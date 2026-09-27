@@ -70,6 +70,10 @@ Open [http://localhost:8080](http://localhost:8080) and create the first account
 
 Before exposing an instance publicly, follow the [Docker Compose guide](https://hitkeep.com/guides/installation/docker-compose/) for HTTPS and trusted proxies, then review [backups](https://hitkeep.com/guides/data/backups-and-restore/) and the [configuration reference](https://hitkeep.com/reference/configuration/). For a native Linux service, download an AMD64 or ARM64 binary from [GitHub Releases](https://github.com/PascaleBeier/hitkeep/releases) and follow the [binary installation guide](https://hitkeep.com/guides/installation/binary/).
 
+## ☁️ One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/hitkeep/)
+
 ## Track Your First Site
 
 Create a site in the dashboard, then add the tracker to your pages:
