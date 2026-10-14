@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { TeamSwitcher } from '@components/team-switcher/team-switcher';
@@ -13,6 +13,7 @@ import { MainLayoutContextService } from '@layout/main-layout-context.service';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class LayoutPageBar {
+    readonly desktop = input(true);
     protected readonly context = inject(MainLayoutContextService);
     protected readonly shareService = this.context.shareService;
     protected readonly siteService = this.context.siteService;

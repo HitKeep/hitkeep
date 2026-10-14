@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
@@ -27,6 +27,7 @@ const ITEM_KEY_PREFIX = 'i:';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class LayoutSidebar {
+    readonly hiddenDesktop = input(false);
     private static readonly SECTION_STATE_STORAGE_KEY = 'hk_sidebar_sections';
 
     protected readonly context = inject(MainLayoutContextService);

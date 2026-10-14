@@ -195,6 +195,58 @@ describe('MainLayout', () => {
     afterEach(() => {
         httpMock.verify();
         vi.restoreAllMocks();
+        localStorage.removeItem('hk_sidebar_layout');
+    });
+
+    it('bounds sidebar width and restores it after collapsing without replacing the outlet', async () => {
+        const outlet = fixture.nativeElement.querySelector('router-outlet');
+        expect(layoutContext.sidebarWidthPx()).toBe(240);
+        layoutContext.setSidebarWidthPx(900);
+        expect(layoutContext.sidebarWidthPx()).toBe(320);
+        layoutContext.setSidebarWidthPx(120);
+        expect(layoutContext.sidebarWidthPx()).toBe(220);
+        layoutContext.setSidebarWidthPx(280);
+        layoutContext.toggleSidebar();
+        await fixture.whenStable();
+        expect(layoutContext.isSidebarCollapsed()).toBe(true);
+        expect(fixture.nativeElement.querySelector('router-outlet')).toBe(outlet);
+        layoutContext.isMobileDrawerOpen.set(true);
+        layoutContext.isMobileDrawerOpen.set(false);
+        layoutContext.toggleSidebar();
+        await fixture.whenStable();
+        expect(layoutContext.sidebarWidthPx()).toBe(280);
+        expect(fixture.nativeElement.querySelector('router-outlet')).toBe(outlet);
+        expect(JSON.parse(localStorage.getItem('hk_sidebar_layout')!)).toEqual({ version: 1, collapsed: false, widthPx: 280 });
+    });
+
+    it('restores valid preferences and safely defaults malformed, obsolete and blocked storage', () => {
+        for (const [record, width, collapsed] of [
+            ['{"version":1,"widthPx":300,"collapsed":true}', 300, true],
+            ['{"version":1,"widthPx":900,"collapsed":false}', 320, false],
+            ['{"version":2,"widthPx":300,"collapsed":true}', 240, false],
+            ['{"version":1,"widthPx":"wide","collapsed":"yes"}', 240, false],
+            ['{broken', 240, false]
+        ] as const) {
+            localStorage.setItem('hk_sidebar_layout', record);
+            const other = TestBed.createComponent(MainLayout);
+            const context = other.debugElement.injector.get(MainLayoutContextService);
+            expect(context.sidebarWidthPx()).toBe(width);
+            expect(context.isSidebarCollapsed()).toBe(collapsed);
+            other.destroy();
+        }
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new Error('blocked');
+        });
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('blocked');
+        });
+        const other = TestBed.createComponent(MainLayout);
+        const context = other.debugElement.injector.get(MainLayoutContextService);
+        context.setSidebarWidthPx(Number.NaN);
+        expect(context.sidebarWidthPx()).toBe(240);
+        context.toggleSidebar();
+        expect(context.isSidebarCollapsed()).toBe(true);
+        other.destroy();
     });
 
     it('should create', () => {

@@ -1,4 +1,13 @@
 <div class="mb-4 hidden items-center gap-2 md:mb-6 md:flex">
+    <button
+        type="button"
+        (click)="desktop() ? context.toggleSidebar() : context.isMobileDrawerOpen.set(true)"
+        [attr.aria-label]="'nav.mainSidebarAria' | transloco"
+        [attr.aria-expanded]="!context.isSidebarCollapsed()"
+        class="size-9 shrink-0 rounded-md hover:bg-surface-100 dark:hover:bg-surface-800 focus-visible:ring-2 focus-visible:ring-primary-500"
+    >
+        <i class="pi pi-bars" aria-hidden="true"></i>
+    </button>
     @if (!shareService.isShareMode() && !context.isOverviewPage()) {
     <app-site-selector class="w-52 min-w-0 shrink-0 lg:w-60" [sites]="siteService.sites()" [current]="siteService.activeSite()" [loading]="siteService.isLoading()" (siteSelected)="context.onSiteSelected($event)" />
     <button

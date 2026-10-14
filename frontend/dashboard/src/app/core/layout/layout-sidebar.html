@@ -1,4 +1,4 @@
-<aside class="hidden md:flex w-64 flex-col bg-[var(--p-surface-card)] border-r border-surface-200 dark:border-surface-700 p-4 gap-6 overflow-y-auto" [attr.aria-label]="'nav.mainSidebarAria' | transloco">
+<aside class="flex h-full w-full flex-col bg-[var(--p-surface-card)] p-4 gap-6 overflow-y-auto" [hidden]="hiddenDesktop()" [attr.inert]="hiddenDesktop() ? '' : null" [attr.aria-label]="'nav.mainSidebarAria' | transloco">
     <div class="px-1">
         <app-brand size="small" />
     </div>

@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, ViewEncapsulation } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { MessageModule } from '@openng/optimus-ui/message';
+import { SplitterModule, SplitterResizeEndEvent } from '@openng/optimus-ui/splitter';
 import { FreePlanRetentionNotice } from '@layout/free-plan-retention-notice';
 import { LayoutMobileHeader } from '@layout/layout-mobile-header';
 import { LayoutOverlays } from '@layout/layout-overlays';
@@ -14,18 +15,41 @@ import { NavigationNoticeService } from '@services/navigation-notice.service';
 
 @Component({
     selector: 'app-main-layout',
+    encapsulation: ViewEncapsulation.None,
     changeDetection: ChangeDetectionStrategy.OnPush,
     host: {
         '(document:keydown)': 'handleKeyboard($event)'
     },
     providers: [MainLayoutContextService, SidebarMenuService],
-    imports: [RouterOutlet, LayoutSidebar, LayoutMobileHeader, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
+    imports: [RouterOutlet, SplitterModule, LayoutSidebar, LayoutMobileHeader, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
     templateUrl: './main-layout.html',
     styleUrl: './main-layout.css'
 })
 export class MainLayout {
     protected readonly context = inject(MainLayoutContextService);
     protected readonly navigationNotice = inject(NavigationNoticeService);
+    private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+    private readonly destroyRef = inject(DestroyRef);
+    private readonly containerWidth = signal(window.innerWidth);
+    protected readonly desktop = computed(() => this.containerWidth() > 768);
+    protected readonly sidebarHidden = computed(() => !this.desktop() || this.context.isSidebarCollapsed());
+    protected readonly panelSizes = computed(() => {
+        const first = ((this.context.sidebarWidthPx() + 4) / this.containerWidth()) * 100;
+        return [first, 100 - first];
+    });
+    protected readonly minSizes = computed(() => [(224 / this.containerWidth()) * 100, 100 - (324 / this.containerWidth()) * 100]);
+
+    constructor() {
+        afterNextRender(() => {
+            const observer = new ResizeObserver(([entry]) => this.containerWidth.set(Math.max(1, entry.contentRect.width)));
+            observer.observe(this.element.nativeElement);
+            this.destroyRef.onDestroy(() => observer.disconnect());
+        });
+    }
+
+    onSidebarResize(event: SplitterResizeEndEvent): void {
+        if (!this.sidebarHidden()) this.context.setSidebarWidthPx((Number(event.sizes[0]) * this.containerWidth()) / 100 - 4);
+    }
 
     handleKeyboard(event: KeyboardEvent) {
         if ((event.metaKey || event.ctrlKey) && event.key === 'k') {

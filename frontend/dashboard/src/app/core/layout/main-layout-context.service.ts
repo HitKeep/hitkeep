@@ -30,6 +30,9 @@ export class MainLayoutContextService {
     readonly isTeamAdmin = computed(() => this.access.canActiveTeam(TEAM_CAPABILITIES.manageSettings));
 
     readonly isMobileDrawerOpen = signal(false);
+    private readonly sidebarPreference = this.readSidebarPreference();
+    readonly isSidebarCollapsed = signal(this.sidebarPreference.collapsed);
+    readonly sidebarWidthPx = signal(this.sidebarPreference.widthPx);
     readonly isAddSiteVisible = signal(false);
     readonly isCreateTeamVisible = signal(false);
     readonly pageHeaderLeft = signal<TemplateRef<unknown> | null>(null);
@@ -52,6 +55,36 @@ export class MainLayoutContextService {
         ),
         { initialValue: this.router.url }
     );
+
+    toggleSidebar(): void {
+        this.isSidebarCollapsed.update((collapsed) => !collapsed);
+        this.storeSidebarPreference();
+    }
+
+    setSidebarWidthPx(widthPx: number): void {
+        this.sidebarWidthPx.set(Number.isFinite(widthPx) ? Math.min(320, Math.max(220, Math.round(widthPx))) : 240);
+        this.storeSidebarPreference();
+    }
+
+    private readSidebarPreference(): { collapsed: boolean; widthPx: number } {
+        try {
+            const value = JSON.parse(localStorage.getItem('hk_sidebar_layout') ?? 'null');
+            if (value?.version === 1 && typeof value.widthPx === 'number' && Number.isFinite(value.widthPx) && typeof value.collapsed === 'boolean') {
+                return { collapsed: value.collapsed, widthPx: Math.min(320, Math.max(220, Math.round(value.widthPx))) };
+            }
+        } catch {
+            // Navigation remains usable when browser storage is unavailable.
+        }
+        return { collapsed: false, widthPx: 240 };
+    }
+
+    private storeSidebarPreference(): void {
+        try {
+            localStorage.setItem('hk_sidebar_layout', JSON.stringify({ version: 1, collapsed: this.isSidebarCollapsed(), widthPx: this.sidebarWidthPx() }));
+        } catch {
+            // Keep the in-memory preference when storage is blocked or full.
+        }
+    }
 
     openSiteSettings(section: SiteSettingsSection = 'general') {
         const site = this.siteService.activeSite();
