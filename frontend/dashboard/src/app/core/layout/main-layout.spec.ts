@@ -69,8 +69,10 @@ describe('MainLayout', () => {
     let bootstrap: DashboardBootstrapService;
     let layoutContext: MainLayoutContextService;
     let askAI: FakeAskAIService;
+    let existingDrawerMasks: Set<Element>;
 
     beforeEach(async () => {
+        existingDrawerMasks = new Set(document.querySelectorAll('.p-drawer-mask'));
         await TestBed.configureTestingModule({
             imports: [
                 MainLayout,
@@ -193,6 +195,11 @@ describe('MainLayout', () => {
     });
 
     afterEach(() => {
+        fixture.destroy();
+        // Destroying a fixture aborts native exit motion before Drawer can remove its body mask.
+        document.querySelectorAll('.p-drawer-mask').forEach((mask) => {
+            if (!existingDrawerMasks.has(mask)) mask.remove();
+        });
         httpMock.verify();
         vi.restoreAllMocks();
         localStorage.removeItem('hk_sidebar_layout');
@@ -1381,41 +1388,6 @@ describe('MainLayout', () => {
         const result = layoutContext.beforeTeamSwitch();
         expect(result).toBe(true);
         expect(confirmSpy).not.toHaveBeenCalled();
-    });
-
-    it('should open site settings from keyboard shortcut when an active site exists', () => {
-        const site = seedActiveSite();
-        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-        const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true });
-        const preventDefault = vi.spyOn(event, 'preventDefault');
-
-        component.handleKeyboard(event);
-
-        expect(preventDefault).toHaveBeenCalled();
-        expect(navigate).toHaveBeenCalledWith(['/sites', site.id, 'settings', 'general']);
-    });
-
-    it('should handle the document keyboard shortcut binding and ctrl-key variant', () => {
-        const site = seedActiveSite();
-        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-        const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true });
-        const preventDefault = vi.spyOn(event, 'preventDefault');
-
-        document.dispatchEvent(event);
-
-        expect(preventDefault).toHaveBeenCalled();
-        expect(navigate).toHaveBeenCalledWith(['/sites', site.id, 'settings', 'general']);
-    });
-
-    it('should ignore unrelated keyboard shortcuts', () => {
-        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-        const event = new KeyboardEvent('keydown', { key: 'x', metaKey: true });
-        const preventDefault = vi.spyOn(event, 'preventDefault');
-
-        component.handleKeyboard(event);
-
-        expect(preventDefault).not.toHaveBeenCalled();
-        expect(navigate).not.toHaveBeenCalled();
     });
 
     it('should keep sidebar drawer actions inside the sidebar component', () => {

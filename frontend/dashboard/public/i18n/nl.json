@@ -1,5 +1,8 @@
 {
   "nav": {
+    "search": "Navigatie doorzoeken",
+    "searchPlaceholder": "Een pagina zoeken…",
+    "noSearchResults": "Geen pagina’s gevonden",
     "expandSidebar": "Zijbalk uitklappen",
     "collapseSidebar": "Zijbalk inklappen",
     "openNavigation": "Navigatie openen",

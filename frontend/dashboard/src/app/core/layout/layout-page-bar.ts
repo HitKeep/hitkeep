@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { NavigationSearch } from './navigation-search';
 import { Brand } from '@components/brand/brand';
 import { AskAIControlService } from '@features/ask-ai/ask-ai-control.service';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
@@ -10,7 +11,7 @@ import { MainLayoutContextService } from '@layout/main-layout-context.service';
 
 @Component({
     selector: 'app-layout-page-bar',
-    imports: [Brand, TeamSwitcher, UserControls, SiteSelector, TranslocoPipe],
+    imports: [NavigationSearch, Brand, TeamSwitcher, UserControls, SiteSelector, TranslocoPipe],
     templateUrl: './layout-page-bar.html',
     styleUrl: './layout-page-bar.css',
     changeDetection: ChangeDetectionStrategy.OnPush

@@ -1,5 +1,8 @@
 {
   "nav": {
+    "search": "Buscar en la navegación",
+    "searchPlaceholder": "Buscar una página…",
+    "noSearchResults": "No se encontraron páginas",
     "expandSidebar": "Expandir barra lateral",
     "collapseSidebar": "Contraer barra lateral",
     "openNavigation": "Abrir navegación",

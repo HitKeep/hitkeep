@@ -10,16 +10,12 @@ import { LayoutPageBar } from '@layout/layout-page-bar';
 import { LayoutSidebar } from '@layout/layout-sidebar';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService } from '@layout/sidebar-menu.service';
-import type { SiteSettingsSection } from '@features/sites/site-settings-section';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
 
 @Component({
     selector: 'app-main-layout',
     encapsulation: ViewEncapsulation.None,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    host: {
-        '(document:keydown)': 'handleKeyboard($event)'
-    },
     providers: [MainLayoutContextService, SidebarMenuService],
     imports: [NgTemplateOutlet, RouterOutlet, SplitterModule, LayoutSidebar, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
     templateUrl: './main-layout.html',
@@ -49,16 +45,5 @@ export class MainLayout {
 
     onSidebarResize(event: SplitterResizeEndEvent): void {
         if (!this.sidebarHidden()) this.context.setSidebarWidthPx((Number(event.sizes[0]) * this.containerWidth()) / 100 - 4);
-    }
-
-    handleKeyboard(event: KeyboardEvent) {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-            event.preventDefault();
-            this.openSiteSettings();
-        }
-    }
-
-    openSiteSettings(section: SiteSettingsSection = 'general') {
-        this.context.openSiteSettings(section);
     }
 }

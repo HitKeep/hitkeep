@@ -1,5 +1,8 @@
 {
   "nav": {
+    "search": "Rechercher dans la navigation",
+    "searchPlaceholder": "Trouver une page…",
+    "noSearchResults": "Aucune page trouvée",
     "expandSidebar": "Développer la barre latérale",
     "collapseSidebar": "Réduire la barre latérale",
     "openNavigation": "Ouvrir la navigation",

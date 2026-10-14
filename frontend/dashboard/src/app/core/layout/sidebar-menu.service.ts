@@ -1,6 +1,7 @@
 import { computed, inject, Service } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
+import { injectActiveLang } from '@core/i18n/active-lang';
 import { TranslocoService } from '@jsverse/transloco';
 import { MenuItem } from '@openng/optimus-ui/api';
 import { filter, map, startWith } from 'rxjs';
@@ -41,7 +42,7 @@ export class SidebarMenuService {
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly share = inject(ShareService);
     private readonly router = inject(Router);
-    private readonly activeLanguage = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+    private readonly activeLanguage = injectActiveLang();
     private readonly activeUrl = toSignal(
         this.router.events.pipe(
             filter((event): event is NavigationEnd => event instanceof NavigationEnd),
@@ -51,11 +52,18 @@ export class SidebarMenuService {
         { initialValue: this.router.url }
     );
 
+    private readonly activePath = computed(() => this.activeUrl().split(/[?#]/, 1)[0] || '/');
+
+    readonly searchableItems = computed<MenuItem[]>(() => {
+        const leaves = (items: MenuItem[]): MenuItem[] => items.flatMap((item) => (item.items?.length ? leaves(item.items) : item.routerLink || item.url ? [item] : []));
+        return leaves(this.desktopItems());
+    });
+
     readonly desktopItems = computed(() => this.buildItems());
 
     readonly activeSectionId = computed(() => {
         this.activeLanguage();
-        this.activeUrl();
+        this.activePath();
         for (const section of this.sections()) {
             if (section.collapsible && this.sectionVisible(section) && this.sectionHasActiveItem(section)) {
                 return section.id;
@@ -70,7 +78,7 @@ export class SidebarMenuService {
 
     private buildItems(close?: () => void): SidebarMenuSectionItem[] {
         this.activeLanguage();
-        const activeUrl = this.activeUrl();
+        const activeUrl = this.activePath();
         return this.sections()
             .filter((section) => this.sectionVisible(section))
             .map((section) => this.sectionItem(section, close, activeUrl))

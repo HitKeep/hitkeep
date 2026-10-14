@@ -64,6 +64,17 @@ describe('SidebarMenuService', () => {
         bootstrap = TestBed.inject(DashboardBootstrapService);
     });
 
+    it('derives searchable leaves from the permitted model and preserves public share routes', () => {
+        permissions.applyPermissions({ instance_role: 'user', permissions: {}, active_team_role: 'member', active_team_capabilities: [] });
+        expect(service.searchableItems().some((item) => item.routerLink === '/utm')).toBe(true);
+        expect(service.searchableItems().some((item) => item.routerLink === '/integration/api-clients')).toBe(true);
+        expect(service.searchableItems().some((item) => item.routerLink === '/admin/system')).toBe(false);
+        expect(service.searchableItems().every((item) => !item.items?.length)).toBe(true);
+        share.setToken('public-token');
+        expect(service.searchableItems().some((item) => item.routerLink === '/share/public-token/utm')).toBe(true);
+        expect(service.searchableItems().some((item) => item.routerLink === '/overview' || item.routerLink === '/integration/api-clients')).toBe(false);
+    });
+
     it('builds capability-filtered desktop menu sections', () => {
         permissions.applyPermissions({
             instance_role: 'admin',

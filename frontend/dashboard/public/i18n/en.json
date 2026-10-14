@@ -1,5 +1,8 @@
 {
   "nav": {
+    "search": "Search navigation",
+    "searchPlaceholder": "Find a page…",
+    "noSearchResults": "No pages found",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "openNavigation": "Open navigation",

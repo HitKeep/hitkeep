@@ -1,5 +1,8 @@
 {
   "nav": {
+    "search": "Navigation durchsuchen",
+    "searchPlaceholder": "Seite finden…",
+    "noSearchResults": "Keine Seiten gefunden",
     "expandSidebar": "Seitenleiste öffnen",
     "collapseSidebar": "Seitenleiste schließen",
     "openNavigation": "Navigation öffnen",
