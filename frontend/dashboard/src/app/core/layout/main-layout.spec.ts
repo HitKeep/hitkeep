@@ -6,7 +6,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { Observable, Subject, of } from 'rxjs';
-import { AskAIRequest, AskAIResponse, AskAIStatus, AskAIStreamEvent } from '@models/analytics.types';
+import { AskAIRequest, AskAIResponse, AskAIStatus, AskAIStreamEvent, Team } from '@models/analytics.types';
 import { AskAIService, AskAIStreamStatusError } from '@services/ask-ai.service';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
@@ -403,7 +403,7 @@ describe('MainLayout', () => {
         expect(fixture.nativeElement.querySelector('.ask-ai-trigger')).toBeNull();
     });
 
-    it('should offer Ask AI from the user menu when available', () => {
+    it('opens Ask AI directly from the persistent header when available', async () => {
         seedActiveSite();
         bootstrap.status.set({
             needs_setup: false,
@@ -422,12 +422,15 @@ describe('MainLayout', () => {
 
         const menuItems = TestBed.inject(UserMenuService).menuItems();
         const askAIItem = menuItems.find((item) => item.icon === 'pi pi-sparkles');
-        expect(askAIItem).toBeTruthy();
-        expect(askAIItem?.label).toContain('Ask AI');
-        expect(fixture.nativeElement.querySelector('.ask-ai-trigger')).toBeNull();
+        expect(askAIItem).toBeUndefined();
+        const trigger = fixture.nativeElement.querySelector('.ask-ai-trigger') as HTMLButtonElement;
+        expect(trigger?.textContent).toContain('Ask AI');
+        trigger.click();
+        await fixture.whenStable();
+        expect(document.body.querySelector('#ask-ai-drawer')).toBeTruthy();
     });
 
-    it('should keep Ask AI in the user menu when the product flag is on but no model is configured', () => {
+    it('keeps direct Ask AI access when enabled without a configured model', () => {
         seedActiveSite();
         bootstrap.status.set({
             needs_setup: false,
@@ -443,7 +446,8 @@ describe('MainLayout', () => {
         fixture.detectChanges();
 
         const menuItems = TestBed.inject(UserMenuService).menuItems();
-        expect(menuItems.some((item) => item.icon === 'pi pi-sparkles')).toBe(true);
+        expect(menuItems.some((item) => item.icon === 'pi pi-sparkles')).toBe(false);
+        expect(fixture.nativeElement.querySelector('.ask-ai-trigger')).toBeTruthy();
 
         openAskAIDrawer();
         fixture.detectChanges();
@@ -1269,13 +1273,17 @@ describe('MainLayout', () => {
         other.destroy();
     });
 
-    it('should hide the site selector and settings shortcut on the overview page', () => {
+    it('keeps global site and team context on Overview with collapsed navigation', () => {
         vi.spyOn(TestBed.inject(Router), 'url', 'get').mockReturnValue('/overview');
         const localFixture = TestBed.createComponent(MainLayout);
         localFixture.detectChanges();
 
-        expect(localFixture.nativeElement.querySelector('app-site-selector')).toBeNull();
-        expect(localFixture.nativeElement.querySelector('app-layout-page-bar button[title]')).toBeNull();
+        const context = localFixture.debugElement.injector.get(MainLayoutContextService);
+        context.toggleSidebar();
+        localFixture.detectChanges();
+        expect(localFixture.nativeElement.querySelector('app-layout-page-bar app-site-selector')).toBeTruthy();
+        expect(localFixture.nativeElement.querySelectorAll('app-team-switcher')).toHaveLength(1);
+        expect(localFixture.nativeElement.querySelector('app-layout-mobile-header')).toBeNull();
         localFixture.destroy();
     });
 
@@ -1429,6 +1437,37 @@ describe('MainLayout', () => {
         expect(layoutContext.isMobileDrawerOpen()).toBe(false);
         expect(menuItems.length).toBeGreaterThan(0);
         expect(sidebar.canCreateTeams()).toBe(true);
+    });
+
+    it('selects a site from Overview and opens its dashboard', () => {
+        const site = seedActiveSite();
+        const router = TestBed.inject(Router);
+        vi.spyOn(router, 'url', 'get').mockReturnValue('/overview');
+        const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+        layoutContext.onSiteSelected(site);
+        expect(TestBed.inject(SiteService).activeSite()).toEqual(site);
+        expect(navigate).toHaveBeenCalledWith(['/dashboard']);
+    });
+
+    it('rejects duplicate team switches and stale site actions, then recovers after failure', () => {
+        const site = seedActiveSite();
+        const teams = TestBed.inject(TeamService);
+        const previousTeam = teams.activeTeamId();
+        const next: Team = { id: 'team-2', name: 'Second team', logo_url: '', role: 'owner', created_at: '2026-01-01T00:00:00Z' };
+        teams.teams.update((items) => [...items, next]);
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+        layoutContext.onTeamSelected(next);
+        layoutContext.onTeamSelected(next);
+        expect(layoutContext.isTeamSwitchPending()).toBe(true);
+        layoutContext.onSiteSelected({ ...site, id: 'stale-site' });
+        layoutContext.openSiteSettings();
+        expect(TestBed.inject(SiteService).activeSite()).toEqual(site);
+        expect(navigate).toHaveBeenCalledTimes(1);
+        const request = httpMock.expectOne('/api/user/teams/active');
+        request.flush({}, { status: 500, statusText: 'Server Error' });
+        expect(teams.activeTeamId()).toBe(previousTeam);
+        expect(layoutContext.isTeamSwitchPending()).toBe(false);
+        expect(TestBed.inject(NavigationNoticeService).key()).toBe('teams.switcher.switchError');
     });
 
     it('keeps the current settings section when selecting another site', () => {

@@ -1,5 +1,8 @@
 {
   "nav": {
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "openNavigation": "Open navigation",
     "mainSidebarAria": "Main sidebar",
     "primaryNavigationAria": "Primary navigation",
     "contentAreaAria": "Content area",
@@ -593,6 +596,7 @@
   },
   "teams": {
     "switcher": {
+      "switchError": "Could not switch teams. Please try again.",
       "label": "Teams",
       "regionAria": "Team selector",
       "selectAria": "Select active team",

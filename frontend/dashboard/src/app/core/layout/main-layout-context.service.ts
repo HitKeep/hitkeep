@@ -1,7 +1,8 @@
-import { TemplateRef, computed, inject, signal, Service } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { TemplateRef, computed, DestroyRef, inject, signal, Service } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
-import { filter, map, startWith } from 'rxjs';
+import { catchError, filter, finalize, forkJoin, map, of, startWith, switchMap, tap } from 'rxjs';
+import { NavigationNoticeService } from '@services/navigation-notice.service';
 import { Site, Team } from '@models/analytics.types';
 import { TEAM_CAPABILITIES } from '@core/access/capabilities';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
@@ -15,6 +16,7 @@ import { SiteService } from '@features/sites/services/site.service';
 @Service({ autoProvided: false })
 export class MainLayoutContextService {
     private readonly router = inject(Router);
+    private readonly destroyRef = inject(DestroyRef);
     readonly siteService = inject(SiteService);
     readonly shareService = inject(ShareService);
     private readonly bootstrap = inject(DashboardBootstrapService);
@@ -29,6 +31,9 @@ export class MainLayoutContextService {
     readonly canCreateTeams = computed(() => !this.cloudHosted() || this.perms.canCreateTeams());
     readonly isTeamAdmin = computed(() => this.access.canActiveTeam(TEAM_CAPABILITIES.manageSettings));
 
+    private readonly navigationNotice = inject(NavigationNoticeService);
+    readonly isTeamSwitchPending = signal(false);
+    readonly isContextPending = computed(() => this.isTeamSwitchPending() || this.siteService.isLoading());
     readonly isMobileDrawerOpen = signal(false);
     private readonly sidebarPreference = this.readSidebarPreference();
     readonly isSidebarCollapsed = signal(this.sidebarPreference.collapsed);
@@ -38,14 +43,12 @@ export class MainLayoutContextService {
     readonly pageHeaderLeft = signal<TemplateRef<unknown> | null>(null);
     readonly pageHeaderRight = signal<TemplateRef<unknown> | null>(null);
     readonly hasPageHeader = computed(() => this.pageHeaderLeft() !== null);
-    // The overview page is team-scoped, so the site selector and its settings
-    // shortcut do not apply there and the shell hides them.
     readonly isOverviewPage = computed(() => {
         const url = this.activeUrl().split(/[?#]/, 1)[0] || '/';
         return url === '/overview' || url.startsWith('/overview/');
     });
 
-    readonly beforeTeamSwitch = () => true;
+    readonly beforeTeamSwitch = () => !this.isContextPending();
     private pageHeaderOwner: symbol | null = null;
     private readonly activeUrl = toSignal(
         this.router.events.pipe(
@@ -88,43 +91,46 @@ export class MainLayoutContextService {
 
     openSiteSettings(section: SiteSettingsSection = 'general') {
         const site = this.siteService.activeSite();
-        if (!site) return;
+        if (!site || this.shareService.isShareMode() || this.isContextPending()) return;
         void this.router.navigate(['/sites', site.id, 'settings', section]);
     }
 
     onSiteSelected(site: Site) {
+        if (this.shareService.isShareMode() || this.isContextPending()) return;
         this.siteService.selectSite(site);
         const section = this.currentSiteSettingsSection();
         if (section) {
             void this.router.navigate(['/sites', site.id, 'settings', section]);
+        } else if (this.router.url.split(/[?#]/, 1)[0] === '/overview') {
+            void this.router.navigate(['/dashboard']);
         }
     }
 
-    onTeamSelected(team: Team) {
+    onTeamSelected(team: Team): void {
+        if (this.shareService.isShareMode() || this.isContextPending() || team.id === this.teamService.activeTeamId()) return;
+        this.isTeamSwitchPending.set(true);
         void this.router.navigate(['/overview']);
-        this.teamService.setActiveTeam(team.id).subscribe({
-            next: () => {
-                this.siteService.sites.set([]);
-                this.siteService.activeSite.set(null);
-                this.teamService.loadTeams().subscribe({
-                    next: () => {
-                        this.siteService.loadSites();
-                        this.perms.loadPermissions().subscribe({
-                            next: () => this.redirectIfTeamAdminAccessWasLost(),
-                            error: () => this.redirectIfTeamAdminAccessWasLost()
-                        });
-                    },
-                    error: () => {
-                        this.siteService.loadSites();
-                        this.perms.loadPermissions().subscribe({
-                            next: () => this.redirectIfTeamAdminAccessWasLost(),
-                            error: () => this.redirectIfTeamAdminAccessWasLost()
-                        });
-                    }
-                });
-            },
-            error: () => undefined
-        });
+        this.teamService
+            .setActiveTeam(team.id)
+            .pipe(
+                tap(() => {
+                    this.siteService.sites.set([]);
+                    this.siteService.activeSite.set(null);
+                }),
+                switchMap(() =>
+                    forkJoin({
+                        teams: this.teamService.loadTeams().pipe(catchError(() => of(null))),
+                        permissions: this.perms.loadPermissions().pipe(catchError(() => of(null)))
+                    })
+                ),
+                tap(() => {
+                    this.siteService.loadSites();
+                    this.redirectIfTeamAdminAccessWasLost();
+                }),
+                takeUntilDestroyed(this.destroyRef),
+                finalize(() => this.isTeamSwitchPending.set(false))
+            )
+            .subscribe({ error: () => this.navigationNotice.show('teams.switcher.switchError', { preserveNextNavigation: true }) });
     }
 
     registerPageHeader(owner: symbol, left: TemplateRef<unknown> | null, right: TemplateRef<unknown> | null) {

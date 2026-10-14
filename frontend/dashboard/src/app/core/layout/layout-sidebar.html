@@ -1,5 +1,4 @@
 <aside class="focus-sidebar flex h-full w-full flex-col bg-[var(--p-surface-card)] p-3 gap-4 overflow-y-auto" [hidden]="hiddenDesktop()" [attr.inert]="hiddenDesktop() ? '' : null" [attr.aria-label]="'nav.mainSidebarAria' | transloco">
-    <app-brand class="px-2 pt-1" size="small" />
     <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco">
         <ng-container [ngTemplateOutlet]="navigation" />
     </nav>
@@ -7,19 +6,6 @@
 </aside>
 <p-drawer [visible]="isMobileDrawerOpen()" (visibleChange)="isMobileDrawerOpen.set($event)" [header]="'nav.primaryNavigationAria' | transloco" appendTo="body" styleClass="focus-navigation-drawer" [style]="{ width: 'min(20rem, 100vw)' }">
     <div class="flex h-full flex-col gap-4">
-        @if (!shareService.isShareMode()) {
-        <app-team-switcher
-            [teams]="teamService.teams()"
-            [currentTeamId]="teamService.activeTeamId()"
-            [loading]="teamService.isLoading()"
-            [switching]="teamService.isSwitching()"
-            [showAdd]="canCreateTeams()"
-            [compact]="false"
-            [beforeSwitch]="beforeTeamSwitch"
-            (teamSelected)="context.onTeamSelected($event)"
-            (addClicked)="isCreateTeamVisible.set(true)"
-        />
-        }
         <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco"><ng-container [ngTemplateOutlet]="navigation" /></nav>
         <app-free-plan-chip />
     </div>

@@ -1,5 +1,8 @@
 {
   "nav": {
+    "expandSidebar": "Espandi barra laterale",
+    "collapseSidebar": "Comprimi barra laterale",
+    "openNavigation": "Apri navigazione",
     "mainSidebarAria": "Barra laterale principale",
     "primaryNavigationAria": "Navigazione principale",
     "contentAreaAria": "Area contenuti",
@@ -593,6 +596,7 @@
   },
   "teams": {
     "switcher": {
+      "switchError": "Impossibile cambiare team. Riprova.",
       "label": "Team",
       "regionAria": "Selettore del team",
       "selectAria": "Seleziona il team attivo",

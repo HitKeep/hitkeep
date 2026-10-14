@@ -4,18 +4,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { MenuItem } from '@openng/optimus-ui/api';
 import { DrawerModule } from '@openng/optimus-ui/drawer';
 import { PanelMenuModule } from '@openng/optimus-ui/panelmenu';
-import { Brand } from '@components/brand/brand';
-import { TeamSwitcher } from '@components/team-switcher/team-switcher';
 import { FreePlanChip } from '@layout/free-plan-chip';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService, type SidebarMenuSectionItem } from '@layout/sidebar-menu.service';
 
 @Component({
     selector: 'app-layout-sidebar',
-    imports: [NgTemplateOutlet, Brand, TeamSwitcher, FreePlanChip, DrawerModule, PanelMenuModule, RouterLink, RouterLinkActive, TranslocoPipe],
+    imports: [NgTemplateOutlet, FreePlanChip, DrawerModule, PanelMenuModule, RouterLink, RouterLinkActive, TranslocoPipe],
     templateUrl: './layout-sidebar.html',
     styleUrl: './layout-sidebar.css',
     encapsulation: ViewEncapsulation.None,

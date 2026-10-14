@@ -1,5 +1,8 @@
 {
   "nav": {
+    "expandSidebar": "Zijbalk uitklappen",
+    "collapseSidebar": "Zijbalk inklappen",
+    "openNavigation": "Navigatie openen",
     "mainSidebarAria": "Hoofdzijbalk",
     "primaryNavigationAria": "Primaire navigatie",
     "contentAreaAria": "Inhoudsgebied",
@@ -593,6 +596,7 @@
   },
   "teams": {
     "switcher": {
+      "switchError": "Wisselen van team is mislukt. Probeer het opnieuw.",
       "label": "Teams",
       "regionAria": "Teamkiezer",
       "selectAria": "Selecteer actief team",

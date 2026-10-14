@@ -1,10 +1,10 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, ViewEncapsulation } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { MessageModule } from '@openng/optimus-ui/message';
 import { SplitterModule, SplitterResizeEndEvent } from '@openng/optimus-ui/splitter';
 import { FreePlanRetentionNotice } from '@layout/free-plan-retention-notice';
-import { LayoutMobileHeader } from '@layout/layout-mobile-header';
 import { LayoutOverlays } from '@layout/layout-overlays';
 import { LayoutPageBar } from '@layout/layout-page-bar';
 import { LayoutSidebar } from '@layout/layout-sidebar';
@@ -21,7 +21,7 @@ import { NavigationNoticeService } from '@services/navigation-notice.service';
         '(document:keydown)': 'handleKeyboard($event)'
     },
     providers: [MainLayoutContextService, SidebarMenuService],
-    imports: [RouterOutlet, SplitterModule, LayoutSidebar, LayoutMobileHeader, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
+    imports: [NgTemplateOutlet, RouterOutlet, SplitterModule, LayoutSidebar, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
     templateUrl: './main-layout.html',
     styleUrl: './main-layout.css'
 })

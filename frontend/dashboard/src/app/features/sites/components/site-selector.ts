@@ -54,9 +54,15 @@ export class SiteSelector {
     sites = input.required<Site[]>();
     current = input<Site | null>(null);
     loading = input<boolean>(false);
+    readonly disabled = input(false);
     siteSelected = output<Site>();
 
     constructor() {
+        effect(() => {
+            const control = this.siteForm.selectedSite().control();
+            if (this.disabled()) control.disable({ emitEvent: false });
+            else control.enable({ emitEvent: false });
+        });
         effect(() => {
             this.siteForm.selectedSite().control().setValue(this.current(), { emitEvent: false });
         });

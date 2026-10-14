@@ -3,7 +3,8 @@ app-main-layout {
 }
 app-main-layout .focus-shell {
     display: block;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     min-width: 0;
 }
 app-main-layout .focus-shell > .p-splitter {

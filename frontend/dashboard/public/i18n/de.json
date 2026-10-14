@@ -1,5 +1,8 @@
 {
   "nav": {
+    "expandSidebar": "Seitenleiste öffnen",
+    "collapseSidebar": "Seitenleiste schließen",
+    "openNavigation": "Navigation öffnen",
     "mainSidebarAria": "Hauptseitenleiste",
     "primaryNavigationAria": "Hauptnavigation",
     "contentAreaAria": "Inhaltsbereich",
@@ -593,6 +596,7 @@
   },
   "teams": {
     "switcher": {
+      "switchError": "Das Team konnte nicht gewechselt werden. Bitte versuche es erneut.",
       "label": "Teams",
       "regionAria": "Team-Auswahl",
       "selectAria": "Aktives Team auswählen",
