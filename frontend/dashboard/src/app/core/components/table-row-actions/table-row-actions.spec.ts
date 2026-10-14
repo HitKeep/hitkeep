@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 
 import { TableRowActions, TableRowActionItem } from './table-row-actions';
 
@@ -61,7 +62,7 @@ describe('TableRowActions', () => {
         expect(menu?.textContent).toContain('Edit');
         expect(menu?.textContent).toContain('Delete');
 
-        (menu?.querySelectorAll('a')[0] as HTMLElement).click();
+        await userEvent.click(menu?.querySelectorAll('a')[0] as HTMLElement);
         fixture.detectChanges();
         await fixture.whenStable();
 
@@ -72,7 +73,7 @@ describe('TableRowActions', () => {
         triggerButton().click();
         fixture.detectChanges();
         await fixture.whenStable();
-        (document.querySelector('.table-row-actions-menu a') as HTMLElement).click();
+        await userEvent.click(document.querySelector('.table-row-actions-menu a') as HTMLElement);
         fixture.detectChanges();
         await new Promise((resolve) => setTimeout(resolve, 300));
         fixture.detectChanges();
