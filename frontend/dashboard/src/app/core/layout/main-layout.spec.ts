@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MainLayout } from '@layout/main-layout';
-import { Router, provideRouter } from '@angular/router';
+import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -196,6 +196,7 @@ describe('MainLayout', () => {
         httpMock.verify();
         vi.restoreAllMocks();
         localStorage.removeItem('hk_sidebar_layout');
+        localStorage.removeItem('hk_sidebar_sections');
     });
 
     it('bounds sidebar width and restores it after collapsing without replacing the outlet', async () => {
@@ -1195,21 +1196,23 @@ describe('MainLayout', () => {
         expect(fixture.nativeElement.querySelector('.ask-ai-trigger')).toBeNull();
     });
 
-    it('should fold other sections when one collapsible section opens', () => {
-        const integrationToggle = fixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Integration"]') as HTMLButtonElement | null;
+    it('keeps multiple sections open and persists each independent choice', () => {
+        const integrationToggle = fixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="false"]') as HTMLButtonElement | null;
         integrationToggle?.click();
         fixture.detectChanges();
 
-        expect(fixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Collapse Integration"]')).toBeTruthy();
+        expect(fixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="true"]')).toBeTruthy();
         expect(fixture.nativeElement.querySelector('aside a[href="/integration/api-clients"]')).toBeTruthy();
         expect(fixture.nativeElement.querySelector('aside a[href="/integration/api-reference"]')).toBeNull();
 
-        const accountToggle = fixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Account"]') as HTMLButtonElement | null;
+        const accountToggle = fixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Account"][aria-expanded="false"]') as HTMLButtonElement | null;
         accountToggle?.click();
         fixture.detectChanges();
 
-        expect(fixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Integration"]')).toBeTruthy();
-        expect(fixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Collapse Account"]')).toBeTruthy();
+        expect(fixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="true"]')).toBeTruthy();
+        expect(fixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Account"][aria-expanded="true"]')).toBeTruthy();
+
+        expect(JSON.parse(localStorage.getItem('hk_sidebar_sections')!)).toMatchObject({ 's:integration': true, 's:account': true });
 
         localStorage.removeItem('hk_sidebar_sections');
     });
@@ -1220,7 +1223,7 @@ describe('MainLayout', () => {
         localFixture.detectChanges();
 
         try {
-            const sectionToggle = localFixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Collapse Integration"]') as HTMLButtonElement | null;
+            const sectionToggle = localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="true"]') as HTMLButtonElement | null;
             const apiClientsLink = localFixture.nativeElement.querySelector('aside a[href="/integration/api-clients"]') as HTMLAnchorElement | null;
 
             expect(sectionToggle).toBeTruthy();
@@ -1229,14 +1232,41 @@ describe('MainLayout', () => {
             sectionToggle?.click();
             localFixture.detectChanges();
 
-            expect(localFixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Integration"]')).toBeTruthy();
-            const closedWrap = localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section:has(button[aria-label="Expand Integration"]) .layout-sidebar-menu__collapse') as HTMLElement | null;
-            expect(closedWrap?.classList.contains('layout-sidebar-menu__collapse--closed')).toBe(true);
-            expect(closedWrap?.hasAttribute('inert')).toBe(true);
+            expect(localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="false"]')).toBeTruthy();
+            expect(sectionToggle?.getAttribute('aria-expanded')).toBe('false');
         } finally {
             localStorage.removeItem('hk_sidebar_sections');
             localFixture.destroy();
         }
+    });
+
+    it('restores independent groups and reveals a closed group only on a new route path', async () => {
+        localStorage.setItem('hk_sidebar_sections', JSON.stringify({ 's:integration': false, 's:resources': true, unknown: true }));
+        const router = TestBed.inject(Router);
+        const events = new Subject<NavigationEnd>();
+        vi.spyOn(router, 'events', 'get').mockReturnValue(events);
+        vi.spyOn(router, 'url', 'get').mockReturnValue('/integration/api-clients');
+        const other = TestBed.createComponent(MainLayout);
+        await other.whenStable();
+        const header = (label: string) => other.nativeElement.querySelector(`aside [role="button"][aria-label="${label}"]`) as HTMLElement;
+        expect(header('Integration').getAttribute('aria-expanded')).toBe('true');
+        const integration = header('Integration');
+        integration.click();
+        await other.whenStable();
+        expect(header('Integration')).toBe(integration);
+        expect(integration.getAttribute('aria-expanded')).toBe('false');
+        events.next(new NavigationEnd(1, '/integration/api-clients?tab=reference', '/integration/api-clients?tab=reference'));
+        await other.whenStable();
+        expect(header('Integration').getAttribute('aria-expanded')).toBe('false');
+        events.next(new NavigationEnd(2, '/settings/reports', '/settings/reports'));
+        await other.whenStable();
+        expect(header('Account').getAttribute('aria-expanded')).toBe('true');
+        events.next(new NavigationEnd(3, '/integration/api-clients', '/integration/api-clients'));
+        await other.whenStable();
+        expect(header('Integration').getAttribute('aria-expanded')).toBe('true');
+        expect(JSON.parse(localStorage.getItem('hk_sidebar_sections')!)).toMatchObject({ 's:resources': true, 's:account': true, 's:integration': true });
+        expect(JSON.parse(localStorage.getItem('hk_sidebar_sections')!)).not.toHaveProperty('unknown');
+        other.destroy();
     });
 
     it('should hide the site selector and settings shortcut on the overview page', () => {
@@ -1249,21 +1279,19 @@ describe('MainLayout', () => {
         localFixture.destroy();
     });
 
-    it('should fold a route-active section when another section is opened', () => {
+    it('keeps the route-active section open when another section is opened', () => {
         vi.spyOn(TestBed.inject(Router), 'url', 'get').mockReturnValue('/integration/api-clients');
         const localFixture = TestBed.createComponent(MainLayout);
         localFixture.detectChanges();
 
         try {
-            expect(localFixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Collapse Integration"]')).toBeTruthy();
+            expect(localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="true"]')).toBeTruthy();
 
-            const accountToggle = localFixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Account"]') as HTMLButtonElement | null;
+            const accountToggle = localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Account"][aria-expanded="false"]') as HTMLButtonElement | null;
             accountToggle?.click();
             localFixture.detectChanges();
 
-            expect(localFixture.nativeElement.querySelector('aside button.layout-sidebar-menu__section-toggle[aria-label="Expand Integration"]')).toBeTruthy();
-            const integrationWrap = localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section:has(button[aria-label="Expand Integration"]) .layout-sidebar-menu__collapse') as HTMLElement | null;
-            expect(integrationWrap?.classList.contains('layout-sidebar-menu__collapse--closed')).toBe(true);
+            expect(localFixture.nativeElement.querySelector('aside .layout-sidebar-menu__section-toggle[aria-label="Integration"][aria-expanded="true"]')).toBeTruthy();
         } finally {
             localStorage.removeItem('hk_sidebar_sections');
             localFixture.destroy();
