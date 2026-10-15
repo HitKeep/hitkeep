@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
@@ -71,9 +70,8 @@ export class OverviewPage {
     private readonly transloco = inject(TranslocoService);
     private readonly localeService = inject(TranslocoLocaleService);
     private readonly statsService = inject(StatsService);
-    private readonly router = inject(Router);
     private readonly destroyRef = inject(DestroyRef);
-    private readonly layoutContext = inject(MainLayoutContextService, { optional: true });
+    protected readonly layoutContext = inject(MainLayoutContextService);
     private readonly preferenceStorage = inject(PreferenceStorage);
     private readonly reportRange = injectReportRange();
     private readonly activeLanguage = injectActiveLang();
@@ -126,12 +124,11 @@ export class OverviewPage {
     }
 
     protected openAddSite(): void {
-        this.layoutContext?.isAddSiteVisible.set(true);
+        this.layoutContext.openAddSite();
     }
 
     protected openDashboard(site: Site): void {
-        this.siteService.selectSite(site);
-        void this.router.navigateByUrl('/dashboard');
+        this.layoutContext.onSiteSelected(site);
     }
 
     protected openDashboardFromKeyboard(event: KeyboardEvent, site: Site): void {

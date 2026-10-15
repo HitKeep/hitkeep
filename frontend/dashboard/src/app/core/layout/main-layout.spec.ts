@@ -444,6 +444,16 @@ describe('MainLayout', () => {
         expect(visibleHrefs).not.toContain('/share/share-token/utm/qr-codes');
     });
 
+    it('keeps readable team and site labels in the narrow global context', async () => {
+        seedActiveSite();
+        fixture.nativeElement.style.width = '320px';
+        await fixture.whenStable();
+        const teamLabel = fixture.nativeElement.querySelector('app-team-switcher .p-select-label .truncate') as HTMLElement;
+        const siteLabel = fixture.nativeElement.querySelector('app-site-selector .site-select-option__domain') as HTMLElement;
+        await expect.poll(() => teamLabel.getBoundingClientRect().width).toBeGreaterThan(64);
+        expect(siteLabel.getBoundingClientRect().width).toBeGreaterThan(64);
+    });
+
     it('should hide Ask AI by default', () => {
         seedActiveSite();
         fixture.detectChanges();

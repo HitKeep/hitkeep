@@ -97,7 +97,15 @@
         gap: 0.125rem;
     }
     .focus-header__context {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 2rem;
         gap: 0.25rem;
+    }
+    .focus-header__team {
+        grid-column: 1 / -1;
+    }
+    .focus-header__divider {
+        display: none;
     }
     .focus-header__context .focus-header__toggle {
         width: 2rem;

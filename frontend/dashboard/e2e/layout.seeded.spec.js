@@ -181,6 +181,9 @@ test("Focus keeps long German team and site names beside a visible Ask AI action
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
     await expect(page.locator('app-team-switcher [role="combobox"]')).toContainText(teamName);
     await expect(siteControl(page)).toContainText(domain);
+    for (const selector of ["app-team-switcher .p-select-label .truncate", "app-site-selector .site-select-option__domain"]) {
+        await expect.poll(() => page.locator(selector).evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(64);
+    }
     await expect(page.locator(".ask-ai-trigger")).toHaveText(de.askAi.title);
     await expect(page.locator(".ask-ai-trigger")).toBeEnabled();
     await expectNoHorizontalOverflow(page);

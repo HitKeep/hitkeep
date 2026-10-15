@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, linkedSignal, untracked } from '@angular/core';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { toSignal } from '@angular/core/rxjs-interop';
 
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { finalize } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { InputTextModule } from '@openng/optimus-ui/inputtext';
 import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
@@ -39,64 +39,73 @@ export class SiteShareSettingsPage {
     private clipboard = inject(Clipboard);
 
     protected isShareMode = computed(() => this.shareService.isShareMode());
-    protected shareLinks = signal<ShareLink[]>([]);
-    protected linksLoading = signal(false);
-    protected createLoading = signal(false);
-    protected deletingShareId = signal<string | null>(null);
+    protected readonly canManageShares = computed(() => {
+        const site = this.siteService.activeSite();
+        return !this.isShareMode() && !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageTeam);
+    });
+    private readonly shareSiteId = computed(() => (this.canManageShares() ? (this.siteService.activeSite()?.id ?? null) : null));
+    protected shareLinks = linkedSignal({ source: this.shareSiteId, computation: (): ShareLink[] => [] });
+    protected linksLoading = linkedSignal({ source: this.shareSiteId, computation: (siteId) => !!siteId });
+    protected createLoading = linkedSignal({ source: this.shareSiteId, computation: () => false });
+    protected deletingShareId = linkedSignal({ source: this.shareSiteId, computation: (): string | null => null });
     protected readonly shareLinkColumns: AppTableColumn<ShareLink>[] = [
         { field: 'token_hint', headerKey: 'share.dialog.tokenHintLabel', frozen: true },
         { field: 'created_at', headerKey: 'common.columns.created', type: 'date' },
         { field: 'url', headerKey: 'share.dialog.shareUrlLabel' }
     ];
     protected readonly shareLinkActionLoading = (link: ShareLink) => this.deletingShareId() === link.id;
-    protected notice = signal<ShareNotice | null>(null);
-    private shareSiteId = signal<string | null>(null);
-    protected readonly canManageShares = computed(() => {
-        const site = this.siteService.activeSite();
-        return !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageTeam);
-    });
+    protected notice = linkedSignal({ source: this.shareSiteId, computation: (): ShareNotice | null => null });
+    private requests: Subscription | null = null;
 
     constructor() {
-        effect(() => {
-            const siteId = this.siteService.activeSite()?.id ?? null;
-            if (this.shareSiteId() === siteId) {
-                return;
-            }
-
-            this.shareSiteId.set(siteId);
-            this.resetShareState();
-
-            if (siteId && this.canManageShares()) {
-                this.loadShareLinks(siteId);
-            }
+        effect((onCleanup) => {
+            const siteId = this.shareSiteId();
+            const requests = new Subscription();
+            this.requests = requests;
+            onCleanup(() => {
+                requests.unsubscribe();
+                this.confirmation.close();
+            });
+            if (siteId) untracked(() => this.loadShareLinks(siteId, requests));
         });
     }
 
     protected generateShareLink() {
-        const siteId = this.siteService.activeSite()?.id;
-        if (!siteId || this.createLoading() || !this.canManageShares()) {
+        const siteId = this.shareSiteId();
+        const requests = this.requests;
+        if (!siteId || !requests || !this.isCurrentScope(siteId, requests) || this.createLoading()) {
             return;
         }
 
         this.createLoading.set(true);
         this.notice.set(null);
 
-        this.shareService
-            .createShareLink(siteId)
-            .pipe(finalize(() => this.createLoading.set(false)))
-            .subscribe({
-                next: (link) => {
-                    this.shareLinks.update((links) => [link, ...links.filter((existing) => existing.id !== link.id)]);
-                    this.notice.set({ kind: 'success', key: 'share.dialog.createSuccess' });
-                },
-                error: () => {
-                    this.notice.set({ kind: 'error', key: 'share.dialog.generateFailed' });
-                }
-            });
+        requests.add(
+            this.shareService
+                .createShareLink(siteId)
+                .pipe(
+                    finalize(() => {
+                        if (this.isCurrentScope(siteId, requests)) this.createLoading.set(false);
+                    })
+                )
+                .subscribe({
+                    next: (link) => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.shareLinks.update((links) => [link, ...links.filter((existing) => existing.id !== link.id)]);
+                        this.notice.set({ kind: 'success', key: 'share.dialog.createSuccess' });
+                    },
+                    error: () => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.notice.set({ kind: 'error', key: 'share.dialog.generateFailed' });
+                    }
+                })
+        );
     }
 
     protected confirmDeleteShareLink(link: ShareLink) {
-        if (this.deletingShareId() !== null || !this.canManageShares()) {
+        const siteId = this.shareSiteId();
+        const requests = this.requests;
+        if (!siteId || !requests || !this.isCurrentScope(siteId, requests) || !this.shareLinks().some((current) => current.id === link.id && current.site_id === siteId) || this.deletingShareId() !== null) {
             return;
         }
 
@@ -106,7 +115,7 @@ export class SiteShareSettingsPage {
             icon: 'pi pi-exclamation-triangle',
             rejectButtonProps: dialogCancelButton(this.transloco.translate('common.actions.cancel')),
             acceptButtonProps: dialogDangerButton(this.transloco.translate('share.dialog.deleteAction')),
-            accept: () => this.deleteShareLink(link)
+            accept: () => this.deleteShareLink(link, siteId, requests)
         });
     }
 
@@ -130,53 +139,62 @@ export class SiteShareSettingsPage {
         ];
     };
 
-    private loadShareLinks(siteId: string) {
-        if (!this.canManageShares()) {
-            return;
-        }
-
-        this.linksLoading.set(true);
-        this.notice.set(null);
-
-        this.shareService
-            .listShareLinks(siteId)
-            .pipe(finalize(() => this.linksLoading.set(false)))
-            .subscribe({
-                next: (links) => {
-                    this.shareLinks.set(this.mergeKnownURLs(links));
-                },
-                error: () => {
-                    this.notice.set({ kind: 'error', key: 'share.dialog.loadFailed' });
-                }
-            });
+    private loadShareLinks(siteId: string, requests: Subscription) {
+        requests.add(
+            this.shareService
+                .listShareLinks(siteId)
+                .pipe(
+                    finalize(() => {
+                        if (this.isCurrentScope(siteId, requests)) this.linksLoading.set(false);
+                    })
+                )
+                .subscribe({
+                    next: (links) => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.shareLinks.set(this.mergeKnownURLs(links));
+                    },
+                    error: () => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.notice.set({ kind: 'error', key: 'share.dialog.loadFailed' });
+                    }
+                })
+        );
     }
 
-    private deleteShareLink(link: ShareLink) {
-        const siteId = this.siteService.activeSite()?.id;
-        if (!siteId || !this.canManageShares()) {
+    private deleteShareLink(link: ShareLink, siteId: string, requests: Subscription) {
+        if (!this.isCurrentScope(siteId, requests) || !this.shareLinks().some((current) => current.id === link.id && current.site_id === siteId)) {
             return;
         }
 
         this.deletingShareId.set(link.id);
-        this.shareService
-            .deleteShareLink(siteId, link.id)
-            .pipe(finalize(() => this.deletingShareId.set(null)))
-            .subscribe({
-                next: () => {
-                    this.shareLinks.update((links) => links.filter((existing) => existing.id !== link.id));
-                    this.notice.set({ kind: 'success', key: 'share.dialog.deleteSuccess' });
-                },
-                error: () => {
-                    this.notice.set({ kind: 'error', key: 'share.dialog.deleteFailed' });
-                }
-            });
+        requests.add(
+            this.shareService
+                .deleteShareLink(siteId, link.id)
+                .pipe(
+                    finalize(() => {
+                        if (this.isCurrentScope(siteId, requests)) this.deletingShareId.set(null);
+                    })
+                )
+                .subscribe({
+                    next: () => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.shareLinks.update((links) => links.filter((existing) => existing.id !== link.id));
+                        this.notice.set({ kind: 'success', key: 'share.dialog.deleteSuccess' });
+                    },
+                    error: () => {
+                        if (!this.isCurrentScope(siteId, requests)) return;
+                        this.notice.set({ kind: 'error', key: 'share.dialog.deleteFailed' });
+                    }
+                })
+        );
     }
 
     private copyShareLink(link: ShareLink) {
-        if (!link.url) {
+        const current = this.shareLinks().find((row) => row.id === link.id && row.site_id === this.shareSiteId());
+        if (!current?.url) {
             return;
         }
-        const copied = this.clipboard.copy(link.url);
+        const copied = this.clipboard.copy(current.url);
         this.notice.set({ kind: copied ? 'success' : 'error', key: copied ? 'common.copyControl.copied' : 'common.copyControl.failed' });
     }
 
@@ -195,11 +213,7 @@ export class SiteShareSettingsPage {
         }));
     }
 
-    private resetShareState() {
-        this.shareLinks.set([]);
-        this.linksLoading.set(false);
-        this.createLoading.set(false);
-        this.deletingShareId.set(null);
-        this.notice.set(null);
+    private isCurrentScope(siteId: string, requests: Subscription): boolean {
+        return requests === this.requests && !requests.closed && siteId === this.shareSiteId();
     }
 }

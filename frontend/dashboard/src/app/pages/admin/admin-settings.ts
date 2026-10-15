@@ -23,7 +23,7 @@ import { CopyControl } from '@components/copy-control/copy-control';
 import { RelativeDateTime } from '@components/relative-date-time/relative-date-time';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
-import { INSTANCE_CAPABILITIES } from '@core/access/capabilities';
+import { INSTANCE_CAPABILITIES, SITE_CAPABILITIES } from '@core/access/capabilities';
 import type { InstanceRole } from '@core/access/capabilities';
 import { formatDurationInterval } from '@core/i18n/duration-format';
 import { AccessService } from '@services/access.service';
@@ -1023,25 +1023,35 @@ export class AdminSettings implements OnInit {
 
     protected readonly siteActions = (site: Site): TableRowActionItem[] => {
         this.activeLanguage();
-        return [
-            {
-                label: this.transloco.translate('sites.selector.siteSettingsAria'),
-                icon: 'pi pi-cog',
-                command: () => this.router.navigate(['/sites', site.id, 'settings', 'general'])
-            },
-            { separator: true },
-            {
-                label: this.transloco.translate('share.dialog.deleteAction'),
-                icon: 'pi pi-trash',
-                danger: true,
-                disabled: this.isDeletingSite(site),
-                command: () => this.confirmDeleteSite(site)
-            }
-        ];
+        const actions: TableRowActionItem[] = [];
+        if (this.layoutContext.siteService.sites().some((candidate) => candidate.id === site.id) && this.access.canSite(site.id, SITE_CAPABILITIES.view)) {
+            actions.push(
+                {
+                    label: this.transloco.translate('sites.selector.siteSettingsAria'),
+                    icon: 'pi pi-cog',
+                    disabled: this.layoutContext.isContextPending(),
+                    command: () => {
+                        const current = this.layoutContext.siteService.sites().find((candidate) => candidate.id === site.id);
+                        if (!current || this.layoutContext.isContextPending() || !this.access.canSite(current.id, SITE_CAPABILITIES.view)) return;
+                        this.layoutContext.onSiteSelected(current);
+                        this.layoutContext.openSiteSettings();
+                    }
+                },
+                { separator: true }
+            );
+        }
+        actions.push({
+            label: this.transloco.translate('share.dialog.deleteAction'),
+            icon: 'pi pi-trash',
+            danger: true,
+            disabled: this.isDeletingSite(site),
+            command: () => this.confirmDeleteSite(site)
+        });
+        return actions;
     };
 
     protected openAddSiteDialog() {
-        this.layoutContext.isAddSiteVisible.set(true);
+        this.layoutContext.openAddSite();
     }
 
     protected readonly teamActions = (team: AdminTeam): TableRowActionItem[] => {
