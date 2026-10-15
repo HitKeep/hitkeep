@@ -1,5 +1,6 @@
 {
   "nav": {
+    "resizeSidebar": "Seitenleiste vergrößern oder verkleinern",
     "search": "Navigation durchsuchen",
     "searchPlaceholder": "Seite finden…",
     "noSearchResults": "Keine Seiten gefunden",

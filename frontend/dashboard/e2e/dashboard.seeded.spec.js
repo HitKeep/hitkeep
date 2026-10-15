@@ -666,7 +666,7 @@ test("team admin page shows seeded members and administration tabs", async ({ pa
     await expect(page.getByRole("heading", { name: "Team API clients" })).toBeVisible();
 
     await page.getByRole("tab", { name: /^Custom Domains$/i }).click();
-    await expect(page.getByRole("heading", { name: "Custom domains" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Custom domains", level: 2, exact: true })).toBeVisible();
     const trackingDomain = `track-${Date.now()}.acme-analytics.io`;
     const customDomainsUrl = page.url();
     await page.locator("app-team-tracking-domains header").getByRole("button", { name: "Add domain" }).click();

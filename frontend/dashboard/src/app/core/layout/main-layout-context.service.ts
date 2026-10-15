@@ -138,6 +138,7 @@ export class MainLayoutContextService {
                 tap(() => {
                     this.siteService.sites.set([]);
                     this.siteService.activeSite.set(null);
+                    this.perms.permissions.set(null);
                 }),
                 switchMap(() =>
                     forkJoin({

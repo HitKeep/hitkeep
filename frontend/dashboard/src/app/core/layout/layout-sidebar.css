@@ -72,3 +72,6 @@ app-layout-sidebar aside[hidden] {
 :is(app-layout-sidebar, .focus-navigation-drawer) .p-panelmenu-item-content {
     padding: 0;
 }
+.focus-navigation-drawer .focus-sidebar__link {
+    min-height: 2.75rem;
+}

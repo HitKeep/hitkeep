@@ -1,12 +1,27 @@
-<aside class="focus-sidebar flex h-full w-full flex-col bg-[var(--p-surface-card)] p-3 gap-4 overflow-y-auto" [hidden]="hiddenDesktop()" [attr.inert]="hiddenDesktop() ? '' : null" [attr.aria-label]="'nav.mainSidebarAria' | transloco">
+<aside
+    id="focus-sidebar"
+    class="focus-sidebar flex h-full w-full flex-col bg-[var(--p-surface-card)] p-3 gap-4 overflow-y-auto"
+    [hidden]="hiddenDesktop()"
+    [attr.inert]="hiddenDesktop() ? '' : null"
+    [attr.aria-label]="'nav.mainSidebarAria' | transloco"
+>
     <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco">
         <ng-container [ngTemplateOutlet]="navigation" />
     </nav>
     <app-free-plan-chip class="px-2" />
 </aside>
-<p-drawer [visible]="isMobileDrawerOpen()" (visibleChange)="isMobileDrawerOpen.set($event)" [header]="'nav.primaryNavigationAria' | transloco" appendTo="body" styleClass="focus-navigation-drawer" [style]="{ width: 'min(20rem, 100vw)' }">
+<p-drawer
+    [visible]="isMobileDrawerOpen()"
+    (visibleChange)="isMobileDrawerOpen.set($event)"
+    (onShow)="focusMobileNavigation()"
+    [pt]="{ root: { id: 'focus-mobile-navigation', role: 'dialog', 'aria-modal': 'true', 'aria-label': ('nav.primaryNavigationAria' | transloco) } }"
+    [header]="'nav.primaryNavigationAria' | transloco"
+    appendTo="body"
+    styleClass="focus-navigation-drawer"
+    [style]="{ width: 'min(20rem, 100vw)' }"
+>
     <div class="flex h-full flex-col gap-4">
-        <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco"><ng-container [ngTemplateOutlet]="navigation" /></nav>
+        <nav #mobileNavigation tabindex="-1" class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco"><ng-container [ngTemplateOutlet]="navigation" /></nav>
         <app-free-plan-chip />
     </div>
 </p-drawer>

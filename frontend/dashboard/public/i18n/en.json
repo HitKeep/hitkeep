@@ -1,5 +1,6 @@
 {
   "nav": {
+    "resizeSidebar": "Resize sidebar",
     "search": "Search navigation",
     "searchPlaceholder": "Find a page…",
     "noSearchResults": "No pages found",

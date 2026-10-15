@@ -2,13 +2,10 @@ app-main-layout {
     display: block;
 }
 app-main-layout .focus-shell {
-    display: block;
+    display: flex;
     flex: 1;
     min-height: 0;
     min-width: 0;
-}
-app-main-layout .focus-shell > .p-splitter {
-    height: 100%;
     border: 0;
     border-radius: 0;
     background: transparent;

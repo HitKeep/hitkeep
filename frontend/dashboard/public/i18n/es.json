@@ -1,5 +1,6 @@
 {
   "nav": {
+    "resizeSidebar": "Cambiar el tamaño de la barra lateral",
     "search": "Buscar en la navegación",
     "searchPlaceholder": "Buscar una página…",
     "noSearchResults": "No se encontraron páginas",

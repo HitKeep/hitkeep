@@ -3,13 +3,15 @@
         <button
             type="button"
             class="focus-header__toggle"
+            [attr.aria-controls]="desktop() ? 'focus-sidebar' : 'focus-mobile-navigation'"
+            [attr.aria-haspopup]="desktop() ? null : 'dialog'"
             (click)="desktop() ? context.toggleSidebar() : context.isMobileDrawerOpen.set(true)"
             [attr.aria-expanded]="desktop() ? !context.isSidebarCollapsed() : context.isMobileDrawerOpen()"
             [attr.aria-label]="(desktop() ? (context.isSidebarCollapsed() ? 'nav.expandSidebar' : 'nav.collapseSidebar') : 'nav.openNavigation') | transloco"
         >
             <i class="pi pi-bars" aria-hidden="true"></i>
         </button>
-        <app-brand size="small" />
+        <app-brand size="small" [compact]="!desktop()" />
     </div>
     <div class="focus-header__context" [attr.aria-busy]="context.isContextPending()">
         @if (!shareService.isShareMode()) {

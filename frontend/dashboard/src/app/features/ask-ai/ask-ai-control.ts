@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, effect, inject, linkedSignal, signal, untracked, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -119,7 +119,6 @@ export class AskAIControl {
     protected readonly aiConfigurationGuideUrl = DOCS_LINKS.aiModelConfiguration;
     protected readonly query = signal('');
     protected readonly siteStatus = signal<AskAIStatus | null>(null);
-    protected readonly drawerVisible = signal(false);
     protected readonly isLoading = this.session.isLoading;
     protected readonly response = this.session.response;
     protected readonly partialAnswer = this.session.partialAnswer;
@@ -162,6 +161,10 @@ export class AskAIControl {
         const status = this.status();
         return !this.share.isShareMode() && !!this.activeSite() && !!status?.enabled;
     });
+    protected readonly drawerVisible = linkedSignal(() => {
+        this.shouldRender();
+        return false;
+    });
     protected readonly canSubmit = computed(() => this.shouldRender() && !!this.status()?.available && this.query().trim().length > 0 && !this.isLoading());
     protected readonly statusLabelKey = computed(() => {
         const status = this.status();
@@ -195,7 +198,7 @@ export class AskAIControl {
             if (openCount === 0) {
                 return;
             }
-            this.openDrawer();
+            untracked(() => this.openDrawer());
         });
 
         effect(() => {

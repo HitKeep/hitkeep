@@ -1,6 +1,14 @@
 <div class="focus-layout flex h-dvh w-full flex-col bg-[var(--p-surface-ground)]">
     <app-layout-page-bar [desktop]="desktop()" />
-    <p-splitter class="focus-shell" [class.sidebar-hidden]="sidebarHidden()" [panelSizes]="panelSizes()" [minSizes]="minSizes()" [step]="8" (onResizeEnd)="onSidebarResize($event)">
+    <p-splitter
+        class="focus-shell"
+        [class.sidebar-hidden]="sidebarHidden()"
+        [panelSizes]="panelSizes()"
+        [minSizes]="minSizes()"
+        [step]="8"
+        [pt]="{ panel: {}, gutter: { role: 'presentation' }, gutterHandle: { role: 'separator', 'aria-label': ('nav.resizeSidebar' | transloco), 'aria-orientation': 'vertical', 'aria-valuemin': 220, 'aria-valuemax': 320, 'aria-valuenow': context.sidebarWidthPx() } }"
+        (onResizeEnd)="onSidebarResize($event)"
+    >
         <ng-template #panel>
             <app-layout-sidebar [hiddenDesktop]="sidebarHidden()" />
         </ng-template>

@@ -39,7 +39,11 @@ export class MainLayout {
 
     constructor() {
         afterNextRender(() => {
-            const observer = new ResizeObserver(([entry]) => this.containerWidth.set(Math.max(1, entry.contentRect.width)));
+            const observer = new ResizeObserver(([entry]) => {
+                const width = Math.max(1, entry.contentRect.width);
+                this.containerWidth.set(width);
+                if (width > 768) this.context.isMobileDrawerOpen.set(false);
+            });
             observer.observe(this.element.nativeElement);
             this.destroyRef.onDestroy(() => observer.disconnect());
         });

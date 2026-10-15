@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, ViewEncapsulation } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { afterNextRender, afterRenderEffect, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, viewChild, ViewEncapsulation } from '@angular/core';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
@@ -23,6 +23,10 @@ export class LayoutSidebar {
     protected readonly context = inject(MainLayoutContextService);
     private readonly sidebarMenu = inject(SidebarMenuService);
     private readonly router = inject(Router);
+    private readonly document = inject(DOCUMENT);
+    private readonly injector = inject(Injector);
+    private readonly mobileNavigation = viewChild<ElementRef<HTMLElement>>('mobileNavigation');
+    private mobileOpener: HTMLElement | null = null;
     protected readonly shareService = this.context.shareService;
     protected readonly teamService = this.context.teamService;
     protected readonly canCreateTeams = this.context.canCreateTeams;
@@ -37,6 +41,14 @@ export class LayoutSidebar {
     protected readonly mobileMenuItems = computed(() => this.sidebarMenu.mobileItems(() => this.closeMobileDrawer()));
 
     constructor() {
+        afterRenderEffect({
+            write: () => {
+                if (!this.isMobileDrawerOpen() && this.mobileOpener) {
+                    this.mobileOpener.focus();
+                    this.mobileOpener = null;
+                }
+            }
+        });
         this.revealActiveSection();
         this.router.events
             .pipe(
@@ -54,6 +66,18 @@ export class LayoutSidebar {
 
     protected closeMobileDrawer(): void {
         this.isMobileDrawerOpen.set(false);
+    }
+
+    protected focusMobileNavigation(): void {
+        this.mobileOpener = this.document.activeElement instanceof HTMLElement ? this.document.activeElement : null;
+        afterNextRender(
+            {
+                write: () => {
+                    if (this.isMobileDrawerOpen()) this.mobileNavigation()?.nativeElement.focus();
+                }
+            },
+            { injector: this.injector }
+        );
     }
 
     private sectionModel(section: SidebarMenuSectionItem): SidebarMenuSectionItem {

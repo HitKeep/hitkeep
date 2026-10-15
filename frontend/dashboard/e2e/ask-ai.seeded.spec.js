@@ -1,5 +1,6 @@
 const { test, expect } = require("playwright/test");
 const { login } = require("./support/auth");
+const { enableAskAIForBootstrap } = require("./support/ask-ai");
 
 test("ask ai stays hidden for disabled installs", async ({ page }) => {
     await login(page, "/dashboard");
@@ -150,44 +151,3 @@ test("ask ai shows the shared daily limit and can refresh availability", async (
     await expect(page.getByText("1 of 1 team questions left today")).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Ask AI prompt" })).toBeEnabled();
 });
-
-async function enableAskAIForBootstrap(page, askAIStatus = {}, cloudHosted = false) {
-    await page.route("**/api/sites/*/ask-ai/status", async (route) => {
-        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true, available: true, status: "available", budget_exhausted: false, ...askAIStatus }) });
-    });
-    await page.route("**/api/user/bootstrap", async (route) => {
-        const response = await route.fetch();
-        const bootstrap = await response.json();
-        const headers = response.headers();
-        delete headers["content-length"];
-
-        bootstrap.status = bootstrap.status || {};
-        if (cloudHosted) {
-            bootstrap.status.cloud = { ...(bootstrap.status.cloud || {}), hosted: true };
-        }
-        bootstrap.status.ai = {
-            ...(bootstrap.status.ai || {}),
-            enabled: true,
-            configured: true,
-            provider: "openai-compatible",
-            model: "openai.gpt-oss-120b",
-            ask_ai_enabled: true,
-            ask_ai_available: true
-        };
-        bootstrap.status.ask_ai = {
-            enabled: true,
-            available: true,
-            status: "available",
-            provider: "openai-compatible",
-            model: "openai.gpt-oss-120b",
-            budget_exhausted: false,
-            ...askAIStatus
-        };
-
-        await route.fulfill({
-            status: response.status(),
-            headers: { ...headers, "content-type": "application/json" },
-            body: JSON.stringify(bootstrap)
-        });
-    });
-}

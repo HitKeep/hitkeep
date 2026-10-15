@@ -441,7 +441,8 @@ async function setDarkMode(page, enabled) {
     }
 
     const label = enabled ? "Switch to dark mode" : "Switch to light mode";
-    await page.locator(`button[aria-label="${label}"]:visible`).first().click();
+    await page.getByRole("button", { name: "Open user menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: label, exact: true }).click();
     await expect.poll(isDark).toBe(enabled);
 }
 

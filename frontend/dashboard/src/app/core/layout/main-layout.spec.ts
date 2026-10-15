@@ -84,6 +84,7 @@ describe('MainLayout', () => {
                     langs: {
                         en: {
                             nav: {
+                                resizeSidebar: 'Resize sidebar',
                                 dashboard: 'Dashboard',
                                 overview: 'Overview',
                                 utm: 'UTM',
@@ -288,6 +289,15 @@ describe('MainLayout', () => {
         expect(layoutContext.isAddSiteVisible()).toBe(false);
     });
 
+    it('exposes the resize handle as a named keyboard separator with pixel bounds', async () => {
+        await fixture.whenStable();
+        const handle = fixture.nativeElement.querySelector('[role="separator"][aria-label="Resize sidebar"]');
+        expect(handle).toBeTruthy();
+        expect(handle?.getAttribute('aria-valuemin')).toBe('220');
+        expect(handle?.getAttribute('aria-valuemax')).toBe('320');
+        expect(handle?.getAttribute('aria-orientation')).toBe('vertical');
+    });
+
     it('should create', () => {
         expect(component).toBeTruthy();
     });
@@ -466,6 +476,26 @@ describe('MainLayout', () => {
         trigger.click();
         await fixture.whenStable();
         expect(document.body.querySelector('#ask-ai-drawer')).toBeTruthy();
+    });
+
+    it('closes Ask AI on entering a shared scope and requires a new explicit request afterward', async () => {
+        seedActiveSite();
+        bootstrap.status.set({ needs_setup: false, version: 'test', ask_ai: { enabled: true, available: true, status: 'available', budget_exhausted: false } });
+        fixture.detectChanges();
+        openAskAIDrawer();
+        await fixture.whenStable();
+        expect(document.body.querySelector('#ask-ai-drawer')?.getAttribute('data-p-open')).toBe('true');
+
+        const share = TestBed.inject(ShareService);
+        share.setToken('shared-site');
+        await fixture.whenStable();
+        expect(document.body.querySelector('#ask-ai-drawer')?.getAttribute('data-p-open')).not.toBe('true');
+        share.clear();
+        await fixture.whenStable();
+        expect(document.body.querySelector('#ask-ai-drawer')?.getAttribute('data-p-open')).not.toBe('true');
+        openAskAIDrawer();
+        await fixture.whenStable();
+        expect(document.body.querySelector('#ask-ai-drawer')?.getAttribute('data-p-open')).toBe('true');
     });
 
     it('keeps direct Ask AI access when enabled without a configured model', () => {
@@ -1471,6 +1501,23 @@ describe('MainLayout', () => {
         expect(teams.activeTeamId()).toBe(previousTeam);
         expect(layoutContext.isTeamSwitchPending()).toBe(false);
         expect(TestBed.inject(NavigationNoticeService).key()).toBe('teams.switcher.switchError');
+    });
+
+    it('discards old permissions after a committed team switch even when permission refresh fails', () => {
+        seedActiveSite();
+        const teams = TestBed.inject(TeamService);
+        const next = teams.teams()[1];
+        const permissions = TestBed.inject(PermissionService);
+        vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+        layoutContext.onTeamSelected(next);
+        httpMock.expectOne('/api/user/teams/active').flush({ active_team_id: next.id });
+        httpMock.expectOne('/api/user/teams').flush({ teams: teams.teams(), active_team_id: next.id });
+        httpMock.expectOne('/api/user/permissions').flush({}, { status: 500, statusText: 'Server Error' });
+        httpMock.expectOne('/api/sites').flush([]);
+        expect(teams.activeTeamId()).toBe(next.id);
+        expect(permissions.permissions()).toBeNull();
+        expect(layoutContext.isTeamAdmin()).toBe(false);
+        expect(layoutContext.isContextPending()).toBe(false);
     });
 
     it('keeps the current settings section when selecting another site', () => {
