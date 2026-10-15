@@ -714,3 +714,19 @@ test("public share links render seeded analytics without login", async ({ page }
     await expectSeededGeoNetworkMetrics(page);
     await expect(page.getByRole("button", { name: /share dashboard/i })).toHaveCount(0);
 });
+
+test("UTM keeps Analytics as the default alongside Generator and QR codes", async ({ page }) => {
+    await login(page, "/utm");
+    await expect(page.getByRole("tab", { name: "Analytics", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("app-utm-analytics app-report-range-toolbar")).toBeVisible();
+    await page.getByRole("tab", { name: /Generator|Builder/ }).click();
+    await expect(page).toHaveURL(/\/utm\/builder$/);
+    await page.getByRole("tab", { name: "QR codes", exact: true }).click();
+    await expect(page).toHaveURL(/\/utm\/qr-codes$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/utm\/builder$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/utm$/);
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "Analytics", exact: true })).toHaveAttribute("aria-selected", "true");
+});

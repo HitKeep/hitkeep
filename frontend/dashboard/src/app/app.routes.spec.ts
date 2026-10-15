@@ -38,11 +38,11 @@ describe('routes', () => {
         const mainUtm = mainChildren.find((route) => route.path === 'utm');
         const shareUtm = shareChildren.find((route) => route.path === 'utm');
 
-        expect(mainUtm?.children?.some((route) => route.path === '' && route.pathMatch === 'full' && route.redirectTo === 'builder')).toBe(true);
+        expect(mainUtm?.children?.some((route) => route.path === '' && !!route.loadComponent && !route.redirectTo)).toBe(true);
         expect(mainUtm?.children?.some((route) => route.path === 'builder')).toBe(true);
         expect(mainUtm?.children?.some((route) => route.path === 'qr-codes')).toBe(true);
 
-        expect(shareUtm?.children?.some((route) => route.path === '' && route.pathMatch === 'full' && route.redirectTo === 'qr-codes')).toBe(true);
+        expect(shareUtm?.children?.some((route) => route.path === '' && !!route.loadComponent && !route.redirectTo)).toBe(true);
         expect(shareUtm?.children?.some((route) => route.path === 'builder')).toBe(false);
         expect(shareUtm?.children?.some((route) => route.path === 'qr-codes')).toBe(true);
     });

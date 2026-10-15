@@ -136,7 +136,7 @@ export const routes: Routes = [
                         loadComponent: () => import('@pages/utm/utm').then((m) => m.UtmHub),
                         data: titleData('nav.utm', 'site'),
                         children: [
-                            { path: '', pathMatch: 'full', redirectTo: 'qr-codes' },
+                            { path: '', pathMatch: 'full', loadComponent: () => import('@pages/utm/utm-analytics').then((m) => m.UtmAnalytics) },
                             {
                                 path: 'qr-codes',
                                 loadComponent: () => import('@pages/utm/qr-codes/qr-codes').then((m) => m.QRCodesPage),
@@ -210,7 +210,7 @@ export const routes: Routes = [
                 loadComponent: () => import('@pages/utm/utm').then((m) => m.UtmHub),
                 data: titleData('nav.utm', 'site'),
                 children: [
-                    { path: '', pathMatch: 'full', redirectTo: 'builder' },
+                    { path: '', pathMatch: 'full', loadComponent: () => import('@pages/utm/utm-analytics').then((m) => m.UtmAnalytics) },
                     {
                         path: 'builder',
                         loadComponent: () => import('@pages/utm/builder/utm-builder').then((m) => m.UtmBuilder),

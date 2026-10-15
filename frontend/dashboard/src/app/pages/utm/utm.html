@@ -2,6 +2,9 @@
     <section class="utm-shell" [attr.aria-label]="'nav.utm' | transloco">
         <p-tabs class="hk-page-tabs utm-tabs" [value]="activeTab()" (valueChange)="onTabChange($event)">
             <p-tablist>
+                <p-tab value="analytics"
+                    ><span class="utm-tab-label"><i class="pi pi-chart-bar" aria-hidden="true"></i><span>{{ "nav.analytics" | transloco }}</span></span></p-tab
+                >
                 @if (!isShareMode()) {
                 <p-tab value="builder">
                     <span class="utm-tab-label">

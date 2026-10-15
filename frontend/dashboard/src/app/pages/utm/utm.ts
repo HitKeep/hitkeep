@@ -7,7 +7,7 @@ import { TabsModule } from '@openng/optimus-ui/tabs';
 import { PageFrame } from '@components/page-frame/page-frame';
 import { ShareService } from '@services/share.service';
 
-type UtmTab = 'builder' | 'qr-codes';
+type UtmTab = 'analytics' | 'builder' | 'qr-codes';
 
 @Component({
     selector: 'app-utm-hub',
@@ -32,12 +32,15 @@ export class UtmHub {
     );
 
     protected onTabChange(value: string | number | undefined): void {
-        const tab = value === 'builder' || value === 'qr-codes' ? value : this.activeTab();
-        void this.router.navigate([this.shareAwareLink(`/utm/${tab}`)]);
+        const tab = value === 'analytics' || value === 'builder' || value === 'qr-codes' ? value : this.activeTab();
+        if (this.isShareMode() && tab === 'builder') return;
+        void this.router.navigate([this.shareAwareLink(tab === 'analytics' ? '/utm' : `/utm/${tab}`)]);
     }
 
     private tabFromUrl(url: string): UtmTab {
-        return url.includes('/utm/qr-codes') ? 'qr-codes' : 'builder';
+        const path = url.split(/[?#]/, 1)[0];
+        if (path.includes('/utm/qr-codes')) return 'qr-codes';
+        return path.endsWith('/utm/builder') ? 'builder' : 'analytics';
     }
 
     private shareAwareLink(link: string): string {
