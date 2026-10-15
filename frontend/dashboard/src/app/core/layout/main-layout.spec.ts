@@ -1,3 +1,4 @@
+import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MainLayout } from '@layout/main-layout';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
@@ -62,6 +63,9 @@ class FakeAskAIService {
     }
 }
 
+@Component({ selector: 'app-layout-title-probe', template: '' })
+class LayoutTitleProbe {}
+
 describe('MainLayout', () => {
     let component: MainLayout;
     let fixture: ComponentFixture<MainLayout>;
@@ -80,6 +84,7 @@ describe('MainLayout', () => {
                     langs: {
                         en: {
                             nav: {
+                                dashboard: 'Dashboard',
                                 overview: 'Overview',
                                 utm: 'UTM',
                                 utmBuilder: 'UTM Builder',
@@ -255,6 +260,32 @@ describe('MainLayout', () => {
         context.toggleSidebar();
         expect(context.isSidebarCollapsed()).toBe(true);
         other.destroy();
+    });
+
+    it('renders the active route title as one page heading in the content area', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'dashboard', component: LayoutTitleProbe, data: { titleKey: 'nav.dashboard', titleScope: 'site' } }]);
+        await router.navigateByUrl('/dashboard');
+        await fixture.whenStable();
+        const headings = fixture.nativeElement.querySelectorAll('main h1');
+        expect(headings).toHaveLength(1);
+        expect(headings[0].textContent).toContain('Dashboard');
+    });
+
+    it('offers contextual site actions under the existing permission and share boundaries', () => {
+        const site = seedActiveSite();
+        expect(layoutContext.siteActions().map((item) => item.icon)).toEqual(['pi pi-cog', 'pi pi-share-alt', 'pi pi-plus']);
+        layoutContext.onSiteSelected({ ...site, id: 'removed-site' });
+        expect(TestBed.inject(SiteService).activeSite()?.id).toBe(site.id);
+        TestBed.inject(PermissionService).applyPermissions({ instance_role: 'user', permissions: { [site.id]: 'viewer' } });
+        expect(layoutContext.siteActions().some((item) => item.icon === 'pi pi-share-alt')).toBe(false);
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+        layoutContext.openSiteSettings('share');
+        expect(navigate).not.toHaveBeenCalled();
+        TestBed.inject(ShareService).setToken('public-token');
+        expect(layoutContext.siteActions()).toEqual([]);
+        layoutContext.openAddSite();
+        expect(layoutContext.isAddSiteVisible()).toBe(false);
     });
 
     it('should create', () => {

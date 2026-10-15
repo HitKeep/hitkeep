@@ -3,6 +3,7 @@ import { SiteSelector } from '@features/sites/components/site-selector';
 import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
+import { userEvent } from 'vitest/browser';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 
 describe('SiteSelector', () => {
@@ -34,6 +35,24 @@ describe('SiteSelector', () => {
 
     afterEach(() => {
         TestBed.resetTestingModule();
+    });
+
+    it('keeps contextual Add site available when the team has no sites and closes the selector', async () => {
+        let opened = 0;
+        fixture.componentRef.setInput('sites', []);
+        fixture.componentRef.setInput('current', null);
+        fixture.componentRef.setInput('actions', [{ label: 'Add site', icon: 'pi pi-plus', command: () => opened++ }]);
+        await fixture.whenStable();
+        const select = fixture.nativeElement.querySelector('p-select') as HTMLElement;
+        expect(select).toBeTruthy();
+        select.click();
+        await fixture.whenStable();
+        const action = fixture.nativeElement.querySelector('button[aria-label="Add site"]') as HTMLButtonElement;
+        expect(action).toBeTruthy();
+        await userEvent.click(action);
+        await fixture.whenStable();
+        expect(opened).toBe(1);
+        await expect.poll(() => fixture.nativeElement.querySelector('.p-select-overlay')).toBeNull();
     });
 
     it('should create', () => {

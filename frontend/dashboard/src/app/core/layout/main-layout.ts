@@ -10,6 +10,7 @@ import { LayoutPageBar } from '@layout/layout-page-bar';
 import { LayoutSidebar } from '@layout/layout-sidebar';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService } from '@layout/sidebar-menu.service';
+import { DashboardTitleService } from '@services/dashboard-title.service';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
 
 @Component({
@@ -23,6 +24,7 @@ import { NavigationNoticeService } from '@services/navigation-notice.service';
 })
 export class MainLayout {
     protected readonly context = inject(MainLayoutContextService);
+    protected readonly dashboardTitle = inject(DashboardTitleService);
     protected readonly navigationNotice = inject(NavigationNoticeService);
     private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
     private readonly destroyRef = inject(DestroyRef);

@@ -3,14 +3,16 @@ import { Component, input, output, ChangeDetectionStrategy, effect, signal } fro
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { SelectModule } from '@openng/optimus-ui/select';
+import { MenuItem } from '@openng/optimus-ui/api';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { Select, SelectModule } from '@openng/optimus-ui/select';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
 import { Site } from '@models/analytics.types';
 import { SiteSelectOption } from '@features/sites/components/site-select-option';
 @Component({
     selector: 'app-site-selector',
     standalone: true,
-    imports: [ReactiveFormsModule, SelectModule, SkeletonModule, SiteSelectOption, TranslocoPipe],
+    imports: [ButtonModule, ReactiveFormsModule, SelectModule, SkeletonModule, SiteSelectOption, TranslocoPipe],
     changeDetection: ChangeDetectionStrategy.OnPush,
     styleUrl: './site-selector.css',
     template: `
@@ -18,29 +20,47 @@ import { SiteSelectOption } from '@features/sites/components/site-select-option'
             @if (loading()) {
                 <p-skeleton height="40px" class="rounded-md" />
             } @else {
-                @if (sites().length > 0) {
-                    <p-select
-                        inputId="site-dropdown"
-                        [options]="sites()"
-                        [formControl]="siteForm.selectedSite().control()"
-                        [filter]="true"
-                        filterBy="domain"
-                        dataKey="id"
-                        (onChange)="onSiteChange($event.value)"
-                        optionLabel="domain"
-                        [placeholder]="'sites.selector.selectPlaceholder' | transloco"
-                        class="site-selector__select w-full text-sm"
-                        [attr.aria-label]="'sites.selector.selectSiteAria' | transloco"
-                    >
-                        <ng-template pTemplate="selectedItem" let-selected>
-                            <app-site-select-option [site]="selected" [selected]="true" />
-                        </ng-template>
+                <p-select
+                    #siteSelect
+                    inputId="site-dropdown"
+                    [options]="sites()"
+                    [formControl]="siteForm.selectedSite().control()"
+                    [filter]="true"
+                    filterBy="domain"
+                    dataKey="id"
+                    (onChange)="onSiteChange($event.value)"
+                    optionLabel="domain"
+                    [placeholder]="'sites.selector.selectPlaceholder' | transloco"
+                    class="site-selector__select w-full text-sm"
+                    [attr.aria-label]="'sites.selector.selectSiteAria' | transloco"
+                >
+                    <ng-template pTemplate="selectedItem" let-selected>
+                        <app-site-select-option [site]="selected" [selected]="true" />
+                    </ng-template>
 
-                        <ng-template pTemplate="item" let-site>
-                            <app-site-select-option [site]="site" />
-                        </ng-template>
-                    </p-select>
-                }
+                    <ng-template pTemplate="item" let-site>
+                        <app-site-select-option [site]="site" />
+                    </ng-template>
+                    <ng-template pTemplate="footer">
+                        @if (actions().length) {
+                            <div class="border-t border-surface p-1">
+                                @for (action of actions(); track action.label) {
+                                    <p-button
+                                        [label]="action.label"
+                                        [icon]="action.icon"
+                                        [ariaLabel]="action.label"
+                                        [disabled]="disabled() || action.disabled"
+                                        [text]="true"
+                                        severity="secondary"
+                                        size="small"
+                                        [style]="{ width: '100%', justifyContent: 'flex-start' }"
+                                        (onClick)="onAction(action, $event, siteSelect)"
+                                    />
+                                }
+                            </div>
+                        }
+                    </ng-template>
+                </p-select>
             }
         </div>
     `
@@ -55,6 +75,7 @@ export class SiteSelector {
     current = input<Site | null>(null);
     loading = input<boolean>(false);
     readonly disabled = input(false);
+    readonly actions = input<MenuItem[]>([]);
     siteSelected = output<Site>();
 
     constructor() {
@@ -66,6 +87,12 @@ export class SiteSelector {
         effect(() => {
             this.siteForm.selectedSite().control().setValue(this.current(), { emitEvent: false });
         });
+    }
+
+    protected onAction(item: MenuItem, event: Event, select: Select): void {
+        if (this.disabled() || item.disabled || !this.actions().includes(item)) return;
+        select.hide();
+        item.command?.({ originalEvent: event, item });
     }
 
     protected onSiteChange(site: Site | null): void {

@@ -27,12 +27,20 @@
             (addClicked)="isCreateTeamVisible.set(true)"
         />
         <span class="focus-header__divider" aria-hidden="true">/</span>
-        <app-site-selector class="focus-header__site" [sites]="siteService.sites()" [current]="siteService.activeSite()" [loading]="siteService.isLoading()" [disabled]="context.isContextPending()" (siteSelected)="context.onSiteSelected($event)" />
+        <app-site-selector
+            class="focus-header__site"
+            [sites]="siteService.sites()"
+            [current]="siteService.activeSite()"
+            [actions]="context.siteActions()"
+            [loading]="siteService.isLoading()"
+            [disabled]="context.isContextPending()"
+            (siteSelected)="context.onSiteSelected($event)"
+        />
         <button
             type="button"
             class="focus-header__toggle"
             (click)="context.openSiteSettings('general')"
-            [disabled]="!siteService.activeSite() || context.isContextPending()"
+            [disabled]="!context.canOpenSiteSettings() || context.isContextPending()"
             [attr.aria-label]="'sites.selector.siteSettingsAria' | transloco"
             [title]="'sites.selector.siteSettingsAria' | transloco"
         >

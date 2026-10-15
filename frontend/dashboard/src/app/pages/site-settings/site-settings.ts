@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
+import { BreadcrumbModule } from '@openng/optimus-ui/breadcrumb';
+import { MenuItem } from '@openng/optimus-ui/api';
 import { TabsModule } from '@openng/optimus-ui/tabs';
 import { filter, map } from 'rxjs';
 
@@ -22,7 +24,7 @@ interface SiteSettingsTab {
 
 @Component({
     selector: 'app-site-settings-page',
-    imports: [PageFrame, TabsModule, RouterLink, RouterOutlet],
+    imports: [BreadcrumbModule, PageFrame, TabsModule, RouterLink, RouterOutlet],
     templateUrl: './site-settings.html',
     changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -67,6 +69,11 @@ export class SiteSettingsPage {
             }
         ];
         return tabs.filter((tab) => tab.visible);
+    });
+
+    protected readonly breadcrumbs = computed<MenuItem[]>(() => {
+        this.activeLanguage();
+        return [{ label: this.transloco.translate('sites.settings.title'), routerLink: ['/sites', this.site()?.id, 'settings', 'general'] }, { label: this.tabs().find((tab) => tab.route === this.activeTab())?.label ?? '' }];
     });
 
     private activeChildSegment(): SiteSettingsSection {

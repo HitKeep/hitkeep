@@ -4,7 +4,10 @@ import { NavigationEnd, Router } from '@angular/router';
 import { catchError, filter, finalize, forkJoin, map, of, startWith, switchMap, tap } from 'rxjs';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
 import { Site, Team } from '@models/analytics.types';
-import { TEAM_CAPABILITIES } from '@core/access/capabilities';
+import { MenuItem } from '@openng/optimus-ui/api';
+import { TranslocoService } from '@jsverse/transloco';
+import { injectActiveLang } from '@core/i18n/active-lang';
+import { SITE_CAPABILITIES, TEAM_CAPABILITIES } from '@core/access/capabilities';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { AccessService } from '@services/access.service';
 import { PermissionService } from '@services/permission.service';
@@ -19,6 +22,8 @@ export class MainLayoutContextService {
     private readonly destroyRef = inject(DestroyRef);
     readonly siteService = inject(SiteService);
     readonly shareService = inject(ShareService);
+    private readonly transloco = inject(TranslocoService);
+    private readonly activeLanguage = injectActiveLang();
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly access = inject(AccessService);
     readonly teamService = inject(TeamService);
@@ -34,6 +39,16 @@ export class MainLayoutContextService {
     private readonly navigationNotice = inject(NavigationNoticeService);
     readonly isTeamSwitchPending = signal(false);
     readonly isContextPending = computed(() => this.isTeamSwitchPending() || this.siteService.isLoading());
+    readonly canOpenSiteSettings = computed(() => !this.shareService.isShareMode() && !!this.siteService.activeSite() && this.access.canActiveSite(SITE_CAPABILITIES.view));
+    readonly siteActions = computed<MenuItem[]>(() => {
+        this.activeLanguage();
+        if (this.shareService.isShareMode() || this.isContextPending()) return [];
+        const items: MenuItem[] = [];
+        if (this.canOpenSiteSettings()) items.push({ label: this.transloco.translate('sites.settings.title'), icon: 'pi pi-cog', command: () => this.openSiteSettings() });
+        if (this.access.canActiveSite(SITE_CAPABILITIES.manageTeam)) items.push({ label: this.transloco.translate('share.dialog.title'), icon: 'pi pi-share-alt', command: () => this.openSiteSettings('share') });
+        items.push({ label: this.transloco.translate('overview.actions.addSite'), icon: 'pi pi-plus', command: () => this.openAddSite() });
+        return items;
+    });
     readonly isMobileDrawerOpen = signal(false);
     private readonly sidebarPreference = this.readSidebarPreference();
     readonly isSidebarCollapsed = signal(this.sidebarPreference.collapsed);
@@ -91,13 +106,20 @@ export class MainLayoutContextService {
 
     openSiteSettings(section: SiteSettingsSection = 'general') {
         const site = this.siteService.activeSite();
-        if (!site || this.shareService.isShareMode() || this.isContextPending()) return;
+        if (!site || !this.canOpenSiteSettings() || this.isContextPending()) return;
+        if (section === 'share' && !this.access.canActiveSite(SITE_CAPABILITIES.manageTeam)) return;
         void this.router.navigate(['/sites', site.id, 'settings', section]);
+    }
+
+    openAddSite(): void {
+        if (!this.shareService.isShareMode() && !this.isContextPending()) this.isAddSiteVisible.set(true);
     }
 
     onSiteSelected(site: Site) {
         if (this.shareService.isShareMode() || this.isContextPending()) return;
-        this.siteService.selectSite(site);
+        const selected = this.siteService.sites().find((candidate) => candidate.id === site.id);
+        if (!selected) return;
+        this.siteService.selectSite(selected);
         const section = this.currentSiteSettingsSection();
         if (section) {
             void this.router.navigate(['/sites', site.id, 'settings', section]);

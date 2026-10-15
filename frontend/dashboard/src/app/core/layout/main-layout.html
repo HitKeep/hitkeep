@@ -14,6 +14,8 @@
                         <div class="flex flex-wrap gap-2"><ng-container [ngTemplateOutlet]="right" /></div>
                         }
                     </div>
+                    } @if (!context.hasPageHeader() && dashboardTitle.pageTitle(); as heading) {
+                    <h1 class="mb-5 text-xl font-semibold tracking-tight text-color">{{ heading }}</h1>
                     }
                     <app-free-plan-retention-notice />
                     @if (navigationNotice.key(); as noticeKey) {
