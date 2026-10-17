@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01T23:16:25.817433929Z",
+  "generated_at": "2026-10-15T22:28:49.971016388Z",
   "sources": {
     "ai_robots_txt": "https://raw.githubusercontent.com/ai-robots-txt/ai.robots.txt/main/robots.json",
     "crawler_user_agents": "https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json",
@@ -1150,6 +1150,28 @@
       ]
     },
     {
+      "token": "grokappandroid",
+      "name": "GrokAppAndroid",
+      "family": "xAI",
+      "category": "ai_search_indexer",
+      "respects_robots_txt": "unclear",
+      "url": "https://x.ai",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "grokbot",
+      "name": "GrokBot",
+      "family": "xAI",
+      "category": "ai_search_indexer",
+      "respects_robots_txt": "unclear",
+      "url": "https://x.ai",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "groq-bot",
       "name": "Groq-Bot",
       "family": "Groq, Inc.",
@@ -1363,6 +1385,17 @@
       "sources": [
         "ai_robots_txt",
         "crawler_user_agents"
+      ]
+    },
+    {
+      "token": "keenablebot",
+      "name": "KeenableBot",
+      "family": "Keenable",
+      "category": "ai_search_indexer",
+      "respects_robots_txt": "unclear",
+      "url": "https://keenable.ai/",
+      "sources": [
+        "ai_robots_txt"
       ]
     },
     {
@@ -1666,6 +1699,17 @@
       "family": "Naget Inc (founded by Chris Samarinas, headquarter in Amherst, Massachusetts)",
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "nbot",
+      "name": "nbot",
+      "family": "NBot",
+      "category": "ai_search_indexer",
+      "respects_robots_txt": "unclear",
+      "url": "https://nbot.ai",
       "sources": [
         "ai_robots_txt"
       ]
@@ -2380,8 +2424,8 @@
     },
     {
       "token": "webzio-extended",
-      "name": "Webzio-Extended",
-      "family": "Webzio-Extended",
+      "name": "webzio-extended",
+      "family": "webzio-extended",
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
       "url": "https://docs.webz.io/reference/how-it-works-video",
