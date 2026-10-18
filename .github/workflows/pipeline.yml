@@ -203,13 +203,13 @@ jobs:
           export CC=gcc
           export CXX=g++
 
-          HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.0 build \
+          HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.3 build \
             --snapshot \
             --clean \
             --single-target \
             --id self-hosted \
             --output "hitkeep-${{ matrix.artifact_suffix }}"
-          HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.0 build \
+          HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.3 build \
             --snapshot \
             --clean \
             --single-target \
