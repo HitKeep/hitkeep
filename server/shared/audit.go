@@ -134,7 +134,7 @@ func (c *Context) withAuditRequestMetadata(r *http.Request, event AuditEvent) Au
 		event.UserAgent = r.UserAgent()
 	}
 	if strings.TrimSpace(event.RequestID) == "" {
-		event.RequestID = r.Header.Get("X-Request-Id")
+		event.RequestID = r.Header.Get("X-Request-ID")
 	}
 	return event
 }

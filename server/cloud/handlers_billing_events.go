@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	stripe "github.com/stripe/stripe-go/v86"
+	stripe "github.com/stripe/stripe-go/v87"
 
 	"hitkeep/api"
 	"hitkeep/appurl"
@@ -24,6 +24,11 @@ import (
 )
 
 func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) error {
+	if event.Type == "invoice.payment_failed" && event.Data != nil {
+		if invoice, err := parseStripeInvoiceEvent(event.Data.Raw); err == nil && invoice.isManualInvoice() {
+			return nil
+		}
+	}
 	eventJurisdiction, err := jurisdictionFromStripeEvent(event)
 	if err != nil {
 		return err
@@ -494,9 +499,20 @@ func (p *stripeSubscriptionEventPayload) FirstPriceID() string {
 }
 
 type stripeInvoiceEventPayload struct {
-	Customer     stripeExpandableRef `json:"customer"`
-	Subscription stripeExpandableRef `json:"subscription"`
-	Metadata     map[string]string   `json:"metadata"`
+	Customer      stripeExpandableRef `json:"customer"`
+	Subscription  stripeExpandableRef `json:"subscription"`
+	Metadata      map[string]string   `json:"metadata"`
+	BillingReason string              `json:"billing_reason"`
+	Parent        struct {
+		Type                string `json:"type"`
+		SubscriptionDetails struct {
+			Subscription stripeExpandableRef `json:"subscription"`
+		} `json:"subscription_details"`
+	} `json:"parent"`
+}
+
+func (p *stripeInvoiceEventPayload) isManualInvoice() bool {
+	return p.BillingReason == "manual" && p.Subscription.ID == "" && p.Parent.Type != "subscription_details" && p.Parent.SubscriptionDetails.Subscription.ID == ""
 }
 
 func (p *stripeInvoiceEventPayload) TenantID() uuid.UUID {
@@ -519,6 +535,9 @@ func parseStripeInvoiceEvent(raw []byte) (*stripeInvoiceEventPayload, error) {
 	var invoice stripeInvoiceEventPayload
 	if err := json.Unmarshal(raw, &invoice); err != nil {
 		return nil, err
+	}
+	if invoice.Subscription.ID == "" {
+		invoice.Subscription = invoice.Parent.SubscriptionDetails.Subscription
 	}
 	return &invoice, nil
 }

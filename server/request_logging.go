@@ -24,7 +24,7 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 			"method", r.Method,
 			"path", safeRequestPath(r.URL.Path),
 		))
-		w.Header().Set("X-Request-Id", requestID)
+		w.Header().Set("X-Request-ID", requestID)
 
 		started := time.Now()
 		response := &statusResponseWriter{ResponseWriter: w}
@@ -47,7 +47,7 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 }
 
 func requestIDFromRequest(r *http.Request) string {
-	requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
 	if requestID != "" && len(requestID) <= maxRequestIDLength && strings.IndexFunc(requestID, unicode.IsControl) == -1 {
 		return requestID
 	}
