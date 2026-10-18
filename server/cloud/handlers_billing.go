@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	stripe "github.com/stripe/stripe-go/v86"
+	stripe "github.com/stripe/stripe-go/v87"
 
 	"hitkeep/api"
 	"hitkeep/appurl"
@@ -32,7 +32,7 @@ const (
 	subscriptionStatusActive   = database.CloudSubscriptionStatusActive
 	subscriptionStatusPending  = database.CloudSubscriptionStatusPendingCheckout
 	subscriptionStatusCanceled = database.CloudSubscriptionStatusCanceled
-	stripeAPIVersion           = "2026-06-24.dahlia"
+	stripeAPIVersion           = stripe.APIVersion
 )
 
 type stripeClient interface {

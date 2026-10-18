@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	stripe "github.com/stripe/stripe-go/v86"
-	"github.com/stripe/stripe-go/v86/webhook"
+	stripe "github.com/stripe/stripe-go/v87"
+	"github.com/stripe/stripe-go/v87/webhook"
 	"golang.org/x/time/rate"
 
 	"hitkeep/config"

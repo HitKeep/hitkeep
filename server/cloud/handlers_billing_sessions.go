@@ -38,6 +38,16 @@ func (h *handler) handleStripeWebhook() http.HandlerFunc {
 
 		event, err := h.webhooks.ConstructEvent(payload, r.Header.Get("Stripe-Signature"), h.ctx.Config.StripeWebhookSecret)
 		if err != nil {
+			if errors.Is(err, errStripeAPIVersionMismatch) {
+				shared.LoggerFromContext(r.Context()).Error("Unsupported Stripe webhook API version", slog.Group("stripe",
+					"event_id", event.ID,
+					"event_type", event.Type,
+					"api_version", event.APIVersion,
+					"expected_api_version", stripeAPIVersion,
+				))
+				http.Error(w, "Unsupported webhook API version", http.StatusBadRequest)
+				return
+			}
 			http.Error(w, "Invalid webhook signature", http.StatusBadRequest)
 			return
 		}
