@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.14.2](https://github.com/PascaleBeier/hitkeep/compare/v2.14.1...v2.14.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* **billing:** align Stripe API and refresh Go dependencies ([#405](https://github.com/PascaleBeier/hitkeep/issues/405)) ([5996e85](https://github.com/PascaleBeier/hitkeep/commit/5996e850f6034bb3aa1b17f45a0adc8cdbde3d50))
+* **deps:** upgrade dashboard dependencies ([#407](https://github.com/PascaleBeier/hitkeep/issues/407)) ([4d70c9a](https://github.com/PascaleBeier/hitkeep/commit/4d70c9a21b58ad57618297b25c89cda5d8654714))
+
 ## [2.14.1](https://github.com/PascaleBeier/hitkeep/compare/v2.14.0...v2.14.1) (2026-10-05)
 
 
