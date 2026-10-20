@@ -221,9 +221,18 @@ func (p *Provider) Token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		credential, loadErr := tx.GetCredential(ctx, kind, tokenSignature(raw))
+		if loadErr != nil && !errors.Is(loadErr, database.ErrOAuthNotFound) {
+			_ = tx.Rollback()
+			oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+			return
+		}
 		var snapshot storedRequest
 		if loadErr == nil {
-			loadErr = json.Unmarshal(credential.Payload, &snapshot)
+			if err := json.Unmarshal(credential.Payload, &snapshot); err != nil {
+				_ = tx.Rollback()
+				oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+				return
+			}
 		}
 		if loadErr != nil || snapshot.Client.ID != form.Get("client_id") || snapshot.Audience != form.Get("resource") {
 			_ = tx.Rollback()

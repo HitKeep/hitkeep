@@ -55,15 +55,6 @@ func (s *Store) getSiteRoleForTenant(ctx context.Context, userID, siteID, tenant
 	}
 	// Existing SQL scanners and driver bindings use the legacy UUID type.
 	queryUser, querySite, queryTenant := legacyuuid.UUID(userID), legacyuuid.UUID(siteID), legacyuuid.UUID(tenantID)
-	var effectiveRole auth.SiteRole
-	hasEffectiveRole := false
-	mergeRole := func(role auth.SiteRole) {
-		if !hasEffectiveRole {
-			effectiveRole, hasEffectiveRole = role, true
-			return
-		}
-		effectiveRole = auth.MinSiteRole(effectiveRole, role)
-	}
 	var explicitRole string
 	err = s.db.QueryRowContext(ctx, `
 		SELECT sm.role FROM site_members sm
@@ -71,9 +62,8 @@ func (s *Store) getSiteRoleForTenant(ctx context.Context, userID, siteID, tenant
 		LEFT JOIN site_tenants st ON st.site_id = s.id
 		WHERE sm.user_id = ? AND sm.site_id = ? AND COALESCE(st.tenant_id, ?) = ?
 	`, queryUser, querySite, defaultTenantID, queryTenant).Scan(&explicitRole)
-	if err == nil {
-		mergeRole(auth.SiteRole(explicitRole))
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	hasExplicitRole := err == nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("failed to get site role: %w", err)
 	}
 	var ownerID legacyuuid.UUID
@@ -81,9 +71,8 @@ func (s *Store) getSiteRoleForTenant(ctx context.Context, userID, siteID, tenant
 		SELECT user_id FROM sites s LEFT JOIN site_tenants st ON st.site_id = s.id
 		WHERE s.id = ? AND COALESCE(st.tenant_id, ?) = ?
 	`, querySite, defaultTenantID, queryTenant).Scan(&ownerID)
-	if err == nil && ownerID == queryUser {
-		mergeRole(auth.SiteOwner)
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	isOwner := err == nil && ownerID == queryUser
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("failed to resolve site owner: %w", err)
 	}
 	var tenantRole string
@@ -94,12 +83,31 @@ func (s *Store) getSiteRoleForTenant(ctx context.Context, userID, siteID, tenant
 		LEFT JOIN tenant_archives ta ON ta.tenant_id = tm.tenant_id
 		WHERE s.id = ? AND COALESCE(st.tenant_id, ?) = ? AND ta.tenant_id IS NULL
 	`, defaultTenantID, queryUser, querySite, defaultTenantID, queryTenant).Scan(&tenantRole)
-	if err == nil {
-		if role, ok := tenantRoleSiteRole(tenantRole); ok {
-			mergeRole(role)
-		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("failed to resolve tenant site role: %w", err)
+	}
+	return effectiveSiteRole(sql.NullString{String: explicitRole, Valid: hasExplicitRole}, isOwner, tenantRole)
+}
+
+// effectiveSiteRole keeps scalar and batched binding reads on the same role policy.
+func effectiveSiteRole(explicitRole sql.NullString, isOwner bool, tenantRole string) (auth.SiteRole, error) {
+	var effectiveRole auth.SiteRole
+	hasEffectiveRole := false
+	mergeRole := func(role auth.SiteRole) {
+		if !hasEffectiveRole {
+			effectiveRole, hasEffectiveRole = role, true
+			return
+		}
+		effectiveRole = auth.MinSiteRole(effectiveRole, role)
+	}
+	if explicitRole.Valid {
+		mergeRole(auth.SiteRole(explicitRole.String))
+	}
+	if isOwner {
+		mergeRole(auth.SiteOwner)
+	}
+	if role, ok := tenantRoleSiteRole(tenantRole); ok {
+		mergeRole(role)
 	}
 	if !hasEffectiveRole {
 		return "", errSiteAccessDenied

@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	stduuid "uuid"
 
 	"github.com/google/uuid"
 
@@ -577,12 +576,18 @@ func (s *Store) getAPIClientAuth(ctx context.Context, tokenHash string) (*APICli
 	authz.InstanceRole = auth.InstanceRole(instanceRole)
 	authz.SiteRoles = make(map[uuid.UUID]auth.SiteRole)
 
-	defaultTenantID := uuid.Nil
-	if authz.TenantID != uuid.Nil {
-		defaultTenantID, err = s.GetDefaultTenantID(ctx)
+	defaultTenantID, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve default tenant for api client auth: %w", err)
+	}
+	if authz.UserID != uuid.Nil {
+		currentInstanceRole, err := s.GetInstanceRole(ctx, authz.UserID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve default tenant for api client auth: %w", err)
+			return nil, fmt.Errorf("failed to resolve api client actor role: %w", err)
 		}
+		authz.InstanceRole = auth.MinInstanceRole(currentInstanceRole, authz.InstanceRole)
+	} else {
+		authz.InstanceRole = auth.MinInstanceRole(auth.InstanceUser, authz.InstanceRole)
 	}
 
 	roleQuery := `
@@ -593,6 +598,20 @@ func (s *Store) getAPIClientAuth(ctx context.Context, tokenHash string) (*APICli
 		WHERE r.api_client_id = ?
 	`
 	roleArgs := []any{authz.ClientID}
+	if authz.UserID != uuid.Nil {
+		roleQuery = `
+			SELECT r.site_id, r.role, sm.role, s.user_id = ?, tm.role
+			FROM api_client_site_roles r
+			JOIN sites s ON s.id = r.site_id
+			LEFT JOIN site_tenants st ON st.site_id = s.id
+			JOIN tenant_members tm ON tm.tenant_id = COALESCE(st.tenant_id, ?) AND tm.user_id = ?
+			JOIN tenants t ON t.id = tm.tenant_id
+			LEFT JOIN tenant_archives ta ON ta.tenant_id = t.id
+			LEFT JOIN site_members sm ON sm.site_id = s.id AND sm.user_id = ?
+			WHERE r.api_client_id = ? AND ta.tenant_id IS NULL
+		`
+		roleArgs = []any{authz.UserID, defaultTenantID, authz.UserID, authz.UserID, authz.ClientID}
+	}
 	if authz.TenantID != uuid.Nil {
 		roleQuery += ` AND COALESCE(st.tenant_id, ?) = ?`
 		roleArgs = append(roleArgs, defaultTenantID, authz.TenantID)
@@ -606,38 +625,28 @@ func (s *Store) getAPIClientAuth(ctx context.Context, tokenHash string) (*APICli
 	for rows.Next() {
 		var siteID uuid.UUID
 		var role string
-		if err := rows.Scan(&siteID, &role); err != nil {
+		var explicitRole sql.NullString
+		var isOwner bool
+		var tenantRole string
+		dest := []any{&siteID, &role}
+		if authz.UserID != uuid.Nil {
+			dest = append(dest, &explicitRole, &isOwner, &tenantRole)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, fmt.Errorf("failed to scan api client site role: %w", err)
 		}
-		authz.SiteRoles[siteID] = auth.SiteRole(role)
+		delegatedRole := auth.SiteRole(role)
+		if authz.UserID != uuid.Nil {
+			currentRole, err := effectiveSiteRole(explicitRole, isOwner, tenantRole)
+			if err != nil {
+				continue
+			}
+			delegatedRole = auth.MinSiteRole(currentRole, delegatedRole)
+		}
+		authz.SiteRoles[siteID] = delegatedRole
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed iterating api client site roles: %w", err)
-	}
-
-	if authz.UserID != uuid.Nil {
-		currentInstanceRole, err := s.GetInstanceRole(ctx, authz.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve api client actor role: %w", err)
-		}
-		authz.InstanceRole = auth.MinInstanceRole(currentInstanceRole, authz.InstanceRole)
-		for siteID, delegatedRole := range authz.SiteRoles {
-			tenantID, err := s.querySiteTenantID(ctx, siteID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve api client site tenant: %w", err)
-			}
-			currentRole, err := s.GetSiteRoleForTenant(ctx, stduuid.UUID(authz.UserID), stduuid.UUID(siteID), stduuid.UUID(tenantID))
-			if errors.Is(err, errSiteAccessDenied) {
-				delete(authz.SiteRoles, siteID)
-				continue
-			}
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve api client actor site role: %w", err)
-			}
-			authz.SiteRoles[siteID] = auth.MinSiteRole(currentRole, delegatedRole)
-		}
-	} else {
-		authz.InstanceRole = auth.MinInstanceRole(auth.InstanceUser, authz.InstanceRole)
 	}
 
 	now := time.Now().UTC()

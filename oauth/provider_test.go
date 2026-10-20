@@ -187,6 +187,69 @@ func TestOAuthProviderPKCEBindingRollbackAndSignatureOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+func TestOAuthProviderTokenLoadFailurePreservesRefresh(t *testing.T) {
+	f := newProviderFixture(t)
+	code, verifier := f.authorize(t)
+	status, first := f.token(t, f.codeForm(code, verifier))
+	requireToken(t, status, first)
+
+	t.Run("query failure", func(t *testing.T) {
+		if _, err := f.store.DB().ExecContext(t.Context(), "ALTER TABLE oauth_credentials RENAME TO oauth_credentials_unavailable"); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := f.store.DB().ExecContext(t.Context(), "ALTER TABLE oauth_credentials_unavailable RENAME TO oauth_credentials"); err != nil {
+				t.Fatal(err)
+			}
+		}()
+		status, result := f.token(t, f.refreshForm(first.RefreshToken))
+		if status != http.StatusServiceUnavailable || result.Error != "temporarily_unavailable" {
+			t.Fatalf("temporary query failure invalidated refresh: %d %+v", status, result)
+		}
+	})
+
+	t.Run("corrupt snapshot", func(t *testing.T) {
+		signature := tokenSignature(first.RefreshToken)
+		var payload string
+		if err := f.store.DB().QueryRowContext(t.Context(), "SELECT payload FROM oauth_credentials WHERE kind='refresh' AND signature=?", signature).Scan(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.DB().ExecContext(t.Context(), "UPDATE oauth_credentials SET payload=? WHERE kind='refresh' AND signature=?", "{", signature); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := f.store.DB().ExecContext(t.Context(), "UPDATE oauth_credentials SET payload=? WHERE kind='refresh' AND signature=?", payload, signature); err != nil {
+				t.Fatal(err)
+			}
+		}()
+		status, result := f.token(t, f.refreshForm(first.RefreshToken))
+		if status != http.StatusServiceUnavailable || result.Error != "temporarily_unavailable" {
+			t.Fatalf("corrupt snapshot reported as invalid refresh: %d %+v", status, result)
+		}
+	})
+
+	unknown, _, err := newOpaqueToken(refreshTokenPrefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func(url.Values){
+		"unknown credential": func(form url.Values) { form.Set("refresh_token", unknown) },
+		"wrong client":       func(form url.Values) { form.Set("client_id", "other-client") },
+		"wrong resource":     func(form url.Values) { form.Set("resource", f.p.Resource("mcp")) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			form := f.refreshForm(first.RefreshToken)
+			change(form)
+			status, result := f.token(t, form)
+			if status != http.StatusBadRequest || result.Error != "invalid_grant" {
+				t.Fatalf("permanent credential failure became recoverable: %d %+v", status, result)
+			}
+		})
+	}
+	status, recovered := f.token(t, f.refreshForm(first.RefreshToken))
+	requireToken(t, status, recovered)
+}
+
 func TestOAuthProviderCodeRaceAndReplayRevokesDescendants(t *testing.T) {
 	f := newProviderFixture(t)
 	code, verifier := f.authorize(t)
