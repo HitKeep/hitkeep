@@ -17,13 +17,14 @@ import { injectActiveLang } from '@core/i18n/active-lang';
 import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
 import { AuthCard } from '@core/components/auth-card/auth-card';
 import { Brand } from '@components/brand/brand';
-import { UserControls } from '@components/user-controls/user-controls';
 import { UserProfileService } from '@services/user-profile.service';
+import { UserMenuService } from '@services/user-menu.service';
 
 @Component({
     selector: 'app-oauth-consent',
-    imports: [ReactiveFormsModule, RouterLink, TranslocoPipe, ButtonModule, CheckboxModule, MessageModule, SelectModule, AuthCard, Brand, UserControls],
+    imports: [ReactiveFormsModule, RouterLink, TranslocoPipe, ButtonModule, CheckboxModule, MessageModule, SelectModule, AuthCard, Brand],
     templateUrl: './oauth-consent.html',
+    styleUrl: './oauth-consent.scss',
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OAuthConsentPage {
@@ -31,6 +32,7 @@ export class OAuthConsentPage {
     protected readonly action = browserAppUrl(inject(DOCUMENT), '/api/oauth/consent');
     private readonly language = injectActiveLang();
     protected readonly profile = inject(UserProfileService);
+    protected readonly accountMenu = inject(UserMenuService);
     protected readonly decisionErrorKey =
         new Map([
             ['expired', 'oauth.expired'],

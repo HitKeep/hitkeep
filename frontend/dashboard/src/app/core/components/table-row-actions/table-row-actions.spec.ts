@@ -1,18 +1,23 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { TranslocoTestingModule } from '@jsverse/transloco';
+import { Menu } from '@openng/optimus-ui/menu';
+import { firstValueFrom } from 'rxjs';
 import { vi } from 'vitest';
 
 import { TableRowActions, TableRowActionItem } from './table-row-actions';
 
 describe('TableRowActions', () => {
     let fixture: ComponentFixture<TableRowActions>;
+    let ownedMenus: Set<Menu>;
     const editCommand = vi.fn();
     const deleteCommand = vi.fn();
 
     beforeEach(async () => {
         editCommand.mockReset();
         deleteCommand.mockReset();
+        ownedMenus = new Set();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -38,11 +43,18 @@ describe('TableRowActions', () => {
 
         fixture = TestBed.createComponent(TableRowActions);
         fixture.componentRef.setInput('items', rowItems());
-        fixture.detectChanges();
+        await fixture.whenStable();
     });
 
-    afterEach(() => {
-        document.querySelectorAll('.table-row-actions-menu').forEach((element) => element.remove());
+    afterEach(async () => {
+        for (const menu of ownedMenus) {
+            if (menu.overlayVisible) {
+                const hidden = firstValueFrom(menu.onHide);
+                menu.hide();
+                await fixture.whenStable();
+                await hidden;
+            }
+        }
     });
 
     it('renders an accessible ellipsis trigger', () => {
@@ -53,88 +65,107 @@ describe('TableRowActions', () => {
     });
 
     it('opens a OptimusUI menu and executes item commands', async () => {
-        triggerButton().click();
-        fixture.detectChanges();
-        await fixture.whenStable();
+        const menu = await openMenu();
+        expect(menuElement(menu)?.textContent).toContain('Edit');
+        expect(menuElement(menu)?.textContent).toContain('Delete');
 
-        const menu = document.querySelector('.table-row-actions-menu');
-        expect(menu?.textContent).toContain('Edit');
-        expect(menu?.textContent).toContain('Delete');
-
-        (menu?.querySelectorAll('a')[0] as HTMLElement).click();
-        fixture.detectChanges();
-        await fixture.whenStable();
+        await clickEdit(menu);
 
         expect(editCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it('executes the current menu command when an inert overlay precedes it in the document', async () => {
+        const menu = await openMenu();
+        const staleOverlay = menuElement(menu)!.cloneNode(true) as HTMLElement;
+        staleOverlay.id = `${menu.id}_stale`;
+        document.body.prepend(staleOverlay);
+
+        try {
+            expect(document.querySelector('.table-row-actions-menu')).toBe(staleOverlay);
+            await clickEdit(menu);
+            expect(editCommand).toHaveBeenCalledTimes(1);
+        } finally {
+            staleOverlay.remove();
+        }
     });
 
     it('reopens after a command runs from the menu', async () => {
-        triggerButton().click();
-        fixture.detectChanges();
-        await fixture.whenStable();
-        (document.querySelector('.table-row-actions-menu a') as HTMLElement).click();
-        fixture.detectChanges();
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        fixture.detectChanges();
-
-        triggerButton().click();
-        fixture.detectChanges();
-        await fixture.whenStable();
+        const menu = await openMenu();
+        await clickEdit(menu);
+        await openMenu();
 
         expect(editCommand).toHaveBeenCalledTimes(1);
-        expect(document.querySelector('.table-row-actions-menu')?.textContent).toContain('Edit');
+        expect(menuElement(menu)?.textContent).toContain('Edit');
     });
 
-    it('supports disabled state', () => {
+    it('supports disabled state', async () => {
         fixture.componentRef.setInput('disabled', true);
-        fixture.detectChanges();
+        await fixture.whenStable();
 
         expect(triggerButton().disabled).toBe(true);
     });
 
     it('applies danger styling to destructive menu items', async () => {
-        triggerButton().click();
-        fixture.detectChanges();
-        await fixture.whenStable();
+        const menu = await openMenu();
 
-        const dangerItem = document.querySelector('.table-row-actions-menu .table-row-actions-menu__item--danger');
+        const dangerItem = menuElement(menu)?.querySelector('.table-row-actions-menu__item--danger');
 
         expect(dangerItem?.textContent).toContain('Delete');
     });
 
     it('opens a different row menu on the first click when another row menu is already open', async () => {
         const hostFixture = TestBed.createComponent(TableRowActionsHost);
-        hostFixture.detectChanges();
+        await hostFixture.whenStable();
+        const first = await openMenu(hostFixture);
 
-        const buttons = hostFixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
-        buttons[0]?.click();
-        hostFixture.detectChanges();
+        expect(menuElement(first)?.textContent).toContain('First');
+
+        const firstHidden = firstValueFrom(first.onHide);
+        const second = await openMenu(hostFixture, 1);
+        await firstHidden;
         await hostFixture.whenStable();
 
-        expect(document.querySelector('.table-row-actions-menu')?.textContent).toContain('First');
-
-        buttons[1]?.click();
-        hostFixture.detectChanges();
-        await hostFixture.whenStable();
-
-        const menus = Array.from(document.querySelectorAll('.table-row-actions-menu'));
+        const menus = [menuElement(first), menuElement(second)].filter((menu): menu is HTMLElement => menu !== null);
         expect(menus.filter((menu) => menu.textContent?.includes('Second')).length).toBe(1);
         expect(menus.some((menu) => menu.textContent?.includes('First'))).toBe(false);
     });
 
     it('closes an open menu when the same trigger is clicked again', async () => {
+        const menu = await openMenu();
+
+        expect(menuElement(menu)?.textContent).toContain('Edit');
+
+        const hidden = firstValueFrom(menu.onHide);
         triggerButton().click();
-        fixture.detectChanges();
+        await fixture.whenStable();
+        await hidden;
         await fixture.whenStable();
 
-        expect(document.querySelector('.table-row-actions-menu')?.textContent).toContain('Edit');
-
-        triggerButton().click();
-        fixture.detectChanges();
-        await fixture.whenStable();
-
-        expect(document.querySelector('.table-row-actions-menu')?.textContent ?? '').not.toContain('Edit');
+        expect(menuElement(menu)?.textContent ?? '').not.toContain('Edit');
     });
+
+    async function openMenu(currentFixture: ComponentFixture<unknown> = fixture, index = 0): Promise<Menu> {
+        const menu = currentFixture.debugElement.queryAll(By.directive(Menu))[index].componentInstance as Menu;
+        ownedMenus.add(menu);
+        const shown = firstValueFrom(menu.onShow);
+        (currentFixture.nativeElement.querySelectorAll('button')[index] as HTMLButtonElement).click();
+        await currentFixture.whenStable();
+        await shown;
+        expect(menuElement(menu)?.isConnected).toBe(true);
+        return menu;
+    }
+
+    async function clickEdit(menu: Menu): Promise<void> {
+        const hidden = firstValueFrom(menu.onHide);
+        (menuElement(menu)?.querySelector('a') as HTMLElement).click();
+        await fixture.whenStable();
+        await hidden;
+        await fixture.whenStable();
+    }
+
+    function menuElement(menu: Menu): HTMLElement | null {
+        return document.getElementById(menu.id!);
+    }
 
     function triggerButton(): HTMLButtonElement {
         return fixture.nativeElement.querySelector('button');

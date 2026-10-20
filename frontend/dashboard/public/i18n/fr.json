@@ -1,5 +1,6 @@
 {
   "oauth": {
+    "connectionDetails": "Détails de la connexion",
     "consentTitle": "Autoriser une application",
     "consentDescription": "Vérifiez l’application et choisissez les sites auxquels elle pourra accéder.",
     "loading": "Chargement des applications et des autorisations…",

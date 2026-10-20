@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, signal } from '@angular/core';
+import { signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
@@ -9,11 +9,8 @@ import { vi } from 'vitest';
 import { OAuthConsent } from '@models/oauth.types';
 import { OAuthService } from '@services/oauth.service';
 import { OAuthConsentPage } from './oauth-consent';
-import { UserControls } from '@components/user-controls/user-controls';
 import { UserProfileService } from '@services/user-profile.service';
-
-@Component({ selector: 'app-user-controls', template: '' })
-class UserControlsStub {}
+import { UserMenuService } from '@services/user-menu.service';
 
 const preview = (): OAuthConsent => ({
     client: { id: 'client-1', name: '<img src=x onerror=alert(1)>', callback_origin: 'https://client.example' },
@@ -37,9 +34,11 @@ interface ConsentControls {
 describe('OAuthConsentPage', () => {
     let fixture: ComponentFixture<OAuthConsentPage>;
     const oauth = { consent: vi.fn() };
+    const accountMenu = { signOut: vi.fn() };
 
     beforeEach(() => {
         oauth.consent.mockReset().mockReturnValue(of(preview()));
+        accountMenu.signOut.mockClear();
         TestBed.configureTestingModule({
             imports: [
                 OAuthConsentPage,
@@ -49,9 +48,8 @@ describe('OAuthConsentPage', () => {
                     preloadLangs: true
                 })
             ],
-            providers: [provideRouter([]), { provide: OAuthService, useValue: oauth }, { provide: UserProfileService, useValue: { profile: signal({ email: 'user@example.test' }) } }]
+            providers: [provideRouter([]), { provide: OAuthService, useValue: oauth }, { provide: UserProfileService, useValue: { profile: signal({ email: 'user@example.test' }) } }, { provide: UserMenuService, useValue: accountMenu }]
         });
-        TestBed.overrideComponent(OAuthConsentPage, { remove: { imports: [UserControls] }, add: { imports: [UserControlsStub] } });
     });
 
     async function create() {
@@ -157,6 +155,21 @@ describe('OAuthConsentPage', () => {
         TestBed.inject(TranslocoService).setActiveLang('de');
         await fixture.whenStable();
         expect(fixture.nativeElement.textContent).toContain('Analytics lesen');
+    });
+
+    it('keeps readable consent and account switching without dashboard controls', async () => {
+        await create();
+        expect(fixture.nativeElement.querySelector('app-user-controls')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.oauth-permission-list').textContent).toContain('Read analytics');
+        expect(fixture.nativeElement.querySelector('.oauth-permission-list').textContent).not.toContain('analytics:read');
+        const details = fixture.nativeElement.querySelector('details') as HTMLDetailsElement;
+        expect(details.open).toBe(false);
+        expect(details.textContent).toContain('analytics:read');
+        expect(details.textContent).toContain('https://hitkeep.example/mcp');
+        const signOut = fixture.nativeElement.querySelector('.oauth-sign-out') as HTMLButtonElement;
+        expect(signOut.type).toBe('button');
+        signOut.click();
+        expect(accountMenu.signOut).toHaveBeenCalledOnce();
     });
 
     it.each([

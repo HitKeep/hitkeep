@@ -1,5 +1,6 @@
 {
   "oauth": {
+    "connectionDetails": "Verbindingsgegevens",
     "consentTitle": "Een toepassing autoriseren",
     "consentDescription": "Controleer de toepassing en kies de websites waartoe deze toegang krijgt.",
     "loading": "Toepassingen en rechten laden…",
