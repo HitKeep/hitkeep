@@ -81,9 +81,9 @@
                 <p-button
                     [label]="primaryActionKey() | transloco"
                     type="submit"
-                    [loading]="authMode() === 'sso' ? isSSOLoading() : isLoading()"
+                    [loading]="oauth.resuming() || (authMode() === 'sso' ? isSSOLoading() : isLoading())"
                     [fluid]="true"
-                    [disabled]="isLoading() || isPasskeyLoading() || isSSOLoading() || socialLoading() !== null"
+                    [disabled]="oauth.resuming() || isLoading() || isPasskeyLoading() || isSSOLoading() || socialLoading() !== null"
                 />
                 } @else {
                 <div class="hk-auth-field">
@@ -97,7 +97,7 @@
                     <p-inputotp inputId="mfaCode" [formControl]="loginForm.mfaCode().control()" [length]="6" [integerOnly]="true" [invalid]="loginForm.mfaCode().touched() && loginForm.mfaCode().invalid()" />
                 </div>
 
-                <p-button [label]="'login.verifyTotp' | transloco" type="submit" [loading]="isLoading()" [fluid]="true" [disabled]="isLoading() || loginForm.mfaCode().invalid()" />
+                <p-button [label]="'login.verifyTotp' | transloco" type="submit" [loading]="isLoading() || oauth.resuming()" [fluid]="true" [disabled]="oauth.resuming() || isLoading() || loginForm.mfaCode().invalid()" />
                 } @if (mfaHasFallback()) { @if (mfaShowsFallbackDivider()) {
                 <app-auth-divider labelKey="login.or" />
                 } @if (mfaHasRecoveryCode()) {
@@ -118,7 +118,14 @@
                     />
                 </div>
 
-                <p-button [label]="'login.verifyRecoveryCode' | transloco" type="button" [loading]="isLoading()" [fluid]="true" [disabled]="isLoading() || loginForm.recoveryCode().invalid()" (onClick)="verifyRecoveryCodeMfa()" />
+                <p-button
+                    [label]="'login.verifyRecoveryCode' | transloco"
+                    type="button"
+                    [loading]="isLoading() || oauth.resuming()"
+                    [fluid]="true"
+                    [disabled]="oauth.resuming() || isLoading() || loginForm.recoveryCode().invalid()"
+                    (onClick)="verifyRecoveryCodeMfa()"
+                />
                 } @if (mfaHasActionFallback()) {
 
                 <div class="hk-auth-actions-stack">
@@ -131,7 +138,7 @@
                         [outlined]="true"
                         [fluid]="true"
                         [loading]="isPasskeyLoading()"
-                        [disabled]="isLoading() || isPasskeyLoading()"
+                        [disabled]="oauth.resuming() || isLoading() || isPasskeyLoading()"
                         (onClick)="onPasskeyLogin()"
                     />
                     } @if (mfaHasEmailLink()) {
@@ -143,8 +150,8 @@
                         severity="secondary"
                         [outlined]="true"
                         [fluid]="true"
-                        [loading]="isLoading()"
-                        [disabled]="isLoading() || isPasskeyLoading()"
+                        [loading]="isLoading() || oauth.resuming()"
+                        [disabled]="oauth.resuming() || isLoading() || isPasskeyLoading()"
                         (onClick)="requestEmailLinkMfa()"
                     />
                     }

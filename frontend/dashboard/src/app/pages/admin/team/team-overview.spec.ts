@@ -7,11 +7,13 @@ import { TeamOverviewPage } from './team-overview';
 import { TeamService } from '@services/team.service';
 import { AnalyticsService } from '@services/analytics.service';
 import { CloudService } from '@services/cloud.service';
+import { OAuthService } from '@services/oauth.service';
 import { Team } from '@models/analytics.types';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 describe('TeamOverviewPage', () => {
+    const oauth = { resuming: signal(false), continuation: vi.fn(() => of({ pending: false })), continueAfterAuthentication: vi.fn() };
     let fixture: ComponentFixture<TeamOverviewPage>;
     let catalogCurrency = 'EUR';
     let routeQuery = convertToParamMap({});
@@ -69,6 +71,8 @@ describe('TeamOverviewPage', () => {
     const activeTeam = signal<Team | null>(createActiveTeam());
 
     beforeEach(async () => {
+        oauth.continuation.mockReset().mockReturnValue(of({ pending: false }));
+        oauth.continueAfterAuthentication.mockReset();
         catalogCurrency = 'EUR';
         routeQuery = convertToParamMap({});
         multipleTeams = false;
@@ -183,6 +187,7 @@ describe('TeamOverviewPage', () => {
                 })
             ],
             providers: [
+                { provide: OAuthService, useValue: oauth },
                 provideRouter([]),
                 provideTranslocoLocale({ langToLocaleMapping: { en: 'en-US' } }),
                 {
@@ -425,6 +430,33 @@ describe('TeamOverviewPage', () => {
         fixture.detectChanges();
         return fixture.componentInstance as TeamOverviewTestAccess;
     }
+
+    it('offers an explicit consent return only after authoritative paid state and a valid pending request', async () => {
+        oauth.continuation.mockReturnValue(of({ pending: true }));
+        await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'pro', subscription_status: 'active' });
+        expect(oauth.continueAfterAuthentication).not.toHaveBeenCalled();
+        const button = fixture.nativeElement.querySelector('[data-testid="oauth-checkout-continue"] button') as HTMLButtonElement;
+        expect(button).not.toBeNull();
+        button.click();
+        expect(oauth.continueAfterAuthentication).toHaveBeenCalledWith('/admin/team/overview');
+    });
+
+    it('does not treat a forged checkout success marker as payment or authorization', async () => {
+        oauth.continuation.mockReturnValue(of({ pending: true }));
+        await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'free', subscription_status: 'pending_checkout' });
+        expect(oauth.continuation).not.toHaveBeenCalled();
+        expect(oauth.continueAfterAuthentication).not.toHaveBeenCalled();
+        expect(fixture.nativeElement.querySelector('[data-testid="oauth-checkout-continue"]')).toBeNull();
+    });
+
+    it('keeps native billing visible when pending-authorization lookup fails', async () => {
+        oauth.continuation.mockReturnValue(throwError(() => ({ status: 503, error: 'private details' })));
+        await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'pro', subscription_status: 'active' });
+        expect(fixture.nativeElement.textContent).toContain('oauth.resumeFailed');
+        expect(fixture.nativeElement.textContent).toContain('Acme Analytics');
+        expect(fixture.nativeElement.textContent).not.toContain('private details');
+        expect(oauth.continueAfterAuthentication).not.toHaveBeenCalled();
+    });
 
     it('restores canceled Pro monthly from stored state and waits for an explicit retry', async () => {
         const component = await showRecovery({ checkout: 'canceled', plan: 'pro', billing: 'annual', team: billingState.team_id }, { ...billingState, subscription_status: 'pending_checkout', pending_plan_code: 'pro', billing: 'monthly' });

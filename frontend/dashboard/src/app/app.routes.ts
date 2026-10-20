@@ -13,6 +13,12 @@ const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') =
 
 export const routes: Routes = [
     {
+        path: 'oauth/consent',
+        loadComponent: () => import('@pages/oauth/oauth-consent').then((m) => m.OAuthConsentPage),
+        canActivate: [setupGuard, authGuard],
+        data: titleData('oauth.consentTitle')
+    },
+    {
         path: 'error',
         loadComponent: () => import('@pages/error/application-error-page').then((m) => m.ApplicationErrorPage),
         data: titleData('applicationError.generic.title')

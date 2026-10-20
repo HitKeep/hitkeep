@@ -1,0 +1,102 @@
+<main class="hk-auth-page" aria-labelledby="oauth-title">
+    <section class="hk-auth-shell">
+        <app-auth-card>
+            <div class="flex flex-col gap-6">
+                <header class="hk-auth-header">
+                    <div class="flex justify-end"><app-user-controls /></div>
+                    <app-brand size="large" />
+                    <h1 id="oauth-title" class="hk-auth-title">{{ 'oauth.consentTitle' | transloco }}</h1>
+                    <p class="hk-auth-subtitle">{{ 'oauth.consentDescription' | transloco }}</p>
+                </header>
+                @if (profile.profile(); as account) {
+                <p class="m-0 break-words">{{ 'oauth.signedInAs' | transloco: { email: account.email } }}</p>
+                <p class="m-0 text-sm text-muted-color">{{ 'oauth.wrongAccount' | transloco }}</p>
+                } @if (decisionErrorKey; as error) {
+                <p-message severity="error" role="alert">{{ error | transloco }}</p-message>
+                } @if (loading()) {
+                <p role="status">{{ 'oauth.loading' | transloco }}</p>
+                } @else if (errorKey(); as error) {
+                <p-message severity="error" role="alert">{{ error | transloco }}</p-message>
+                <button pButton type="button" (click)="load()">{{ 'oauth.retry' | transloco }}</button>
+                } @else if (consent(); as request) {
+                <dl class="grid gap-3 sm:grid-cols-[auto_1fr]">
+                    <dt class="font-medium">{{ 'oauth.application' | transloco }}</dt>
+                    <dd class="min-w-0 break-words">{{ request.client.name }} <code class="text-sm">{{ request.client.id }}</code></dd>
+                    <dt class="font-medium">{{ 'oauth.callbackOrigin' | transloco }}</dt>
+                    <dd class="min-w-0 break-all"><code>{{ request.client.callback_origin }}</code></dd>
+                    <dt class="font-medium">{{ 'oauth.resource' | transloco }}</dt>
+                    <dd class="min-w-0 break-all"><code>{{ request.resource }}</code></dd>
+                    <dt class="font-medium">{{ 'oauth.expiresAt' | transloco }}</dt>
+                    <dd><time [attr.datetime]="request.expires_at">{{ expiryLabel() }}</time></dd>
+                </dl>
+                <section aria-labelledby="oauth-abilities">
+                    <h2 id="oauth-abilities" class="font-semibold">{{ 'oauth.abilities' | transloco }}</h2>
+                    <ul class="mt-2 list-inside list-disc break-words">
+                        @for (scope of request.scopes; track scope) {
+                        <li>@if (scopeLabelKey(scope); as key) { <span>{{ key | transloco }}</span> } <code class="text-sm text-muted-color">{{ scope }}</code></li>
+                        }
+                    </ul>
+                </section>
+                @if (expired()) {
+                <p-message severity="warn" role="alert">{{ 'oauth.expired' | transloco }}</p-message>
+                } @else {
+                <form [attr.action]="action" method="post" (submit)="submit($event)" class="flex flex-col gap-5" [attr.aria-busy]="submitting()">
+                    <input type="hidden" name="decision" value="" />
+                    <input type="hidden" name="csrf_token" [value]="request.csrf_token" />
+                    <input type="hidden" name="team_id" [value]="form.team_id().value()" />
+                    @for (id of selectedSiteIds(); track id) {
+                    <input type="hidden" name="site_ids" [value]="id" />
+                    }
+                    <div class="flex flex-col gap-2">
+                        <label id="oauth-team-label" for="oauth-team" class="font-medium">{{ 'oauth.team' | transloco }}</label>
+                        <p-select
+                            inputId="oauth-team"
+                            ariaLabelledBy="oauth-team-label"
+                            [formControl]="form.team_id().control()"
+                            [options]="request.teams"
+                            optionLabel="name"
+                            optionValue="id"
+                            [filter]="true"
+                            filterBy="name"
+                            [placeholder]="'oauth.selectTeam' | transloco"
+                            class="w-full"
+                        />
+                    </div>
+                    @if (request.teams.length === 0) {
+                    <p-message severity="warn">{{ 'oauth.noEligibleSites' | transloco }}</p-message>
+                    <a routerLink="/" class="underline">{{ 'oauth.setupSites' | transloco }}</a>
+                    } @else if (selectedTeam(); as team) {
+                    <fieldset class="min-w-0" [disabled]="submitting()">
+                        <legend class="font-medium">{{ 'oauth.sites' | transloco }}</legend>
+                        <p id="oauth-site-help" class="my-2 text-muted-color">{{ 'oauth.siteHelp' | transloco }}</p>
+                        <div class="max-h-80 space-y-3 overflow-y-auto py-2" aria-describedby="oauth-site-help">
+                            @for (site of team.sites; track site.id) {
+                            <div class="flex items-start gap-3">
+                                <p-checkbox [inputId]="'oauth-site-' + site.id" [value]="site.id" [formControl]="form.site_ids().control()" />
+                                <label [for]="'oauth-site-' + site.id" class="min-w-0 cursor-pointer break-words"
+                                    >{{ site.name || site.domain }} @if (site.name && site.name !== site.domain) { <span class="text-muted-color">{{ site.domain }}</span> }</label
+                                >
+                            </div>
+                            } @empty {
+                            <p-message severity="warn">{{ 'oauth.noEligibleSites' | transloco }}</p-message>
+                            <a routerLink="/" class="underline">{{ 'oauth.setupSites' | transloco }}</a>
+                            }
+                        </div>
+                    </fieldset>
+                    }
+                    <p class="text-sm text-muted-color">{{ 'oauth.permissionNotice' | transloco }}</p>
+                    <div class="flex flex-wrap gap-3">
+                        <button pButton type="submit" value="approve" [disabled]="!canApprove()">{{ 'oauth.approve' | transloco }}</button>
+                        <button pButton type="submit" value="deny" severity="secondary" [disabled]="submitting()">{{ 'oauth.deny' | transloco }}</button>
+                    </div>
+                    @if (submitting()) {
+                    <p role="status">{{ 'oauth.submitting' | transloco }}</p>
+                    }
+                </form>
+                } } @if (!consent() || expired()) {
+                <a routerLink="/" class="underline">{{ 'oauth.cancel' | transloco }}</a>
+                }
+            </div>
+        </app-auth-card>
+    </section>
+</main>

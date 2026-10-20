@@ -99,6 +99,10 @@ join-addr: ""
 # Unique node name (type: string; default: "hostname-timestamp"; derived)
 # node-name:
 
+# oauth settings
+# Pre-registered public OAuth clients as a JSON array with exact redirect URIs; client secrets are not supported (type: string; default: "unset"; sensitive)
+# oauth-clients:
+
 # mcp settings
 # Minutes to cache fetched docs for MCP tools (type: integer; default: "60")
 mcp-docs-cache-minutes: 60

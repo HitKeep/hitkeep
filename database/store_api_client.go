@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	stduuid "uuid"
 
 	"github.com/google/uuid"
 
@@ -30,6 +31,7 @@ const (
 )
 
 type APIClientAuth struct {
+	tokenHash    string
 	ClientID     uuid.UUID
 	UserID       uuid.UUID
 	TenantID     uuid.UUID
@@ -510,12 +512,29 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 		return nil, nil
 	}
 
-	tokenHash := hashAPIClientToken(token)
-	if cached, ok := s.getCachedAPIClientAuth(tokenHash); ok {
-		return cached, nil
-	}
+	return s.getAPIClientAuth(ctx, hashAPIClientToken(token))
+}
 
-	var authz APIClientAuth
+// RevalidateAPIClientAuth reloads a captured credential without retaining its secret.
+func (s *Store) RevalidateAPIClientAuth(ctx context.Context, previous *APIClientAuth) (*APIClientAuth, error) {
+	if previous == nil || previous.tokenHash == "" {
+		return nil, nil
+	}
+	current, err := s.getAPIClientAuth(ctx, previous.tokenHash)
+	if err != nil || current == nil {
+		return current, err
+	}
+	if current.ClientID != previous.ClientID || current.UserID != previous.UserID || current.TenantID != previous.TenantID {
+		return nil, nil
+	}
+	return current, nil
+}
+
+func (s *Store) getAPIClientAuth(ctx context.Context, tokenHash string) (*APIClientAuth, error) {
+	// Cached values track usage only; revocation and grants are resolved below.
+	_, recentlyUsed := s.getCachedAPIClientAuth(tokenHash)
+
+	authz := APIClientAuth{tokenHash: tokenHash}
 	var userIDRaw sql.NullString
 	var tenantIDRaw sql.NullString
 	var instanceRole string
@@ -596,9 +615,36 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 		return nil, fmt.Errorf("failed iterating api client site roles: %w", err)
 	}
 
+	if authz.UserID != uuid.Nil {
+		currentInstanceRole, err := s.GetInstanceRole(ctx, authz.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve api client actor role: %w", err)
+		}
+		authz.InstanceRole = auth.MinInstanceRole(currentInstanceRole, authz.InstanceRole)
+		for siteID, delegatedRole := range authz.SiteRoles {
+			tenantID, err := s.querySiteTenantID(ctx, siteID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve api client site tenant: %w", err)
+			}
+			currentRole, err := s.GetSiteRoleForTenant(ctx, stduuid.UUID(authz.UserID), stduuid.UUID(siteID), stduuid.UUID(tenantID))
+			if errors.Is(err, errSiteAccessDenied) {
+				delete(authz.SiteRoles, siteID)
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve api client actor site role: %w", err)
+			}
+			authz.SiteRoles[siteID] = auth.MinSiteRole(currentRole, delegatedRole)
+		}
+	} else {
+		authz.InstanceRole = auth.MinInstanceRole(auth.InstanceUser, authz.InstanceRole)
+	}
+
 	now := time.Now().UTC()
-	_, _ = s.db.ExecContext(ctx, "UPDATE api_clients SET last_used_at = ?, updated_at = ? WHERE id = ?", now, now, authz.ClientID)
-	s.cacheAPIClientAuth(tokenHash, authz, expiresAt.Time)
+	if !recentlyUsed {
+		_, _ = s.db.ExecContext(ctx, "UPDATE api_clients SET last_used_at = ?, updated_at = ? WHERE id = ?", now, now, authz.ClientID)
+		s.cacheAPIClientAuth(tokenHash, authz, expiresAt.Time)
+	}
 
 	return &authz, nil
 }

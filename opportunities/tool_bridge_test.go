@@ -284,7 +284,15 @@ func TestToolBridgeAllowsInstanceActorWithSiteViewPermission(t *testing.T) {
 
 func TestToolBridgeAllowsAPIClientWhenEffectiveRoleAndDelegationCanViewSite(t *testing.T) {
 	store, siteID, teamID, _, _ := setupToolBridgeStore(t)
-	clientID := uuid.New()
+	client, token, err := store.CreateTeamAPIClient(t.Context(), teamID, "tool bridge", "", map[uuid.UUID]auth.SiteRole{siteID: auth.SiteViewer}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientID := client.ID
+	principal, err := store.GetAPIClientAuth(t.Context(), token)
+	if err != nil || principal == nil {
+		t.Fatalf("authenticate client: %+v, %v", principal, err)
+	}
 	bridge := NewToolBridge(ToolBridgeConfig{
 		Shared:            store,
 		Analytics:         store,
@@ -294,13 +302,9 @@ func TestToolBridgeAllowsAPIClientWhenEffectiveRoleAndDelegationCanViewSite(t *t
 		ActorType:         "api_client",
 		EffectiveUserID:   uuid.Nil,
 		EffectiveSiteRole: auth.SiteViewer,
-		APIClientAuth: &database.APIClientAuth{
-			ClientID:  clientID,
-			TenantID:  teamID,
-			SiteRoles: map[uuid.UUID]auth.SiteRole{siteID: auth.SiteViewer},
-		},
-		From: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
-		To:   time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		APIClientAuth:     principal,
+		From:              time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		To:                time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
 	})
 
 	if _, err := executeBridgeToolErr(bridge, "hitkeep_get_site_overview"); err != nil {

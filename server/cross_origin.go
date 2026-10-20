@@ -11,6 +11,8 @@ func newCrossOriginProtection() *http.CrossOriginProtection {
 		"POST /ingest",
 		"POST /ingest/event",
 		"POST /ingest/web-vitals",
+		"POST /oauth/token",
+		"POST /oauth/revoke",
 	} {
 		protection.AddInsecureBypassPattern(pattern)
 	}

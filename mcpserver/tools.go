@@ -38,6 +38,9 @@ func (s *service) registerTools(server *mcp.Server) {
 
 // resolveSite authorizes the bearer API client for one site.
 func (s *service) resolveSite(ctx context.Context, siteID uuid.UUID) (analyticstools.Site, error) {
+	if grant := oauthGrantFromContext(ctx); grant != nil {
+		return s.resolveOAuthSite(ctx, grant, siteID)
+	}
 	authz, err := apiAuth(ctx)
 	if err != nil {
 		return analyticstools.Site{}, err
@@ -56,6 +59,9 @@ func (s *service) resolveSite(ctx context.Context, siteID uuid.UUID) (analyticst
 }
 
 func (s *service) listSites(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, listSitesOutput, error) {
+	if grant := oauthGrantFromContext(ctx); grant != nil {
+		return s.listOAuthSites(ctx, grant)
+	}
 	authz, err := apiAuth(ctx)
 	if err != nil {
 		return nil, listSitesOutput{}, err
@@ -76,7 +82,7 @@ func (s *service) listSites(ctx context.Context, _ *mcp.CallToolRequest, _ struc
 
 	filtered := make([]api.Site, 0, len(sites))
 	for _, site := range sites {
-		if _, ok := authz.SiteRoles[site.ID]; ok {
+		if role, ok := authz.SiteRoles[site.ID]; ok && role.HasPermission(authcore.PermSiteView) {
 			filtered = append(filtered, site)
 		}
 	}

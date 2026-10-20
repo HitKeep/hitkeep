@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 
 import { Signup } from '@pages/signup/signup';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { AuthService } from '@services/auth.service';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
 import { CloudService, CloudSignupResponse } from '@services/cloud.service';
@@ -110,6 +111,7 @@ describe('Signup', () => {
                 { provide: Router, useValue: routerMock },
                 { provide: AuthService, useValue: authServiceMock },
                 { provide: CloudService, useValue: cloudServiceMock },
+                { provide: OAuthService, useFactory: (router: Router) => ({ resuming: () => false, continueAfterAuthentication: vi.fn((target: string) => void router.navigateByUrl(target)) }), deps: [Router] },
                 { provide: AnalyticsService, useValue: analyticsServiceMock },
                 { provide: CloudSignupTrackingService, useValue: signupTrackingMock },
                 { provide: DOCUMENT, useValue: documentMock },

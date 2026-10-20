@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	stdjson "encoding/json/v2"
 	"errors"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	stduuid "uuid"
 
 	"github.com/google/uuid"
 	"github.com/rs/cors"
@@ -140,7 +142,7 @@ type webVitalPayload struct {
 }
 
 func (h *handler) handleServerPageviewIngest() http.HandlerFunc {
-	leaderHandler := h.ctx.RequireAPIClientAuth(h.handleServerPageviewIngestLeader())
+	leaderHandler := h.ctx.RequireIntegrationAuth("ingest:write", h.handleServerPageviewIngestLeader())
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !h.isLeader() {
 			h.forwardToLeader(w, r, "/api/ingest/server/pageview")
@@ -153,14 +155,17 @@ func (h *handler) handleServerPageviewIngest() http.HandlerFunc {
 func (h *handler) handleServerPageviewIngestLeader() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-		var payload api.ServerPageviewIngestRequest
+		var payload struct {
+			api.ServerPageviewIngestRequest
+			SiteID json.RawMessage `json:"site_id"`
+		}
 		if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 			h.recordRejection()
 			http.Error(w, "Bad request body", http.StatusBadRequest)
 			return
 		}
 
-		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent)
+		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID)
 		if !ok {
 			return
 		}
@@ -239,7 +244,7 @@ func (h *handler) handleServerPageviewIngestLeader() http.HandlerFunc {
 }
 
 func (h *handler) handleServerEventIngest() http.HandlerFunc {
-	leaderHandler := h.ctx.RequireAPIClientAuth(h.handleServerEventIngestLeader())
+	leaderHandler := h.ctx.RequireIntegrationAuth("ingest:write", h.handleServerEventIngestLeader())
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !h.isLeader() {
 			h.forwardToLeader(w, r, "/api/ingest/server/event")
@@ -252,14 +257,17 @@ func (h *handler) handleServerEventIngest() http.HandlerFunc {
 func (h *handler) handleServerEventIngestLeader() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-		var payload api.ServerEventIngestRequest
+		var payload struct {
+			api.ServerEventIngestRequest
+			SiteID json.RawMessage `json:"site_id"`
+		}
 		if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 			h.recordRejection()
 			http.Error(w, "Bad request body", http.StatusBadRequest)
 			return
 		}
 
-		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent)
+		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID)
 		if !ok {
 			return
 		}
@@ -359,11 +367,27 @@ func parseServerIngestURL(rawURL string) (*url.URL, string, string, bool) {
 	return parsedURL, domain, path, true
 }
 
-func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Request, rawURL, rawTimestamp, rawVisitorIP, rawUserAgent string) (serverIngestContext, bool) {
+func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Request, rawURL, rawTimestamp, rawVisitorIP, rawUserAgent string, rawSiteID json.RawMessage) (serverIngestContext, bool) {
 	apiClientAuth, _ := r.Context().Value(shared.APIClientAuthKey).(*database.APIClientAuth)
-	if apiClientAuth == nil {
+	oauthGrant, _ := r.Context().Value(shared.OAuthGrantKey).(*authcore.OAuthGrant)
+	if apiClientAuth == nil && oauthGrant == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return serverIngestContext{}, false
+	}
+
+	var selectedSiteID stduuid.UUID
+	if oauthGrant != nil {
+		var selected string
+		if err := stdjson.Unmarshal(rawSiteID, &selected); err != nil {
+			http.Error(w, "site_id must be a UUID", http.StatusBadRequest)
+			return serverIngestContext{}, false
+		}
+		var err error
+		selectedSiteID, err = stduuid.Parse(selected)
+		if err != nil || selectedSiteID == stduuid.Nil() {
+			http.Error(w, "site_id must be a UUID", http.StatusBadRequest)
+			return serverIngestContext{}, false
+		}
 	}
 
 	if h.ctx.Store == nil || h.ctx.Producer == nil {
@@ -411,7 +435,21 @@ func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Requ
 		return serverIngestContext{}, false
 	}
 
-	if !apiClientCanManageSiteData(apiClientAuth, site.ID) {
+	if oauthGrant != nil {
+		if selectedSiteID != stduuid.UUID(site.ID) {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return serverIngestContext{}, false
+		}
+		if h.ctx.OAuthProvider == nil {
+			http.Error(w, "Service not available on this node", http.StatusServiceUnavailable)
+			return serverIngestContext{}, false
+		}
+		audience := h.ctx.OAuthProvider.Resource("api")
+		if err := h.ctx.AuthorizeOAuthSite(r.Context(), oauthGrant, stduuid.UUID(site.ID), audience, "ingest:write", authcore.PermSiteManageData); err != nil {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return serverIngestContext{}, false
+		}
+	} else if !apiClientCanManageSiteData(apiClientAuth, site.ID) {
 		http.Error(w, "Access denied", http.StatusForbidden)
 		return serverIngestContext{}, false
 	}

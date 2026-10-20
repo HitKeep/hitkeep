@@ -107,7 +107,7 @@ func (c *Context) RequireTeamCapability(capability auth.Capability) func(http.Ha
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			userID := GetUserIDFromContext(r)
-			if userID == uuid.Nil {
+			if userID == uuid.Nil || r.Context().Value(APIClientAuthKey) != nil || r.Context().Value(OAuthGrantKey) != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -132,7 +132,7 @@ func (c *Context) RequireActiveTeamCapability(capability auth.Capability) func(h
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			userID := GetUserIDFromContext(r)
-			if userID == uuid.Nil {
+			if userID == uuid.Nil || r.Context().Value(APIClientAuthKey) != nil || r.Context().Value(OAuthGrantKey) != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

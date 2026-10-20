@@ -57,7 +57,7 @@
                     </label>
                 </div>
 
-                <p-button [label]="'social.createTeam' | transloco" type="submit" [loading]="isLoading()" [disabled]="isLoading() || form().invalid()" [fluid]="true" />
+                <p-button [label]="'social.createTeam' | transloco" type="submit" [loading]="isLoading() || oauth.resuming()" [disabled]="oauth.resuming() || isLoading() || form().invalid()" [fluid]="true" />
             </form>
             } }
         </app-auth-card>

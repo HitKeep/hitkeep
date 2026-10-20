@@ -86,7 +86,7 @@ func openAPIV1CorePaths() map[string]any {
 				map[string]any{"202": desc("Accepted"), "400": errResp("Invalid request")}),
 		},
 		"/api/ingest/server/pageview": map[string]any{
-			"post": op([]string{"Ingest"}, "Ingest server-side pageview", "Accepts one trusted server-side pageview from an API client. Use this endpoint for backend forwarding, CMS plugins, reverse proxy forwarding, edge workers, and historical pageview replay. It does not require browser Origin or Referer headers. HitKeep resolves the site from the submitted URL hostname, requires site.manage_data for that resolved site, and uses visitor_ip for ingest-time exclusions, spam filtering, and country, region, city, provider, and ASN lookup. UTM values and hk_qr QR attribution are read from the query string in url, for example utm_source, utm_campaign, and hk_qr on the visitor-facing URL, not from top-level JSON fields. Stored analytics records contain derived country, region, city, provider, and ASN context. HitKeep does not store the raw visitor IP. This endpoint uses the ingest rate limiter.", secAPIClient(), nil,
+			"post": op([]string{"Ingest"}, "Ingest server-side pageview", "Accepts one trusted server-side pageview from an API client. Use this endpoint for backend forwarding, CMS plugins, reverse proxy forwarding, edge workers, and historical pageview replay. It does not require browser Origin or Referer headers. HitKeep resolves the site from the submitted URL hostname, requires site.manage_data for that resolved site, and uses visitor_ip for ingest-time exclusions, spam filtering, and country, region, city, provider, and ASN lookup. UTM values and hk_qr QR attribution are read from the query string in url, for example utm_source, utm_campaign, and hk_qr on the visitor-facing URL, not from top-level JSON fields. Stored analytics records contain derived country, region, city, provider, and ASN context. HitKeep does not store the raw visitor IP. This endpoint uses the ingest rate limiter. OAuth requires an API-resource token with ingest:write, a nonzero site_id matching the URL-resolved site, an explicit site grant, and current site.manage_data authority. Existing API-client payloads remain supported without site_id.", append(secAPIClient(), map[string]any{"oauth2": []string{"ingest:write"}}), nil,
 				jsonBody(serverPageviewIngestSchema()),
 				map[string]any{
 					"202": desc("Accepted. Empty response body."),
@@ -99,7 +99,7 @@ func openAPIV1CorePaths() map[string]any {
 				}),
 		},
 		"/api/ingest/server/event": map[string]any{
-			"post": op([]string{"Ingest"}, "Ingest server-side event", "Accepts one trusted server-side custom event from an API client. This server-to-server endpoint does not require browser Origin or Referer headers. HitKeep resolves the site from the submitted URL hostname, requires site.manage_data for that resolved site, and uses visitor_ip for ingest-time exclusions, spam filtering, and country, region, city, provider, and ASN lookup. Stored analytics records contain derived country, region, city, provider, and ASN context. HitKeep does not store the raw visitor IP. This endpoint uses the ingest rate limiter.", secAPIClient(), nil,
+			"post": op([]string{"Ingest"}, "Ingest server-side event", "Accepts one trusted server-side custom event from an API client. This server-to-server endpoint does not require browser Origin or Referer headers. HitKeep resolves the site from the submitted URL hostname, requires site.manage_data for that resolved site, and uses visitor_ip for ingest-time exclusions, spam filtering, and country, region, city, provider, and ASN lookup. Stored analytics records contain derived country, region, city, provider, and ASN context. HitKeep does not store the raw visitor IP. This endpoint uses the ingest rate limiter. OAuth requires an API-resource token with ingest:write, a nonzero site_id matching the URL-resolved site, an explicit site grant, and current site.manage_data authority. Existing API-client payloads remain supported without site_id.", append(secAPIClient(), map[string]any{"oauth2": []string{"ingest:write"}}), nil,
 				jsonBody(serverEventIngestSchema()),
 				map[string]any{
 					"202": desc("Accepted. Empty response body."),
@@ -783,6 +783,7 @@ func serverPageviewIngestSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"site_id":         map[string]any{"type": "string", "format": "uuid", "description": "Required for OAuth tokens; must match the granted site resolved from url. Legacy API clients do not require this field."},
 			"url":             map[string]any{"type": "string", "format": "uri", "description": "Absolute page URL. The hostname resolves the configured HitKeep site. UTM values and hk_qr QR attribution are read from this URL query string."},
 			"timestamp":       map[string]any{"type": "string", "format": "date-time", "description": "Canonical analytics time in RFC3339 format."},
 			"visitor_ip":      map[string]any{"type": "string", "format": "ip", "description": "Trusted transient visitor IP context. Used to derive country, region, city, provider, and ASN metadata. HitKeep does not store the raw visitor IP."},
@@ -805,6 +806,7 @@ func serverEventIngestSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"site_id":    map[string]any{"type": "string", "format": "uuid", "description": "Required for OAuth tokens; must match the granted site resolved from url. Legacy API clients do not require this field."},
 			"url":        map[string]any{"type": "string", "format": "uri", "description": "Absolute page or event context URL. The hostname resolves the configured HitKeep site."},
 			"timestamp":  map[string]any{"type": "string", "format": "date-time", "description": "Canonical analytics time in RFC3339 format."},
 			"visitor_ip": map[string]any{"type": "string", "format": "ip", "description": "Trusted transient visitor IP context. Used to derive country, region, city, provider, and ASN metadata. HitKeep does not store the raw visitor IP."},

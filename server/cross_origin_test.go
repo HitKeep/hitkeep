@@ -162,10 +162,10 @@ func TestCrossOriginProtectionBlocksBrowserRequestsToServerEndpoints(t *testing.
 	}
 }
 
-func TestCrossOriginProtectionBypassesOnlyPublicBrowserIngest(t *testing.T) {
+func TestCrossOriginProtectionBypassesOnlyPublicBrowserIngestAndOAuthTokenEndpoints(t *testing.T) {
 	handler := crossOriginTestHandler()
 
-	for _, path := range []string{"/ingest", "/ingest/event", "/ingest/web-vitals"} {
+	for _, path := range []string{"/ingest", "/ingest/event", "/ingest/web-vitals", "/oauth/token", "/oauth/revoke"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, path, nil)
 			req.Header.Set("Sec-Fetch-Site", "cross-site")
@@ -183,6 +183,10 @@ func TestCrossOriginProtectionBypassesOnlyPublicBrowserIngest(t *testing.T) {
 		path   string
 	}{
 		{method: http.MethodPut, path: "/ingest"},
+		{method: http.MethodPut, path: "/oauth/token"},
+		{method: http.MethodPost, path: "/oauth/token/other"},
+		{method: http.MethodPost, path: "/oauth/consent"},
+		{method: http.MethodPost, path: "/api/oauth/consent"},
 		{method: http.MethodPost, path: "/ingest/other"},
 		{method: http.MethodPost, path: "/api/ingest/server/pageview"},
 	} {

@@ -77,7 +77,7 @@ HitKeep MCP is an optional, leader-only Streamable HTTP route for approved assis
 - MCP tools must remain read-only and aggregate-only.
 - Every MCP tool must set `ReadOnlyHint: true`.
 - Analytics tools should use closed-world behavior. Only official docs lookup tools should declare open-world docs fetching.
-- MCP must authenticate with API client bearer tokens. Do not accept dashboard cookies.
+- MCP must authenticate with scoped API-client bearer tokens or OAuth access tokens bound to the configured MCP resource, consented sites, and current user authority. Do not accept dashboard cookies.
 - Both MCP transports are stateless at the protocol layer. The production route supports sessionless `2026-07-28` discovery with legacy negotiation retained; the developer broker resolves each request in process from its configured fallback and cached workspace catalog; it never opens a nested MCP connection. Durable development sessions and finite runs remain explicit filesystem-backed application state.
 - Do not advertise or implement deprecated roots or logging capabilities, session-keyed routing, or list-change/subscription notifications. Return bounded cursor-addressed progress and logs through the consolidated status tools; the developer MCP exposes no resources or resource templates.
 - Site analytics access must pass the same site-scoped permission checks as the REST and dashboard surfaces.

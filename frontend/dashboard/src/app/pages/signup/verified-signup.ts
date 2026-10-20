@@ -11,6 +11,7 @@ import { AuthCard } from '@core/components/auth-card/auth-card';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { BillingInterval } from '@services/cloud.service';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { cloudBillingReviewUrl } from '@core/utils/cloud-purchase-intent';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
 
@@ -43,7 +44,7 @@ type PaidPlan = 'pro' | 'business';
                     <div class="hk-auth-form" aria-live="polite">
                         @if (cloudReady()) {
                             <p-button [label]="'signup.reviewPayment' | transloco" [fluid]="true" (onClick)="reviewPayment()" />
-                            <p-button [label]="'signup.verified.continueFree' | transloco" severity="secondary" [text]="true" [fluid]="true" (onClick)="continueFree()" />
+                            <p-button [label]="'signup.verified.continueFree' | transloco" [loading]="oauth.resuming()" severity="secondary" [text]="true" [fluid]="true" (onClick)="continueFree()" />
                         } @else {
                             <p-message severity="info">{{ 'signup.checkingCloud' | transloco }}</p-message>
                         }
@@ -61,6 +62,7 @@ export class VerifiedSignup {
     private readonly document = inject(DOCUMENT);
     private readonly route = inject(ActivatedRoute);
     private readonly router = inject(Router);
+    protected readonly oauth = inject(OAuthService);
     private readonly destroyRef = inject(DestroyRef);
     private readonly analytics = inject(AnalyticsService);
     private readonly tracking = inject(CloudSignupTrackingService);
@@ -77,14 +79,14 @@ export class VerifiedSignup {
             .subscribe({
                 next: (status) => {
                     if (!status.cloud?.hosted) {
-                        void this.router.navigateByUrl('/dashboard');
+                        this.oauth.continueAfterAuthentication('/dashboard');
                         return;
                     }
                     this.cloudReady.set(true);
                     this.tracking.install();
                     this.track('signup_verified');
                 },
-                error: () => void this.router.navigateByUrl('/dashboard')
+                error: () => this.oauth.continueAfterAuthentication('/dashboard')
             });
     }
 
@@ -95,7 +97,7 @@ export class VerifiedSignup {
 
     protected continueFree(): void {
         this.track('continue_on_free');
-        void this.router.navigateByUrl('/dashboard');
+        this.oauth.continueAfterAuthentication('/dashboard');
     }
 
     private track(name: string): void {

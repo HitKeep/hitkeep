@@ -23,6 +23,7 @@ import { Brand } from '@components/brand/brand';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { CloudPlanTier, CloudStatus } from '@models/analytics.types';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
 import { BillingInterval, CloudPlanCode, CloudService, CloudSignupRequest } from '@services/cloud.service';
 import { cloudBillingReviewUrl, cloudPurchaseIntent, cloudPurchaseQuery } from '@core/utils/cloud-purchase-intent';
@@ -48,6 +49,7 @@ export class Signup {
     private readonly document = inject(DOCUMENT);
     private readonly destroyRef = inject(DestroyRef);
     private readonly router = inject(Router);
+    protected readonly oauth = inject(OAuthService);
     private readonly route = inject(ActivatedRoute);
     private readonly analytics = inject(AnalyticsService);
     private readonly auth = inject(AuthService);
@@ -92,7 +94,7 @@ export class Signup {
             providerIcon: provider.id,
             wide: true,
             loading: this.socialLoading() === provider.id,
-            disabled: this.isLoading() || this.socialLoading() !== null
+            disabled: this.oauth.resuming() || this.isLoading() || this.socialLoading() !== null
         }))
     );
     private trackedSignupPageView = false;
@@ -166,6 +168,7 @@ export class Signup {
 
     protected onSubmit(event?: Event): void {
         event?.preventDefault();
+        if (this.oauth.resuming()) return;
         if (this.signupForm().invalid()) {
             this.signupForm.email().markAsTouched();
             this.signupForm.password().markAsTouched();
@@ -206,7 +209,7 @@ export class Signup {
                         return;
                     }
                     const target = response.redirect_url?.trim() || '/dashboard';
-                    void this.router.navigateByUrl(target);
+                    this.oauth.continueAfterAuthentication(target);
                 },
                 error: (err) => {
                     console.error('Cloud signup failed', err);
