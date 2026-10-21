@@ -10,6 +10,7 @@ Read [procedure.md](references/procedure.md) before analyzing data. It is the ca
 ## External-agent adapter
 
 - Use the production HitKeep MCP for scoped, read-only aggregate analytics and official docs lookup.
+- Connect through resource-bound OAuth when the instance and client support it, or an existing scoped API-client bearer token. OAuth consent must include the MCP resource, `sites:read analytics:read`, and explicit sites; never request dashboard cookies or broader authority.
 - Inspect live MCP tool schemas and help resources instead of copying the tool catalog, filters, limits, or defaults into this skill.
 - If MCP is unavailable, state what cannot be verified and use official docs or user-provided data.
 - Use the dashboard for human setup, administration, and visual review; REST APIs for supported application automation; and exports or takeout for portable owned data.

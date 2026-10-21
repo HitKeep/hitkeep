@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,8 @@ import (
 	"hitkeep/server/goals"
 	importhandlers "hitkeep/server/imports"
 	"hitkeep/server/ingest"
+	"hitkeep/server/integrations"
+	oauthhandlers "hitkeep/server/oauth"
 	opportunityhandlers "hitkeep/server/opportunities"
 	"hitkeep/server/permissions"
 	qrcodehandlers "hitkeep/server/qrcodes"
@@ -225,6 +228,14 @@ func New(conf *config.Config, publicFS fs.FS, store *database.Store, tenantStore
 		MailTestTracker:          mailTestTracker,
 	}
 	s.ctx.SocialAuth = socialauth.NewClient(s.ctx.SSO)
+	if store != nil {
+		provider, oauthErr := newOAuthProvider(conf, store, func() bool { return cluster == nil || cluster.IsLeader() })
+		if oauthErr != nil {
+			logger.Warn("OAuth unavailable: public HTTPS issuer, client registry, or browser signing configuration is invalid")
+		} else {
+			s.ctx.OAuthProvider = provider
+		}
+	}
 
 	// Load static HTML into memory
 	s.loadStaticAssets(publicFS)
@@ -358,12 +369,16 @@ func (s *Server) stripPublicBasePath(next http.Handler) http.Handler {
 				strippedPath = "/"
 			}
 			r = cloneRequestWithPath(r, strippedPath)
-		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) {
+		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) && !s.isOAuthDiscoveryPath(r.URL.Path) {
 			http.NotFound(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isOAuthDiscoveryPath(requestPath string) bool {
+	return s.ctx != nil && s.ctx.OAuthProvider != nil && slices.Contains(s.ctx.OAuthProvider.DiscoveryPaths(), requestPath)
 }
 
 func cloneRequestWithPath(r *http.Request, nextPath string) *http.Request {
@@ -381,6 +396,8 @@ func (s *Server) setupRoutes(mux *http.ServeMux, publicFS fs.FS) {
 	mux.HandleFunc("GET /internal/caddy/on-demand-tls/{token}", s.handleCaddyOnDemandTLSAsk())
 	ingest.Register(mux, ctx)
 	serverauth.Register(mux, ctx)
+	oauthhandlers.Register(mux, ctx)
+	integrations.Register(mux, ctx)
 	cloudhandlers.Register(mux, ctx)
 	user.Register(mux, ctx)
 	permissions.Register(mux, ctx)
@@ -481,7 +498,7 @@ func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) isNonDashboardPath(requestPath string) bool {
 	requestPath = "/" + strings.TrimPrefix(requestPath, "/")
-	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/q", "/healthz", "/readyz", "/scalar"}
+	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/q", "/healthz", "/readyz", "/scalar", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
 	if s.conf != nil {
 		mcpPath := strings.TrimRight(strings.TrimSpace(s.conf.MCPPath), "/")
 		if mcpPath != "" {

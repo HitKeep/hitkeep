@@ -7,6 +7,7 @@ import { vi } from 'vitest';
 
 import { VerifiedSignup } from '@pages/signup/verified-signup';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
 
 describe('VerifiedSignup', () => {
@@ -21,6 +22,7 @@ describe('VerifiedSignup', () => {
         await TestBed.configureTestingModule({
             imports: [VerifiedSignup, TranslocoTestingModule.forRoot({ langs: { en: {} }, translocoConfig: { availableLangs: ['en'], defaultLang: 'en' }, preloadLangs: true })],
             providers: [
+                { provide: OAuthService, useFactory: (router: Router) => ({ resuming: () => false, continueAfterAuthentication: vi.fn((target: string) => void router.navigateByUrl(target)) }), deps: [Router] },
                 { provide: AnalyticsService, useValue: analytics },
                 { provide: CloudSignupTrackingService, useValue: tracking },
                 { provide: Router, useValue: router },

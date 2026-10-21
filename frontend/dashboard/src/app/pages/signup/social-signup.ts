@@ -15,6 +15,7 @@ import { Brand } from '@components/brand/brand';
 import { AuthCard } from '@core/components/auth-card/auth-card';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { AuthService, SocialPreviewResponse } from '@services/auth.service';
+import { OAuthService } from '@services/oauth.service';
 import { BillingInterval, CloudPlanCode } from '@services/cloud.service';
 import { cloudPurchaseIntent } from '@core/utils/cloud-purchase-intent';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
@@ -31,6 +32,7 @@ export class SocialSignup {
     private readonly document = inject(DOCUMENT);
     private readonly route = inject(ActivatedRoute);
     private readonly router = inject(Router);
+    protected readonly oauth = inject(OAuthService);
     private readonly auth = inject(AuthService);
     private readonly tracking = inject(CloudSignupTrackingService);
     private readonly activeLanguage = injectActiveLang();
@@ -74,6 +76,7 @@ export class SocialSignup {
 
     protected onSubmit(event?: Event): void {
         event?.preventDefault();
+        if (this.oauth.resuming()) return;
         if (!this.completionToken || !this.preview() || this.form().invalid()) {
             this.form.email().markAsTouched();
             this.form.teamName().markAsTouched();
@@ -102,7 +105,7 @@ export class SocialSignup {
                         this.verificationSent.set(true);
                         return;
                     }
-                    void this.router.navigateByUrl(response.redirect_url?.trim() || '/dashboard');
+                    this.oauth.continueAfterAuthentication(response.redirect_url?.trim() || '/dashboard');
                 },
                 error: (err) => {
                     const code = err?.error?.code;

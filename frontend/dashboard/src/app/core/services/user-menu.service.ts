@@ -1,5 +1,5 @@
 import { computed, inject, Service } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { injectActiveLang } from '@core/i18n/active-lang';
 import { Router } from '@angular/router';
 import { MenuItem } from '@openng/optimus-ui/api';
 import { TranslocoService } from '@jsverse/transloco';
@@ -13,7 +13,7 @@ export class UserMenuService {
     private auth = inject(AuthService);
     private transloco = inject(TranslocoService);
     private isSigningOut = false;
-    private activeLanguage = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+    private activeLanguage = injectActiveLang();
 
     readonly menuItems = computed<MenuItem[]>(() => {
         const language = this.activeLanguage();
@@ -42,6 +42,11 @@ export class UserMenuService {
                 label: this.transloco.translate('userMenu.userSettings'),
                 icon: 'pi pi-user',
                 command: () => this.router.navigate(['/settings'])
+            },
+            {
+                label: this.transloco.translate('oauth.applicationsTitle'),
+                icon: 'pi pi-link',
+                command: () => this.router.navigate(['/settings/connected-applications'])
             },
             ...sessionItems,
             { separator: true },

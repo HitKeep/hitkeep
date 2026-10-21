@@ -53,8 +53,9 @@ func rejectDeveloperDependencies(variantID, dependencies string) error {
 
 func boundedCommandOutput(output []byte) string {
 	const limit = 4096
-	if len(output) > limit {
-		output = output[:limit]
+	value := redactError(strings.TrimSpace(string(output)))
+	if len(value) > limit {
+		value = value[len(value)-limit:]
 	}
-	return redactError(strings.TrimSpace(string(output)))
+	return value
 }

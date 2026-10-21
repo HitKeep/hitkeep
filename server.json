@@ -31,7 +31,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer token from a scoped HitKeep personal or team API client.",
+          "description": "Scoped HitKeep API-client bearer token; compatible instances also accept an OAuth access token for the configured MCP resource.",
           "isRequired": true,
           "isSecret": true
         }

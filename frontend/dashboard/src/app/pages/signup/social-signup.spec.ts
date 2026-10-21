@@ -7,6 +7,7 @@ import { vi } from 'vitest';
 
 import { SocialSignup } from '@pages/signup/social-signup';
 import { AuthService } from '@services/auth.service';
+import { OAuthService } from '@services/oauth.service';
 import { CloudSignupTrackingService } from '@services/cloud-signup-tracking.service';
 
 describe('SocialSignup', () => {
@@ -56,6 +57,7 @@ describe('SocialSignup', () => {
             ],
             providers: [
                 { provide: AuthService, useValue: authMock },
+                { provide: OAuthService, useFactory: (router: Router) => ({ resuming: () => false, continueAfterAuthentication: vi.fn((target: string) => void router.navigateByUrl(target)) }), deps: [Router] },
                 { provide: CloudSignupTrackingService, useValue: trackingMock },
                 { provide: Router, useValue: routerMock },
                 { provide: DOCUMENT, useValue: documentMock },

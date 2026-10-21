@@ -6,6 +6,11 @@ const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') =
 
 export const SETTINGS_ROUTES: Route[] = [
     {
+        path: 'connected-applications',
+        loadComponent: () => import('@pages/settings/connected-applications/connected-applications').then((m) => m.ConnectedApplicationsPage),
+        data: titleData('oauth.applicationsTitle')
+    },
+    {
         path: '',
         loadComponent: () => import('@pages/settings/user/user-settings').then((m) => m.UserSettings),
         data: titleData('settings.user.title')

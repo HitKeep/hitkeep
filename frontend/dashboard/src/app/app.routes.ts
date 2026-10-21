@@ -13,6 +13,12 @@ const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') =
 
 export const routes: Routes = [
     {
+        path: 'oauth/consent',
+        loadComponent: () => import('@pages/oauth/oauth-consent').then((m) => m.OAuthConsentPage),
+        canActivate: [setupGuard, authGuard],
+        data: titleData('oauth.consentTitle')
+    },
+    {
         path: 'error',
         loadComponent: () => import('@pages/error/application-error-page').then((m) => m.ApplicationErrorPage),
         data: titleData('applicationError.generic.title')
@@ -284,6 +290,12 @@ export const routes: Routes = [
                 path: 'integration/api-clients',
                 loadComponent: () => import('@pages/integration/api-clients/api-clients').then((m) => m.APIClientsPage),
                 data: titleData('nav.apiClients', 'team')
+            },
+            {
+                path: 'integration/oauth-clients',
+                loadComponent: () => import('@pages/integration/oauth-clients/oauth-clients').then((m) => m.OAuthClientsPage),
+                canActivate: [capabilityGuard],
+                data: { ...titleData('oauthClients.title', 'team'), activeTeamCapability: TEAM_CAPABILITIES.manageApiClients }
             },
             {
                 path: 'integration/api-reference',

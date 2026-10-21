@@ -1,6 +1,23 @@
 @if (team(); as t) {
 <div class="grid gap-4">
-    @if (recoveryKind(); as kind) {
+    @if (checkoutReturned && systemStatus()?.cloud?.hosted) { @if (billingStateResource.isLoading() || authorizationContinuation.isLoading()) {
+    <p role="status">{{ 'oauth.loading' | transloco }}</p>
+    } @else if (billingStateResource.error() || authorizationContinuation.error()) {
+    <section class="grid gap-3" aria-live="polite">
+        <p role="alert">{{ 'oauth.resumeFailed' | transloco }}</p>
+        <p-button [label]="'oauth.retry' | transloco" severity="secondary" (onClick)="retryAuthorizationReturn()" />
+    </section>
+    } @else if (!checkoutAuthorizationReady()) {
+    <section class="grid gap-3" aria-live="polite">
+        <p>{{ 'oauth.checkoutWaiting' | transloco }}</p>
+        <p-button [label]="'oauth.retry' | transloco" severity="secondary" (onClick)="retryAuthorizationReturn()" />
+    </section>
+    } @else if (authorizationContinuation.hasValue() && authorizationContinuation.value().pending) {
+    <section class="grid gap-3" aria-live="polite">
+        <p>{{ 'oauth.resumeDescription' | transloco }}</p>
+        <p-button data-testid="oauth-checkout-continue" [label]="'oauth.continueAuthorization' | transloco" [loading]="oauth.resuming()" (onClick)="continueToAuthorization()" />
+    </section>
+    } } @if (recoveryKind(); as kind) {
     <section class="grid gap-3 rounded-xl border border-[var(--p-content-border-color)] bg-[var(--p-content-background)] p-4 sm:p-6" aria-labelledby="purchase-recovery-title">
         @if (kind === 'loading') {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ 'signup.recovery.loading' | transloco }}</h2>
@@ -27,10 +44,10 @@
             <p-button
                 [label]="'signup.recovery.continuePaid' | transloco: { plan: ('signup.plans.' + recoveryIntent().plan + '.name') | transloco, price: recoveryPrice() }"
                 [loading]="checkoutPending()"
-                [disabled]="checkoutPending()"
+                [disabled]="checkoutPending() || oauth.resuming()"
                 (onClick)="startRecoveryCheckout()"
             />
-            <p-button [label]="'signup.recovery.continueFree' | transloco" severity="secondary" [outlined]="true" [disabled]="checkoutPending()" (onClick)="continueOnFree()" />
+            <p-button [label]="'signup.recovery.continueFree' | transloco" [loading]="oauth.resuming()" severity="secondary" [outlined]="true" [disabled]="checkoutPending() || oauth.resuming()" (onClick)="continueOnFree()" />
         </div>
         } @if (recoveryError()) {
         <p role="alert" class="mb-0 text-sm text-[var(--p-red-600)]">{{ 'signup.recovery.checkoutError' | transloco }}</p>
@@ -168,7 +185,7 @@
                     <p-button
                         [label]="'admin.team.overview.plans.upgradeAction' | transloco: { plan: tier.name }"
                         [loading]="checkoutPending()"
-                        [disabled]="checkoutPending()"
+                        [disabled]="checkoutPending() || oauth.resuming()"
                         [severity]="tier.code === 'pro' || upgradeTiers().length === 1 ? 'primary' : 'secondary'"
                         [fluid]="true"
                         (onClick)="startCheckoutForPlan($any(tier.code))"

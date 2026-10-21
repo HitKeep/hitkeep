@@ -168,7 +168,7 @@
                     }
                 </div>
 
-                <p-button [label]="'signup.submit' | transloco" type="submit" [loading]="isLoading()" [disabled]="isLoading()" [fluid]="true" />
+                <p-button [label]="'signup.submit' | transloco" type="submit" [loading]="isLoading() || oauth.resuming()" [disabled]="oauth.resuming() || isLoading()" [fluid]="true" />
 
                 <ul class="hk-auth-trust">
                     @if (selectedPlan() === 'free') {

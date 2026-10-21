@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"slices"
 	"strings"
 )
 
@@ -66,5 +65,5 @@ func TeamCapabilities(role string) []string {
 }
 
 func TeamRoleHasCapability(role string, capability Capability) bool {
-	return slices.Contains(TeamCapabilities(role), string(capability))
+	return roleAllows(ResourceTeam, role, capability)
 }

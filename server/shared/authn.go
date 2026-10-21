@@ -10,6 +10,7 @@ import (
 
 	"hitkeep/auth"
 	"hitkeep/database"
+	"hitkeep/oauth"
 )
 
 // AuthSessionContext carries the authenticated session's lifetime, set by
@@ -17,6 +18,18 @@ import (
 type AuthSessionContext struct {
 	ExpiresAt time.Time
 	IssuedAt  time.Time
+}
+
+// RequireHumanAuth prevents a bearer credential from downgrading to browser cookies.
+func (c *Context) RequireHumanAuth(next http.HandlerFunc) http.HandlerFunc {
+	cookieHandler := c.RequireAuth(false, next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if extractAPIClientToken(r) != "" {
+			c.writeOAuthAuthenticationError(w)
+			return
+		}
+		cookieHandler(w, r)
+	}
 }
 
 // RequireAPIClientAuth wraps a handler and accepts only API client tokens.
@@ -50,6 +63,11 @@ func (c *Context) RequireAPIClientAuth(next http.HandlerFunc) http.HandlerFunc {
 // It sets the UserIDKey in the context.
 func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Recognized OAuth credentials never fall back to dashboard cookies.
+		if oauth.IsOAuthToken(extractAPIClientToken(r)) {
+			c.writeOAuthAuthenticationError(w)
+			return
+		}
 		var userID uuid.UUID
 		var err error
 		var apiClientAuth *database.APIClientAuth

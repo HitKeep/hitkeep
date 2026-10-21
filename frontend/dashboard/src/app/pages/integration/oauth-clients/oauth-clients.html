@@ -1,0 +1,54 @@
+<p-confirmdialog />
+<app-page-frame [breadcrumbItems]="breadcrumbItems()" [subtitle]="'oauthClients.description' | transloco">
+    <section class="flex min-w-0 flex-col gap-5">
+        @if (!canManage()) {
+        <p-message severity="error" role="alert">{{ 'oauth.permissionDenied' | transloco }}</p-message>
+        } @else {
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-muted-color">{{ 'oauthClients.pkce' | transloco }}</p>
+            <button pButton type="button" icon="pi pi-plus" [disabled]="pending() || loading()" (click)="open()">{{ 'oauthClients.register' | transloco }}</button>
+        </div>
+        @if (success(); as message) { <p-message severity="success" role="status">{{ message | transloco }}</p-message> } @if (error(); as message) { @if (!visible()) { <p-message severity="error" role="alert">{{ message | transloco }}</p-message> }
+        } @if (loading()) {
+        <p role="status">{{ 'oauth.loading' | transloco }}</p>
+        } @else if (loadError(); as message) {
+        <p-message severity="error" role="alert">{{ message | transloco }}</p-message>
+        <button pButton type="button" (click)="reload()">{{ 'oauth.retry' | transloco }}</button>
+        } @else {
+        <app-table [value]="clients()" [columns]="columns" [rowActions]="actions" [actionsDisabled]="pending()" [exportable]="false" emptyTextKey="oauthClients.empty" stateKey="oauth-clients">
+            <ng-template appTableCell="client_name" let-client>
+                <div class="flex min-w-0 flex-col gap-1"><span class="font-semibold">{{ client.client_name }}</span><span class="break-all text-sm text-muted-color">{{ client.client_uri }}</span></div>
+            </ng-template>
+            <ng-template appTableCell="client_id" let-client><code class="break-all text-xs">{{ client.client_id }}</code></ng-template>
+            <ng-template appTableCell="redirect_uris" let-client
+                ><ul class="space-y-1">
+                    @for (uri of client.redirect_uris; track uri) {
+                    <li class="break-all text-sm">{{ uri }}</li>
+                    }
+                </ul></ng-template
+            >
+        </app-table>
+        } }
+    </section>
+</app-page-frame>
+<app-crud-dialog
+    [title]="(editing() ? 'oauthClients.edit' : 'oauthClients.register') | transloco"
+    [visible]="visible()"
+    (visibleChange)="visible.set($event)"
+    (cancelled)="visible.set(false)"
+    [submitLabel]="'common.actions.save' | transloco"
+    [cancelLabel]="'common.actions.cancel' | transloco"
+    [saving]="pending()"
+    (submitted)="submit()"
+>
+    <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-4">
+        <p class="text-sm text-muted-color">{{ (editing() ? 'oauthClients.editWarning' : 'oauthClients.pkce') | transloco }}</p>
+        <div class="flex flex-col gap-2"><label for="oauth-client-name">{{ 'common.columns.name' | transloco }}</label><input id="oauth-client-name" pInputText formControlName="name" maxlength="128" required /></div>
+        <div class="flex flex-col gap-2"><label for="oauth-client-uri">{{ 'oauthClients.website' | transloco }}</label><input id="oauth-client-uri" pInputText formControlName="uri" type="url" maxlength="2048" /></div>
+        <div class="flex flex-col gap-2">
+            <label for="oauth-client-redirects">{{ 'oauthClients.redirects' | transloco }}</label><textarea id="oauth-client-redirects" pTextarea formControlName="redirects" rows="5" required aria-describedby="oauth-redirect-hint"></textarea
+            ><small id="oauth-redirect-hint" class="text-muted-color">{{ 'oauthClients.redirectsHint' | transloco }}</small>
+        </div>
+        @if (form.touched && form.invalid) { <p-message severity="error" role="alert">{{ 'oauthClients.invalid' | transloco }}</p-message> } @if (error(); as message) { <p-message severity="error" role="alert">{{ message | transloco }}</p-message> }
+    </form>
+</app-crud-dialog>

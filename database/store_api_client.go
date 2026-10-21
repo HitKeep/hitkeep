@@ -30,6 +30,7 @@ const (
 )
 
 type APIClientAuth struct {
+	tokenHash    string
 	ClientID     uuid.UUID
 	UserID       uuid.UUID
 	TenantID     uuid.UUID
@@ -510,12 +511,29 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 		return nil, nil
 	}
 
-	tokenHash := hashAPIClientToken(token)
-	if cached, ok := s.getCachedAPIClientAuth(tokenHash); ok {
-		return cached, nil
-	}
+	return s.getAPIClientAuth(ctx, hashAPIClientToken(token))
+}
 
-	var authz APIClientAuth
+// RevalidateAPIClientAuth reloads a captured credential without retaining its secret.
+func (s *Store) RevalidateAPIClientAuth(ctx context.Context, previous *APIClientAuth) (*APIClientAuth, error) {
+	if previous == nil || previous.tokenHash == "" {
+		return nil, nil
+	}
+	current, err := s.getAPIClientAuth(ctx, previous.tokenHash)
+	if err != nil || current == nil {
+		return current, err
+	}
+	if current.ClientID != previous.ClientID || current.UserID != previous.UserID || current.TenantID != previous.TenantID {
+		return nil, nil
+	}
+	return current, nil
+}
+
+func (s *Store) getAPIClientAuth(ctx context.Context, tokenHash string) (*APIClientAuth, error) {
+	// Cached values track usage only; revocation and grants are resolved below.
+	_, recentlyUsed := s.getCachedAPIClientAuth(tokenHash)
+
+	authz := APIClientAuth{tokenHash: tokenHash}
 	var userIDRaw sql.NullString
 	var tenantIDRaw sql.NullString
 	var instanceRole string
@@ -558,12 +576,18 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 	authz.InstanceRole = auth.InstanceRole(instanceRole)
 	authz.SiteRoles = make(map[uuid.UUID]auth.SiteRole)
 
-	defaultTenantID := uuid.Nil
-	if authz.TenantID != uuid.Nil {
-		defaultTenantID, err = s.GetDefaultTenantID(ctx)
+	defaultTenantID, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve default tenant for api client auth: %w", err)
+	}
+	if authz.UserID != uuid.Nil {
+		currentInstanceRole, err := s.GetInstanceRole(ctx, authz.UserID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve default tenant for api client auth: %w", err)
+			return nil, fmt.Errorf("failed to resolve api client actor role: %w", err)
 		}
+		authz.InstanceRole = auth.MinInstanceRole(currentInstanceRole, authz.InstanceRole)
+	} else {
+		authz.InstanceRole = auth.MinInstanceRole(auth.InstanceUser, authz.InstanceRole)
 	}
 
 	roleQuery := `
@@ -574,6 +598,20 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 		WHERE r.api_client_id = ?
 	`
 	roleArgs := []any{authz.ClientID}
+	if authz.UserID != uuid.Nil {
+		roleQuery = `
+			SELECT r.site_id, r.role, sm.role, s.user_id = ?, tm.role
+			FROM api_client_site_roles r
+			JOIN sites s ON s.id = r.site_id
+			LEFT JOIN site_tenants st ON st.site_id = s.id
+			JOIN tenant_members tm ON tm.tenant_id = COALESCE(st.tenant_id, ?) AND tm.user_id = ?
+			JOIN tenants t ON t.id = tm.tenant_id
+			LEFT JOIN tenant_archives ta ON ta.tenant_id = t.id
+			LEFT JOIN site_members sm ON sm.site_id = s.id AND sm.user_id = ?
+			WHERE r.api_client_id = ? AND ta.tenant_id IS NULL
+		`
+		roleArgs = []any{authz.UserID, defaultTenantID, authz.UserID, authz.UserID, authz.ClientID}
+	}
 	if authz.TenantID != uuid.Nil {
 		roleQuery += ` AND COALESCE(st.tenant_id, ?) = ?`
 		roleArgs = append(roleArgs, defaultTenantID, authz.TenantID)
@@ -587,18 +625,35 @@ func (s *Store) GetAPIClientAuth(ctx context.Context, token string) (*APIClientA
 	for rows.Next() {
 		var siteID uuid.UUID
 		var role string
-		if err := rows.Scan(&siteID, &role); err != nil {
+		var explicitRole sql.NullString
+		var isOwner bool
+		var tenantRole string
+		dest := []any{&siteID, &role}
+		if authz.UserID != uuid.Nil {
+			dest = append(dest, &explicitRole, &isOwner, &tenantRole)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, fmt.Errorf("failed to scan api client site role: %w", err)
 		}
-		authz.SiteRoles[siteID] = auth.SiteRole(role)
+		delegatedRole := auth.SiteRole(role)
+		if authz.UserID != uuid.Nil {
+			currentRole, err := effectiveSiteRole(explicitRole, isOwner, tenantRole)
+			if err != nil {
+				continue
+			}
+			delegatedRole = auth.MinSiteRole(currentRole, delegatedRole)
+		}
+		authz.SiteRoles[siteID] = delegatedRole
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed iterating api client site roles: %w", err)
 	}
 
 	now := time.Now().UTC()
-	_, _ = s.db.ExecContext(ctx, "UPDATE api_clients SET last_used_at = ?, updated_at = ? WHERE id = ?", now, now, authz.ClientID)
-	s.cacheAPIClientAuth(tokenHash, authz, expiresAt.Time)
+	if !recentlyUsed {
+		_, _ = s.db.ExecContext(ctx, "UPDATE api_clients SET last_used_at = ?, updated_at = ? WHERE id = ?", now, now, authz.ClientID)
+		s.cacheAPIClientAuth(tokenHash, authz, expiresAt.Time)
+	}
 
 	return &authz, nil
 }

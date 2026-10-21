@@ -24,6 +24,7 @@ import { AuthMethodOption, AuthMethods } from '@core/components/auth-methods/aut
 import { CloudStatus } from '@models/analytics.types';
 import { AuthService, LoginResponse, PasskeyLoginFinishRequest, PasskeyLoginStartResponse, SocialProvider, SocialProviderID } from '@services/auth.service';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { UserPreferencesService } from '@services/user-preferences.service';
 import { readSessionEndState, SessionEndReason } from '@services/session-end-navigation.service';
 import { toAssertionResponseJson, toPublicKeyRequestOptions } from '@core/utils/webauthn';
@@ -50,6 +51,7 @@ export class Login {
     private readonly document = inject(DOCUMENT);
     private destroyRef = inject(DestroyRef);
     private router = inject(Router);
+    protected readonly oauth = inject(OAuthService);
     private route = inject(ActivatedRoute);
     private auth = inject(AuthService);
     private analytics = inject(AnalyticsService);
@@ -100,7 +102,7 @@ export class Login {
         return this.route.snapshot.queryParamMap.get('returnUrl') === reviewUrl ? { ...this.signupQueryParams, returnUrl: reviewUrl } : this.signupQueryParams;
     })();
     protected readonly authMethods = computed<readonly AuthMethodOption[]>(() => {
-        const disabled = this.isLoading() || this.isPasskeyLoading() || this.isSSOLoading() || this.socialLoading() !== null;
+        const disabled = this.oauth.resuming() || this.isLoading() || this.isPasskeyLoading() || this.isSSOLoading() || this.socialLoading() !== null;
         if (this.authMode() === 'sso') {
             return [
                 {
@@ -412,6 +414,7 @@ export class Login {
 
     onSubmit(event?: Event): void {
         event?.preventDefault();
+        if (this.oauth.resuming()) return;
         if (this.isMfaRequired()) {
             if (this.mfaHasTotp()) {
                 this.verifyTotpMfa();
@@ -553,10 +556,10 @@ export class Login {
         this.pendingSocialReturnUrl.set(null);
         this.preferences.load().subscribe({
             next: () => {
-                void this.router.navigateByUrl(targetUrl);
+                this.oauth.continueAfterAuthentication(targetUrl);
             },
             error: () => {
-                void this.router.navigateByUrl(targetUrl);
+                this.oauth.continueAfterAuthentication(targetUrl);
             }
         });
     }
