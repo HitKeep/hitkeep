@@ -57,7 +57,7 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	client, err := p.clients.resolve(r.Context(), form.Get("client_id"))
+	client, err := p.resolveClient(r.Context(), form.Get("client_id"))
 	if err != nil {
 		oauthError(w, http.StatusBadRequest, "invalid_client")
 		return
@@ -248,7 +248,7 @@ func (p *Provider) Consent(ctx context.Context, r *http.Request, userID uuid.UUI
 	if err != nil {
 		return nil, ErrInvalidConsent
 	}
-	return &api.OAuthConsent{Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
+	return &api.OAuthConsent{RegistrationTeamID: pending.Client.RegistrationTeamID, Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
 }
 func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userID, teamID uuid.UUID, sites []uuid.UUID, decision, csrf string, authorize func(context.Context, *auth.OAuthGrant, uuid.UUID) error) error {
 	if !p.Ready() {
@@ -268,10 +268,13 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 	if decision != "approve" && decision != "deny" {
 		return ErrInvalidConsent
 	}
+	if decision == "approve" && pending.Client.RegistrationTeamID != uuid.Nil() && pending.Client.RegistrationTeamID != teamID {
+		return ErrConsentForbidden
+	}
 	if decision == "approve" && (teamID == uuid.Nil() || len(sites) == 0 || authorize == nil) {
 		return ErrInvalidConsent
 	}
-	grant := database.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), ClientID: pending.Client.ID, ClientName: pending.Client.Name, ClientURI: pending.Client.URI, Audience: pending.Resource, Scopes: slices.Clone(pending.Scopes), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(grantLifetime)}
+	grant := database.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), ClientRevision: pending.Client.RegistrationVersion, ClientID: pending.Client.ID, ClientName: pending.Client.Name, ClientURI: pending.Client.URI, Audience: pending.Resource, Scopes: slices.Clone(pending.Scopes), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(grantLifetime)}
 	principal := &auth.OAuthGrant{ID: grant.ID, UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), Scopes: slices.Clone(pending.Scopes), Audience: pending.Resource}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -308,6 +311,9 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 		if err := authorize(ctx, principal, siteID); err != nil {
 			return err
 		}
+	}
+	if err := tx.CheckOAuthClient(ctx, pending.Client.ID, pending.Client.RegistrationVersion); err != nil {
+		return ErrInvalidConsent
 	}
 	if err := tx.CreateGrant(ctx, grant); err != nil {
 		return err

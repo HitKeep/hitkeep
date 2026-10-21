@@ -1,4 +1,6 @@
 import { routes } from './app.routes';
+import { capabilityGuard } from '@guards/capability-guard';
+import { TEAM_CAPABILITIES } from '@core/access/capabilities';
 import { authGuard } from '@guards/auth-guard';
 import { SETTINGS_ROUTES } from '@pages/settings/settings.routes';
 
@@ -15,5 +17,12 @@ describe('OAuth route boundaries', () => {
         expect(layout?.canActivate).toContain(authGuard);
         expect(layout?.children?.find((route) => route.path === 'settings')).toBeDefined();
         expect(SETTINGS_ROUTES.find((route) => route.path === 'connected-applications')?.loadComponent).toBeDefined();
+    });
+    it('matches OAuth registration administration to the backend team capability', () => {
+        const layout = routes.find((route) => route.path === '');
+        const admin = layout?.children?.find((route) => route.path === 'integration/oauth-clients');
+        expect(admin?.canActivate).toContain(capabilityGuard);
+        expect(admin?.data?.['activeTeamCapability']).toBe(TEAM_CAPABILITIES.manageApiClients);
+        expect(admin?.loadComponent).toBeDefined();
     });
 });

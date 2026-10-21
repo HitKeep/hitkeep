@@ -3979,5 +3979,23 @@
     "clearFilters": "Filters wissen",
     "empty": "Hier staat nog niets.",
     "total": "Totaal"
+  },
+  "oauthClients": {
+    "title": "OAuth-clients",
+    "description": "Registreer en beheer applicaties voor dit team. Gebruikers keuren toegang tot sites afzonderlijk goed.",
+    "pkce": "Publieke clients gebruiken de autorisatiecodeflow met PKCE S256. Er wordt geen clientgeheim aangemaakt.",
+    "register": "Client registreren",
+    "edit": "Client bewerken",
+    "redirects": "Omleidings-URI’s",
+    "website": "Website van de applicatie (optioneel)",
+    "redirectsHint": "Voer één exacte HTTPS-callback-URI per regel in, maximaal 16. Jokertekens en fragmenten zijn niet toegestaan.",
+    "editWarning": "Bij opslaan worden bestaande machtigingen ingetrokken. Gebruikers moeten de applicatie opnieuw autoriseren.",
+    "empty": "Geen OAuth-clients geregistreerd voor dit team.",
+    "saved": "Client opgeslagen. Kopieer de client-ID naar je applicatie.",
+    "revoked": "Client ingetrokken. De machtigingen geven geen toegang meer.",
+    "saveFailed": "Client opslaan mislukt. Controleer de naam en HTTPS-URL’s en probeer het opnieuw.",
+    "invalid": "Voer een naam en minstens één HTTPS-omleidings-URI in binnen de veldlimieten.",
+    "revokeTitle": "OAuth-client intrekken",
+    "revokeConfirm": "{{application}} intrekken? Dit blokkeert nieuwe autorisaties en trekt alle bestaande machtigingen in."
   }
 }

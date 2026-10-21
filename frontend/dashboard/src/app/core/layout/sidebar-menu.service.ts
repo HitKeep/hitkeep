@@ -180,6 +180,7 @@ export class SidebarMenuService {
                         exact: true,
                         items: [{ labelKey: 'nav.apiReference', icon: 'pi pi-book', routerLink: '/integration/api-reference' }]
                     },
+                    { labelKey: 'oauthClients.title', icon: 'pi pi-shield', routerLink: '/integration/oauth-clients', visible: () => this.access.canActiveTeam(TEAM_CAPABILITIES.manageApiClients) },
                     { labelKey: 'nav.webhooks', icon: 'pi pi-send', routerLink: '/integration/webhooks', visible: canManageWebhooks },
                     { labelKey: 'nav.googleSearchConsole', icon: 'pi pi-search', routerLink: '/integration/google-search-console', visible: canManageIntegrations }
                 ]

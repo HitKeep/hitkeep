@@ -35,6 +35,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/oauth/consent", human(h.completeConsent))
 	mux.HandleFunc("GET /api/user/oauth-grants", human(h.grants))
 	mux.HandleFunc("DELETE /api/user/oauth-grants/{id}", human(h.revoke))
+	h.registerClients(mux)
 	p := ctx.OAuthProvider
 	if p == nil {
 		return
@@ -138,6 +139,9 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 		return
 	}
 	for _, team := range teams {
+		if info.RegistrationTeamID != uuid.Nil() && info.RegistrationTeamID != uuid.UUID(team.ID) {
+			continue
+		}
 		sites, err := h.ctx.Store.ListSitesForTenant(r.Context(), team.ID)
 		if err != nil {
 			response(w, http.StatusServiceUnavailable, map[string]string{"error": "unavailable"})

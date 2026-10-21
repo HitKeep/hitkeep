@@ -29,3 +29,11 @@ export interface OAuthGrant {
     expires_at: string;
     last_used_at?: string | null;
 }
+
+export interface OAuthClientRegistration {
+    client_id: string;
+    client_name: string;
+    client_uri?: string;
+    redirect_uris: string[];
+}
+export type OAuthClientRegistrationRequest = Omit<OAuthClientRegistration, 'client_id'>;

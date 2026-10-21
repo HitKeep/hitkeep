@@ -3969,5 +3969,23 @@
     "clearFilters": "Limpar filtros",
     "empty": "Ainda não há nada aqui.",
     "total": "Total"
+  },
+  "oauthClients": {
+    "title": "Clientes OAuth",
+    "description": "Cadastre e gerencie aplicativos para esta equipe. Os usuários aprovam o acesso aos sites separadamente.",
+    "pkce": "Clientes públicos usam o fluxo de código de autorização com PKCE S256. Nenhum segredo de cliente é gerado.",
+    "register": "Cadastrar cliente",
+    "edit": "Editar cliente",
+    "redirects": "URIs de redirecionamento",
+    "website": "Site do aplicativo (opcional)",
+    "redirectsHint": "Insira uma URI de retorno HTTPS exata por linha, até 16. Curingas e fragmentos não são permitidos.",
+    "editWarning": "Salvar alterações revoga as autorizações existentes. Os usuários precisam autorizar o aplicativo novamente.",
+    "empty": "Nenhum cliente OAuth cadastrado para esta equipe.",
+    "saved": "Cliente salvo. Copie o ID do cliente para seu aplicativo.",
+    "revoked": "Cliente revogado. Suas autorizações não permitem mais o acesso.",
+    "saveFailed": "Não foi possível salvar o cliente. Verifique o nome e as URLs HTTPS e tente novamente.",
+    "invalid": "Insira um nome e pelo menos uma URI de redirecionamento HTTPS dentro dos limites dos campos.",
+    "revokeTitle": "Revogar cliente OAuth",
+    "revokeConfirm": "Revogar {{application}}? Isso impede novas autorizações e revoga todas as existentes."
   }
 }

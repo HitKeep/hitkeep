@@ -4247,5 +4247,23 @@
     "clearFilters": "Borrar filtros",
     "empty": "Todavía no hay nada aquí.",
     "total": "Total"
+  },
+  "oauthClients": {
+    "title": "Clientes OAuth",
+    "description": "Registra y administra aplicaciones para este equipo. Los usuarios aprueban el acceso a los sitios por separado.",
+    "pkce": "Los clientes públicos usan el flujo de código de autorización con PKCE S256. No se genera ningún secreto de cliente.",
+    "register": "Registrar cliente",
+    "edit": "Editar cliente",
+    "redirects": "URI de redirección",
+    "website": "Sitio web de la aplicación (opcional)",
+    "redirectsHint": "Introduce una URI de retorno HTTPS exacta por línea, hasta 16. No se permiten comodines ni fragmentos.",
+    "editWarning": "Al guardar los cambios se revocan las autorizaciones existentes. Los usuarios deben autorizar la aplicación de nuevo.",
+    "empty": "No hay clientes OAuth registrados para este equipo.",
+    "saved": "Cliente guardado. Copia su ID de cliente en tu aplicación.",
+    "revoked": "Cliente revocado. Sus autorizaciones ya no permiten el acceso.",
+    "saveFailed": "No se pudo guardar el cliente. Revisa el nombre y las URL HTTPS e inténtalo de nuevo.",
+    "invalid": "Introduce un nombre y al menos una URI de redirección HTTPS dentro de los límites de los campos.",
+    "revokeTitle": "Revocar cliente OAuth",
+    "revokeConfirm": "¿Revocar {{application}}? Esto impide nuevas autorizaciones y revoca todas las existentes."
   }
 }

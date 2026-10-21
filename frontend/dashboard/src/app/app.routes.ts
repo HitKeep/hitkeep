@@ -292,6 +292,12 @@ export const routes: Routes = [
                 data: titleData('nav.apiClients', 'team')
             },
             {
+                path: 'integration/oauth-clients',
+                loadComponent: () => import('@pages/integration/oauth-clients/oauth-clients').then((m) => m.OAuthClientsPage),
+                canActivate: [capabilityGuard],
+                data: { ...titleData('oauthClients.title', 'team'), activeTeamCapability: TEAM_CAPABILITIES.manageApiClients }
+            },
+            {
                 path: 'integration/api-reference',
                 loadComponent: () => import('@pages/integration/api-reference/api-reference').then((m) => m.APIReferencePage),
                 data: titleData('nav.apiReference')

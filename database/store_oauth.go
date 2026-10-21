@@ -23,20 +23,21 @@ var (
 )
 
 type OAuthGrant struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	TeamID     uuid.UUID
-	ClientID   string
-	ClientName string
-	ClientURI  string
-	Audience   string
-	Scopes     []string
-	SiteIDs    []uuid.UUID
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	LastUsedAt *time.Time
-	RevokedAt  *time.Time
-	Active     bool
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	TeamID         uuid.UUID
+	ClientRevision string
+	ClientID       string
+	ClientName     string
+	ClientURI      string
+	Audience       string
+	Scopes         []string
+	SiteIDs        []uuid.UUID
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+	LastUsedAt     *time.Time
+	RevokedAt      *time.Time
+	Active         bool
 }
 
 type OAuthCredential struct {
@@ -108,8 +109,8 @@ func (o *OAuthTransaction) CreateGrant(ctx context.Context, g OAuthGrant) error 
 	if count >= 200 {
 		return ErrOAuthCapacity
 	}
-	result, err := o.tx.ExecContext(ctx, `INSERT INTO oauth_grants(id,user_id,tenant_id,client_id,client_name,client_uri,audience,scopes,created_at,expires_at)
- SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=?) AND NOT EXISTS(SELECT 1 FROM tenant_archives WHERE tenant_id=?)`, g.ID.String(), g.UserID.String(), g.TeamID.String(), g.ClientID, g.ClientName, g.ClientURI, g.Audience, string(scopes), g.CreatedAt, g.ExpiresAt, g.TeamID.String(), g.UserID.String(), g.TeamID.String())
+	result, err := o.tx.ExecContext(ctx, `INSERT INTO oauth_grants(id,user_id,tenant_id,client_id,client_name,client_uri,audience,scopes,created_at,expires_at,client_registration_revision)
+ SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=?) AND NOT EXISTS(SELECT 1 FROM tenant_archives WHERE tenant_id=?) AND (?='' OR EXISTS(SELECT 1 FROM oauth_clients WHERE id=? AND tenant_id=? AND revision=? AND revoked_at IS NULL))`, g.ID.String(), g.UserID.String(), g.TeamID.String(), g.ClientID, g.ClientName, g.ClientURI, g.Audience, string(scopes), g.CreatedAt, g.ExpiresAt, g.ClientRevision, g.TeamID.String(), g.UserID.String(), g.TeamID.String(), g.ClientRevision, g.ClientID, g.TeamID.String(), g.ClientRevision)
 	if err != nil {
 		return oauthStoreError(err)
 	}
@@ -147,6 +148,7 @@ func (o *OAuthTransaction) GetGrant(ctx context.Context, id uuid.UUID) (*OAuthGr
 	var lastUsed, revoked sql.NullTime
 	err := o.tx.QueryRowContext(ctx, `SELECT CAST(g.id AS VARCHAR),CAST(g.user_id AS VARCHAR),CAST(g.tenant_id AS VARCHAR),g.client_id,g.client_name,g.client_uri,g.audience,g.scopes,g.created_at,g.expires_at,g.last_used_at,g.revoked_at,
  EXISTS(SELECT 1 FROM users u JOIN tenant_members tm ON tm.user_id=u.id WHERE u.id=g.user_id AND tm.tenant_id=g.tenant_id) AND NOT EXISTS(SELECT 1 FROM tenant_archives ta WHERE ta.tenant_id=g.tenant_id)
+ AND (g.client_registration_revision='' OR EXISTS(SELECT 1 FROM oauth_clients c WHERE c.id=g.client_id AND c.tenant_id=g.tenant_id AND c.revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM tenant_archives ta WHERE ta.tenant_id=c.tenant_id)))
  FROM oauth_grants g WHERE g.id=?`, id.String()).Scan(&idRaw, &userRaw, &teamRaw, &g.ClientID, &g.ClientName, &g.ClientURI, &g.Audience, &scopes, &g.CreatedAt, &g.ExpiresAt, &lastUsed, &revoked, &g.Active)
 	if err != nil {
 		return nil, oauthStoreError(err)

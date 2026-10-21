@@ -1,6 +1,7 @@
 package system
 
 import (
+	"maps"
 	"net/url"
 	"strings"
 )
@@ -60,11 +61,13 @@ func openAPIV1OAuthPaths(publicURL string) map[string]any {
 			paths[path] = map[string]any{"servers": []map[string]string{{"url": origin}}, "get": op([]string{"OAuth"}, "Read OAuth discovery metadata", "Canonical issuer and API protected-resource metadata, including path-prefixed deployments. MCP protected-resource metadata follows the configured enabled MCP resource. OAuth requires a compatible public HTTPS issuer.", nil, nil, nil, map[string]any{"200": jsonSchemaResp("Discovery metadata", map[string]any{"type": "object"})})}
 		}
 	}
+	maps.Copy(paths, openAPIV1OAuthClientPaths())
 	return paths
 }
 
 func openAPIV1OAuthSchemas() map[string]any {
 	return map[string]any{
+		"OAuthClientRegistration":    oauthClientRegistrationSchema(),
 		"OAuthError":                 map[string]any{"type": "object", "required": []string{"error"}, "properties": map[string]any{"error": map[string]any{"type": "string"}}},
 		"OAuthTokenResponse":         map[string]any{"type": "object", "required": []string{"access_token", "token_type", "expires_in", "refresh_token"}, "properties": map[string]any{"access_token": map[string]any{"type": "string"}, "token_type": map[string]any{"const": "bearer"}, "expires_in": map[string]any{"type": "integer"}, "refresh_token": map[string]any{"type": "string"}, "scope": map[string]any{"type": "string"}, "resource": map[string]any{"type": "string", "format": "uri"}}},
 		"OAuthClient":                map[string]any{"type": "object", "required": []string{"id", "name"}, "properties": map[string]any{"id": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "callback_origin": map[string]any{"type": "string", "format": "uri"}}},

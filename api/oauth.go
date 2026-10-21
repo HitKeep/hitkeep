@@ -25,12 +25,13 @@ type OAuthTeamSummary struct {
 	Name string    `json:"name"`
 }
 type OAuthConsent struct {
-	Client    OAuthClientSummary `json:"client"`
-	Resource  string             `json:"resource"`
-	Scopes    []string           `json:"scopes"`
-	ExpiresAt time.Time          `json:"expires_at"`
-	CSRFToken string             `json:"csrf_token"`
-	Teams     []OAuthTeam        `json:"teams"`
+	RegistrationTeamID uuid.UUID          `json:"-"`
+	Client             OAuthClientSummary `json:"client"`
+	Resource           string             `json:"resource"`
+	Scopes             []string           `json:"scopes"`
+	ExpiresAt          time.Time          `json:"expires_at"`
+	CSRFToken          string             `json:"csrf_token"`
+	Teams              []OAuthTeam        `json:"teams"`
 }
 type OAuthAuthorizedApp struct {
 	ID         uuid.UUID          `json:"id"`

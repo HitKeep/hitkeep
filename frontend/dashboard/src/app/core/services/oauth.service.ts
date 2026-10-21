@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { finalize, timeout } from 'rxjs';
 import { ApplicationErrorNavigationService, ROUTE_CRITICAL_REQUEST_TIMEOUT_MS } from '@services/application-error-navigation.service';
 
-import { OAuthConsent, OAuthGrant } from '@models/oauth.types';
+import { OAuthConsent, OAuthGrant, OAuthClientRegistration, OAuthClientRegistrationRequest } from '@models/oauth.types';
 
 @Service()
 export class OAuthService {
@@ -47,5 +47,21 @@ export class OAuthService {
 
     revoke(id: string) {
         return this.http.delete<void>(`/api/user/oauth-grants/${encodeURIComponent(id)}`).pipe(timeout({ first: ROUTE_CRITICAL_REQUEST_TIMEOUT_MS }));
+    }
+    clients(teamId: string) {
+        return this.http.get<OAuthClientRegistration[]>(this.clientsURL(teamId)).pipe(timeout({ first: ROUTE_CRITICAL_REQUEST_TIMEOUT_MS }));
+    }
+
+    saveClient(teamId: string, clientId: string | null, body: OAuthClientRegistrationRequest) {
+        const url = this.clientsURL(teamId);
+        return clientId ? this.http.put<OAuthClientRegistration>(`${url}/${encodeURIComponent(clientId)}`, body) : this.http.post<OAuthClientRegistration>(url, body);
+    }
+
+    revokeClient(teamId: string, clientId: string) {
+        return this.http.delete<void>(`${this.clientsURL(teamId)}/${encodeURIComponent(clientId)}`);
+    }
+
+    private clientsURL(teamId: string): string {
+        return `/api/user/teams/${encodeURIComponent(teamId)}/oauth-clients`;
     }
 }

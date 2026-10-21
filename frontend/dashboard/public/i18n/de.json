@@ -4040,5 +4040,23 @@
     "clearFilters": "Filter zurücksetzen",
     "empty": "Noch keine Einträge.",
     "total": "Gesamt"
+  },
+  "oauthClients": {
+    "title": "OAuth-Clients",
+    "description": "Anwendungen für dieses Team registrieren und verwalten. Nutzer genehmigen den Website-Zugriff separat.",
+    "pkce": "Öffentliche Clients verwenden den Authorization-Code-Flow mit PKCE S256. Es wird kein Client-Secret erstellt.",
+    "register": "Client registrieren",
+    "edit": "Client bearbeiten",
+    "redirects": "Weiterleitungs-URIs",
+    "website": "Anwendungswebsite (optional)",
+    "redirectsHint": "Eine exakte HTTPS-Callback-URI pro Zeile, maximal 16. Platzhalter und Fragmente sind nicht erlaubt.",
+    "editWarning": "Beim Speichern werden bestehende Freigaben widerrufen. Nutzer müssen die Anwendung erneut autorisieren.",
+    "empty": "Für dieses Team sind keine OAuth-Clients registriert.",
+    "saved": "Client gespeichert. Kopiere die Client-ID in deine Anwendung.",
+    "revoked": "Client widerrufen. Seine Freigaben gewähren keinen Zugriff mehr.",
+    "saveFailed": "Client konnte nicht gespeichert werden. Prüfe den Namen und die HTTPS-URLs und versuche es erneut.",
+    "invalid": "Gib einen Namen und mindestens eine HTTPS-Weiterleitungs-URI innerhalb der Feldgrenzen ein.",
+    "revokeTitle": "OAuth-Client widerrufen",
+    "revokeConfirm": "{{application}} widerrufen? Dies verhindert neue Autorisierungen und widerruft alle bestehenden Freigaben."
   }
 }

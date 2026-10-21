@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"uuid"
 )
 
 const (
@@ -29,14 +30,16 @@ var errMetadataBusy = errors.New("OAuth client metadata fetch capacity exhausted
 
 // ClientMetadata is a validated public-client snapshot; remote key/logo URLs are never fetched.
 type ClientMetadata struct {
-	ID            string   `json:"client_id"`
-	Name          string   `json:"client_name"`
-	URI           string   `json:"client_uri,omitempty"`
-	RedirectURIs  []string `json:"redirect_uris"`
-	GrantTypes    []string `json:"grant_types,omitempty"`
-	ResponseTypes []string `json:"response_types,omitempty"`
-	AuthMethod    string   `json:"token_endpoint_auth_method,omitempty"`
-	AuthMethods   []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	RegistrationTeamID  uuid.UUID `json:"registration_team_id,omitzero"`
+	RegistrationVersion string    `json:"registration_version,omitempty"`
+	ID                  string    `json:"client_id"`
+	Name                string    `json:"client_name"`
+	URI                 string    `json:"client_uri,omitempty"`
+	RedirectURIs        []string  `json:"redirect_uris"`
+	GrantTypes          []string  `json:"grant_types,omitempty"`
+	ResponseTypes       []string  `json:"response_types,omitempty"`
+	AuthMethod          string    `json:"token_endpoint_auth_method,omitempty"`
+	AuthMethods         []string  `json:"token_endpoint_auth_methods_supported,omitempty"`
 }
 
 type cachedClient struct {
@@ -63,6 +66,8 @@ func newClientResolver(registered []ClientMetadata) (*clientResolver, error) {
 	}
 	r := &clientResolver{registered: make(map[string]ClientMetadata), cache: make(map[string]cachedClient), pending: make(map[string]*clientFetch), fetches: make(chan struct{}, metadataMaxFetches)}
 	for _, m := range registered {
+		m.RegistrationVersion = ""
+		m.RegistrationTeamID = uuid.Nil()
 		if err := validateClientMetadata(m, m.ID, true); err != nil {
 			return nil, err
 		}
@@ -163,6 +168,8 @@ func (r *clientResolver) fetch(ctx context.Context, id string) (ClientMetadata, 
 	if err := json.Unmarshal(body, &m); err != nil {
 		return ClientMetadata{}, 0, errors.New("invalid OAuth client metadata JSON")
 	}
+	m.RegistrationVersion = ""
+	m.RegistrationTeamID = uuid.Nil()
 	if err := validateClientMetadata(m, id, false); err != nil {
 		return ClientMetadata{}, 0, err
 	}
