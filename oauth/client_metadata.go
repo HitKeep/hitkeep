@@ -268,7 +268,31 @@ func validateClientMetadata(m ClientMetadata, id string, registered bool) error 
 }
 
 func redirectAllowed(m ClientMetadata, redirect string) bool {
-	return slices.Contains(m.RedirectURIs, redirect)
+	if slices.Contains(m.RedirectURIs, redirect) {
+		return true
+	}
+	requested, err := url.Parse(redirect)
+	if err != nil || requested.Scheme != "http" || requested.User != nil || requested.Fragment != "" || strings.Contains(redirect, "#") || requested.String() != redirect {
+		return false
+	}
+	ip, err := netip.ParseAddr(requested.Hostname())
+	port, portErr := strconv.Atoi(requested.Port())
+	if err != nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
+		return false
+	}
+	for _, raw := range m.RedirectURIs {
+		registered, err := url.Parse(raw)
+		// Only operator-configured clients can register HTTP loopback callbacks.
+		if err != nil || registered.Scheme != "http" || registered.Hostname() != requested.Hostname() {
+			continue
+		}
+		candidate := requested.Clone()
+		candidate.Host = registered.Host
+		if candidate.String() == raw {
+			return true
+		}
+	}
+	return false
 }
 
 var metadataDeniedPrefixes = []netip.Prefix{

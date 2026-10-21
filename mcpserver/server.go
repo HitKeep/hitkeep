@@ -151,8 +151,31 @@ func (s *service) hostValidationMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
+		if origins := r.Header.Values("Origin"); len(origins) > 1 || (len(origins) == 1 && !isAllowedMCPOrigin(origins[0], s.conf.PublicURL)) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAllowedMCPOrigin(raw, publicURL string) bool {
+	origin, err := url.Parse(raw)
+	if err != nil || origin.Hostname() == "" || origin.User != nil || origin.Opaque != "" || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || strings.ContainsAny(raw, "#\\ \t\r\n") || strings.HasSuffix(origin.Host, ":") {
+		return false
+	}
+	public, err := url.Parse(publicURL)
+	if err != nil || origin.Scheme != public.Scheme || !strings.EqualFold(origin.Hostname(), public.Hostname()) || defaultMCPPort(origin.Scheme) == "" {
+		return false
+	}
+	originPort, publicPort := origin.Port(), public.Port()
+	if originPort == "" {
+		originPort = defaultMCPPort(origin.Scheme)
+	}
+	if publicPort == "" {
+		publicPort = defaultMCPPort(public.Scheme)
+	}
+	return originPort == publicPort
 }
 
 func (s *service) authMiddleware(next http.Handler) http.Handler {

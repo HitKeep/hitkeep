@@ -63,8 +63,8 @@
         "@jsverse/transloco-optimize": "^8.4.0",
         "@playwright/test": "^1.64.0",
         "@types/markdown-it": "14.2.0",
-        "@vitest/browser-playwright": "^5.0.3",
-        "@vitest/coverage-v8": "^5.0.3",
+        "@vitest/browser-playwright": "^5.0.5",
+        "@vitest/coverage-v8": "^5.0.5",
         "angular-eslint": "22.6.0",
         "baseline-browser-mapping": "^2.11.28",
         "esbuild": "0.28.2",
@@ -75,7 +75,7 @@
         "postcss": "^8.5.29",
         "typescript": "~6.0.3",
         "typescript-eslint": "8.71.1",
-        "vitest": "^5.0.3"
+        "vitest": "^5.0.5"
     },
     "engines": {
         "node": "26.10.0",

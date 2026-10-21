@@ -51,6 +51,8 @@ type catalogEntry struct {
 	Description string
 }
 
+var errDocsRedirect = errors.New("docs redirect rejected")
+
 func NewDocs(baseURL string, ttl time.Duration) *Docs {
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -64,6 +66,12 @@ func NewDocs(baseURL string, ttl time.Duration) *Docs {
 		ttl:  ttl,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if req.URL.Scheme != parsed.Scheme || req.URL.Host != parsed.Host || len(via) >= 10 {
+					return errDocsRedirect
+				}
+				return nil
+			},
 		},
 		pages: lru.NewLRU[string, DocPage](maxDocCacheEntries, nil, ttl),
 	}
@@ -199,7 +207,16 @@ func (c *Docs) fetchMarkdown(ctx context.Context, path string) (DocPage, error) 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return DocPage{}, fmt.Errorf("fetch docs markdown: %w", err)
+		if errors.Is(err, errDocsRedirect) {
+			return DocPage{}, errDocsRedirect
+		}
+		if errors.Is(err, context.Canceled) {
+			return DocPage{}, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return DocPage{}, context.DeadlineExceeded
+		}
+		return DocPage{}, errors.New("fetch docs markdown failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

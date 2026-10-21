@@ -187,6 +187,52 @@ func TestOAuthProviderPKCEBindingRollbackAndSignatureOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+func TestOAuthProviderTokenRedirectCompatibility(t *testing.T) {
+	f := newProviderFixture(t)
+	for _, tt := range []struct {
+		name   string
+		change func(url.Values)
+		valid  bool
+	}{
+		{"omitted redirect", func(form url.Values) { form.Del("redirect_uri") }, true},
+		{"registered redirect", func(url.Values) {}, true},
+		{"empty redirect", func(form url.Values) { form.Set("redirect_uri", "") }, false},
+		{"wrong redirect", func(form url.Values) { form.Set("redirect_uri", "https://evil.example/callback") }, false},
+		{"omitted redirect with wrong verifier", func(form url.Values) {
+			form.Del("redirect_uri")
+			form.Set("code_verifier", strings.Repeat("x", 64))
+		}, false},
+		{"omitted redirect with wrong client", func(form url.Values) {
+			form.Del("redirect_uri")
+			form.Set("client_id", "other-client")
+		}, false},
+		{"omitted redirect with wrong resource", func(form url.Values) {
+			form.Del("redirect_uri")
+			form.Set("resource", f.p.Resource("mcp"))
+		}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, verifier := f.authorize(t)
+			form := f.codeForm(code, verifier)
+			tt.change(form)
+			status, result := f.token(t, form)
+			if tt.valid {
+				if status != http.StatusOK || !IsAccessToken(result.AccessToken) {
+					t.Fatalf("valid code exchange rejected: status=%d error=%s", status, result.Error)
+				}
+				return
+			}
+			if status != http.StatusBadRequest || result.AccessToken != "" {
+				t.Fatalf("invalid binding accepted: status=%d error=%s", status, result.Error)
+			}
+			status, result = f.token(t, f.codeForm(code, verifier))
+			if status != http.StatusOK || !IsAccessToken(result.AccessToken) {
+				t.Fatalf("rejected request consumed the code: status=%d error=%s", status, result.Error)
+			}
+		})
+	}
+}
+
 func TestOAuthProviderTokenLoadFailurePreservesRefresh(t *testing.T) {
 	f := newProviderFixture(t)
 	code, verifier := f.authorize(t)

@@ -251,6 +251,11 @@ func (p *Provider) Token(w http.ResponseWriter, r *http.Request) {
 		request := r.Clone(ctx)
 		request.Form = form.Clone()
 		request.PostForm = form.Clone()
+		if kind == "code" && !form.Has("redirect_uri") {
+			// OAuth 2.1 omits this parameter; Fosite still requires the code-bound value.
+			request.Form.Set("redirect_uri", snapshot.RedirectURI)
+			request.PostForm.Set("redirect_uri", snapshot.RedirectURI)
+		}
 		request.PostForm.Set("audience", snapshot.Audience)
 		request.Form.Set("audience", snapshot.Audience)
 		requester, err = p.core.NewAccessRequest(ctx, request, &oauthSession{})
