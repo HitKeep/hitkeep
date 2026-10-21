@@ -42,7 +42,7 @@
         "@tailwindcss/postcss": "^4.3.3",
         "circle-flags": "^2.8.3",
         "echarts": "^6.1.0",
-        "markdown-it": "15.0.2",
+        "markdown-it": "15.0.3",
         "ng-number-flow": "0.2.0",
         "ngx-echarts": "^22.0.0",
         "number-flow": "0.6.2",
@@ -95,6 +95,7 @@
     },
     "overrides": {
         "dompurify": "3.4.16",
+        "vite": "8.3.3",
         "@jsverse/transloco-optimize": {
             "glob": "^13.0.6"
         },
