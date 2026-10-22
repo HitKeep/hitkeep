@@ -63,6 +63,10 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirect := form.Get("redirect_uri")
+	if !form.Has("redirect_uri") && len(client.RedirectURIs) == 1 {
+		redirect = client.RedirectURIs[0]
+		form.Set("redirect_uri", redirect)
+	}
 	if !redirectAllowed(client, redirect) {
 		oauthError(w, http.StatusBadRequest, "invalid_request")
 		return
@@ -76,7 +80,7 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_target")
 		return
 	}
-	if form.Get("response_type") != "code" || form.Get("response_mode") != "" || form.Has("audience") || form.Has("request") || form.Has("request_uri") || len(state) < 8 || len(state) > 1024 || form.Get("code_challenge_method") != "S256" {
+	if form.Get("response_type") != "code" || form.Get("response_mode") != "" || form.Has("audience") || form.Has("request") || form.Has("request_uri") || (form.Has("state") && state == "") || len(state) > 1024 || form.Get("code_challenge_method") != "S256" {
 		fail("invalid_request")
 		return
 	}
@@ -114,7 +118,7 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 	form.Set("audience", resource)
 	validated.URL.RawQuery = form.Encode()
 	validated.Form = form.Clone()
-	_, err = p.core.NewAuthorizeRequest(ctx, validated)
+	_, err = p.newAuthorizeRequest(ctx, validated)
 	_ = tx.Rollback()
 	if err != nil {
 		fail(fosite.ErrorToRFC6749Error(err).ErrorField)
@@ -320,13 +324,16 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 	}
 	op := &providerOperation{tx: tx, client: pending.Client, resource: pending.Resource}
 	ctx = context.WithValue(ctx, operationKey{}, op)
-	form := url.Values{"response_type": {"code"}, "client_id": {pending.Client.ID}, "redirect_uri": {pending.RedirectURI}, "scope": {strings.Join(pending.Scopes, " ")}, "state": {pending.State}, "code_challenge": {pending.Challenge}, "code_challenge_method": {"S256"}, "audience": {pending.Resource}}
+	form := url.Values{"response_type": {"code"}, "client_id": {pending.Client.ID}, "redirect_uri": {pending.RedirectURI}, "scope": {strings.Join(pending.Scopes, " ")}, "code_challenge": {pending.Challenge}, "code_challenge_method": {"S256"}, "audience": {pending.Resource}}
+	if pending.State != "" {
+		form.Set("state", pending.State)
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.urls.Issuer+"/oauth/authorize?"+form.Encode(), nil)
 	if err != nil {
 		return err
 	}
 	request.Form = form
-	ar, err := p.core.NewAuthorizeRequest(ctx, request)
+	ar, err := p.newAuthorizeRequest(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -353,6 +360,19 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 	p.callback(w, r, pending.RedirectURI, pending.State, response.GetCode(), "")
 	return nil
 }
+func (p *Provider) newAuthorizeRequest(ctx context.Context, r *http.Request) (fosite.AuthorizeRequester, error) {
+	form := r.Form
+	if (form.Has("state") && form.Get("state") == "") || len(form.Get("state")) > 1024 || form.Get("code_challenge_method") != "S256" || form.Get("code_challenge") == "" {
+		return nil, fosite.ErrInvalidRequest
+	}
+	request, err := p.core.NewAuthorizeRequest(ctx, r)
+	// Fosite v0.49 checks client-state entropy last, after protocol validation.
+	if request != nil && errors.Is(err, fosite.ErrInvalidState) {
+		return request, nil
+	}
+	return request, err
+}
+
 func (p *Provider) callback(w http.ResponseWriter, r *http.Request, redirect, state, code, errorCode string) {
 	target, err := url.Parse(redirect)
 	if err != nil {
@@ -362,7 +382,11 @@ func (p *Provider) callback(w http.ResponseWriter, r *http.Request, redirect, st
 	target = target.Clone()
 	query := target.Query()
 	query.Set("iss", p.urls.Issuer)
-	query.Set("state", state)
+	if state != "" {
+		query.Set("state", state)
+	} else {
+		query.Del("state")
+	}
 	if errorCode != "" {
 		query.Set("error", errorCode)
 		query.Del("code")

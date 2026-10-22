@@ -242,7 +242,16 @@ func New(conf *config.Config, publicFS fs.FS, store *database.Store, tenantStore
 
 	mux := http.NewServeMux()
 	s.setupRoutes(mux, publicFS)
-	rootHandler := s.databaseAvailabilityMiddleware(newCrossOriginProtection().Handler(mux))
+	protected := newCrossOriginProtection().Handler(mux)
+	rootHandler := s.databaseAvailabilityMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, pattern := mux.Handler(r)
+		if conf.MCPEnabled && pattern == conf.MCPPath {
+			// Only the actual bearer-only MCP handler owns its Origin policy.
+			mux.ServeHTTP(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
+	}))
 	handler := rootHandler
 	if s.publicBasePath != "/" {
 		handler = s.stripPublicBasePath(rootHandler)
@@ -454,7 +463,7 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 
 		// 2. Handle Root (Explicit request for index)
 		if path == "" || path == "index.html" {
-			s.serveIndex(w)
+			s.serveIndex(w, r)
 			return
 		}
 
@@ -490,7 +499,7 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 // browser then tries to parse as JavaScript, CSS, or JSON.
 func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && !s.isNonDashboardPath(r.URL.Path) && acceptsSPADocument(r) {
-		s.serveIndex(w)
+		s.serveIndex(w, r)
 		return
 	}
 	http.NotFound(w, r)
@@ -573,7 +582,7 @@ func acceptsSPADocument(r *http.Request) bool {
 }
 
 // serveIndex serves the Angular index.html from memory.
-func (s *Server) serveIndex(w http.ResponseWriter) {
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	if len(s.indexHTML) == 0 {
 		http.Error(w, "Frontend index missing", http.StatusNotFound)
 		return
@@ -581,6 +590,10 @@ func (s *Server) serveIndex(w http.ResponseWriter) {
 
 	w.Header().Set("Cache-Control", cacheControlNoCache)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if !strings.HasPrefix(r.URL.Path, "/share/") && !strings.HasPrefix(r.URL.Path, "/qr-share/") {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		w.Header().Set("X-Frame-Options", "DENY")
+	}
 	_, _ = w.Write(s.indexHTML)
 }
 

@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { setupGuard } from '@guards/setup-guard';
 import { authGuard } from '@guards/auth-guard';
+import { privateFrameGuard } from '@guards/private-frame-guard';
 import { capabilityGuard } from '@guards/capability-guard';
 import { cloudSignupGuard } from '@guards/cloud-signup-guard';
 import { importExportDefaultGuard } from '@pages/import-export/import-export-default.guard';
@@ -463,3 +464,8 @@ export const routes: Routes = [
         }
     }
 ];
+
+for (const route of routes) {
+    route.canActivate = [privateFrameGuard, ...(route.canActivate ?? [])];
+    route.canActivateChild = [privateFrameGuard, ...(route.canActivateChild ?? [])];
+}
