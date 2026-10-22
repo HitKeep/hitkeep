@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	serverName           = "hitkeep"
+	serverName           = "io.github.PascaleBeier/hitkeep"
 	mcpListCacheTTL      = 5 * time.Minute
 	mcpStaticResourceTTL = time.Hour
 )
@@ -75,12 +75,7 @@ func NewHandler(conf *config.Config, store *database.Store, tenantStores *databa
 }
 
 func (s *service) newMCPServer() *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:        serverName,
-		Title:       "HitKeep Analytics MCP",
-		Description: "Read-only aggregate HitKeep analytics and official documentation over a stateless MCP endpoint.",
-		Version:     s.conf.Version,
-	}, &mcp.ServerOptions{
+	server := mcp.NewServer(ServerInfo(s.conf.Version), &mcp.ServerOptions{
 		Instructions: mcpInstructions,
 		Capabilities: &mcp.ServerCapabilities{
 			Tools:     &mcp.ToolCapabilities{ListChanged: false},
@@ -488,4 +483,9 @@ func rawSiteID(raw json.RawMessage) string {
 		return ""
 	}
 	return strings.TrimSpace(payload.SiteID)
+}
+
+// ServerInfo is the shared protocol identity used by runtime discovery and its public card.
+func ServerInfo(version string) *mcp.Implementation {
+	return &mcp.Implementation{Name: serverName, Title: "HitKeep Analytics MCP", Description: "Read-only aggregate HitKeep analytics and official documentation.", Version: version}
 }

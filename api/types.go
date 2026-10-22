@@ -1658,8 +1658,9 @@ type SocialProvidersResponse struct {
 }
 
 type CloudPlanPrice struct {
-	AmountMinor int64  `json:"amount_minor"`
-	Currency    string `json:"currency"`
+	AmountMinor       int64  `json:"amount_minor"`
+	Currency          string `json:"currency"`
+	PurchaseReviewURL string `json:"purchase_review_url,omitempty"`
 }
 
 type CloudPlanTier struct {

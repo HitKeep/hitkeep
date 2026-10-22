@@ -81,13 +81,15 @@ describe('AssistantsPage', () => {
 
     it('copies the canonical endpoint with pending and localized accessible feedback', async () => {
         let complete!: () => void;
-        writeText.mockReturnValue(new Promise<void>((resolve) => (complete = resolve)));
+        const clipboardWrite = new Promise<void>((resolve) => (complete = resolve));
+        writeText.mockReturnValue(clipboardWrite);
         const button: HTMLButtonElement = fixture.nativeElement.querySelector('button');
         button.click();
         await fixture.whenStable();
         expect(button.disabled).toBe(true);
         expect(writeText).toHaveBeenCalledExactlyOnceWith(canonicalEndpoint);
         complete();
+        await clipboardWrite;
         await fixture.whenStable();
         expect(button.disabled).toBe(false);
         const feedback: HTMLElement = fixture.nativeElement.querySelector('[aria-live="polite"]');

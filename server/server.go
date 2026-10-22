@@ -378,7 +378,7 @@ func (s *Server) stripPublicBasePath(next http.Handler) http.Handler {
 				strippedPath = "/"
 			}
 			r = cloneRequestWithPath(r, strippedPath)
-		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) && !s.isOAuthDiscoveryPath(r.URL.Path) {
+		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) && !s.isOAuthDiscoveryPath(r.URL.Path) && !s.isDiscoveryRoot(r.URL.Path) {
 			http.NotFound(w, r)
 			return
 		}
@@ -402,6 +402,7 @@ func cloneRequestWithPath(r *http.Request, nextPath string) *http.Request {
 func (s *Server) setupRoutes(mux *http.ServeMux, publicFS fs.FS) {
 	ctx := s.ctx
 	system.Register(mux, ctx)
+	s.registerDiscoveryRoutes(mux)
 	mux.HandleFunc("GET /internal/caddy/on-demand-tls/{token}", s.handleCaddyOnDemandTLSAsk())
 	ingest.Register(mux, ctx)
 	serverauth.Register(mux, ctx)
@@ -424,7 +425,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux, publicFS fs.FS) {
 	qrcodehandlers.Register(mux, ctx)
 	takeouthandlers.Register(mux, ctx)
 	sharehandlers.Register(mux, ctx)
-	if s.conf.MCPEnabled && s.store != nil && (s.cluster == nil || s.cluster.IsLeader()) {
+	if s.mcpAvailable() {
 		s.logger.Info("MCP server route enabled", "path", s.conf.MCPPath)
 		mcpserver.Register(mux, ctx, s.logger)
 	}
@@ -463,6 +464,9 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 
 		// 2. Handle Root (Explicit request for index)
 		if path == "" || path == "index.html" {
+			if links := s.discoveryLinks(); links != "" {
+				w.Header().Set("Link", links)
+			}
 			s.serveIndex(w, r)
 			return
 		}
@@ -507,7 +511,7 @@ func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) isNonDashboardPath(requestPath string) bool {
 	requestPath = "/" + strings.TrimPrefix(requestPath, "/")
-	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/q", "/healthz", "/readyz", "/scalar", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
+	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/skills", "/q", "/healthz", "/readyz", "/scalar", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
 	if s.conf != nil {
 		mcpPath := strings.TrimRight(strings.TrimSpace(s.conf.MCPPath), "/")
 		if mcpPath != "" {
