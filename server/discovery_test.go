@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -193,7 +194,7 @@ func TestDiscoverySkillsAndSeparateCatalogSchemas(t *testing.T) {
 func TestDiscoveryHomepageLinksKeepDashboardPrivate(t *testing.T) {
 	s := newDiscoveryServer()
 	rec := httptest.NewRecorder()
-	s.spaHandler(http.Dir(t.TempDir())).ServeHTTP(rec, httptest.NewRequest("GET", "https://malicious.example/", nil))
+	s.spaHandler(os.DirFS(t.TempDir())).ServeHTTP(rec, httptest.NewRequest("GET", "https://malicious.example/", nil))
 	if rec.Code != 200 || rec.Header().Get("Link") == "" || strings.Contains(rec.Header().Get("Cache-Control"), "public") {
 		t.Fatalf("root headers %v", rec.Header())
 	}
