@@ -693,14 +693,20 @@ type AskAIStatus struct {
 	DailyResetAt    *time.Time `json:"daily_reset_at,omitempty"`
 }
 
+type AssistantConnection struct {
+	Enabled  bool   `json:"enabled"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
 type UserBootstrap struct {
-	Session     AuthSession       `json:"session"`
-	Profile     UserProfile       `json:"profile"`
-	Preferences UserPreferences   `json:"preferences"`
-	Teams       UserTeamsResponse `json:"teams"`
-	Permissions PermissionContext `json:"permissions"`
-	Sites       []Site            `json:"sites"`
-	Status      SystemStatus      `json:"status"`
+	Session     AuthSession         `json:"session"`
+	Profile     UserProfile         `json:"profile"`
+	Preferences UserPreferences     `json:"preferences"`
+	Teams       UserTeamsResponse   `json:"teams"`
+	Permissions PermissionContext   `json:"permissions"`
+	Sites       []Site              `json:"sites"`
+	Status      SystemStatus        `json:"status"`
+	Assistants  AssistantConnection `json:"assistants"`
 }
 
 type OnboardingStep struct {

@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Existing scoped API-client connections may still be available. Review API clients for manual setup.",
+    "title": "Assistants",
+    "description": "Connect your assistant to the sites you choose in HitKeep.",
+    "available": "Configured for assistant setup",
+    "endpoint": "MCP endpoint",
+    "copy": "Copy endpoint",
+    "copying": "Copying…",
+    "copied": "Endpoint copied.",
+    "copyFailed": "Could not copy the endpoint. Select and copy it manually.",
+    "configurationNote": "This configuration does not verify that an assistant is connected.",
+    "unavailable": "Assistant setup is unavailable on this instance. Ask your administrator to check the MCP configuration.",
+    "setupTitle": "Connect an assistant",
+    "access": "Assistant access is read-only and aggregate-only. During OAuth sign-in, choose the sites to share; your current site permissions still apply.",
+    "setup": "Add the MCP endpoint as a custom connection in your assistant, sign in to HitKeep, and review the requested access.",
+    "claude": "Claude setup",
+    "chatgpt": "ChatGPT setup",
+    "codex": "Codex setup",
+    "availability": "Custom connections are separate from optional skill or plugin installation. Availability depends on your assistant account and network access.",
+    "registrationHint": "If your assistant requires a registered client ID, ask your administrator to register its exact callback URL.",
+    "starterTitle": "Try a question",
+    "starter": "Compare my site’s last seven complete days with the preceding seven. What changed, and what remains uncertain?",
+    "connections": "Review assistant access"
+  },
   "oauth": {
     "connectionDetails": "Connection details",
     "consentTitle": "Authorize an application",

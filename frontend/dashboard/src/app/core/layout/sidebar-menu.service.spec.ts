@@ -20,6 +20,7 @@ describe('SidebarMenuService', () => {
                 TranslocoTestingModule.forRoot({
                     langs: {
                         en: {
+                            assistants: { title: 'Assistants' },
                             nav: {
                                 analytics: 'Analytics',
                                 overview: 'Overview',
@@ -103,6 +104,8 @@ describe('SidebarMenuService', () => {
 
         expect(analytics?.expanded).toBe(true);
         expect(integration?.expanded).toBe(true);
+        expect(findByLabel(items, 'Assistants')?.routerLink).toBe('/integration/assistants');
+        expect(findByLabel(items, 'oauthClients.title')).toBeUndefined();
         expect(findByLabel(items, 'Overview')?.routerLink).toBe('/overview');
         expect(findByLabel(items, 'AI Agents')?.routerLink).toBe('/ai-agents');
         expect(utm?.routerLink).toBe('/utm');
@@ -172,6 +175,7 @@ describe('SidebarMenuService', () => {
         const utmBuilder = findByLabel(items, 'UTM Builder');
         const qrCodes = analyticsItems.find((item) => item.label === 'QR codes');
 
+        expect(findByLabel(items, 'Assistants')).toBeUndefined();
         expect(dashboard?.routerLink).toBe('/share/share-token/dashboard');
         expect(webVitals?.routerLink).toBe('/share/share-token/web-vitals');
         expect(findByLabel(items, 'AI Agents')?.routerLink).toBe('/share/share-token/ai-agents');

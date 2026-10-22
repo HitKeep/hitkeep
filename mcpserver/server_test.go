@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -2159,4 +2160,184 @@ func mcpToolErrorText(res *mcp.CallToolResult) string {
 
 func testMCPLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func TestMCPEventInspectionSiteJourney(t *testing.T) {
+	store, first, _ := setupMCPStore(t)
+	second, err := store.CreateSite(t.Context(), first.UserID, "second-mcp.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := store.CreateSite(t.Context(), first.UserID, "hidden-mcp.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, err := store.CreateAPIClient(t.Context(), first.UserID, "journey", "", authcore.InstanceUser, map[uuid.UUID]authcore.SiteRole{first.ID: authcore.SiteViewer, second.ID: authcore.SiteViewer}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 30, 23, 59, 59, 0, time.UTC)
+	for _, site := range []*api.Site{first, second, hidden} {
+		if err := store.CreateEvent(t.Context(), &api.Event{SiteID: site.ID, SessionID: uuid.New(), Timestamp: to, Name: "signup", Properties: map[string]any{"plan": site.Domain, "variant": "fixture"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conf := testMCPConfig(t, "")
+	server := httptest.NewServer(NewHandler(conf, store, nil, nil, testMCPLogger()))
+	defer server.Close()
+	session := connectMCPClient(t, server.URL+conf.MCPPath, token)
+	defer session.Close()
+	catalog, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := findTool(catalog.Tools, analyticstools.ToolEventBreakdown)
+	encodedSchema, err := json.Marshal(published.OutputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(encodedSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(raw string) {
+		t.Helper()
+		var data any
+		if err := json.Unmarshal([]byte(raw), &data); err != nil {
+			t.Fatal(err)
+		}
+		if err := resolved.Validate(data); err != nil {
+			t.Fatalf("event output violates published schema: %v", err)
+		}
+	}
+	calls, structuredBytes, textBytes := 0, 0, 0
+	call := func(name string, args map[string]any) (*mcp.CallToolResult, string) {
+		t.Helper()
+		result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: name, Arguments: args})
+		requireSuccessfulMCPTool(t, result, err)
+		calls++
+		raw := marshalMCPStructuredContent(t, result)
+		if name == analyticstools.ToolEventBreakdown {
+			validate(raw)
+		}
+		structuredBytes += len(raw)
+		matchedText := false
+		for _, content := range result.Content {
+			if text, ok := content.(*mcp.TextContent); ok {
+				textBytes += len(text.Text)
+				var value any
+				if err := json.Unmarshal([]byte(text.Text), &value); err == nil {
+					encoded, _ := json.Marshal(value)
+					matchedText = string(encoded) == raw
+				}
+			}
+		}
+		if !matchedText {
+			t.Fatalf("MCP compatibility text differs from structured result for %s", name)
+		}
+		return result, raw
+	}
+	_, sites := call("hitkeep_list_sites", nil)
+	if !strings.Contains(sites, first.ID.String()) || !strings.Contains(sites, second.ID.String()) || strings.Contains(sites, hidden.ID.String()) {
+		t.Fatal("site discovery ignored explicit grants")
+	}
+	for _, args := range []map[string]any{
+		{"event_name": "signup"},
+		{"site_id": hidden.ID.String(), "event_name": "signup"},
+		{"site_id": second.ID.String(), "event_name": "signup", "property_key": " "},
+	} {
+		result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: analyticstools.ToolEventBreakdown, Arguments: args})
+		if err != nil || !result.IsError {
+			t.Fatalf("invalid/ambiguous/denied call = %+v, %v", result, err)
+		}
+	}
+	args := map[string]any{"site_id": second.ID.String(), "from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339)}
+	_, names := call(analyticstools.ToolEventNames, args)
+	if !strings.Contains(names, `"names":["signup"]`) {
+		t.Fatalf("names = %s", names)
+	}
+	args["event_name"] = "signup"
+	args["limit"] = 1
+	_, keys := call(analyticstools.ToolEventBreakdown, args)
+	if !strings.Contains(keys, `"property_keys":["plan"]`) || !strings.Contains(keys, `"property_keys_truncated":true`) || strings.Contains(keys, second.Domain) {
+		t.Fatalf("keys = %s", keys)
+	}
+	args["property_key"] = "plan"
+	_, values := call(analyticstools.ToolEventBreakdown, args)
+	if !strings.Contains(values, second.Domain) || strings.Contains(values, first.Domain) || strings.Contains(values, hidden.Domain) || !strings.Contains(values, `"value":1`) || strings.Contains(values, `"property_keys"`) {
+		t.Fatalf("scoped values = %s", values)
+	}
+	if calls != 4 {
+		t.Fatalf("completed discovery journey used %d calls", calls)
+	}
+	t.Logf("MCP completed site/names/keys/values calls=%d structured_bytes=%d compatibility_text_bytes=%d; invalid calls=3 measured separately", calls, structuredBytes, textBytes)
+	delete(args, "property_key")
+	args["event_name"] = "unknown"
+	_, empty := call(analyticstools.ToolEventBreakdown, args)
+	if !strings.Contains(empty, `"property_keys":[]`) || !strings.Contains(empty, `"breakdown":[]`) {
+		t.Fatalf("empty MCP discovery = %s", empty)
+	}
+	goaiTools := analyticstools.GoAI(analyticstools.Scope{
+		SiteID: second.ID, From: from, To: to,
+		Resolve: func(_ context.Context, id uuid.UUID) (analyticstools.Site, error) {
+			return analyticstools.Site{ID: id, Control: store, Analytics: store}, nil
+		},
+	}, analyticstools.EventBreakdown)
+	for _, input := range []string{`{"event_name":"unknown"}`, `{"event_name":"signup","limit":1}`, `{"event_name":"signup","property_key":"plan"}`} {
+		raw, err := goaiTools[0].Execute(t.Context(), []byte(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var envelope struct {
+			Data json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		validate(string(envelope.Data))
+	}
+}
+
+func TestMCPOverviewKPISelectionPreservesStructuredAndTextValues(t *testing.T) {
+	store, site, token := setupMCPStore(t)
+	conf := testMCPConfig(t, "")
+	server := httptest.NewServer(NewHandler(conf, store, nil, nil, testMCPLogger()))
+	defer server.Close()
+	session := connectMCPClient(t, server.URL+conf.MCPPath, token)
+	defer session.Close()
+	args := map[string]any{"site_id": site.ID.String(), "from": time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "to": time.Now().UTC().Add(time.Hour).Format(time.RFC3339)}
+	all, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: analyticstools.ToolSiteOverview, Arguments: args})
+	requireSuccessfulMCPTool(t, all, err)
+	args["sections"] = []string{"kpis"}
+	kpis, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: analyticstools.ToolSiteOverview, Arguments: args})
+	requireSuccessfulMCPTool(t, kpis, err)
+	allRaw, kpiRaw := marshalMCPStructuredContent(t, all), marshalMCPStructuredContent(t, kpis)
+	var baseline, selected analyticstools.SiteOverviewOutput
+	if err := json.Unmarshal([]byte(allRaw), &baseline); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(kpiRaw), &selected); err != nil {
+		t.Fatal(err)
+	}
+	if baseline.Stats.TotalPageviews != selected.Stats.TotalPageviews || baseline.Stats.UniqueSessions != selected.Stats.UniqueSessions || baseline.Stats.BounceRate != selected.Stats.BounceRate || baseline.Stats.AvgSessionDuration != selected.Stats.AvgSessionDuration || baseline.Stats.PagesPerSession != selected.Stats.PagesPerSession || selected.Stats.ChartData != nil || selected.Stats.TopPages != nil || selected.Stats.Goals != nil {
+		t.Fatal("KPI selection changed totals or kept optional sections")
+	}
+	textSize := func(result *mcp.CallToolResult) int {
+		size := 0
+		for _, content := range result.Content {
+			if text, ok := content.(*mcp.TextContent); ok {
+				size += len(text.Text)
+			}
+		}
+		return size
+	}
+	if len(kpiRaw) >= len(allRaw) || textSize(kpis) >= textSize(all) {
+		t.Fatal("KPI selection did not reduce both structured and compatibility text bytes")
+	}
+	t.Logf("MCP overview calls=1 baseline_structured_bytes=%d kpi_structured_bytes=%d baseline_text_bytes=%d kpi_text_bytes=%d", len(allRaw), len(kpiRaw), textSize(all), textSize(kpis))
 }

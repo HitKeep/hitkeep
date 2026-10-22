@@ -71,6 +71,10 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	if strings.HasPrefix(redirect, "http://") {
+		// Fosite only varies IP-loopback ports; pin our validated native callback for consent and code binding.
+		client.RedirectURIs = []string{redirect}
+	}
 	state := form.Get("state")
 	fail := func(code string) { p.callback(w, r, redirect, state, "", code) }
 	resource := form.Get("resource")

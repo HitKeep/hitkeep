@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "hitkeep": {
+      "type": "streamable-http",
+      "url": "https://example.com/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "cimd"
+            },
+            "baseScopes": [
+              "sites:read",
+              "analytics:read"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

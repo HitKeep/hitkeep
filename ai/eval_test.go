@@ -218,19 +218,140 @@ var goldenCases = []goldenCase{
 			}
 		},
 	},
+	{
+		name: "KPI snapshot", query: "Give me just the September KPIs.",
+		script: func(step int) []provider.StreamChunk {
+			if step == 0 {
+				return toolCallStep(analyticstools.ToolSiteOverview, `{"sections":["kpis"]}`)
+			}
+			return answerStep("September had 58 pageviews.")
+		},
+		check: func(t *testing.T, _ askAIGeneration, seen string) {
+			if !strings.Contains(seen, `\"total_pageviews\":58`) {
+				t.Fatal("KPI result did not reach model")
+			}
+		},
+	},
+	{
+		name: "traffic comparison", query: "Which pages changed since August?",
+		script: func(step int) []provider.StreamChunk {
+			if step == 0 {
+				return toolCallStep(analyticstools.ToolBreakdown, `{"dimension":"page","compare_from":"2026-08-01T00:00:00Z","compare_to":"2026-08-31T23:59:59Z"}`)
+			}
+			return answerStep("Tracked pageviews rose by 21 across the scanned pages; this is not causal attribution.")
+		},
+		check: func(t *testing.T, _ askAIGeneration, seen string) {
+			for _, want := range []string{`\"pageview_change\":21`, `\"population\":\"tracked_hits\"`, `\"values_per_period_limit\":500`} {
+				if !strings.Contains(seen, want) {
+					t.Fatalf("comparison result missing %s", want)
+				}
+			}
+		},
+	},
+	{
+		name: "AI visibility", query: "Did an AI crawler fetch us, and is that a referred visit?",
+		script: func(step int) []provider.StreamChunk {
+			if step == 0 {
+				return toolCallStep(analyticstools.ToolAIVisibility, `{"include_timeseries":false}`)
+			}
+			return answerStep("One crawler fetch is distinct from AI-referred visits.")
+		},
+		check: func(t *testing.T, _ askAIGeneration, seen string) {
+			if !strings.Contains(seen, `\"total_requests\":1`) || !strings.Contains(seen, `\"ai_source_visits\":0`) {
+				t.Fatal("crawler and referral evidence missing")
+			}
+		},
+	},
+	{
+		name: "ecommerce", query: "Summarize our orders and revenue.",
+		script: func(step int) []provider.StreamChunk {
+			if step == 0 {
+				return toolCallStep(analyticstools.ToolEcommerce, `{}`)
+			}
+			return answerStep("One order generated 120 EUR of revenue.")
+		},
+		check: func(t *testing.T, _ askAIGeneration, seen string) {
+			if !strings.Contains(seen, `\"revenue\":120`) || !strings.Contains(seen, `\"orders\":1`) {
+				t.Fatal("ecommerce aggregate missing")
+			}
+		},
+	},
+	{
+		name: "tracking verification", query: "Which signup plans were tracked?",
+		script: func(step int) []provider.StreamChunk {
+			switch step {
+			case 0:
+				return toolCallStep(analyticstools.ToolEventNames, `{}`)
+			case 1:
+				return toolCallStep(analyticstools.ToolEventBreakdown, `{"event_name":"signup"}`)
+			case 2:
+				return toolCallStep(analyticstools.ToolEventBreakdown, `{"event_name":"signup","property_key":"plan"}`)
+			default:
+				return answerStep("Signup tracked one pro plan.")
+			}
+		},
+		check: func(t *testing.T, _ askAIGeneration, seen string) {
+			for _, want := range []string{`\"property_keys\":[\"plan\"]`, `\"name\":\"pro\",\"value\":1`} {
+				if !strings.Contains(seen, want) {
+					t.Fatalf("tracking evidence missing %s", want)
+				}
+			}
+		},
+	},
 }
 
 func TestAskAIEvalGolden(t *testing.T) {
 	store, site := seedEvalStore(t)
+	if err := store.CreateAIFetch(t.Context(), &api.AIFetch{SiteID: site.ID, Timestamp: evalFrom.Add(time.Hour), AssistantName: "GPTBot", AssistantFamily: "OpenAI", Path: "/docs", StatusCode: 200, ResourceType: "html"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []*api.Event{
+		{SiteID: site.ID, SessionID: uuid.New(), Timestamp: evalFrom.Add(time.Hour), Name: "signup", Properties: map[string]any{"plan": "pro"}},
+		{SiteID: site.ID, SessionID: uuid.New(), Timestamp: evalFrom.Add(time.Hour), Name: "purchase", Properties: map[string]any{"transaction_id": "eval-order", "value": 120.0, "currency": "EUR", "items": []map[string]any{{"item_id": "pro", "item_name": "Pro", "quantity": 1, "price": 120.0}}}},
+	} {
+		if err := store.CreateEvent(t.Context(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, tc := range goldenCases {
 		t.Run(tc.name, func(t *testing.T) {
 			model := &scriptedStreamModel{script: tc.script}
 			service := &Service{conf: Config{Enabled: true, Provider: "openai", Model: "eval", Timeout: 10 * time.Second}, model: model}
-			generation := service.runAskAIStreamingGeneration(context.Background(), evalRequest(store, site, tc.query, tc.history), nil)
+			request := evalRequest(store, site, tc.query, tc.history)
+			calls, resultBytes := 0, 0
+			var measurementMu sync.Mutex
+			for i := range request.Tools {
+				execute := request.Tools[i].Execute
+				name := request.Tools[i].Name
+				request.Tools[i].Execute = func(ctx context.Context, input json.RawMessage) (string, error) {
+					raw, err := execute(ctx, input)
+					measurementMu.Lock()
+					calls++
+					resultBytes += len(raw)
+					measurementMu.Unlock()
+					if err == nil {
+						var envelope struct {
+							EvidenceID string `json:"evidence_id"`
+							Data       struct {
+								SiteID string `json:"site_id"`
+							} `json:"data"`
+						}
+						if decodeErr := json.Unmarshal([]byte(raw), &envelope); decodeErr != nil || envelope.EvidenceID != name || envelope.Data.SiteID != site.ID.String() {
+							t.Errorf("invalid scoped evidence envelope for %s", name)
+						}
+					}
+					return raw, err
+				}
+			}
+			generation := service.runAskAIStreamingGeneration(t.Context(), request, nil)
 			if generation.Err != nil {
 				t.Fatalf("generation failed: %v", generation.Err)
 			}
 			tc.check(t, generation, model.seen.String())
+			if calls < 2 || resultBytes == 0 || model.inputBytes == 0 {
+				t.Fatal("missing actual journey measurements")
+			}
+			t.Logf("scripted selected-site journey calls=%d GoAI_result_bytes=%d full_model_input_bytes=%d", calls, resultBytes, model.inputBytes)
 		})
 	}
 }
@@ -377,9 +498,10 @@ func describeBaseline(baseline map[string]evalScore, model string) string {
 // scriptedStreamModel plays one scripted step per request and keeps every
 // request it saw, so a case can check what reached the model.
 type scriptedStreamModel struct {
-	script func(step int) []provider.StreamChunk
-	step   int
-	seen   strings.Builder
+	script     func(step int) []provider.StreamChunk
+	step       int
+	seen       strings.Builder
+	inputBytes int
 }
 
 func (m *scriptedStreamModel) ModelID() string { return "eval" }
@@ -393,7 +515,15 @@ func (m *scriptedStreamModel) DoGenerate(context.Context, provider.GenerateParam
 }
 
 func (m *scriptedStreamModel) DoStream(_ context.Context, params provider.GenerateParams) (*provider.StreamResult, error) {
-	raw, _ := json.Marshal(params.Messages)
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+	m.inputBytes += len(raw)
+	raw, err = json.Marshal(params.Messages)
+	if err != nil {
+		return nil, err
+	}
 	m.seen.Write(raw)
 	chunks := m.script(m.step)
 	m.step++

@@ -112,9 +112,22 @@ type BreakdownOutput struct {
 	CompareFrom string `json:"compare_from,omitempty"`
 	CompareTo   string `json:"compare_to,omitempty"`
 	Dimension   string `json:"dimension"`
-	// PageviewChange is the total change across all values, when comparing.
-	PageviewChange *int           `json:"pageview_change,omitempty"`
-	Rows           []breakdownRow `json:"rows"`
+	// PageviewChange is the change across each period's top 500 tracked values.
+	PageviewChange  *int                      `json:"pageview_change,omitempty"`
+	Rows            []breakdownRow            `json:"rows"`
+	ComparisonBasis *breakdownComparisonBasis `json:"comparison_basis,omitempty"`
+}
+
+// breakdownComparisonBasis describes the scan before the requested output row limit.
+type breakdownComparisonBasis struct {
+	Population              string `json:"population"`
+	ImportedHistoryIncluded bool   `json:"imported_history_included"`
+	ValuesPerPeriodLimit    int    `json:"values_per_period_limit"`
+	CurrentValues           int    `json:"current_values"`
+	PreviousValues          int    `json:"previous_values"`
+	CurrentLimitReached     bool   `json:"current_limit_reached"`
+	PreviousLimitReached    bool   `json:"previous_limit_reached"`
+	ShareDenominator        string `json:"share_denominator"`
 }
 
 type breakdownRow struct {
@@ -123,7 +136,8 @@ type breakdownRow struct {
 	Visitors          int    `json:"visitors"`
 	PreviousPageviews *int   `json:"previous_pageviews,omitempty"`
 	PageviewChange    *int   `json:"pageview_change,omitempty"`
-	// ShareOfChange is this value's part of the total pageview change.
+	// ShareOfChange is this value's part of the scanned tracked pageview change.
+	// It is absent when that denominator is zero, and is not sitewide attribution.
 	ShareOfChange *float64 `json:"share_of_change,omitempty"`
 }
 
@@ -135,10 +149,12 @@ type EventNamesOutput struct {
 }
 
 type EventBreakdownOutput struct {
-	SiteID    string           `json:"site_id"`
-	From      string           `json:"from"`
-	To        string           `json:"to"`
-	Breakdown []api.MetricStat `json:"breakdown"`
+	SiteID                string           `json:"site_id"`
+	From                  string           `json:"from"`
+	To                    string           `json:"to"`
+	Breakdown             []api.MetricStat `json:"breakdown"`
+	PropertyKeys          []string         `json:"property_keys,omitzero"`
+	PropertyKeysTruncated *bool            `json:"property_keys_truncated,omitempty"`
 }
 
 type AnnotationsOutput struct {

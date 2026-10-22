@@ -64,16 +64,16 @@ type siteOverviewInput struct {
 	FilterSet
 	CompareFrom string   `json:"compare_from,omitempty" jsonschema:"Optional RFC3339 comparison start timestamp, for example the previous period."`
 	CompareTo   string   `json:"compare_to,omitempty" jsonschema:"Optional RFC3339 comparison end timestamp."`
-	Sections    []string `json:"sections,omitempty" jsonschema:"Optional sections to return besides the KPIs: chart, pages, sources, audience, ai, utm, goals. Defaults to all. Ask only for what the question needs."`
+	Sections    []string `json:"sections,omitempty" jsonschema:"Optional sections besides KPIs: chart, pages, sources, audience, ai, utm, goals. Use only [kpis] for KPIs without optional sections. Omitted or empty returns all."`
 	Limit       int      `json:"limit,omitempty" jsonschema:"Maximum rows per top list, 1 to 10. Defaults to 10."`
 }
 
 var overviewSections = []string{"chart", "pages", "sources", "audience", "ai", "utm", "goals"}
 
 var SiteOverview = Define(ToolSiteOverview, "Get HitKeep Site Overview",
-	"Read traffic KPIs (pageviews, sessions, bounce rate, duration, pages per session) for one site and range, plus optional sections: chart series, top pages, sources, audience, AI bots, UTM, and goals. Set compare_from and compare_to for period-over-period questions. Request only the sections you need.",
+	"Read traffic KPIs (pageviews, sessions, bounce rate, duration, pages per session) for one site and range, plus optional sections: chart series, top pages, sources, audience, AI bots, UTM, and goals. Set compare_from and compare_to for period-over-period questions. Use sections:[kpis] alone for KPIs without charts or lists; omitted or empty sections returns all. Request only the sections you need.",
 	func(ctx context.Context, call Call, in siteOverviewInput) (SiteOverviewOutput, error) {
-		sections, err := parseSections(in.Sections, overviewSections, overviewSections)
+		sections, err := parseOverviewSections(in.Sections)
 		if err != nil {
 			return SiteOverviewOutput{}, err
 		}
@@ -149,13 +149,12 @@ type breakdownInput struct {
 	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum rows to return. Defaults to 10 and is capped at 50."`
 }
 
-// moverScan bounds how many values per period a comparison reads.
-// ponytail: movers outside each period's top 500 values are missed; raise it
-// if a dimension's long tail starts to matter.
+// moverScan bounds how many tracked values per period a comparison reads.
+// shortcut: values outside each period's top 500 are missed, use a full-population query if long-tail attribution is required.
 const moverScan = 500
 
 var Breakdown = Define(ToolBreakdown, "Get HitKeep Breakdown",
-	"Break pageviews and visitors down by one dimension, such as page, referrer, country, or UTM source, with optional filters and up to 50 rows. With compare_from and compare_to, each row also shows its change and share of the total change, largest movers first: use it to explain why traffic moved. Counts tracked hits; imported history is not broken down.",
+	"Break pageviews and visitors down by one dimension, such as page, referrer, country, or UTM source, with optional filters and up to 50 rows. With compare_from and compare_to, each row shows its change and share of the change across each period's top 500 tracked values, largest movers first. comparison_basis describes this bounded scan; shares are not complete sitewide or causal attribution. Imported history is excluded.",
 	func(ctx context.Context, call Call, in breakdownInput) (BreakdownOutput, error) {
 		dimension := strings.ToLower(strings.TrimSpace(in.Dimension))
 		if !slices.Contains(database.BreakdownDimensions(), dimension) {
@@ -186,12 +185,18 @@ var Breakdown = Define(ToolBreakdown, "Get HitKeep Breakdown",
 		}
 		out.CompareFrom, out.CompareTo = formatTime(compareStart), formatTime(compareEnd)
 		out.Rows, out.PageviewChange = movers(current, previous)
+		out.ComparisonBasis = &breakdownComparisonBasis{
+			Population: "tracked_hits", ValuesPerPeriodLimit: moverScan,
+			CurrentValues: len(current), PreviousValues: len(previous),
+			CurrentLimitReached: len(current) == moverScan, PreviousLimitReached: len(previous) == moverScan,
+			ShareDenominator: "scanned_pageview_change",
+		}
 		out.Rows = out.Rows[:min(len(out.Rows), limit)]
 		return out, nil
 	})
 
 // movers pairs both periods' values and ranks them by the size of their
-// pageview change, with each value's share of the total change.
+// pageview change, with each value's share of the scanned tracked change.
 func movers(current, previous []api.DimensionStat) ([]breakdownRow, *int) {
 	rows := map[string]*breakdownRow{}
 	row := func(name string) *breakdownRow {
@@ -239,17 +244,34 @@ var EventNames = Define(ToolEventNames, "Get HitKeep Event Names",
 
 type eventBreakdownInput struct {
 	Target
-	EventName   string `json:"event_name" jsonschema:"Event name to inspect, from hitkeep_get_event_names."`
-	PropertyKey string `json:"property_key" jsonschema:"Event property key to break down."`
-	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum rows to return. Defaults to 10 and is capped at 50."`
+	EventName   string  `json:"event_name" jsonschema:"Event name to inspect, from hitkeep_get_event_names."`
+	PropertyKey *string `json:"property_key,omitempty" jsonschema:"Event property key to break down. Omit to discover ordered property keys; a supplied key must not be blank."`
+	Limit       int     `json:"limit,omitempty" jsonschema:"Maximum rows to return. Defaults to 10 and is capped at 50."`
 }
 
 var EventBreakdown = Define(ToolEventBreakdown, "Get HitKeep Event Breakdown",
-	"Count one custom event by the values of one event property, for one site and range.",
+	"Inspect one custom event for one site and range: omit property_key to discover ordered property_keys, bounded by limit with property_keys_truncated. Supply a nonblank property_key to count its values. Discover names first with hitkeep_get_event_names; known keys can skip discovery.",
 	func(ctx context.Context, call Call, in eventBreakdownInput) (EventBreakdownOutput, error) {
-		eventName, propertyKey := strings.TrimSpace(in.EventName), strings.TrimSpace(in.PropertyKey)
-		if eventName == "" || propertyKey == "" {
-			return EventBreakdownOutput{}, InvalidInput("event_name and property_key are required")
+		eventName := strings.TrimSpace(in.EventName)
+		if eventName == "" {
+			return EventBreakdownOutput{}, InvalidInput("event_name is required")
+		}
+		if in.PropertyKey == nil {
+			keys, err := call.Analytics.GetEventPropertyKeys(ctx, api.EventNamesParams{SiteID: call.ID, Start: call.From, End: call.To}, eventName)
+			if err != nil {
+				return EventBreakdownOutput{}, err
+			}
+			limit := normalizeLimit(in.Limit)
+			truncated := len(keys) > limit
+			keys = keys[:min(len(keys), limit)]
+			return EventBreakdownOutput{
+				SiteID: call.ID.String(), From: formatTime(call.From), To: formatTime(call.To),
+				Breakdown: []api.MetricStat{}, PropertyKeys: keys, PropertyKeysTruncated: &truncated,
+			}, nil
+		}
+		propertyKey := strings.TrimSpace(*in.PropertyKey)
+		if propertyKey == "" {
+			return EventBreakdownOutput{}, InvalidInput("property_key must not be blank; omit it to discover keys")
 		}
 		breakdown, err := call.Analytics.GetEventPropertyBreakdown(ctx, api.EventBreakdownParams{
 			SiteID: call.ID, Start: call.From, End: call.To, EventName: eventName, PropertyKey: propertyKey,
@@ -545,6 +567,18 @@ var SearchConsole = Define(ToolSearchConsole, "Get HitKeep Search Console",
 		}
 		return out, nil
 	})
+
+func parseOverviewSections(input []string) (map[string]bool, error) {
+	for _, section := range input {
+		if strings.EqualFold(strings.TrimSpace(section), "kpis") {
+			if len(input) != 1 {
+				return nil, InvalidInput("kpis must be the only section")
+			}
+			return map[string]bool{}, nil
+		}
+	}
+	return parseSections(input, overviewSections, overviewSections)
+}
 
 func parseSections(input, allowed, defaults []string) (map[string]bool, error) {
 	if len(input) == 0 {

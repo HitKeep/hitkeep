@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -87,11 +88,54 @@ func (s *service) newMCPServer() *mcp.Server {
 			Resources: &mcp.ResourceCapabilities{ListChanged: false, Subscribe: false},
 		},
 	})
-	server.AddReceivingMiddleware(s.logMiddleware(), s.cacheMiddleware())
+	server.AddReceivingMiddleware(s.toolSecurityMiddleware(), s.logMiddleware(), s.cacheMiddleware())
 	s.registerTools(server)
 	s.registerResources(server)
 	registerPrompts(server)
 	return server
+}
+
+type oauthToolSecurity struct {
+	Type   string   `json:"type"`
+	Scopes []string `json:"scopes"`
+}
+
+type oauthTool struct {
+	*mcp.Tool
+	SecuritySchemes []oauthToolSecurity `json:"securitySchemes"`
+}
+
+type oauthToolsResult struct {
+	*mcp.ListToolsResult
+	Tools []oauthTool `json:"tools"`
+}
+
+func (s *service) toolSecurityMiddleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, req)
+			if err != nil || s.oauthAudience() == "" {
+				return result, err
+			}
+			listed, ok := result.(*mcp.ListToolsResult)
+			if !ok || listed == nil {
+				return result, nil
+			}
+			// The SDK has no top-level securitySchemes field; preserve its typed descriptors.
+			protected := &oauthToolsResult{ListToolsResult: listed, Tools: make([]oauthTool, len(listed.Tools))}
+			for i, tool := range listed.Tools {
+				descriptor := *tool
+				descriptor.Meta = maps.Clone(tool.Meta)
+				if descriptor.Meta == nil {
+					descriptor.Meta = mcp.Meta{}
+				}
+				schemes := []oauthToolSecurity{{Type: "oauth2", Scopes: []string{oauth.ScopeSitesRead, oauth.ScopeAnalyticsRead}}}
+				descriptor.Meta["securitySchemes"] = schemes
+				protected.Tools[i] = oauthTool{Tool: &descriptor, SecuritySchemes: schemes}
+			}
+			return protected, nil
+		}
+	}
 }
 
 func (s *service) cacheMiddleware() mcp.Middleware {

@@ -188,3 +188,32 @@ func TestDocsClientCapsCachedPages(t *testing.T) {
 		t.Fatalf("expected docs cache to cap at %d entries, got %d", maxDocCacheEntries, got)
 	}
 }
+
+func TestDocsSearchDeduplicatesNormalizedPathsBeforeLimit(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path == "/llms.txt" {
+			_, _ = w.Write([]byte("- [MCP](/guide): MCP\n- [MCP](/guide/): MCP\n- [Other](/other/): MCP bearer\n"))
+			return
+		}
+		_, _ = w.Write([]byte("# Guide\nMCP bearer authorization\n"))
+	}))
+	defer server.Close()
+	client := NewDocs(server.URL, time.Hour)
+	if _, err := client.GetMarkdown(t.Context(), "/guide"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		results, err := client.Search(t.Context(), "MCP bearer authorization", 2)
+		if err != nil || len(results) != 2 {
+			t.Fatalf("results = %+v, %v", results, err)
+		}
+		if results[0].Path != "/guide/" || results[0].Score != 3 || results[0].Snippet != "MCP bearer authorization" || results[1].Path != "/other/" {
+			t.Fatalf("deduplicated results = %+v", results)
+		}
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("search made extra fetches: %d", requests.Load())
+	}
+}
