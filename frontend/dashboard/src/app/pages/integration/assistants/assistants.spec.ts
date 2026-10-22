@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
-import { APP_BASE_HREF } from '@angular/common';
+import { Component, TemplateRef, inject, signal } from '@angular/core';
+import { APP_BASE_HREF, NgTemplateOutlet } from '@angular/common';
 import { provideRouter } from '@angular/router';
 import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { vi } from 'vitest';
@@ -9,29 +9,61 @@ import { AssistantConnection } from '@models/analytics.types';
 import { TEAM_CAPABILITIES } from '@core/access/capabilities';
 import { AccessService } from '@services/access.service';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
+import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { authGuard } from '@guards/auth-guard';
 import { privateFrameGuard } from '@guards/private-frame-guard';
 import { routes } from '../../../app.routes';
 import { AssistantsPage } from './assistants';
 
+@Component({
+    imports: [NgTemplateOutlet, AssistantsPage],
+    template: `
+        <app-assistants />
+        @if (context.pageHeaderLeft(); as headerLeft) {
+            <ng-container [ngTemplateOutlet]="headerLeft" />
+        }
+        @if (context.pageHeaderRight(); as headerRight) {
+            <ng-container [ngTemplateOutlet]="headerRight" />
+        }
+    `
+})
+class AssistantsTestHost {
+    protected readonly context = inject(MainLayoutContextService);
+}
+
 const canonicalEndpoint = 'https://analytics.example/prefix/assistant/mcp';
 
 describe('AssistantsPage', () => {
-    let fixture: ComponentFixture<AssistantsPage>;
+    let fixture: ComponentFixture<AssistantsTestHost>;
     const connection = signal<AssistantConnection>({ enabled: true, endpoint: canonicalEndpoint });
     const allowed = signal(false);
     const canActiveTeam = vi.fn(() => allowed());
     const writeText = vi.fn<(text: string) => Promise<void>>();
+    const pageHeaderLeft = signal<TemplateRef<unknown> | null>(null);
+    const pageHeaderRight = signal<TemplateRef<unknown> | null>(null);
+    const context = {
+        pageHeaderLeft,
+        pageHeaderRight,
+        registerPageHeader: (_owner: symbol, left: TemplateRef<unknown> | null, right: TemplateRef<unknown> | null) => {
+            pageHeaderLeft.set(left);
+            pageHeaderRight.set(right);
+        },
+        clearPageHeader: () => {
+            pageHeaderLeft.set(null);
+            pageHeaderRight.set(null);
+        }
+    };
 
     beforeEach(async () => {
         connection.set({ enabled: true, endpoint: canonicalEndpoint });
         allowed.set(false);
         canActiveTeam.mockClear();
         writeText.mockReset().mockResolvedValue(undefined);
+        context.clearPageHeader();
         vi.stubGlobal('navigator', { clipboard: { writeText } });
         TestBed.configureTestingModule({
             imports: [
-                AssistantsPage,
+                AssistantsTestHost,
                 TranslocoTestingModule.forRoot({
                     langs: {
                         en: { nav: { integration: 'Integration' }, assistants: { title: 'Assistants', copied: 'Endpoint copied.' } },
@@ -41,9 +73,15 @@ describe('AssistantsPage', () => {
                     preloadLangs: true
                 })
             ],
-            providers: [provideRouter([]), { provide: APP_BASE_HREF, useValue: '/prefix/' }, { provide: DashboardBootstrapService, useValue: { assistants: connection } }, { provide: AccessService, useValue: { canActiveTeam } }]
+            providers: [
+                provideRouter([]),
+                { provide: APP_BASE_HREF, useValue: '/prefix/' },
+                { provide: MainLayoutContextService, useValue: context },
+                { provide: DashboardBootstrapService, useValue: { assistants: connection } },
+                { provide: AccessService, useValue: { canActiveTeam } }
+            ]
         });
-        fixture = TestBed.createComponent(AssistantsPage);
+        fixture = TestBed.createComponent(AssistantsTestHost);
         await fixture.whenStable();
     });
 
