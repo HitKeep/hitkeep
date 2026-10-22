@@ -85,6 +85,7 @@ func (s *Server) registerDiscoveryRoutes(mux *http.ServeMux) {
 		s.discoveryHeaders(w, media)
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		if r.Method != http.MethodHead {
+			// #nosec G705 -- PublicFile returns only allowlisted embedded Markdown; non-HTML media and nosniff are set above.
 			_, _ = w.Write(data)
 		}
 	})

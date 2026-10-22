@@ -160,6 +160,13 @@ func TestDiscoverySkillsAndSeparateCatalogSchemas(t *testing.T) {
 			if !bytes.Equal(get.Body.Bytes(), want) || head.Body.Len() != 0 || head.Header().Get("Content-Type") != get.Header().Get("Content-Type") {
 				t.Errorf("incorrect skill representation %s", name)
 			}
+			media := "text/markdown; charset=utf-8"
+			if suffix == "SKILL.md" {
+				media = "application/agent-skills+md; charset=utf-8"
+			}
+			if get.Header().Get("Content-Type") != media || get.Header().Get("X-Content-Type-Options") != "nosniff" || head.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Errorf("unsafe skill representation headers %s: GET %v HEAD %v", name, get.Header(), head.Header())
+			}
 		}
 	}
 	ai := discoveryRequest(s, "GET", "/.well-known/ai-catalog.json")

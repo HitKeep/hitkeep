@@ -92,7 +92,7 @@ describe('AssistantsPage', () => {
         await clipboardWrite;
         await fixture.whenStable();
         expect(button.disabled).toBe(false);
-        const feedback: HTMLElement = fixture.nativeElement.querySelector('[aria-live="polite"]');
+        const feedback: HTMLElement = fixture.nativeElement.querySelector('p[role="status"][aria-live="polite"]');
         expect(feedback.textContent).toContain('Endpoint copied.');
         TestBed.inject(TranslocoService).setActiveLang('de');
         await fixture.whenStable();
@@ -104,7 +104,7 @@ describe('AssistantsPage', () => {
         writeText.mockRejectedValue(new Error('clipboard unavailable'));
         fixture.nativeElement.querySelector('button').click();
         await fixture.whenStable();
-        expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('assistants.copyFailed');
+        expect(fixture.nativeElement.querySelector('p[role="status"][aria-live="polite"]').textContent).toContain('assistants.copyFailed');
         expect(fixture.nativeElement.querySelector('input').value).toBe(canonicalEndpoint);
         expect(fixture.nativeElement.querySelector('button').disabled).toBe(false);
     });
