@@ -44,7 +44,7 @@ func TestPostpublicationFailureLeavesValidEarlyReceiptPending(t *testing.T) {
 	sourceWorkflow := strings.Repeat("c", 64)
 	docsWorkflow := strings.Repeat("d", 64)
 	docsArtifact := strings.Repeat("e", 64)
-	receipt := fmt.Sprintf(`{"schema_version":"hitkeep.docs-postpublication-receipt/v1","source":{"repository":"PascaleBeier/hitkeep","run_id":"1.1","commit":"%s","tag":"v1.2.3","workflow_sha256":"%s","catalog_sha256":"%s","example_sha256":"%s","manifest_sha256":"%s"},"docs":{"repository":"PascaleBeier/hitkeep-docs","base_sha":"%s","workflow_sha256":"%s","prepublication_run_id":10,"prepublication_run_attempt":2,"prepublication_attestation_artifact_sha256":"%s"},"receipt":{"run_id":42,"run_attempt":3}}`, sourceCommit, sourceWorkflow, strings.Repeat("f", 64), strings.Repeat("1", 64), strings.Repeat("2", 64), docsBase, docsWorkflow, docsArtifact)
+	receipt := fmt.Sprintf(`{"schema_version":"hitkeep.docs-postpublication-receipt/v1","source":{"repository":"HitKeep/hitkeep","run_id":"1.1","commit":"%s","tag":"v1.2.3","workflow_sha256":"%s","catalog_sha256":"%s","example_sha256":"%s","manifest_sha256":"%s"},"docs":{"repository":"HitKeep/hitkeep-docs","base_sha":"%s","workflow_sha256":"%s","prepublication_run_id":10,"prepublication_run_attempt":2,"prepublication_attestation_artifact_sha256":"%s"},"receipt":{"run_id":42,"run_attempt":3}}`, sourceCommit, sourceWorkflow, strings.Repeat("f", 64), strings.Repeat("1", 64), strings.Repeat("2", 64), docsBase, docsWorkflow, docsArtifact)
 
 	for _, scenario := range []struct {
 		name        string
@@ -62,7 +62,7 @@ func TestPostpublicationFailureLeavesValidEarlyReceiptPending(t *testing.T) {
 			receiptDigest := writeReleaseZip(t, receiptZip, "hitkeep-docs-postpublication-receipt.json", receipt, false)
 			runJSON := filepath.Join(root, "run.json")
 			artifactsJSON := filepath.Join(root, "artifacts.json")
-			writeReleaseFixture(t, runJSON, fmt.Sprintf(`{"id":42,"run_attempt":3,"repository":{"full_name":"PascaleBeier/hitkeep-docs"},"path":".github/workflows/sync-hitkeep-release.yml","event":"workflow_dispatch","head_branch":"main","head_sha":"%s","status":"completed","conclusion":"failure","html_url":"https://example.invalid/run/42"}`, docsBase))
+			writeReleaseFixture(t, runJSON, fmt.Sprintf(`{"id":42,"run_attempt":3,"repository":{"full_name":"HitKeep/hitkeep-docs"},"path":".github/workflows/sync-hitkeep-release.yml","event":"workflow_dispatch","head_branch":"main","head_sha":"%s","status":"completed","conclusion":"failure","html_url":"https://example.invalid/run/42"}`, docsBase))
 			writeReleaseFixture(t, artifactsJSON, fmt.Sprintf(`{"artifacts":[{"id":7,"name":"hitkeep-docs-postpublication-receipt-42-3","expired":false,"digest":"sha256:%s"}]}`, receiptDigest))
 			gh := filepath.Join(root, "gh")
 			writeReleaseFixture(t, gh, strings.NewReplacer(
@@ -84,9 +84,9 @@ case "$*" in
     [[ "{{mode}}" == "failed-downstream" ]] && exit 1
     exit 0
     ;;
-  *"api repos/PascaleBeier/hitkeep-docs/actions/runs/42/artifacts"*) cat "{{artifacts}}" ;;
-  *"api repos/PascaleBeier/hitkeep-docs/actions/artifacts/7/zip"*) cat "{{receipt}}" ;;
-  *"api repos/PascaleBeier/hitkeep-docs/actions/runs/42"*) cat "{{run}}" ;;
+  *"api repos/HitKeep/hitkeep-docs/actions/runs/42/artifacts"*) cat "{{artifacts}}" ;;
+  *"api repos/HitKeep/hitkeep-docs/actions/artifacts/7/zip"*) cat "{{receipt}}" ;;
+  *"api repos/HitKeep/hitkeep-docs/actions/runs/42"*) cat "{{run}}" ;;
   *) echo "unexpected gh invocation: $*" >&2; exit 99 ;;
 esac
 `))
@@ -104,7 +104,7 @@ esac
 				"GITHUB_RUN_ID":                    "1",
 				"GITHUB_RUN_ATTEMPT":               "1",
 				"GITHUB_SHA":                       sourceCommit,
-				"DOWNSTREAM_REPOSITORY":            "PascaleBeier/hitkeep-docs",
+				"DOWNSTREAM_REPOSITORY":            "HitKeep/hitkeep-docs",
 				"TAG":                              "v1.2.3",
 				"SOURCE_WORKFLOW_SHA256":           sourceWorkflow,
 				"SOURCE_CATALOG_SHA256":            strings.Repeat("f", 64),
@@ -147,7 +147,7 @@ func TestDocsAttestationRejectsMismatchedArtifactZIPBeforeFinalization(t *testin
 	catalog := strings.Repeat("e", 64)
 	example := strings.Repeat("f", 64)
 	manifest := strings.Repeat("1", 64)
-	attestation := fmt.Sprintf(`{"schema_version":"hitkeep.docs-attestation/v2","source":{"repository":"PascaleBeier/hitkeep","run_id":"1.1","commit":"%s","tag":"v1.2.3","catalog_sha256":"%s","example_sha256":"%s","manifest_sha256":"%s"},"docs":{"repository":"PascaleBeier/hitkeep-docs","base_sha":"%s","workflow_sha256":"%s","run_id":12,"run_attempt":3}}`, sourceCommit, catalog, example, manifest, docsBase, docsWorkflow)
+	attestation := fmt.Sprintf(`{"schema_version":"hitkeep.docs-attestation/v2","source":{"repository":"HitKeep/hitkeep","run_id":"1.1","commit":"%s","tag":"v1.2.3","catalog_sha256":"%s","example_sha256":"%s","manifest_sha256":"%s"},"docs":{"repository":"HitKeep/hitkeep-docs","base_sha":"%s","workflow_sha256":"%s","run_id":12,"run_attempt":3}}`, sourceCommit, catalog, example, manifest, docsBase, docsWorkflow)
 	expectedZIP := filepath.Join(root, "expected.zip")
 	expectedDigest := writeReleaseZip(t, expectedZIP, "hitkeep-docs-release-attestation.json", attestation, false)
 	mismatchedZIP := filepath.Join(root, "mismatched.zip")
@@ -161,8 +161,8 @@ func TestDocsAttestationRejectsMismatchedArtifactZIPBeforeFinalization(t *testin
 	).Replace(`#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  *"api repos/PascaleBeier/hitkeep-docs/actions/runs/12/artifacts"*) cat "{{artifacts}}" ;;
-  *"api repos/PascaleBeier/hitkeep-docs/actions/artifacts/7/zip"*) cat "{{mismatch}}" ;;
+  *"api repos/HitKeep/hitkeep-docs/actions/runs/12/artifacts"*) cat "{{artifacts}}" ;;
+  *"api repos/HitKeep/hitkeep-docs/actions/artifacts/7/zip"*) cat "{{mismatch}}" ;;
   *"run download"*)
     dir=""
     while [[ $# -gt 0 ]]; do
@@ -194,7 +194,7 @@ esac
 		"GITHUB_OUTPUT":        output,
 		"TAG":                  "v1.2.3",
 		"GITHUB_SHA":           sourceCommit,
-		"DOCS_REPOSITORY":      "PascaleBeier/hitkeep-docs",
+		"DOCS_REPOSITORY":      "HitKeep/hitkeep-docs",
 		"docs_run_id":          "12",
 		"docs_run_attempt":     "3",
 		"docs_head_sha":        docsBase,

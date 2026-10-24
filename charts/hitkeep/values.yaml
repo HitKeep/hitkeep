@@ -5,7 +5,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 image:
-  repository: ghcr.io/pascalebeier/hitkeep
+  repository: ghcr.io/hitkeep/hitkeep
   pullPolicy: IfNotPresent
   # Defaults to the chart appVersion, normalized without a leading "v".
   tag: ""

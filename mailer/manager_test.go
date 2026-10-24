@@ -609,7 +609,7 @@ func TestSendFooterIncludesLegalAndSocialLinks(t *testing.T) {
 	for _, want := range []string{
 		"https://hitkeep.com/legal/imprint/",
 		"https://hitkeep.com/legal/privacy-policy/",
-		"https://github.com/pascalebeier/hitkeep",
+		"https://github.com/HitKeep/hitkeep",
 		"https://www.linkedin.com/company/hitkeep",
 		"https://x.com/gethitkeep",
 		"https://bsky.app/profile/hitkeep.com",

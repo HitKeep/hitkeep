@@ -31,12 +31,12 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/PascaleBeier/hitkeep.git",
+        "url": "git+https://github.com/HitKeep/hitkeep.git",
         "directory": "frontend/tracker"
     },
     "homepage": "https://hitkeep.com",
     "bugs": {
-        "url": "https://github.com/PascaleBeier/hitkeep/issues"
+        "url": "https://github.com/HitKeep/hitkeep/issues"
     },
     "keywords": [
         "analytics",
