@@ -1,8 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { NavigationSearch } from './navigation-search';
 import { Brand } from '@components/brand/brand';
-import { AskAIControlService } from '@features/ask-ai/ask-ai-control.service';
-import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { TeamSwitcher } from '@components/team-switcher/team-switcher';
 import { UserControls } from '@components/user-controls/user-controls';
@@ -18,9 +16,6 @@ import { MainLayoutContextService } from '@layout/main-layout-context.service';
 })
 export class LayoutPageBar {
     readonly desktop = input(true);
-    protected readonly askAI = inject(AskAIControlService);
-    private readonly bootstrap = inject(DashboardBootstrapService);
-    protected readonly showAskAI = computed(() => !this.shareService.isShareMode() && !!this.bootstrap.status()?.ask_ai?.enabled);
     protected readonly context = inject(MainLayoutContextService);
     protected readonly shareService = this.context.shareService;
     protected readonly siteService = this.context.siteService;

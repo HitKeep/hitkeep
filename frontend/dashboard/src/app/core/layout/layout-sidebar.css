@@ -4,6 +4,29 @@ app-layout-sidebar {
 app-layout-sidebar aside[hidden] {
     display: none !important;
 }
+.focus-sidebar__ask-ai {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.625rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border: 1px solid var(--p-primary-color);
+    border-radius: 0.5rem;
+    color: var(--p-primary-color);
+    background: var(--p-highlight-background);
+    cursor: pointer;
+}
+.focus-sidebar__ask-ai:focus-visible {
+    outline: 2px solid var(--p-primary-color);
+    outline-offset: 2px;
+}
+.focus-sidebar__ask-ai:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 .focus-sidebar__heading,
 .focus-sidebar__group {
     color: var(--p-text-muted-color);

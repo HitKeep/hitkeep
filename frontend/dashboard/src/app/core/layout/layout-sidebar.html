@@ -5,6 +5,7 @@
     [attr.inert]="hiddenDesktop() ? '' : null"
     [attr.aria-label]="'nav.mainSidebarAria' | transloco"
 >
+    <ng-container [ngTemplateOutlet]="askAITrigger" />
     <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco">
         <ng-container [ngTemplateOutlet]="navigation" />
     </nav>
@@ -21,10 +22,18 @@
     [style]="{ width: 'min(20rem, 100vw)' }"
 >
     <div class="flex h-full flex-col gap-4">
+        <ng-container [ngTemplateOutlet]="askAITrigger" />
         <nav #mobileNavigation tabindex="-1" class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco"><ng-container [ngTemplateOutlet]="navigation" /></nav>
         <app-free-plan-chip />
     </div>
 </p-drawer>
+<ng-template #askAITrigger>
+    @if (showAskAI()) {
+    <button type="button" class="ask-ai-trigger focus-sidebar__ask-ai" [disabled]="!siteService.activeSite() || context.isContextPending()" [attr.aria-label]="'askAi.triggerAria' | transloco" (click)="openAskAI()">
+        <i class="pi pi-sparkles" aria-hidden="true"></i><span>{{ 'askAi.title' | transloco }}</span>
+    </button>
+    }
+</ng-template>
 <ng-template #navigation>
     @for (section of primaryMenuItems(); track section.sectionId) { @if (section.label) {
     <h2 class="focus-sidebar__heading">{{ section.label }}</h2>

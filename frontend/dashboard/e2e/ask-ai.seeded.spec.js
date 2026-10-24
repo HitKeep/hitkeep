@@ -113,7 +113,9 @@ test("ask ai opens in unavailable and mobile drawer states", async ({ page }) =>
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, "/dashboard");
 
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
     await page.getByRole("button", { name: "Ask AI about this site" }).click();
+    await expect(page.locator(".focus-navigation-drawer")).not.toBeVisible();
     await expect(page.getByRole("heading", { name: "Ask AI" })).toBeVisible();
     const drawer = page.locator(".ask-ai-drawer");
     await expect(drawer.getByText("Ask AI not configured")).toBeVisible();
