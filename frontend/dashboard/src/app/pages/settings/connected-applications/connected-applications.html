@@ -60,7 +60,7 @@
         <dd class="min-w-0">
             <ul class="list-inside list-disc break-words">
                 @for (scope of grant.scopes; track scope) {
-                <li>@if (scopeLabelKey(scope); as key) { <span>{{ key | transloco }}</span> } <code class="text-sm text-muted-color">{{ scope }}</code></li>
+                <li>@if (scopeLabelKey(scope); as key) { <span class="me-1">{{ key | transloco }}</span> } <code class="text-sm text-muted-color">{{ scope }}</code></li>
                 }
             </ul>
         </dd>
