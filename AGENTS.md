@@ -46,7 +46,7 @@ This file is public guidance for AI-assisted contributions to HitKeep. It is wri
 - `server.json`: MCP Registry metadata.
 - `tests`: e2e fixtures, launchers, and audit scripts.
 
-The rendered product documentation is public, but its source lives in the private `PascaleBeier/hitkeep-docs` repository by design. It is not part of HitKeep's public MIT-licensed source. Contributors without access should describe the documentation impact in their pull request or issue; maintainers apply the corresponding website update. When the private repository is checked out next to this repository, docs commands usually run from `../hitkeep-docs`.
+The rendered product documentation is public, but its source lives in the private `HitKeep/hitkeep-docs` repository by design. It is not part of HitKeep's public MIT-licensed source. Contributors without access should describe the documentation impact in their pull request or issue; maintainers apply the corresponding website update. When the private repository is checked out next to this repository, docs commands usually run from `../hitkeep-docs`.
 
 ## Contributor Workflow
 

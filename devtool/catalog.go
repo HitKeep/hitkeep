@@ -14,7 +14,7 @@ var variants = []Variant{
 		ID:                  "self-hosted",
 		Description:         "Public self-hosted HitKeep build",
 		BuildTags:           []string{"timetzdata"},
-		LocalImage:          "ghcr.io/pascalebeier/hitkeep:snapshot",
+		LocalImage:          "ghcr.io/hitkeep/hitkeep:snapshot",
 		Publishable:         true,
 		ProductionImageOnly: false,
 	},

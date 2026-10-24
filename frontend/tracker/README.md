@@ -1,7 +1,7 @@
 # @hitkeep/tracker
 
 [![npm version](https://img.shields.io/npm/v/@hitkeep/tracker.svg)](https://www.npmjs.com/package/@hitkeep/tracker)
-[![license](https://img.shields.io/npm/l/@hitkeep/tracker.svg)](https://github.com/PascaleBeier/hitkeep/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@hitkeep/tracker.svg)](https://github.com/HitKeep/hitkeep/blob/main/LICENSE)
 [![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](https://www.npmjs.com/package/@hitkeep/tracker?activeTab=dependencies)
 [![types included](https://img.shields.io/badge/types-included-blue.svg)](https://www.npmjs.com/package/@hitkeep/tracker)
 
@@ -144,7 +144,7 @@ The opt-out persists in `localStorage` under `hk_ignore` and is honored by both 
 
 ## What you need to run it
 
-The package sends data to a HitKeep instance. You can [self-host HitKeep](https://hitkeep.com/guides/installation/) as a single binary, Docker image, or Helm chart, or use [HitKeep Cloud](https://cloud.hitkeep.eu/signup?plan=free&billing=monthly&utm_source=npm&utm_medium=referral&utm_campaign=tracker_package). HitKeep is open source under the MIT license — the source for this package lives in [PascaleBeier/hitkeep](https://github.com/PascaleBeier/hitkeep).
+The package sends data to a HitKeep instance. You can [self-host HitKeep](https://hitkeep.com/guides/installation/) as a single binary, Docker image, or Helm chart, or use [HitKeep Cloud](https://cloud.hitkeep.eu/signup?plan=free&billing=monthly&utm_source=npm&utm_medium=referral&utm_campaign=tracker_package). HitKeep is open source under the MIT license — the source for this package lives in [PascaleBeier/hitkeep](https://github.com/HitKeep/hitkeep).
 
 ## Documentation
 
@@ -161,4 +161,4 @@ This package is versioned in lockstep with HitKeep itself and published with eve
 
 ## License
 
-MIT © Pascale Beier — see [LICENSE](https://github.com/PascaleBeier/hitkeep/blob/main/LICENSE).
+MIT © Pascale Beier — see [LICENSE](https://github.com/HitKeep/hitkeep/blob/main/LICENSE).

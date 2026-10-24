@@ -101,7 +101,8 @@
         },
         "@scalar/json-magic": {
             "undici": "^7.30.0"
-        }
+        },
+        "zod": "4.6.7"
     },
     "packageExtensions": {
         "@jsverse/transloco-locale@8.4.0": {
