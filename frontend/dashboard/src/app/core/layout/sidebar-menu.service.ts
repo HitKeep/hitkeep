@@ -202,6 +202,7 @@ export class SidebarMenuService {
                 collapsible: true,
                 visible: notShare,
                 items: [
+                    { labelKey: 'assistants.title', icon: 'pi pi-sparkles', routerLink: '/integration/assistants' },
                     { labelKey: 'nav.importExport', icon: 'pi pi-sync', routerLink: '/import-export' },
                     {
                         labelKey: 'nav.apiClients',

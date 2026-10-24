@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Bestehende Verbindungen über API-Clients mit eingeschränktem Zugriff können weiterhin verfügbar sein. Öffne API-Clients für die manuelle Einrichtung.",
+    "title": "Assistenten",
+    "description": "Verbinde deinen Assistenten mit den Websites, die du in HitKeep auswählst.",
+    "available": "Für die Einrichtung von Assistenten konfiguriert",
+    "endpoint": "MCP-Endpunkt",
+    "copy": "Endpunkt kopieren",
+    "copying": "Wird kopiert…",
+    "copied": "Endpunkt kopiert.",
+    "copyFailed": "Der Endpunkt konnte nicht kopiert werden. Markiere und kopiere ihn manuell.",
+    "configurationNote": "Diese Konfiguration bestätigt nicht, dass ein Assistent verbunden ist.",
+    "unavailable": "Die Einrichtung von Assistenten ist auf dieser Instanz nicht verfügbar. Bitte deine Administration, die MCP-Konfiguration zu prüfen.",
+    "setupTitle": "Assistenten verbinden",
+    "access": "Assistenten erhalten ausschließlich Lesezugriff auf aggregierte Daten. Wähle bei der OAuth-Anmeldung die freizugebenden Websites aus; deine aktuellen Website-Berechtigungen gelten weiterhin.",
+    "setup": "Füge den MCP-Endpunkt als benutzerdefinierte Verbindung in deinem Assistenten hinzu, melde dich bei HitKeep an und prüfe den angeforderten Zugriff.",
+    "claude": "Claude einrichten",
+    "chatgpt": "ChatGPT einrichten",
+    "codex": "Codex einrichten",
+    "availability": "Benutzerdefinierte Verbindungen sind unabhängig von der optionalen Installation von Skills oder Plugins. Die Verfügbarkeit hängt von deinem Assistentenkonto und dem Netzwerkzugriff ab.",
+    "registrationHint": "Falls dein Assistent eine registrierte Client-ID benötigt, bitte deine Administration, die genaue Callback-URL zu registrieren.",
+    "starterTitle": "Eine Frage ausprobieren",
+    "starter": "Vergleiche die letzten sieben vollständigen Tage meiner Website mit den sieben Tagen davor. Was hat sich verändert und was bleibt unklar?",
+    "connections": "Assistentenzugriff prüfen"
+  },
   "oauth": {
     "connectionDetails": "Verbindungsdetails",
     "consentTitle": "Anwendung autorisieren",

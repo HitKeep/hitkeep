@@ -12,6 +12,12 @@ The pack contains:
 
 Each `SKILL.md` is a thin external-agent adapter for production HitKeep MCP. Each `references/procedure.md` contains the transport-neutral reasoning shared with Ask AI. Ask AI uses its internal analytics tool bridge, not MCP, and never embeds contributor skills.
 
+## Connect an assistant
+
+Open **Integration → Assistants** (`/integration/assistants`) in HitKeep to copy the canonical MCP endpoint and find setup links. Approve only the MCP resource, `sites:read analytics:read`, and the sites you intend to share. Review or revoke your OAuth grant under **Settings → Connected applications**. The configuration display does not verify a working client connection; existing scoped API-client tokens remain available for compatible clients.
+
+Skill installation supplies instructions; a custom MCP connection supplies access. Optional plugins can package the same five skills, but Claude and OpenAI use different manifest and connection formats. Offline fixture metadata and the prepared review cases live in [`tests/agent-plugins`](../tests/agent-plugins/README.md); they are not complete installable packages or a public listing. Structural tests stage transient regular-file bundles from this canonical pack, README, and LICENSE without maintaining a second copy of the skills. Real account installation and assistant behavior remain unverified.
+
 ## Install
 
 List only the analytics pack:

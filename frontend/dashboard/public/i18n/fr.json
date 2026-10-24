@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Les connexions existantes via des clients API aux droits limités peuvent rester disponibles. Consultez les clients API pour une configuration manuelle.",
+    "title": "Assistants",
+    "description": "Connectez votre assistant aux sites que vous choisissez dans HitKeep.",
+    "available": "Configuré pour connecter des assistants",
+    "endpoint": "Point de terminaison MCP",
+    "copy": "Copier le point de terminaison",
+    "copying": "Copie en cours…",
+    "copied": "Point de terminaison copié.",
+    "copyFailed": "Impossible de copier le point de terminaison. Sélectionnez-le et copiez-le manuellement.",
+    "configurationNote": "Cette configuration ne confirme pas qu’un assistant est connecté.",
+    "unavailable": "La connexion d’assistants n’est pas disponible sur cette instance. Demandez à votre administrateur de vérifier la configuration MCP.",
+    "setupTitle": "Connecter un assistant",
+    "access": "Les assistants disposent uniquement d’un accès en lecture aux données agrégées. Lors de la connexion OAuth, choisissez les sites à partager ; vos autorisations actuelles sur les sites restent applicables.",
+    "setup": "Ajoutez le point de terminaison MCP comme connexion personnalisée dans votre assistant, connectez-vous à HitKeep et vérifiez l’accès demandé.",
+    "claude": "Configurer Claude",
+    "chatgpt": "Configurer ChatGPT",
+    "codex": "Configurer Codex",
+    "availability": "Les connexions personnalisées sont distinctes de l’installation facultative de skills ou de plugins. Leur disponibilité dépend de votre compte d’assistant et de l’accès réseau.",
+    "registrationHint": "Si votre assistant exige un identifiant client enregistré, demandez à votre administrateur d’enregistrer son URL de rappel exacte.",
+    "starterTitle": "Essayez une question",
+    "starter": "Compare les sept derniers jours complets de mon site aux sept jours précédents. Qu’est-ce qui a changé et qu’est-ce qui reste incertain ?",
+    "connections": "Vérifier l’accès des assistants"
+  },
   "oauth": {
     "connectionDetails": "Détails de la connexion",
     "consentTitle": "Autoriser une application",

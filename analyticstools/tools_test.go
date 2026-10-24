@@ -17,6 +17,27 @@ import (
 	json "hitkeep/jsonapi"
 )
 
+func TestOverviewKPISelector(t *testing.T) {
+	sections, err := parseOverviewSections([]string{"kpis"})
+	if err != nil || len(sections) != 0 {
+		t.Fatalf("KPI selection = %v, %v", sections, err)
+	}
+	for _, input := range [][]string{nil, {}} {
+		sections, err := parseOverviewSections(input)
+		if err != nil || len(sections) != len(overviewSections) {
+			t.Fatalf("default selection = %v, %v", sections, err)
+		}
+	}
+	for _, input := range [][]string{{"kpis", "chart"}, {"kpis", "kpis"}, {"invalid"}} {
+		if _, err := parseOverviewSections(input); err == nil {
+			t.Fatalf("invalid selection accepted: %v", input)
+		}
+	}
+	if _, err := parseSections([]string{"kpis"}, searchConsoleSections, nil); err == nil {
+		t.Fatal("overview-only selector accepted by Search Console")
+	}
+}
+
 func TestEvidenceToolsNeverIncludeAnnotations(t *testing.T) {
 	// Opportunities cites evidence tools: notes explain data but must never become evidence.
 	for _, tool := range Evidence() {
@@ -245,4 +266,188 @@ func setupAnnotationsStore(t *testing.T) (*database.Store, uuid.UUID, uuid.UUID)
 		t.Fatalf("create site: %v", err)
 	}
 	return store, site.ID, userID
+}
+
+func TestMoversZeroDenominatorOmitsShare(t *testing.T) {
+	rows, total := movers([]api.DimensionStat{{Name: "/new", Pageviews: 3}}, []api.DimensionStat{{Name: "/old", Pageviews: 3}})
+	if *total != 0 || len(rows) != 2 {
+		t.Fatalf("movers = %v, total = %v", rows, total)
+	}
+	for _, row := range rows {
+		if row.ShareOfChange != nil {
+			t.Fatal("zero denominator produced a share")
+		}
+	}
+}
+
+func TestEventInspectionDiscoveryAndExistingValues(t *testing.T) {
+	store, siteID, _ := setupAnnotationsStore(t)
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 30, 23, 59, 59, 0, time.UTC)
+	if err := store.CreateEvent(t.Context(), &api.Event{SiteID: siteID, SessionID: uuid.New(), Name: "signup", Timestamp: to, Properties: map[string]any{"plan": "pro", "variant": "secret-value"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO imported_event_properties_daily (site_id, import_id, date, event_name, property_key, property_value, visitors, events, source_file) VALUES (?, ?, ?, 'signup', 'imported_key', 'private-imported-value', 1, 2, 'fixture.csv')`, siteID, uuid.New(), from); err != nil {
+		t.Fatal(err)
+	}
+	scope := Scope{SiteID: siteID, Resolve: func(_ context.Context, id uuid.UUID) (Site, error) {
+		return Site{ID: id, Control: store, Analytics: store}, nil
+	}, From: from, To: to}
+	tool := goaiTool(t, scope, EventBreakdown)
+	decode := func(input string) (string, EventBreakdownOutput) {
+		t.Helper()
+		raw, err := tool.Execute(t.Context(), []byte(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			EvidenceID string               `json:"evidence_id"`
+			Data       EventBreakdownOutput `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.EvidenceID != ToolEventBreakdown || body.Data.SiteID != siteID.String() {
+			t.Fatalf("envelope = %+v", body)
+		}
+		return raw, body.Data
+	}
+	raw, discovered := decode(`{"event_name":"signup"}`)
+	if discovered.PropertyKeys == nil || !slices.Equal(discovered.PropertyKeys, []string{"imported_key", "plan", "variant"}) || discovered.PropertyKeysTruncated == nil || *discovered.PropertyKeysTruncated || discovered.Breakdown == nil || len(discovered.Breakdown) != 0 {
+		t.Fatalf("discovery = %+v", discovered)
+	}
+	if strings.Contains(raw, "secret-value") || strings.Contains(raw, "private-imported-value") || strings.Contains(raw, "session_id") {
+		t.Fatalf("discovery leaked event data: %s", raw)
+	}
+	_, limited := decode(`{"event_name":"signup","limit":1}`)
+	if !slices.Equal(limited.PropertyKeys, []string{"imported_key"}) || !*limited.PropertyKeysTruncated {
+		t.Fatalf("limited = %+v", limited)
+	}
+	_, values := decode(`{"event_name":"signup","property_key":"plan"}`)
+	if values.PropertyKeys != nil || values.PropertyKeysTruncated != nil || len(values.Breakdown) != 1 || values.Breakdown[0].Name != "pro" || values.Breakdown[0].Value != 1 {
+		t.Fatalf("values = %+v", values)
+	}
+	_, missing := decode(`{"event_name":"unknown"}`)
+	if missing.PropertyKeys == nil || len(missing.PropertyKeys) != 0 || *missing.PropertyKeysTruncated {
+		t.Fatalf("unknown = %+v", missing)
+	}
+	for _, input := range []string{`{}`, `{"event_name":" "}`, `{"event_name":"signup","property_key":" "}`, `{"event_name":"signup","property_key":42}`} {
+		if _, err := tool.Execute(t.Context(), []byte(input)); err == nil {
+			t.Fatalf("invalid input accepted: %s", input)
+		}
+	}
+	emptyScope := scope
+	emptyScope.From, emptyScope.To = from.AddDate(0, -1, 0), from.AddDate(0, -1, 1)
+	emptyRaw, err := goaiTool(t, emptyScope, EventBreakdown).Execute(t.Context(), []byte(`{"event_name":"signup"}`))
+	if err != nil || !strings.Contains(emptyRaw, `"property_keys":[]`) {
+		t.Fatalf("empty period = %s, %v", emptyRaw, err)
+	}
+	scope.Resolve = func(context.Context, uuid.UUID) (Site, error) { return Site{}, InvalidInput("site access denied") }
+	if _, err := goaiTool(t, scope, EventBreakdown).Execute(t.Context(), []byte(`{"event_name":"signup"}`)); err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("denial = %v", err)
+	}
+}
+
+func TestBreakdownReportsBoundedTrackedComparisonBasis(t *testing.T) {
+	store, siteID, _ := setupAnnotationsStore(t)
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	for i := range moverScan + 1 {
+		if err := store.CreateHit(t.Context(), &api.Hit{SiteID: siteID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: from.Add(time.Hour), Path: fmt.Sprintf("/tail-%03d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scope := Scope{SiteID: siteID, Resolve: func(_ context.Context, id uuid.UUID) (Site, error) {
+		return Site{ID: id, Control: store, Analytics: store}, nil
+	}, From: from, To: from.AddDate(0, 1, 0)}
+	raw, err := goaiTool(t, scope, Breakdown).Execute(t.Context(), []byte(`{"dimension":"page","compare_from":"2026-08-01T00:00:00Z","compare_to":"2026-08-31T23:59:59Z","limit":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Data BreakdownOutput `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		t.Fatal(err)
+	}
+	basis := body.Data.ComparisonBasis
+	if basis == nil || basis.Population != "tracked_hits" || basis.ImportedHistoryIncluded || basis.ValuesPerPeriodLimit != moverScan || basis.CurrentValues != moverScan || !basis.CurrentLimitReached || basis.PreviousValues != 0 || basis.PreviousLimitReached || basis.ShareDenominator != "scanned_pageview_change" {
+		t.Fatalf("basis = %+v", basis)
+	}
+	if *body.Data.PageviewChange != moverScan || len(body.Data.Rows) != 1 || *body.Data.Rows[0].ShareOfChange != .002 {
+		t.Fatalf("bounded comparison = %+v", body.Data)
+	}
+	stats, err := store.GetSiteOverviewStats(t.Context(), api.AnalyticsParams{SiteID: siteID, Start: scope.From, End: scope.To})
+	if err != nil || stats.TotalPageviews != moverScan+1 {
+		t.Fatalf("sitewide = %+v, %v", stats, err)
+	}
+}
+
+func TestOverviewKPIOnlyPreservesValuesWithFewerBytes(t *testing.T) {
+	store, siteID, _ := setupAnnotationsStore(t)
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.CreateHit(t.Context(), &api.Hit{SiteID: siteID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: from.Add(time.Hour), Path: "/pricing"}); err != nil {
+		t.Fatal(err)
+	}
+	scope := Scope{SiteID: siteID, Resolve: func(_ context.Context, id uuid.UUID) (Site, error) {
+		return Site{ID: id, Control: store, Analytics: store}, nil
+	}, From: from, To: from.AddDate(0, 1, 0)}
+	tool := goaiTool(t, scope, SiteOverview)
+	read := func(sections string) (string, SiteOverviewOutput) {
+		t.Helper()
+		raw, err := tool.Execute(t.Context(), []byte(`{"sections":`+sections+`,"compare_from":"2026-08-01T00:00:00Z","compare_to":"2026-08-31T23:59:59Z"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			Data SiteOverviewOutput `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &body); err != nil {
+			t.Fatal(err)
+		}
+		return raw, body.Data
+	}
+	allRaw, all := read(`[]`)
+	kpiRaw, kpi := read(`["kpis"]`)
+	if all.Stats.TotalPageviews != 1 || len(all.Stats.TopPages) != 1 || len(all.Stats.ChartData) == 0 {
+		t.Fatalf("unpopulated default = %+v", all)
+	}
+	all.Stats.keep(map[string]bool{}, 10)
+	want, _ := json.Marshal(all)
+	got, _ := json.Marshal(kpi)
+	if string(got) != string(want) || kpi.Stats.Comparison == nil {
+		t.Fatalf("KPI values changed: %s != %s", got, want)
+	}
+	if len(kpiRaw) >= len(allRaw) {
+		t.Fatalf("KPI bytes %d >= all %d", len(kpiRaw), len(allRaw))
+	}
+	t.Logf("GoAI overview calls=1 baseline_bytes=%d kpi_bytes=%d", len(allRaw), len(kpiRaw))
+}
+
+func TestEventDiscoveryPreservesInclusiveDSTAndOffsetRanges(t *testing.T) {
+	store, siteID, _ := setupAnnotationsStore(t)
+	end := time.Date(2026, 10, 25, 23, 59, 59, 0, time.UTC)
+	for _, at := range []time.Time{end, time.Date(2026, 10, 25, 1, 30, 0, 0, time.UTC)} {
+		if err := store.CreateEvent(t.Context(), &api.Event{SiteID: siteID, SessionID: uuid.New(), Timestamp: at, Name: "edge", Properties: map[string]any{"boundary": true}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scope := Scope{SiteID: siteID, Resolve: func(_ context.Context, id uuid.UUID) (Site, error) {
+		return Site{ID: id, Analytics: store, Control: store}, nil
+	}}
+	for _, input := range []string{
+		`{"event_name":"edge","from":"2026-10-25T00:00:00Z","to":"2026-10-25T23:59:59Z"}`,
+		`{"event_name":"edge","from":"2026-10-25T02:00:00+02:00","to":"2026-10-26T00:59:59+01:00"}`,
+	} {
+		raw, err := goaiTool(t, scope, EventBreakdown).Execute(t.Context(), []byte(input))
+		if err != nil || !strings.Contains(raw, `"property_keys":["boundary"]`) {
+			t.Fatalf("calendar discovery = %s, %v", raw, err)
+		}
+	}
+	raw, err := goaiTool(t, scope, EventBreakdown).Execute(t.Context(), []byte(`{"event_name":"edge","property_key":"boundary","from":"2026-10-25T00:00:00Z","to":"2026-10-25T23:59:59Z"}`))
+	if err != nil || !strings.Contains(raw, `"value":2`) {
+		t.Fatalf("inclusive values = %s, %v", raw, err)
+	}
+	if _, err := goaiTool(t, scope, EventBreakdown).Execute(t.Context(), []byte(`{"event_name":"edge","from":"2026-10-26T00:00:00Z","to":"2026-10-25T00:00:00Z"}`)); err == nil {
+		t.Fatal("inverted range accepted")
+	}
 }

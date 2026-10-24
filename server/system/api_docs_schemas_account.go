@@ -873,6 +873,14 @@ func openAPIV1AccountSchemas() map[string]any {
 			},
 			"required": []string{"entries", "total", "limit", "offset", "has_more"},
 		},
+		"AssistantConnection": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"enabled":  map[string]any{"type": "boolean", "description": "Whether the optional MCP route is enabled and mounted."},
+				"endpoint": map[string]any{"type": "string", "format": "uri", "description": "Canonical MCP resource URL; omitted when unavailable."},
+			},
+			"required": []string{"enabled"},
+		},
 		"UserBootstrap": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -883,6 +891,7 @@ func openAPIV1AccountSchemas() map[string]any {
 				"permissions": map[string]any{"$ref": "#/components/schemas/PermissionContext"},
 				"sites":       map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/Site"}},
 				"status":      map[string]any{"$ref": "#/components/schemas/SystemStatus"},
+				"assistants":  map[string]any{"$ref": "#/components/schemas/AssistantConnection"},
 			},
 		},
 		"OnboardingStep": map[string]any{

@@ -303,6 +303,11 @@ export const routes: Routes = [
                 loadChildren: () => import('@pages/settings/settings.routes').then((m) => m.SETTINGS_ROUTES)
             },
             {
+                path: 'integration/assistants',
+                loadComponent: () => import('@pages/integration/assistants/assistants').then((m) => m.AssistantsPage),
+                data: titleData('assistants.title')
+            },
+            {
                 path: 'integration/api-clients',
                 loadComponent: () => import('@pages/integration/api-clients/api-clients-hub').then((m) => m.ApiClientsHub),
                 data: titleData('nav.apiClients', 'team'),

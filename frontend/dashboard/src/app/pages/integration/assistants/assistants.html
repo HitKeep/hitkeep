@@ -1,0 +1,42 @@
+<app-page-frame [subtitle]="'assistants.description' | transloco">
+    <div class="flex min-w-0 flex-col gap-6">
+        @if (endpoint(); as url) {
+        <section class="flex min-w-0 flex-col gap-3" aria-labelledby="assistant-endpoint-title">
+            <p-message severity="success">{{ 'assistants.available' | transloco }}</p-message>
+            <h2 id="assistant-endpoint-title" class="text-lg font-semibold">{{ 'assistants.endpoint' | transloco }}</h2>
+            <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                <input pInputText type="text" readonly [value]="url" aria-labelledby="assistant-endpoint-title" class="w-full min-w-0 flex-1 font-mono text-sm" />
+                <button pButton type="button" icon="pi pi-copy" [disabled]="copying()" (click)="copyEndpoint()">{{ (copying() ? 'assistants.copying' : 'assistants.copy') | transloco }}</button>
+            </div>
+            <p aria-live="polite" role="status" class="text-sm text-muted-color">@if (copyFeedback(); as feedback) { {{ feedback | transloco }} }</p>
+            <p class="text-sm text-muted-color">{{ 'assistants.configurationNote' | transloco }}</p>
+        </section>
+        } @else {
+        <p-message severity="warn">{{ 'assistants.unavailable' | transloco }}</p-message>
+        <p class="text-sm text-muted-color">{{ 'assistants.legacy' | transloco }}</p>
+        <a pButton [outlined]="true" routerLink="/integration/api-clients">{{ 'nav.apiClients' | transloco }}</a>
+        }
+        <section class="flex flex-col gap-3" aria-labelledby="assistant-setup-title">
+            <h2 id="assistant-setup-title" class="text-lg font-semibold">{{ 'assistants.setupTitle' | transloco }}</h2>
+            <p>{{ 'assistants.access' | transloco }}</p>
+            <p>{{ 'assistants.setup' | transloco }}</p>
+            <ul class="flex flex-wrap gap-3">
+                <li><a pButton [outlined]="true" href="https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp" target="_blank" rel="noopener noreferrer">{{ 'assistants.claude' | transloco }}</a></li>
+                <li><a pButton [outlined]="true" href="https://learn.chatgpt.com/docs/extend/mcp?surface=web" target="_blank" rel="noopener noreferrer">{{ 'assistants.chatgpt' | transloco }}</a></li>
+                <li><a pButton [outlined]="true" href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli" target="_blank" rel="noopener noreferrer">{{ 'assistants.codex' | transloco }}</a></li>
+            </ul>
+            <p class="text-sm text-muted-color">{{ 'assistants.availability' | transloco }}</p>
+            <p class="text-sm text-muted-color">{{ 'assistants.registrationHint' | transloco }}</p>
+        </section>
+        <section class="flex flex-col gap-3" aria-labelledby="assistant-starter-title">
+            <h2 id="assistant-starter-title" class="text-lg font-semibold">{{ 'assistants.starterTitle' | transloco }}</h2>
+            <blockquote class="border-l-2 border-surface pl-4">{{ 'assistants.starter' | transloco }}</blockquote>
+        </section>
+        <nav class="flex flex-wrap gap-3" [attr.aria-label]="'assistants.connections' | transloco">
+            <a pButton [outlined]="true" routerLink="/settings/connected-applications">{{ 'oauth.applicationsTitle' | transloco }}</a>
+            @if (canManageClients()) {
+            <a pButton [outlined]="true" routerLink="/integration/oauth-clients">{{ 'oauthClients.title' | transloco }}</a>
+            }
+        </nav>
+    </div>
+</app-page-frame>

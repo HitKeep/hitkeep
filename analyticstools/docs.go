@@ -89,12 +89,29 @@ func (c *Docs) Search(ctx context.Context, query string, limit int) ([]docSearch
 
 	terms := searchTerms(query)
 	results := make([]docSearchResult, 0)
+	paths := make(map[string]int)
+	add := func(result docSearchResult) {
+		path, err := c.normalizePath(result.Path)
+		if err != nil {
+			return
+		}
+		result.Path = path
+		result.URL = c.base.ResolveReference(&url.URL{Path: path}).String()
+		if index, ok := paths[path]; ok {
+			if result.Score > results[index].Score {
+				results[index] = result
+			}
+			return
+		}
+		paths[path] = len(results)
+		results = append(results, result)
+	}
 	for _, entry := range parseCatalog(llms.Markdown, c.base) {
 		score := scoreText(terms, entry.Title, entry.Path, entry.Description)
 		if score == 0 {
 			continue
 		}
-		results = append(results, docSearchResult{
+		add(docSearchResult{
 			Title:   entry.Title,
 			URL:     entry.URL,
 			Path:    entry.Path,
@@ -109,7 +126,7 @@ func (c *Docs) Search(ctx context.Context, query string, limit int) ([]docSearch
 		}
 		snippet, score := markdownSnippet(terms, page.Markdown)
 		if score > 0 {
-			results = append(results, docSearchResult{
+			add(docSearchResult{
 				Title:   titleFromMarkdown(page.Markdown, page.Path),
 				URL:     page.URL,
 				Path:    page.Path,

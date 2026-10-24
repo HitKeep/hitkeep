@@ -10,6 +10,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"hitkeep/analyticstools"
+
 	json "hitkeep/jsonapi"
 )
 
@@ -124,6 +126,60 @@ func TestMCPPublishedSurfaceAudit(t *testing.T) {
 		}
 		if isForbiddenToolName(tool.Name) {
 			t.Fatalf("tool %q violates read-only aggregate-only surface policy", tool.Name)
+		}
+	}
+
+	eventTool := findTool(tools.Tools, analyticstools.ToolEventBreakdown)
+	var mcpInput, goaiInput struct {
+		Required   []string `json:"required"`
+		Properties map[string]struct {
+			Type json.RawMessage `json:"type"`
+		} `json:"properties"`
+	}
+	input, err := json.Marshal(eventTool.InputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(input, &mcpInput); err != nil {
+		t.Fatal(err)
+	}
+	goaiTools := analyticstools.GoAI(analyticstools.Scope{}, analyticstools.EventBreakdown)
+	if err := json.Unmarshal(goaiTools[0].InputSchema, &goaiInput); err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []struct {
+		Required   []string `json:"required"`
+		Properties map[string]struct {
+			Type json.RawMessage `json:"type"`
+		} `json:"properties"`
+	}{mcpInput, goaiInput} {
+		propertyType := string(schema.Properties["property_key"].Type)
+		// MCP keeps nullable optional types; GoAI removes null for provider portability.
+		stringType := propertyType == `"string"` || propertyType == `["string","null"]` || propertyType == `["null","string"]`
+		if slices.Contains(schema.Required, "property_key") || !slices.Contains(schema.Required, "event_name") || !stringType {
+			t.Fatalf("event inspection schema = %+v", schema)
+		}
+	}
+	if string(goaiInput.Properties["property_key"].Type) != `"string"` {
+		t.Fatal("GoAI optional key lost provider-portable string type")
+	}
+	var output struct {
+		Required   []string                   `json:"required"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	encoded, err := json.Marshal(eventTool.OutputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(output.Required, "property_keys") || slices.Contains(output.Required, "property_keys_truncated") {
+		t.Fatal("discovery-only fields must stay optional")
+	}
+	for _, field := range []string{"breakdown", "property_keys", "property_keys_truncated"} {
+		if len(output.Properties[field]) == 0 {
+			t.Fatalf("event output missing %s", field)
 		}
 	}
 

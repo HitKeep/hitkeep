@@ -39,6 +39,7 @@ const bootstrap: DashboardBootstrap = {
         instance_role: 'owner',
         permissions: {}
     },
+    assistants: { enabled: true, endpoint: 'https://analytics.example/prefix/assistant/mcp' },
     sites: [],
     status: {
         needs_setup: false,
@@ -89,6 +90,14 @@ describe('DashboardBootstrapService', () => {
         httpMock.verify();
     });
 
+    it('clears a previous endpoint when a later bootstrap omits assistant configuration', () => {
+        service.applyBootstrap(bootstrap);
+        const legacy = { ...bootstrap };
+        delete legacy.assistants;
+        service.applyBootstrap(legacy);
+        expect(service.assistants()).toEqual({ enabled: false });
+    });
+
     it('loads dashboard bootstrap once and hydrates app services', () => {
         service.load().subscribe();
 
@@ -102,6 +111,7 @@ describe('DashboardBootstrapService', () => {
         expect(teams.applyTeams).toHaveBeenCalledWith(bootstrap.teams);
         expect(permissions.applyPermissions).toHaveBeenCalledWith(bootstrap.permissions);
         expect(sites.applySites).toHaveBeenCalledWith(bootstrap.sites);
+        expect(service.assistants()).toEqual(bootstrap.assistants);
         expect(service.cloudHosted()).toBe(true);
         expect(service.cloudSupportUrl()).toBe('https://hitkeep.com/support/help/');
         expect(service.isLoading()).toBe(false);

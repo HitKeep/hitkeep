@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Le connessioni esistenti tramite client API con accesso limitato possono essere ancora disponibili. Consulta i client API per la configurazione manuale.",
+    "title": "Assistenti",
+    "description": "Collega il tuo assistente ai siti che scegli in HitKeep.",
+    "available": "Configurato per collegare gli assistenti",
+    "endpoint": "Endpoint MCP",
+    "copy": "Copia endpoint",
+    "copying": "Copia in corso…",
+    "copied": "Endpoint copiato.",
+    "copyFailed": "Impossibile copiare l’endpoint. Selezionalo e copialo manualmente.",
+    "configurationNote": "Questa configurazione non conferma che un assistente sia connesso.",
+    "unavailable": "Il collegamento degli assistenti non è disponibile in questa istanza. Chiedi al tuo amministratore di verificare la configurazione MCP.",
+    "setupTitle": "Collega un assistente",
+    "access": "Gli assistenti possono solo leggere dati aggregati. Durante l’accesso OAuth, scegli i siti da condividere; le tue autorizzazioni attuali sui siti continuano ad applicarsi.",
+    "setup": "Aggiungi l’endpoint MCP come connessione personalizzata nel tuo assistente, accedi a HitKeep e verifica l’accesso richiesto.",
+    "claude": "Configura Claude",
+    "chatgpt": "Configura ChatGPT",
+    "codex": "Configura Codex",
+    "availability": "Le connessioni personalizzate sono separate dall’installazione facoltativa di skill o plugin. La disponibilità dipende dal tuo account dell’assistente e dall’accesso alla rete.",
+    "registrationHint": "Se il tuo assistente richiede un ID client registrato, chiedi al tuo amministratore di registrare il suo URL di callback esatto.",
+    "starterTitle": "Prova una domanda",
+    "starter": "Confronta gli ultimi sette giorni completi del mio sito con i sette precedenti. Cosa è cambiato e cosa rimane incerto?",
+    "connections": "Verifica l’accesso degli assistenti"
+  },
   "oauth": {
     "connectionDetails": "Dettagli della connessione",
     "consentTitle": "Autorizza un’applicazione",

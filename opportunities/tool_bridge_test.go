@@ -194,6 +194,36 @@ func TestToolBridgeExecutesSharedEventNamesTool(t *testing.T) {
 	}
 }
 
+func TestToolBridgePreservesSuppliedKeyEvidenceAndLockedRange(t *testing.T) {
+	store, siteID, teamID, viewerID, _ := setupToolBridgeStore(t)
+	bridge := NewToolBridge(ToolBridgeConfig{
+		Shared: store, Analytics: store, TeamID: teamID, SiteID: siteID, ActorID: viewerID, ActorType: "user",
+		EffectiveUserID: viewerID, EffectiveSiteRole: auth.SiteViewer,
+		From: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+	})
+	for _, tool := range bridge.Tools() {
+		if tool.Name != analyticstools.ToolEventBreakdown {
+			continue
+		}
+		raw, err := tool.Execute(t.Context(), []byte(`{"event_name":"begin_checkout","property_key":"items","from":"2020-01-01T00:00:00Z","to":"2020-01-02T00:00:00Z"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			EvidenceID string                              `json:"evidence_id"`
+			Data       analyticstools.EventBreakdownOutput `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.EvidenceID != analyticstools.ToolEventBreakdown || body.Data.SiteID != siteID.String() || body.Data.From != "2026-05-01T00:00:00Z" || len(body.Data.Breakdown) != 1 || body.Data.Breakdown[0].Value != 1 || body.Data.PropertyKeys != nil || containsRawRowField(raw) {
+			t.Fatalf("existing saved-claim evidence changed: %s", raw)
+		}
+		return
+	}
+	t.Fatal("shared event value evidence tool missing")
+}
+
 func TestToolBridgeDeniesUnauthorizedActor(t *testing.T) {
 	store, siteID, teamID, _, outsiderID := setupToolBridgeStore(t)
 	bridge := NewToolBridge(ToolBridgeConfig{

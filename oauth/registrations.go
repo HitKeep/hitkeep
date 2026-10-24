@@ -70,7 +70,7 @@ func (p *Provider) SaveClient(ctx context.Context, actorID, teamID uuid.UUID, c 
 	if err := validateClientMetadata(metadata, c.ID, true); err != nil {
 		return nil, ErrInvalidConsent
 	}
-	// Dashboard registrations require HTTPS; native loopback registrations remain operator-configured.
+	// Team registrations require HTTPS even though configured clients and HTTPS CIMD support native loopbacks.
 	for _, redirect := range c.RedirectURIs {
 		if !strings.HasPrefix(redirect, "https://") || strings.Contains(redirect, "*") {
 			return nil, ErrInvalidConsent

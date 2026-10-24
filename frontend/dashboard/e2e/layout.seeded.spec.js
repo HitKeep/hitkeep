@@ -34,6 +34,17 @@ async function expectNoHorizontalOverflow(page) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 }
 
+test("Assistants uses the shared route heading and keeps connection controls reachable", async ({ page }) => {
+    await overrideBootstrap(page, (data) => {
+        data.assistants = { enabled: true, endpoint: "https://analytics.example.com/mcp" };
+    });
+    await login(page, "/integration/assistants");
+    await expect(page.locator("main h1")).toHaveText("Assistants");
+    await expect(page.locator("main input[readonly]")).toHaveValue("https://analytics.example.com/mcp");
+    await expect(page.locator('main a[href="/settings/connected-applications"]')).toBeVisible();
+    await expect(page.locator('main a[href="/integration/oauth-clients"]')).toBeVisible();
+});
+
 test("Focus preserves the active page while resizing, collapsing and restoring navigation", async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.addInitScript(() => localStorage.setItem("hk_theme", "light"));

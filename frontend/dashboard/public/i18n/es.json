@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Las conexiones existentes con clientes API de acceso limitado pueden seguir disponibles. Consulta los clientes API para la configuración manual.",
+    "title": "Asistentes",
+    "description": "Conecta tu asistente a los sitios que elijas en HitKeep.",
+    "available": "Configurado para conectar asistentes",
+    "endpoint": "Endpoint MCP",
+    "copy": "Copiar endpoint",
+    "copying": "Copiando…",
+    "copied": "Endpoint copiado.",
+    "copyFailed": "No se pudo copiar el endpoint. Selecciónalo y cópialo manualmente.",
+    "configurationNote": "Esta configuración no confirma que haya un asistente conectado.",
+    "unavailable": "La conexión de asistentes no está disponible en esta instancia. Pide a tu administrador que revise la configuración de MCP.",
+    "setupTitle": "Conectar un asistente",
+    "access": "Los asistentes solo pueden leer datos agregados. Durante el inicio de sesión con OAuth, elige los sitios que quieres compartir; tus permisos actuales sobre los sitios siguen vigentes.",
+    "setup": "Añade el endpoint MCP como conexión personalizada en tu asistente, inicia sesión en HitKeep y revisa el acceso solicitado.",
+    "claude": "Configurar Claude",
+    "chatgpt": "Configurar ChatGPT",
+    "codex": "Configurar Codex",
+    "availability": "Las conexiones personalizadas son independientes de la instalación opcional de skills o plugins. La disponibilidad depende de tu cuenta del asistente y del acceso a la red.",
+    "registrationHint": "Si tu asistente requiere un ID de cliente registrado, pide a tu administrador que registre su URL de devolución exacta.",
+    "starterTitle": "Prueba una pregunta",
+    "starter": "Compara los últimos siete días completos de mi sitio con los siete anteriores. ¿Qué cambió y qué sigue siendo incierto?",
+    "connections": "Revisar el acceso de los asistentes"
+  },
   "oauth": {
     "connectionDetails": "Detalles de la conexión",
     "consentTitle": "Autorizar una aplicación",
