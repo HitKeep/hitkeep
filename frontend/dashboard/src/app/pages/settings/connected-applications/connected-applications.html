@@ -1,56 +1,80 @@
 <app-page-frame [subtitle]="'oauth.applicationsDescription' | transloco">
-    <section class="flex flex-col gap-6">
+    <section class="flex min-w-0 flex-col gap-5">
         @if (revoked()) {
         <p-message severity="success" role="status">{{ 'oauth.revoked' | transloco }}</p-message>
-        } @if (loading()) {
-        <p role="status">{{ 'oauth.loading' | transloco }}</p>
-        } @else if (loadError(); as error) {
+        } @if (loadError(); as error) {
         <p-message severity="error" role="alert">{{ error | transloco }}</p-message>
         <button pButton type="button" (click)="load()">{{ 'oauth.retry' | transloco }}</button>
-        } @else { @for (grant of grants(); track grant.id) {
-        <article class="min-w-0 border-b border-surface-200 pb-6 dark:border-surface-700" [attr.aria-labelledby]="'oauth-grant-' + grant.id">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 [id]="'oauth-grant-' + grant.id" class="min-w-0 break-words text-lg font-semibold">{{ grant.client.name }}</h2>
-                <button pButton type="button" severity="danger" [disabled]="pending().has(grant.id)" [attr.aria-label]="'oauth.revokeApplication' | transloco: { application: grant.client.name }" (click)="revoke(grant)">
-                    {{ (pending().has(grant.id) ? 'oauth.revoking' : 'oauth.revoke') | transloco }}
-                </button>
-            </div>
-            <dl class="grid gap-2 sm:grid-cols-[auto_1fr]">
-                <dt class="font-medium">{{ 'oauth.applicationId' | transloco }}</dt>
-                <dd class="min-w-0 break-all"><code>{{ grant.client.id }}</code></dd>
-                <dt class="font-medium">{{ 'oauth.team' | transloco }}</dt>
-                <dd class="min-w-0 break-words">{{ grant.team.name }}</dd>
-                <dt class="font-medium">{{ 'oauth.sites' | transloco }}</dt>
-                <dd class="min-w-0">
-                    <ul class="max-h-48 list-inside list-disc overflow-y-auto break-words">
-                        @for (site of grant.sites; track site.id) {
-                        <li>{{ site.name || site.domain }} @if (site.name && site.name !== site.domain) { <span class="text-muted-color">{{ site.domain }}</span> }</li>
-                        }
-                    </ul>
-                </dd>
-                <dt class="font-medium">{{ 'oauth.abilities' | transloco }}</dt>
-                <dd class="min-w-0">
-                    <ul class="list-inside list-disc break-words">
-                        @for (scope of grant.scopes; track scope) {
-                        <li>@if (scopeLabelKey(scope); as key) { <span>{{ key | transloco }}</span> } <code class="text-sm text-muted-color">{{ scope }}</code></li>
-                        }
-                    </ul>
-                </dd>
-                <dt class="font-medium">{{ 'oauth.resource' | transloco }}</dt>
-                <dd class="min-w-0 break-all"><code>{{ grant.resource }}</code></dd>
-                <dt class="font-medium">{{ 'oauth.createdAt' | transloco }}</dt>
-                <dd>{{ formatTime(grant.created_at) }}</dd>
-                <dt class="font-medium">{{ 'oauth.expiresAt' | transloco }}</dt>
-                <dd>{{ formatTime(grant.expires_at) }}</dd>
-                <dt class="font-medium">{{ 'oauth.lastUsedAt' | transloco }}</dt>
-                <dd>{{ formatTime(grant.last_used_at) }}</dd>
-            </dl>
-            @if (failures().has(grant.id)) {
-            <p-message severity="error" role="alert" class="mt-3">{{ 'oauth.revokeFailed' | transloco }}</p-message>
-            }
-        </article>
-        } @empty {
-        <p>{{ 'oauth.noApplications' | transloco }}</p>
-        } }
+        } @else {
+        <app-table
+            [value]="grants()"
+            [columns]="columns"
+            [rowActions]="actions"
+            [loading]="loading()"
+            [selectable]="true"
+            (rowSelect)="openDetails($event)"
+            [exportable]="false"
+            [defaultSort]="{ field: 'created_at', order: -1 }"
+            emptyTextKey="oauth.noApplications"
+            ariaLabelKey="oauth.applicationsTitle"
+            stateKey="connected-applications"
+        >
+            <ng-template appTableCell="client.name" let-grant>
+                <span class="break-words font-semibold">{{ grant.client.name }}</span>
+                @if (failures().has(grant.id) && selectedGrant()?.id !== grant.id) {
+                <p-message severity="error" role="alert" class="mt-2">{{ 'oauth.revokeFailed' | transloco }}</p-message>
+                }
+            </ng-template>
+            <ng-template appTableCell="created_at" let-grant>{{ formatTime(grant.created_at) }}</ng-template>
+            <ng-template appTableCell="last_used_at" let-grant>{{ formatTime(grant.last_used_at) }}</ng-template>
+        </app-table>
+        }
     </section>
 </app-page-frame>
+
+@if (selectedGrant(); as grant) {
+<app-dialog-shell
+    [title]="grant.client.name"
+    [visible]="true"
+    (visibleChange)="!$event && selectedGrant.set(null)"
+    [secondaryLabel]="'common.actions.close' | transloco"
+    [primaryLabel]="'oauth.revoke' | transloco"
+    primarySeverity="danger"
+    [busy]="pending().has(grant.id)"
+    (primaryAction)="revoke(grant)"
+>
+    <dl class="grid gap-2 sm:grid-cols-[auto_1fr]">
+        <dt class="font-medium">{{ 'oauth.applicationId' | transloco }}</dt>
+        <dd class="min-w-0 break-all"><code>{{ grant.client.id }}</code></dd>
+        <dt class="font-medium">{{ 'oauth.team' | transloco }}</dt>
+        <dd class="min-w-0 break-words">{{ grant.team.name }}</dd>
+        <dt class="font-medium">{{ 'oauth.sites' | transloco }}</dt>
+        <dd class="min-w-0">
+            <ul class="max-h-48 list-inside list-disc overflow-y-auto break-words">
+                @for (site of grant.sites; track site.id) {
+                <li>{{ site.name || site.domain }} @if (site.name && site.name !== site.domain) { <span class="text-muted-color">{{ site.domain }}</span> }</li>
+                }
+            </ul>
+        </dd>
+        <dt class="font-medium">{{ 'oauth.abilities' | transloco }}</dt>
+        <dd class="min-w-0">
+            <ul class="list-inside list-disc break-words">
+                @for (scope of grant.scopes; track scope) {
+                <li>@if (scopeLabelKey(scope); as key) { <span class="me-1">{{ key | transloco }}</span> } <code class="text-sm text-muted-color">{{ scope }}</code></li>
+                }
+            </ul>
+        </dd>
+        <dt class="font-medium">{{ 'oauth.resource' | transloco }}</dt>
+        <dd class="min-w-0 break-all"><code>{{ grant.resource }}</code></dd>
+        <dt class="font-medium">{{ 'oauth.createdAt' | transloco }}</dt>
+        <dd>{{ formatTime(grant.created_at) }}</dd>
+        <dt class="font-medium">{{ 'oauth.expiresAt' | transloco }}</dt>
+        <dd>{{ formatTime(grant.expires_at) }}</dd>
+        <dt class="font-medium">{{ 'oauth.lastUsedAt' | transloco }}</dt>
+        <dd>{{ formatTime(grant.last_used_at) }}</dd>
+    </dl>
+    @if (failures().has(grant.id)) {
+    <p-message severity="error" role="alert" class="mt-3">{{ 'oauth.revokeFailed' | transloco }}</p-message>
+    }
+</app-dialog-shell>
+}

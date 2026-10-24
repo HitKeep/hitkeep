@@ -10,10 +10,13 @@ import { OAuthService } from '@services/oauth.service';
 import { formatOAuthTime, oauthScopeLabelKey } from '@core/utils/oauth-display';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { PageFrame } from '@components/page-frame/page-frame';
+import { DialogShell } from '@components/dialog-shell/dialog-shell';
+import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
+import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
 
 @Component({
     selector: 'app-connected-applications',
-    imports: [TranslocoPipe, ButtonModule, MessageModule, PageFrame],
+    imports: [TranslocoPipe, ButtonModule, MessageModule, PageFrame, DialogShell, AppTable, AppTableCell],
     templateUrl: './connected-applications.html',
     changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -29,6 +32,21 @@ export class ConnectedApplicationsPage {
     protected readonly pending = signal(new Set<string>());
     protected readonly failures = signal(new Set<string>());
     protected readonly revoked = signal(false);
+    protected readonly selectedGrant = signal<OAuthGrant | null>(null);
+    protected readonly columns: AppTableColumn<OAuthGrant>[] = [
+        { field: 'client.name', headerKey: 'oauth.application', frozen: true },
+        { field: 'team.name', headerKey: 'oauth.team' },
+        { field: 'created_at', headerKey: 'oauth.createdAt', type: 'date' },
+        { field: 'last_used_at', headerKey: 'oauth.lastUsedAt', type: 'date' }
+    ];
+    protected readonly actions = (grant: OAuthGrant): TableRowActionItem[] => [
+        { label: this.transloco.translate('oauth.connectionDetails'), icon: 'pi pi-info-circle', command: () => this.openDetails(grant) },
+        { label: this.transloco.translate(this.pending().has(grant.id) ? 'oauth.revoking' : 'oauth.revoke'), icon: 'pi pi-ban', danger: true, disabled: this.pending().has(grant.id), command: () => this.revoke(grant) }
+    ];
+
+    protected openDetails(grant: OAuthGrant): void {
+        this.selectedGrant.set(grant);
+    }
 
     constructor() {
         this.load();
@@ -74,6 +92,7 @@ export class ConnectedApplicationsPage {
             .subscribe({
                 next: () => {
                     this.grants.update((grants) => grants.filter((item) => item.id !== grant.id));
+                    if (this.selectedGrant()?.id === grant.id) this.selectedGrant.set(null);
                     this.revoked.set(true);
                 },
                 error: () => this.failures.update((ids) => new Set(ids).add(grant.id))

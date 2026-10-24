@@ -12,6 +12,7 @@ import { finalize } from 'rxjs';
 
 import { PageFrame } from '@components/page-frame/page-frame';
 import { CrudDialog } from '@components/crud-dialog/crud-dialog';
+import { DialogShell } from '@components/dialog-shell/dialog-shell';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
@@ -23,7 +24,7 @@ import { AccessService } from '@services/access.service';
 
 @Component({
     selector: 'app-oauth-clients',
-    imports: [PageFrame, CrudDialog, AppTable, AppTableCell, ReactiveFormsModule, TranslocoPipe, ButtonModule, ConfirmDialogModule, InputTextModule, TextareaModule, MessageModule],
+    imports: [PageFrame, CrudDialog, DialogShell, AppTable, AppTableCell, ReactiveFormsModule, TranslocoPipe, ButtonModule, ConfirmDialogModule, InputTextModule, TextareaModule, MessageModule],
     providers: [ConfirmationService],
     templateUrl: './oauth-clients.html',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -45,12 +46,13 @@ export class OAuthClientsPage {
     protected readonly success = signal<string | null>(null);
     protected readonly visible = signal(false);
     protected readonly editing = signal<string | null>(null);
+    protected readonly selectedClient = signal<OAuthClientRegistration | null>(null);
     protected readonly columns: AppTableColumn<OAuthClientRegistration>[] = [
         { field: 'client_name', headerKey: 'common.columns.name', frozen: true },
-        { field: 'client_id', headerKey: 'oauth.applicationId' },
-        { field: 'redirect_uris', headerKey: 'oauthClients.redirects', sortable: false, filterable: false }
+        { field: 'client_id', headerKey: 'oauth.applicationId' }
     ];
     protected readonly actions = (client: OAuthClientRegistration): TableRowActionItem[] => [
+        { label: this.transloco.translate('oauth.connectionDetails'), icon: 'pi pi-info-circle', command: () => this.showDetails(client) },
         { label: this.transloco.translate('common.actions.edit'), icon: 'pi pi-pencil', command: () => this.open(client) },
         { label: this.transloco.translate('oauth.revoke'), icon: 'pi pi-ban', danger: true, command: () => this.confirmRevoke(client) }
     ];
@@ -67,6 +69,7 @@ export class OAuthClientsPage {
             this.refresh();
             this.clients.set([]);
             this.visible.set(false);
+            this.selectedClient.set(null);
             this.confirmations.close();
             this.error.set(null);
             this.success.set(null);
@@ -94,10 +97,16 @@ export class OAuthClientsPage {
 
     protected open(client?: OAuthClientRegistration): void {
         if (!this.canManage() || this.pending()) return;
+        this.selectedClient.set(null);
         this.editing.set(client?.client_id ?? null);
         this.form.reset({ name: client?.client_name ?? '', uri: client?.client_uri ?? '', redirects: client?.redirect_uris.join('\n') ?? '' });
         this.error.set(null);
         this.visible.set(true);
+    }
+
+    protected showDetails(client: OAuthClientRegistration): void {
+        if (!this.canManage() || this.pending()) return;
+        this.selectedClient.set(client);
     }
 
     protected submit(): void {
@@ -158,6 +167,7 @@ export class OAuthClientsPage {
                         next: () => {
                             if (team.id !== this.teams.activeTeam()?.id) return;
                             this.clients.update((clients) => clients.filter((c) => c.client_id !== client.client_id));
+                            if (this.selectedClient()?.client_id === client.client_id) this.selectedClient.set(null);
                             this.success.set('oauthClients.revoked');
                         },
                         error: () => {

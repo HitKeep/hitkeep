@@ -44,6 +44,26 @@ describe('OAuthClientsPage', () => {
         await fixture.whenStable();
     });
 
+    it('opens registration details separately from editing', async () => {
+        expect(fixture.nativeElement.textContent).not.toContain('https://reports.example/callback');
+        const details = fixture.componentInstance as unknown as { showDetails(client: OAuthClientRegistration): void };
+        details.showDetails(client);
+        await fixture.whenStable();
+        const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
+        expect(dialog).not.toBeNull();
+        expect(dialog.textContent).toContain('Reporting app');
+        expect(dialog.textContent).toContain('hk_client_1');
+        expect(dialog.textContent).toContain('https://reports.example/callback');
+        expect(document.getElementById('oauth-client-name')).toBeNull();
+        const edit = Array.from(dialog.querySelectorAll('button')).find((button) => button.textContent?.includes('common.actions.edit'));
+        expect(edit).toBeDefined();
+        edit!.click();
+        await fixture.whenStable();
+        expect(page.visible()).toBe(true);
+        expect(document.getElementById('oauth-client-name')).not.toBeNull();
+        expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    });
+
     it('saves exact redirects and shows the generated client ID only after success', async () => {
         const response = new Subject<OAuthClientRegistration>();
         oauth.saveClient.mockReturnValue(response);
@@ -59,6 +79,21 @@ describe('OAuthClientsPage', () => {
         expect(page.visible()).toBe(false);
         expect(fixture.nativeElement.textContent).toContain('new-generated-id');
         expect(fixture.nativeElement.textContent).toContain('oauthClients.saved');
+    });
+
+    it('closes registration details on team or capability changes', async () => {
+        fixture.componentInstance['showDetails'](client);
+        await fixture.whenStable();
+        expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain('hk_client_1');
+        team.set({ id: 'team-2' });
+        await fixture.whenStable();
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+        fixture.componentInstance['showDetails'](client);
+        await fixture.whenStable();
+        allowed.set(false);
+        await fixture.whenStable();
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('app-table')).toBeNull();
     });
 
     it('keeps an edited registration available after save failure', async () => {

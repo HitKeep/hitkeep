@@ -15,22 +15,56 @@
         <p-message severity="error" role="alert">{{ message | transloco }}</p-message>
         <button pButton type="button" (click)="reload()">{{ 'oauth.retry' | transloco }}</button>
         } @else {
-        <app-table [value]="clients()" [columns]="columns" [rowActions]="actions" [actionsDisabled]="pending()" [exportable]="false" emptyTextKey="oauthClients.empty" stateKey="oauth-clients">
+        <app-table
+            [value]="clients()"
+            [columns]="columns"
+            [rowActions]="actions"
+            [actionsDisabled]="pending()"
+            [selectable]="true"
+            (rowSelect)="showDetails($event)"
+            [exportable]="false"
+            emptyTextKey="oauthClients.empty"
+            ariaLabelKey="oauthClients.title"
+            stateKey="oauth-clients"
+            dataKey="client_id"
+        >
             <ng-template appTableCell="client_name" let-client>
                 <div class="flex min-w-0 flex-col gap-1"><span class="font-semibold">{{ client.client_name }}</span><span class="break-all text-sm text-muted-color">{{ client.client_uri }}</span></div>
             </ng-template>
             <ng-template appTableCell="client_id" let-client><code class="break-all text-xs">{{ client.client_id }}</code></ng-template>
-            <ng-template appTableCell="redirect_uris" let-client
-                ><ul class="space-y-1">
-                    @for (uri of client.redirect_uris; track uri) {
-                    <li class="break-all text-sm">{{ uri }}</li>
-                    }
-                </ul></ng-template
-            >
         </app-table>
         } }
     </section>
 </app-page-frame>
+@if (selectedClient(); as client) {
+<app-dialog-shell
+    [title]="client.client_name"
+    [visible]="true"
+    (visibleChange)="!$event && selectedClient.set(null)"
+    [secondaryLabel]="'common.actions.close' | transloco"
+    [primaryLabel]="'common.actions.edit' | transloco"
+    [primaryDisabled]="pending() || !canManage()"
+    (primaryAction)="open(client)"
+>
+    <dl class="grid gap-3 sm:grid-cols-[auto_1fr]">
+        <dt class="font-medium">{{ 'oauth.applicationId' | transloco }}</dt>
+        <dd class="min-w-0 break-all"><code>{{ client.client_id }}</code></dd>
+        @if (client.client_uri) {
+        <dt class="font-medium">{{ 'oauthClients.website' | transloco }}</dt>
+        <dd class="min-w-0 break-all">{{ client.client_uri }}</dd>
+        }
+        <dt class="font-medium">{{ 'oauthClients.redirects' | transloco }}</dt>
+        <dd class="min-w-0">
+            <ul class="max-h-48 list-inside list-disc space-y-1 overflow-y-auto break-all">
+                @for (uri of client.redirect_uris; track uri) {
+                <li>{{ uri }}</li>
+                }
+            </ul>
+        </dd>
+    </dl>
+    <p class="mt-4 text-sm text-muted-color">{{ 'oauthClients.pkce' | transloco }}</p>
+</app-dialog-shell>
+}
 <app-crud-dialog
     [title]="(editing() ? 'oauthClients.edit' : 'oauthClients.register') | transloco"
     [visible]="visible()"
