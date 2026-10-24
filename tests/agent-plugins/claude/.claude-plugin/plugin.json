@@ -1,0 +1,10 @@
+{
+  "name": "hitkeep-analytics",
+  "version": "0.0.0",
+  "description": "Read-only analytics workflows for explicitly authorized HitKeep sites.",
+  "author": {
+    "name": "HitKeep"
+  },
+  "license": "MIT",
+  "skills": "./skills/"
+}

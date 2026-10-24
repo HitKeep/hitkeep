@@ -732,6 +732,11 @@ export interface FunnelStats {
     overall_conversion_rate: number;
 }
 
+export interface AssistantConnection {
+    enabled: boolean;
+    endpoint?: string;
+}
+
 export interface SystemStatus {
     needs_setup: boolean;
     version: string;

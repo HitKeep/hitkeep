@@ -19,7 +19,7 @@ func (s *service) registerTools(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "hitkeep_list_sites",
 		Title:       "List HitKeep Sites",
-		Description: "List the HitKeep sites this API client can read. Call this first to find the site_id every analytics tool needs.",
+		Description: "List the HitKeep sites authorized for this OAuth grant or API client. Call this first to find the site_id every analytics tool needs.",
 		Annotations: readOnly,
 	}, s.listSites)
 	tools := append(analyticstools.Analytics(), opportunities.ReadTool)
@@ -31,7 +31,7 @@ func (s *service) registerTools(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "hitkeep_get_mcp_help",
 		Title:       "Get HitKeep MCP Help",
-		Description: "Return local MCP usage guidance, token setup, privacy boundaries, date ranges, and filter syntax.",
+		Description: "Return local MCP usage guidance, OAuth and API-client setup, privacy boundaries, date ranges, and filter syntax.",
 		Annotations: readOnly,
 	}, s.getMCPHelp)
 }

@@ -1,4 +1,28 @@
 {
+  "assistants": {
+    "legacy": "Bestaande verbindingen via API-clients met beperkte toegang kunnen nog beschikbaar zijn. Bekijk API-clients voor handmatige configuratie.",
+    "title": "Assistenten",
+    "description": "Verbind je assistent met de websites die je in HitKeep kiest.",
+    "available": "Geconfigureerd voor het instellen van assistenten",
+    "endpoint": "MCP-eindpunt",
+    "copy": "Eindpunt kopiëren",
+    "copying": "Bezig met kopiëren…",
+    "copied": "Eindpunt gekopieerd.",
+    "copyFailed": "Het eindpunt kon niet worden gekopieerd. Selecteer en kopieer het handmatig.",
+    "configurationNote": "Deze configuratie bevestigt niet dat er een assistent is verbonden.",
+    "unavailable": "Het instellen van assistenten is niet beschikbaar op deze instantie. Vraag je beheerder de MCP-configuratie te controleren.",
+    "setupTitle": "Een assistent verbinden",
+    "access": "Assistenten hebben alleen leestoegang tot geaggregeerde gegevens. Kies tijdens het aanmelden met OAuth welke websites je wilt delen; je huidige websitemachtigingen blijven van toepassing.",
+    "setup": "Voeg het MCP-eindpunt toe als aangepaste verbinding in je assistent, meld je aan bij HitKeep en controleer de gevraagde toegang.",
+    "claude": "Claude instellen",
+    "chatgpt": "ChatGPT instellen",
+    "codex": "Codex instellen",
+    "availability": "Aangepaste verbindingen staan los van de optionele installatie van skills of plugins. De beschikbaarheid hangt af van je assistentaccount en netwerktoegang.",
+    "registrationHint": "Als je assistent een geregistreerde client-ID vereist, vraag je beheerder dan de exacte callback-URL te registreren.",
+    "starterTitle": "Probeer een vraag",
+    "starter": "Vergelijk de laatste zeven volledige dagen van mijn website met de zeven dagen daarvoor. Wat is er veranderd en wat blijft onzeker?",
+    "connections": "Toegang van assistenten controleren"
+  },
   "oauth": {
     "connectionDetails": "Verbindingsgegevens",
     "consentTitle": "Een toepassing autoriseren",

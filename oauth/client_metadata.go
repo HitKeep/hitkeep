@@ -240,21 +240,8 @@ func validateClientMetadata(m ClientMetadata, id string, registered bool) error 
 	}
 	seen := make(map[string]bool, len(m.RedirectURIs))
 	for _, raw := range m.RedirectURIs {
-		u, err := url.Parse(raw)
-		if err != nil || len(raw) > 2048 || u.Hostname() == "" || u.Opaque != "" || u.User != nil || u.Fragment != "" || u.RawFragment != "" || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) || seen[raw] {
+		if _, err := callbackURL(raw); err != nil || seen[raw] {
 			return errors.New("invalid OAuth client redirect")
-		}
-		if u.Scheme != "https" {
-			ip, e := netip.ParseAddr(u.Hostname())
-			if !registered || u.Scheme != "http" || e != nil || !ip.IsLoopback() || u.Port() == "" {
-				return errors.New("OAuth redirect must be HTTPS or an explicit registered native loopback")
-			}
-		}
-		if port := u.Port(); port != "" {
-			n, e := strconv.Atoi(port)
-			if e != nil || n < 1 || n > 65535 {
-				return errors.New("invalid OAuth redirect port")
-			}
 		}
 		seen[raw] = true
 	}
@@ -267,25 +254,54 @@ func validateClientMetadata(m ClientMetadata, id string, registered bool) error 
 	return nil
 }
 
+// callbackURL validates browser destinations independently of HTTPS-only metadata fetching.
+func callbackURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 2048 || u.Hostname() == "" || u.Opaque != "" || u.User != nil || u.Fragment != "" || u.RawFragment != "" || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) || strings.Contains(u.Host, "*") || strings.HasSuffix(u.Host, ":") || u.String() != raw {
+		return nil, errors.New("invalid OAuth client redirect")
+	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return nil, errors.New("invalid OAuth redirect port")
+		}
+	}
+	if u.Scheme == "https" {
+		return u, nil
+	}
+	ip, ipErr := netip.ParseAddr(u.Hostname())
+	if u.Scheme != "http" || (u.Hostname() != "localhost" && (ipErr != nil || !ip.IsLoopback() || ip.Zone() != "")) {
+		return nil, errors.New("OAuth redirect must be HTTPS or an explicit native loopback")
+	}
+	host := u.Hostname()
+	if u.Port() != "" {
+		host = net.JoinHostPort(host, u.Port())
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if u.Host != host {
+		return nil, errors.New("invalid native loopback host")
+	}
+	return u, nil
+}
+
 func redirectAllowed(m ClientMetadata, redirect string) bool {
+	requested, err := callbackURL(redirect)
+	if err != nil {
+		return false
+	}
 	if slices.Contains(m.RedirectURIs, redirect) {
 		return true
 	}
-	requested, err := url.Parse(redirect)
-	if err != nil || requested.Scheme != "http" || requested.User != nil || requested.Fragment != "" || strings.Contains(redirect, "#") || requested.String() != redirect {
-		return false
-	}
-	ip, err := netip.ParseAddr(requested.Hostname())
-	port, portErr := strconv.Atoi(requested.Port())
-	if err != nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
+	if requested.Scheme != "http" || requested.Port() == "" {
 		return false
 	}
 	for _, raw := range m.RedirectURIs {
-		registered, err := url.Parse(raw)
-		// Only operator-configured clients can register HTTP loopback callbacks.
+		registered, err := callbackURL(raw)
 		if err != nil || registered.Scheme != "http" || registered.Hostname() != requested.Hostname() {
 			continue
 		}
+		// Native clients choose a local listener port; every other byte stays declared.
 		candidate := requested.Clone()
 		candidate.Host = registered.Host
 		if candidate.String() == raw {

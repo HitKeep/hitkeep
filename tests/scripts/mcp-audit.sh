@@ -107,6 +107,7 @@ assertCache(discover.result, "server/discover", 300000);
 assert(!tools.error, `tools/list failed: ${JSON.stringify(tools.error)}`);
 assert(Array.isArray(tools.result?.tools), "tools/list did not return result.tools");
 assertCache(tools.result, "tools/list", 300000);
+assert(tools.result.tools.length === expectedTools.size, "unexpected tool inventory size");
 for (const name of expectedTools) {
   assert(tools.result.tools.some((tool) => tool.name === name), `missing tool ${name}`);
 }
@@ -121,6 +122,17 @@ for (const tool of tools.result.tools) {
     assert(tool.annotations?.openWorldHint === false, `tool ${tool.name} must be closed-world`);
   }
   assert(!forbidden.some((part) => tool.name.includes(part)), `forbidden tool surface ${tool.name}`);
+}
+
+const eventTool = tools.result.tools.find((tool) => tool.name === "hitkeep_get_event_breakdown");
+assert(eventTool.inputSchema.required?.includes("event_name"), "event inspection must require event_name");
+assert(!eventTool.inputSchema.required?.includes("property_key"), "property_key must be optional for discovery");
+const propertyKeyType = eventTool.inputSchema.properties?.property_key?.type;
+const optionalString = propertyKeyType === "string" || (Array.isArray(propertyKeyType) && propertyKeyType.length === 2 && propertyKeyType.includes("string") && propertyKeyType.includes("null"));
+assert(optionalString, "property_key must be an optional string (nullable on MCP)");
+assert(!eventTool.outputSchema.required?.includes("property_keys"), "property_keys must be optional outside discovery");
+for (const field of ["breakdown", "property_keys", "property_keys_truncated"]) {
+  assert(eventTool.outputSchema.properties?.[field], `event output missing ${field}`);
 }
 
 assert(!resources.error, `resources/list failed: ${JSON.stringify(resources.error)}`);

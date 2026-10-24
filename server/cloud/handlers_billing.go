@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,8 +120,6 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		stripe:   newStripeSDKClient(ctx.Config.StripeSecretKey),
 		webhooks: stripeWebhookSDK{},
 	}
-
-	h.registerDiscoveryRoutes(mux)
 
 	mux.HandleFunc("POST /api/cloud/signup", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
@@ -494,7 +493,7 @@ func (h *handler) handleListCloudPlans() http.HandlerFunc {
 						if cachedPrices[code] == nil {
 							cachedPrices[code] = make(map[string]api.CloudPlanPrice)
 						}
-						cachedPrices[code][interval] = api.CloudPlanPrice{AmountMinor: price.AmountMinor, Currency: currency}
+						cachedPrices[code][interval] = api.CloudPlanPrice{AmountMinor: price.AmountMinor, Currency: currency, PurchaseReviewURL: cloudPurchaseReviewURL(h.ctx.Config.PublicURL, code, interval)}
 					}
 				}
 			}
@@ -509,4 +508,21 @@ func (h *handler) handleListCloudPlans() http.HandlerFunc {
 
 		shared.WriteJSON(r.Context(), w, http.StatusOK, response)
 	}
+}
+
+func cloudPurchaseReviewURL(rawBase, code, interval string) string {
+	base, err := url.Parse(strings.TrimSpace(rawBase))
+	if err != nil || base.User != nil || base.Hostname() == "" || (base.Scheme != "https" && base.Scheme != "http") || base.RawQuery != "" || base.ForceQuery || strings.Contains(rawBase, "#") || strings.HasSuffix(base.Host, ":") {
+		return ""
+	}
+	if strings.Contains(base.Hostname(), ":") && !strings.HasPrefix(base.Host, "[") {
+		return ""
+	}
+	if port := base.Port(); port != "" {
+		value, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || value == 0 {
+			return ""
+		}
+	}
+	return appurl.Path(base.String(), "/admin/team") + "?" + url.Values{"purchase": {"review"}, "plan": {code}, "billing": {interval}}.Encode()
 }

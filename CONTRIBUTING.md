@@ -206,6 +206,12 @@ The canonical contributor skills live under [`.agents/skills`](./.agents/skills)
 
 These are normal publishable skill bodies, not generated proxies. Use callable local developer MCP operations for every covered action. Diagnose and report MCP unavailability, then obtain explicit user approval before using an equivalent structured CLI fallback. The separate [`skills/`](./skills/) directory is the end-user analytics pack and supplies transport-neutral procedures to HitKeep Ask AI.
 
+## Product Assistant Packages
+
+The end-user analytics pack in [`skills/`](./skills/README.md) is separate from contributor tooling. [`tests/agent-plugins`](./tests/agent-plugins/README.md) holds offline Claude and OpenAI manifest fixtures and review scenarios. Existing skill tests assemble temporary bundles containing regular copies of exactly the five canonical product skills and references, plus README and LICENSE; no second maintained skill tree or packaging command is needed.
+
+A package does not grant data access. Use the instance's Assistants page and scoped OAuth or existing API-client setup, then verify the intended client separately. Fixture checks do not establish a working installation, live model safety, directory eligibility, or a public listing. Keep external setup text out of the five transport-neutral procedures embedded by Ask AI.
+
 ## Documentation Authority
 
 Development information has one owner:

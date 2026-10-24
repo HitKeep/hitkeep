@@ -45,7 +45,7 @@ func TestClientMetadataExactIdentityMethodsAndRedirects(t *testing.T) {
 		func(m *ClientMetadata) { m.ID = "https://evil.test/client" },
 		func(m *ClientMetadata) { m.RedirectURIs = []string{"https://example.test/#fragment"} },
 		func(m *ClientMetadata) { m.RedirectURIs = []string{"https://user:password@example.test/callback"} },
-		func(m *ClientMetadata) { m.RedirectURIs = []string{"http://127.0.0.1:1234/callback"} },
+		func(m *ClientMetadata) { m.RedirectURIs = []string{"http://192.168.1.1:1234/callback"} },
 		func(m *ClientMetadata) { m.AuthMethods = []string{"private_key_jwt"} },
 		func(m *ClientMetadata) { m.Name = "Example\nspoof" },
 	} {
@@ -64,6 +64,65 @@ func TestClientMetadataExactIdentityMethodsAndRedirects(t *testing.T) {
 	}
 	if !redirectAllowed(good, good.RedirectURIs[0]) {
 		t.Fatal("exact redirect rejected")
+	}
+}
+
+func TestClientMetadataNativeCallbackDeclarations(t *testing.T) {
+	for _, tt := range []struct {
+		redirect string
+		valid    bool
+	}{
+		{"https://example.test/callback?x=1", true},
+		{"http://localhost/callback", true},
+		{"http://localhost:1234/callback", true},
+		{"http://127.0.0.1/callback", true},
+		{"http://127.0.0.1:1234/callback", true},
+		{"http://[::1]/callback", true},
+		{"http://[::1]:65535/callback", true},
+		{"http://localhost:/callback", false},
+		{"http://127.0.0.1:/callback", false},
+		{"http://[::1]:/callback", false},
+		{"http://localhost:0/callback", false},
+		{"http://localhost:65536/callback", false},
+		{"http://localhost:abc/callback", false},
+		{"http://localhost:+1234/callback", false},
+		{"http://localhost:-1/callback", false},
+		{"http://localhost:1234:5678/callback", false},
+		{"http://localhost:999999999999999999999/callback", false},
+		{"http://[localhost]:1234/callback", false},
+		{"http://[::1%25lo0]:1234/callback", false},
+		{"http://localhost./callback", false},
+		{"http://LOCALHOST/callback", false},
+		{"http://app.localhost/callback", false},
+		{"http://*.localhost/callback", false},
+		{"http://192.168.1.1:1234/callback", false},
+		{"http://example.test:1234/callback", false},
+		{"http://user@localhost:1234/callback", false},
+		{"http://localhost:1234/callback#", false},
+		{"http://localhost:1234/callback#fragment", false},
+		{"http://localhost:1234/call\\back", false},
+		{"http://localhost:1234/call back", false},
+		{"http:localhost:1234/callback", false},
+		{"https://example.test:/callback", false},
+		{"https://example.test:0/callback", false},
+		{"https://example.test:65536/callback", false},
+	} {
+		t.Run(tt.redirect, func(t *testing.T) {
+			m := ClientMetadata{ID: "https://example.test/client", Name: "Native", RedirectURIs: []string{tt.redirect}, AuthMethod: "none"}
+			for _, configured := range []bool{false, true} {
+				if err := validateClientMetadata(m, m.ID, configured); (err == nil) != tt.valid {
+					t.Errorf("configured=%v: validation error=%v, want valid=%v", configured, err, tt.valid)
+				}
+			}
+			if redirectAllowed(m, tt.redirect) != tt.valid {
+				t.Error("exact matching bypassed callback syntax validation")
+			}
+			if strings.HasPrefix(tt.redirect, "http:") {
+				if _, err := metadataURL(tt.redirect); err == nil {
+					t.Error("callback exception permitted HTTP metadata retrieval")
+				}
+			}
+		})
 	}
 }
 

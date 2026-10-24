@@ -259,15 +259,15 @@ func openAPIV1CorePaths() map[string]any {
 				}),
 		},
 		"/api/cloud/plans": map[string]any{
-			"get": cloudOp("List Cloud plans", "Public managed Cloud plan catalog. Configured paid prices are resolved from Stripe; a missing price is omitted rather than estimated.", nil, nil, nil,
+			"get": cloudOp("List Cloud plans", "Public managed Cloud plan catalog. Configured paid prices are resolved from Stripe; a missing price is omitted rather than estimated. Available paid offers may include a canonical purchase review URL for human approval; opening it does not create checkout or complete payment.", nil, nil, nil,
 				map[string]any{"200": jsonSchemaResp("Cloud plan catalog", map[string]any{
 					"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 						"code":         map[string]any{"type": "string", "enum": []string{"free", "pro", "business"}},
 						"name":         map[string]any{"type": "string"},
 						"entitlements": map[string]any{"type": "object", "additionalProperties": true},
 						"prices": map[string]any{"type": "object", "properties": map[string]any{
-							"monthly": map[string]any{"type": "object", "properties": map[string]any{"amount_minor": map[string]any{"type": "integer", "minimum": 1}, "currency": map[string]any{"type": "string"}}, "required": []string{"amount_minor", "currency"}},
-							"annual":  map[string]any{"type": "object", "properties": map[string]any{"amount_minor": map[string]any{"type": "integer", "minimum": 1}, "currency": map[string]any{"type": "string"}}, "required": []string{"amount_minor", "currency"}},
+							"monthly": map[string]any{"type": "object", "properties": map[string]any{"amount_minor": map[string]any{"type": "integer", "minimum": 1}, "currency": map[string]any{"type": "string"}, "purchase_review_url": map[string]any{"type": "string", "format": "uri", "description": "Canonical Cloud app page where an authorized user reviews this plan and billing interval before starting checkout; opening this URL does not create a checkout session or complete a purchase."}}, "required": []string{"amount_minor", "currency"}},
+							"annual":  map[string]any{"type": "object", "properties": map[string]any{"amount_minor": map[string]any{"type": "integer", "minimum": 1}, "currency": map[string]any{"type": "string"}, "purchase_review_url": map[string]any{"type": "string", "format": "uri", "description": "Canonical Cloud app page where an authorized user reviews this plan and billing interval before starting checkout; opening this URL does not create a checkout session or complete a purchase."}}, "required": []string{"amount_minor", "currency"}},
 						}},
 					}, "required": []string{"code", "name", "entitlements"}},
 				})}),

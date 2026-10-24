@@ -2,7 +2,7 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { computed, inject, signal, Service } from '@angular/core';
 import { finalize, tap, timeout } from 'rxjs';
 
-import { Site, SystemStatus, UserTeamsResponse } from '@models/analytics.types';
+import { AssistantConnection, Site, SystemStatus, UserTeamsResponse } from '@models/analytics.types';
 import { SKIP_AUTH_REDIRECT } from '@core/interceptors/auth.interceptor';
 import { SiteService } from '@features/sites/services/site.service';
 import { AuthSession, AuthService } from '@services/auth.service';
@@ -20,6 +20,7 @@ export interface DashboardBootstrap {
     permissions: UserPermissions;
     sites: Site[];
     status: SystemStatus;
+    assistants?: AssistantConnection;
 }
 
 @Service()
@@ -33,6 +34,7 @@ export class DashboardBootstrapService {
     private sites = inject(SiteService);
 
     readonly status = signal<SystemStatus | null>(null);
+    readonly assistants = signal<AssistantConnection>({ enabled: false });
     readonly isLoading = signal(false);
     readonly cloudHosted = computed(() => Boolean(this.status()?.cloud?.hosted));
     readonly cloudSupportUrl = computed(() => this.status()?.cloud?.support_url?.trim() ?? '');
@@ -55,5 +57,6 @@ export class DashboardBootstrapService {
         this.permissions.applyPermissions(bootstrap.permissions);
         this.sites.applySites(bootstrap.sites);
         this.status.set(bootstrap.status);
+        this.assistants.set(bootstrap.assistants ?? { enabled: false });
     }
 }

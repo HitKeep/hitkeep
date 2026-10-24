@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "hitkeep-analytics",
+  "version": "0.0.0",
+  "description": "Read-only analytics workflows for explicitly authorized HitKeep sites.",
+  "author": {
+    "name": "HitKeep"
+  },
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "HitKeep Analytics",
+        "shortDescription": "Analyze authorized HitKeep site aggregates",
+        "capabilities": [
+          "Read"
+        ]
+      }
+    }
+  }
+}

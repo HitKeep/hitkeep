@@ -87,7 +87,19 @@ func (h *handler) userBootstrapResponse(r *http.Request, userID uuid.UUID) (api.
 		Permissions: permissions,
 		Sites:       sites,
 		Status:      status,
+		Assistants:  h.assistantConnectionResponse(),
 	}, nil
+}
+
+func (h *handler) assistantConnectionResponse() api.AssistantConnection {
+	if h.ctx.Config == nil || !h.ctx.Config.MCPEnabled || h.ctx.Store == nil || (h.ctx.Cluster != nil && !h.ctx.Cluster.IsLeader()) {
+		return api.AssistantConnection{}
+	}
+	connection := api.AssistantConnection{Enabled: true}
+	if h.ctx.OAuthProvider != nil {
+		connection.Endpoint = h.ctx.OAuthProvider.Resource("mcp")
+	}
+	return connection
 }
 
 func (h *handler) authSessionResponse(r *http.Request, userID uuid.UUID) (api.AuthSession, error) {
