@@ -14,14 +14,15 @@ import (
 )
 
 // readmeScreenshots are the docs screenshots mirrored into the repository
-// README assets by `hk screenshot docs --sync`. Hand-made README images such
-// as .github/assets/mcp.png are not captured and stay untouched.
+// README assets by `hk screenshot docs --sync`.
 var readmeScreenshots = []string{
 	"dashboard-overview.png",
 	"analytics-ecommerce.png",
 	"analytics-search-console.png",
 	"analytics-ai-visibility.png",
+	"analytics-ai-agents-traffic.png",
 	"feature-ask-ai-answer.png",
+	"mcp.png",
 }
 
 // docsScreenshotTargets are the optional subsets the curated script supports.
