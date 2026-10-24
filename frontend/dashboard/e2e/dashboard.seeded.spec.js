@@ -262,6 +262,9 @@ test("dashboard switches date ranges without tearing the KPIs and chart down", a
     await selectSeededSite(page);
     await selectRange(page, SEEDED_EVENT_RANGE);
 
+    // Visible content may still belong to the previous range while its replacement loads.
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true }).first();
+    await expect(refresh).toBeEnabled();
     const chartCanvas = page.locator("[echarts] canvas").first();
     await expect(chartCanvas).toBeVisible();
     const kpiValue = page.locator("app-kpi-card app-animated-number").first();
@@ -274,6 +277,7 @@ test("dashboard switches date ranges without tearing the KPIs and chart down", a
     await kpiValue.evaluate((node) => (window.__hkKpiValue = node));
 
     await selectRange(page, ALTERNATE_RANGE);
+    await expect(refresh).toBeEnabled();
     await expect(page.locator("app-kpi-card p-skeleton")).toHaveCount(0);
     await expect(chartCanvas).toBeVisible();
 
