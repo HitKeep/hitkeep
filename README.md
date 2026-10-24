@@ -20,9 +20,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/PascaleBeier/hitkeep/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/PascaleBeier/hitkeep?sort=semver"></a>
-  <a href="https://github.com/PascaleBeier/hitkeep/actions/workflows/ci.yml"><img alt="Continuous integration status" src="https://github.com/PascaleBeier/hitkeep/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/PascaleBeier/hitkeep"></a>
+  <a href="https://github.com/HitKeep/hitkeep/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/HitKeep/hitkeep?sort=semver"></a>
+  <a href="https://github.com/HitKeep/hitkeep/actions/workflows/ci.yml"><img alt="Continuous integration status" src="https://github.com/HitKeep/hitkeep/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/HitKeep/hitkeep"></a>
   <a href="https://hub.docker.com/r/pascalebeier/hitkeep"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/pascalebeier/hitkeep?logo=docker&label=docker%20pulls"></a>
   <a href="https://www.bestpractices.dev/projects/11990"><img alt="OpenSSF Best Practices badge" src="https://www.bestpractices.dev/projects/11990/badge"></a>
 </p>
@@ -46,7 +46,7 @@ HitKeep is web-focused. It favors aggregate traffic and conversion evidence over
 On Apple silicon macOS or x86_64 Linux, install HitKeep with Homebrew:
 
 ```bash
-brew install PascaleBeier/hitkeep/hitkeep
+brew install HitKeep/hitkeep/hitkeep
 hitkeep --version
 ```
 
@@ -56,8 +56,8 @@ For a production-oriented self-hosted setup, download the Docker Compose file an
 
 ```bash
 mkdir hitkeep && cd hitkeep
-curl -fsSLo compose.yml https://raw.githubusercontent.com/PascaleBeier/hitkeep/main/examples/compose.yml
-curl -fsSLo .env https://raw.githubusercontent.com/PascaleBeier/hitkeep/main/examples/.env.example
+curl -fsSLo compose.yml https://raw.githubusercontent.com/HitKeep/hitkeep/main/examples/compose.yml
+curl -fsSLo .env https://raw.githubusercontent.com/HitKeep/hitkeep/main/examples/.env.example
 ```
 
 Open `.env` and replace `paste-the-generated-value-here` with a long random value from your password manager. Then start HitKeep:
@@ -68,7 +68,7 @@ docker compose up -d
 
 Open [http://localhost:8080](http://localhost:8080) and create the first account. Keep `.env` private and retain the same secret across restarts.
 
-Before exposing an instance publicly, follow the [Docker Compose guide](https://hitkeep.com/guides/installation/docker-compose/) for HTTPS and trusted proxies, then review [backups](https://hitkeep.com/guides/data/backups-and-restore/) and the [configuration reference](https://hitkeep.com/reference/configuration/). For a native Linux service, download an AMD64 or ARM64 binary from [GitHub Releases](https://github.com/PascaleBeier/hitkeep/releases) and follow the [binary installation guide](https://hitkeep.com/guides/installation/binary/).
+Before exposing an instance publicly, follow the [Docker Compose guide](https://hitkeep.com/guides/installation/docker-compose/) for HTTPS and trusted proxies, then review [backups](https://hitkeep.com/guides/data/backups-and-restore/) and the [configuration reference](https://hitkeep.com/reference/configuration/). For a native Linux service, download an AMD64 or ARM64 binary from [GitHub Releases](https://github.com/HitKeep/hitkeep/releases) and follow the [binary installation guide](https://hitkeep.com/guides/installation/binary/).
 
 ## Track Your First Site
 
@@ -115,8 +115,8 @@ Run `./hk setup`, then start seeded development with `./hk dev --seed` or use `.
 </details>
 
 - **Operate:** [Installation](https://hitkeep.com/guides/installation/) · [Configuration](https://hitkeep.com/reference/configuration/) · [REST API](https://hitkeep.com/api/) · [Goals](https://hitkeep.com/guides/analytics/goals/) · [Funnels](https://hitkeep.com/guides/analytics/funnels/)
-- **Evaluate:** [Comparison library](https://hitkeep.com/vs/) · [Compliance](https://hitkeep.com/compliance/overview/) · [Releases](https://github.com/PascaleBeier/hitkeep/releases) · [Changelog](./CHANGELOG.md)
-- **Contribute:** [Contributor guide](./CONTRIBUTING.md) · [Security policy](./SECURITY.md) · [Issues](https://github.com/PascaleBeier/hitkeep/issues)
+- **Evaluate:** [Comparison library](https://hitkeep.com/vs/) · [Compliance](https://hitkeep.com/compliance/overview/) · [Releases](https://github.com/HitKeep/hitkeep/releases) · [Changelog](./CHANGELOG.md)
+- **Contribute:** [Contributor guide](./CONTRIBUTING.md) · [Security policy](./SECURITY.md) · [Issues](https://github.com/HitKeep/hitkeep/issues)
 - **Support open source:** [Fund HitKeep on GitHub Sponsors](https://github.com/sponsors/PascaleBeier) or [make a one-time contribution](https://www.paypal.me/kreuztal).
 
 ## License

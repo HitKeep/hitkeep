@@ -28,7 +28,7 @@ Note legali: https://hitkeep.com/legal/imprint/
 Informativa sulla privacy: https://hitkeep.com/legal/privacy-policy/
 
 HitKeep sui social media:
-GitHub: https://github.com/pascalebeier/hitkeep
+GitHub: https://github.com/HitKeep/hitkeep
 LinkedIn: https://www.linkedin.com/company/hitkeep
 X: https://x.com/gethitkeep
 Bluesky: https://bsky.app/profile/hitkeep.com

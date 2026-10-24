@@ -10,17 +10,13 @@ HitKeep follows the standard Helm pattern used by major charts: the chart emits 
 
 ### Install (OCI via GHCR)
 
-```
-helm install hitkeep oci://ghcr.io/pascalebeier/charts/hitkeep --version 2.14.2 # x-release-please-version
-```
+Use the [Kubernetes guide](https://hitkeep.com/guides/installation/kubernetes/) for commands matching the current published release.
+
+Future chart publications use `oci://ghcr.io/hitkeep/charts/hitkeep`. Releases through `2.14.2` remain available from `oci://ghcr.io/pascalebeier/charts/hitkeep`.
 
 ### Minimal values
 
 ```
-image:
-  repository: ghcr.io/pascalebeier/hitkeep
-  tag: "2.14.2" # x-release-please-version
-
 env:
   HITKEEP_PUBLIC_URL: "https://analytics.example.com"
 

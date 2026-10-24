@@ -220,7 +220,7 @@
           <span style="font-weight: 600">{{ t "footer.social.profiles" }}</span>
           <br />
           <a
-            href="https://github.com/pascalebeier/hitkeep"
+            href="https://github.com/HitKeep/hitkeep"
             style="color: #334155; text-decoration: none; font-weight: 600"
             >{{ t "footer.social.github" }}</a
           >

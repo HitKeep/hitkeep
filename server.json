@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.PascaleBeier/hitkeep",
+  "name": "io.github.HitKeep/hitkeep",
   "title": "HitKeep",
   "description": "Stateless 2026-07-28 read-only MCP server for aggregate HitKeep analytics and official docs.",
   "icons": [
@@ -14,7 +14,7 @@
   ],
   "websiteUrl": "https://hitkeep.com/use-cases/read-only-mcp-server-web-analytics/",
   "repository": {
-    "url": "https://github.com/pascalebeier/hitkeep",
+    "url": "https://github.com/HitKeep/hitkeep",
     "source": "github"
   },
   "version": "2.14.2",
