@@ -27,7 +27,7 @@
   <a href="https://www.bestpractices.dev/projects/11990"><img alt="OpenSSF Best Practices badge" src="https://www.bestpractices.dev/projects/11990/badge"></a>
 </p>
 
-![HitKeep dashboard showing setup progress, traffic metrics, conversion reports, and analytics navigation](./.github/assets/dashboard-overview.png)
+![HitKeep dashboard showing traffic metrics, a 30-day comparison chart, and analytics navigation](./.github/assets/dashboard-overview.png)
 
 ## Why HitKeep
 
@@ -83,7 +83,7 @@ Pageviews and supported automatic interaction events—outbound clicks, file dow
 ## Explore HitKeep
 
 <details>
-<summary>See AI visibility, ecommerce, Search Console, and Ask AI</summary>
+<summary>See AI visibility, ecommerce, Search Console, Ask AI, and Assistants</summary>
 
 ### AI visibility
 
@@ -100,6 +100,10 @@ Pageviews and supported automatic interaction events—outbound clicks, file dow
 ### Ask AI
 
 ![HitKeep Ask AI answer with completed analytics tools, cited evidence, a table, and a safe dashboard action](./.github/assets/feature-ask-ai-answer.png)
+
+### Assistants
+
+![HitKeep Assistants setup showing the MCP endpoint, connection guides, and OAuth access controls](./.github/assets/mcp.png)
 
 </details>
 
