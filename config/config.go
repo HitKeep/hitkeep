@@ -108,6 +108,8 @@ type Config struct {
 	S3URLStyle        string `env:"HITKEEP_S3_URL_STYLE"         default:""         desc:"S3 URL style: path or vhost"`
 	S3UseSSL          bool   `env:"HITKEEP_S3_USE_SSL"           default:"true"     desc:"S3 use SSL (set false for local MinIO over HTTP)"`
 
+	OAuthClients string `env:"HITKEEP_OAUTH_CLIENTS" default:"[]" desc:"Pre-registered public OAuth clients as a JSON array with exact redirect URIs; client secrets are not supported" sensitive:"redact"`
+
 	MCPEnabled          bool   `env:"HITKEEP_MCP_ENABLED"            default:"false"  desc:"Enable the optional leader-only MCP server"`
 	MCPPath             string `env:"HITKEEP_MCP_PATH"               default:"/mcp"   desc:"MCP server HTTP path on the main HitKeep HTTP server"`
 	MCPMaxRangeDays     int    `env:"HITKEEP_MCP_MAX_RANGE_DAYS"     default:"366"    desc:"Maximum analytics date range in days for MCP tools"`

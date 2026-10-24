@@ -259,7 +259,7 @@ jobs:
       - name: Login to GHCR
         env:
           GHCR_ACTOR: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHT }}
+          GHCR_TOKEN: ${{ github.token }}
         run: echo "${GHCR_TOKEN}" | helm registry login ghcr.io -u "${GHCR_ACTOR}" --password-stdin
 
       - name: Package chart
@@ -272,7 +272,7 @@ jobs:
         env:
           VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          helm push "hitkeep-${VERSION}.tgz" "oci://ghcr.io/pascalebeier/charts"
+          helm push "hitkeep-${VERSION}.tgz" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
 
   verify-tracker-package:
     name: Verify @hitkeep/tracker release package
@@ -330,7 +330,7 @@ jobs:
           mv "$tarball" verified-tracker.tgz
 
       - name: Upload verified tracker artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tracker-package-${{ needs.release-please.outputs.version }}
           path: frontend/tracker/verified-tracker.tgz
@@ -364,9 +364,9 @@ jobs:
       - name: Dispatch and verify exact documentation attestation
         id: dispatch
         env:
-          DOCS_REPOSITORY: PascaleBeier/hitkeep-docs
+          DOCS_REPOSITORY: HitKeep/hitkeep-docs
           # Finite v1→v2 transition: v1 remains receiver-only for in-flight callers.
-          DOCS_WORKFLOW_SHA256: 84296ee4afc6a75645d5b96339828a1f47aedd699e0506d01865b20eabdf2ac8
+          DOCS_WORKFLOW_SHA256: 0fc53f440603336106c1a1cf8c878899f2b14dae43c1cde9cbf03524161a69c9
           GH_TOKEN: ${{ secrets.HITKEEP_DOCS_DISPATCH_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         shell: bash
@@ -446,7 +446,7 @@ jobs:
           fi
           gh api "repos/$DOCS_REPOSITORY/check-suites/$check_suite_id" > "$workdir/docs-check-suite.json"
           jq -e --argjson run_id "$docs_run_id" --arg docs_head_sha "$docs_head_sha" '
-            .id == $run_id and .repository.full_name == "PascaleBeier/hitkeep-docs" and
+            .id == $run_id and .repository.full_name == "HitKeep/hitkeep-docs" and
             .path == ".github/workflows/sync-hitkeep-release.yml" and .event == "workflow_dispatch" and
             .head_branch == "main" and .head_sha == $docs_head_sha and .status == "completed" and .conclusion == "success"
           ' "$workdir/docs-run.json" >/dev/null
@@ -476,10 +476,10 @@ jobs:
             --arg docs_base_sha "$docs_head_sha" --arg docs_workflow_sha256 "$docs_workflow_sha256" \
             --argjson docs_run_id "$docs_run_id" --argjson docs_run_attempt "$docs_run_attempt" '
             .schema_version == "hitkeep.docs-attestation/v2" and
-            .source.repository == "PascaleBeier/hitkeep" and .source.tag == $tag and
+            .source.repository == "HitKeep/hitkeep" and .source.tag == $tag and
             .source.commit == $source_commit and .source.run_id == $source_run_id and
             .source.catalog_sha256 == $catalog_sha256 and .source.example_sha256 == $example_sha256 and
-            .source.manifest_sha256 == $manifest_sha256 and .docs.repository == "PascaleBeier/hitkeep-docs" and
+            .source.manifest_sha256 == $manifest_sha256 and .docs.repository == "HitKeep/hitkeep-docs" and
             .docs.base_sha == $docs_base_sha and .docs.workflow_sha256 == $docs_workflow_sha256 and
             .docs.run_id == $docs_run_id and .docs.run_attempt == $docs_run_attempt and
             (.docs | has("attestation_artifact_sha256") | not)
@@ -516,7 +516,7 @@ jobs:
       - uses: $/.github/actions/setup-node-npm
 
       - name: Download verified tracker artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: tracker-package-${{ needs.release-please.outputs.version }}
           path: tracker-package
@@ -640,7 +640,7 @@ jobs:
       - name: Dispatch hitkeep-docs release synchronization
         id: dispatch
         env:
-          DOWNSTREAM_REPOSITORY: PascaleBeier/hitkeep-docs
+          DOWNSTREAM_REPOSITORY: HitKeep/hitkeep-docs
           GH_TOKEN: ${{ secrets.HITKEEP_DOCS_DISPATCH_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
           SOURCE_WORKFLOW_SHA256: ${{ needs.docs-attestation.outputs.source_workflow_sha256 }}
@@ -731,7 +731,7 @@ jobs:
             exit 1
           fi
           jq -e --argjson run_id "$downstream_run_id" --argjson run_attempt "$downstream_run_attempt" --arg base "$DOCS_BASE_SHA" '
-            .id == $run_id and .run_attempt == $run_attempt and .repository.full_name == "PascaleBeier/hitkeep-docs" and
+            .id == $run_id and .run_attempt == $run_attempt and .repository.full_name == "HitKeep/hitkeep-docs" and
             .path == ".github/workflows/sync-hitkeep-release.yml" and .event == "workflow_dispatch" and
             .head_branch == "main" and .head_sha == $base and .status == "completed" and .conclusion == "success"
           ' downstream-run.json >/dev/null
@@ -757,11 +757,11 @@ jobs:
             --argjson docs_run_id "$DOCS_RUN_ID" --argjson docs_run_attempt "$DOCS_RUN_ATTEMPT" \
             --argjson receipt_run_id "$downstream_run_id" --argjson receipt_run_attempt "$downstream_run_attempt" '
             .schema_version == "hitkeep.docs-postpublication-receipt/v1" and
-            .source.repository == "PascaleBeier/hitkeep" and .source.tag == $tag and
+            .source.repository == "HitKeep/hitkeep" and .source.tag == $tag and
             .source.run_id == $source_run_id and .source.commit == $source_commit and
             .source.workflow_sha256 == $source_workflow_sha256 and .source.catalog_sha256 == $catalog_sha256 and
             .source.example_sha256 == $example_sha256 and .source.manifest_sha256 == $manifest_sha256 and
-            .docs.repository == "PascaleBeier/hitkeep-docs" and .docs.base_sha == $docs_base_sha and
+            .docs.repository == "HitKeep/hitkeep-docs" and .docs.base_sha == $docs_base_sha and
             .docs.workflow_sha256 == $docs_workflow_sha256 and .docs.prepublication_run_id == $docs_run_id and
             .docs.prepublication_run_attempt == $docs_run_attempt and
             .docs.prepublication_attestation_artifact_sha256 == $docs_attestation_artifact_sha256 and
@@ -807,10 +807,10 @@ jobs:
             echo "missing exact release checksum for $artifact" >&2
             exit 1
           fi
-          artifact_url="https://github.com/PascaleBeier/hitkeep/releases/download/${TAG}/${artifact}"
+          artifact_url="https://github.com/HitKeep/hitkeep/releases/download/${TAG}/${artifact}"
 
           gh workflow run release-deploy.yml \
-            --repo PascaleBeier/hitkeep-infra \
+            --repo HitKeep/hitkeep-infra \
             --ref main \
             -f stack=both \
             -f artifact_url="${artifact_url}" \

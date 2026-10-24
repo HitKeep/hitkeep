@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { setupGuard } from '@guards/setup-guard';
 import { authGuard } from '@guards/auth-guard';
+import { privateFrameGuard } from '@guards/private-frame-guard';
 import { capabilityGuard } from '@guards/capability-guard';
 import { cloudSignupGuard } from '@guards/cloud-signup-guard';
 import { importExportDefaultGuard } from '@pages/import-export/import-export-default.guard';
@@ -12,6 +13,12 @@ import type { DashboardTitleScope } from '@services/dashboard-title.service';
 const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') => ({ titleKey, titleScope });
 
 export const routes: Routes = [
+    {
+        path: 'oauth/consent',
+        loadComponent: () => import('@pages/oauth/oauth-consent').then((m) => m.OAuthConsentPage),
+        canActivate: [setupGuard, authGuard],
+        data: titleData('oauth.consentTitle')
+    },
     {
         path: 'error',
         loadComponent: () => import('@pages/error/application-error-page').then((m) => m.ApplicationErrorPage),
@@ -314,6 +321,12 @@ export const routes: Routes = [
                 ]
             },
             {
+                path: 'integration/oauth-clients',
+                loadComponent: () => import('@pages/integration/oauth-clients/oauth-clients').then((m) => m.OAuthClientsPage),
+                canActivate: [capabilityGuard],
+                data: { ...titleData('oauthClients.title', 'team'), activeTeamCapability: TEAM_CAPABILITIES.manageApiClients }
+            },
+            {
                 path: 'integration/api-reference',
                 pathMatch: 'full',
                 redirectTo: '/integration/api-clients/reference'
@@ -479,3 +492,8 @@ export const routes: Routes = [
         }
     }
 ];
+
+for (const route of routes) {
+    route.canActivate = [privateFrameGuard, ...(route.canActivate ?? [])];
+    route.canActivateChild = [privateFrameGuard, ...(route.canActivateChild ?? [])];
+}

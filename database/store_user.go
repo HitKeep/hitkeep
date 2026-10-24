@@ -320,6 +320,14 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email s
 
 	shadowUserID := uuid.New()
 	shadowEmail := fmt.Sprintf("__shadow_%s@hitkeep.invalid", strings.ReplaceAll(shadowUserID.String(), "-", ""))
+	cleanupShadow := func() error {
+		return runStoreTx(ctx, s.db, func(tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM users WHERE id = ?", shadowUserID); err != nil {
+				return fmt.Errorf("could not cleanup shadow user for profile update: %w", err)
+			}
+			return nil
+		})
+	}
 
 	if err := runStoreTx(ctx, s.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
@@ -352,21 +360,18 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email s
 		if err := moveUserForeignKeys(ctx, tx, shadowUserID, userID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM users WHERE id = ?", shadowUserID); err != nil {
-			return fmt.Errorf("could not cleanup shadow user for profile update: %w", err)
-		}
 		return nil
 	}); err != nil {
 		// Best-effort rollback to keep references on original user if update sequence fails.
-		_ = runStoreTx(ctx, s.db, func(tx *sql.Tx) error {
-			if err := moveUserForeignKeys(ctx, tx, shadowUserID, userID); err != nil {
-				return err
-			}
-			if _, err := tx.ExecContext(ctx, "DELETE FROM users WHERE id = ?", shadowUserID); err != nil {
-				return fmt.Errorf("could not cleanup shadow user during rollback: %w", err)
-			}
-			return nil
-		})
+		if restoreErr := runStoreTx(ctx, s.db, func(tx *sql.Tx) error {
+			return moveUserForeignKeys(ctx, tx, shadowUserID, userID)
+		}); restoreErr == nil {
+			_ = cleanupShadow()
+		}
+		return err
+	}
+	// DuckDB must commit reference restoration before deleting the referenced shadow row.
+	if err := cleanupShadow(); err != nil {
 		return err
 	}
 
@@ -459,6 +464,10 @@ func cleanupUserRows(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
 			return err
 		}
 		return nil
+	}
+
+	if err := cleanupOAuthUserRows(ctx, tx, userID.String()); err != nil {
+		return fmt.Errorf("could not delete user OAuth grants: %w", err)
 	}
 
 	if err := execIfTableExists("share_links", "UPDATE share_links SET created_by = NULL WHERE created_by = ?", userID); err != nil {

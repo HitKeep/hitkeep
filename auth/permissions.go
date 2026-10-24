@@ -114,11 +114,7 @@ var sitePermissions = map[SiteRole][]Permission{
 }
 
 func (r InstanceRole) HasPermission(perm Permission) bool {
-	perms, ok := instancePermissions[r]
-	if !ok {
-		return false
-	}
-	return slices.Contains(perms, perm)
+	return roleAllows(ResourceInstance, string(r), Capability(perm))
 }
 
 func (r InstanceRole) Permissions() []Permission {
@@ -126,11 +122,7 @@ func (r InstanceRole) Permissions() []Permission {
 }
 
 func (r SiteRole) HasPermission(perm Permission) bool {
-	perms, ok := sitePermissions[r]
-	if !ok {
-		return false
-	}
-	return slices.Contains(perms, perm)
+	return roleAllows(ResourceSite, string(r), Capability(perm))
 }
 
 func (r SiteRole) Permissions() []Permission {

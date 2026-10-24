@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,8 @@ import (
 	"hitkeep/server/goals"
 	importhandlers "hitkeep/server/imports"
 	"hitkeep/server/ingest"
+	"hitkeep/server/integrations"
+	oauthhandlers "hitkeep/server/oauth"
 	opportunityhandlers "hitkeep/server/opportunities"
 	"hitkeep/server/permissions"
 	qrcodehandlers "hitkeep/server/qrcodes"
@@ -225,13 +228,30 @@ func New(conf *config.Config, publicFS fs.FS, store *database.Store, tenantStore
 		MailTestTracker:          mailTestTracker,
 	}
 	s.ctx.SocialAuth = socialauth.NewClient(s.ctx.SSO)
+	if store != nil {
+		provider, oauthErr := newOAuthProvider(conf, store, func() bool { return cluster == nil || cluster.IsLeader() })
+		if oauthErr != nil {
+			logger.Warn("OAuth unavailable: public HTTPS issuer, client registry, or browser signing configuration is invalid")
+		} else {
+			s.ctx.OAuthProvider = provider
+		}
+	}
 
 	// Load static HTML into memory
 	s.loadStaticAssets(publicFS)
 
 	mux := http.NewServeMux()
 	s.setupRoutes(mux, publicFS)
-	rootHandler := s.databaseAvailabilityMiddleware(newCrossOriginProtection().Handler(mux))
+	protected := newCrossOriginProtection().Handler(mux)
+	rootHandler := s.databaseAvailabilityMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, pattern := mux.Handler(r)
+		if conf.MCPEnabled && pattern == conf.MCPPath {
+			// Only the actual bearer-only MCP handler owns its Origin policy.
+			mux.ServeHTTP(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
+	}))
 	handler := rootHandler
 	if s.publicBasePath != "/" {
 		handler = s.stripPublicBasePath(rootHandler)
@@ -358,12 +378,16 @@ func (s *Server) stripPublicBasePath(next http.Handler) http.Handler {
 				strippedPath = "/"
 			}
 			r = cloneRequestWithPath(r, strippedPath)
-		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) {
+		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) && !s.isOAuthDiscoveryPath(r.URL.Path) {
 			http.NotFound(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isOAuthDiscoveryPath(requestPath string) bool {
+	return s.ctx != nil && s.ctx.OAuthProvider != nil && slices.Contains(s.ctx.OAuthProvider.DiscoveryPaths(), requestPath)
 }
 
 func cloneRequestWithPath(r *http.Request, nextPath string) *http.Request {
@@ -381,6 +405,8 @@ func (s *Server) setupRoutes(mux *http.ServeMux, publicFS fs.FS) {
 	mux.HandleFunc("GET /internal/caddy/on-demand-tls/{token}", s.handleCaddyOnDemandTLSAsk())
 	ingest.Register(mux, ctx)
 	serverauth.Register(mux, ctx)
+	oauthhandlers.Register(mux, ctx)
+	integrations.Register(mux, ctx)
 	cloudhandlers.Register(mux, ctx)
 	user.Register(mux, ctx)
 	permissions.Register(mux, ctx)
@@ -437,7 +463,7 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 
 		// 2. Handle Root (Explicit request for index)
 		if path == "" || path == "index.html" {
-			s.serveIndex(w)
+			s.serveIndex(w, r)
 			return
 		}
 
@@ -473,7 +499,7 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 // browser then tries to parse as JavaScript, CSS, or JSON.
 func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && !s.isNonDashboardPath(r.URL.Path) && acceptsSPADocument(r) {
-		s.serveIndex(w)
+		s.serveIndex(w, r)
 		return
 	}
 	http.NotFound(w, r)
@@ -481,7 +507,7 @@ func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) isNonDashboardPath(requestPath string) bool {
 	requestPath = "/" + strings.TrimPrefix(requestPath, "/")
-	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/q", "/healthz", "/readyz", "/scalar"}
+	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/q", "/healthz", "/readyz", "/scalar", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
 	if s.conf != nil {
 		mcpPath := strings.TrimRight(strings.TrimSpace(s.conf.MCPPath), "/")
 		if mcpPath != "" {
@@ -556,7 +582,7 @@ func acceptsSPADocument(r *http.Request) bool {
 }
 
 // serveIndex serves the Angular index.html from memory.
-func (s *Server) serveIndex(w http.ResponseWriter) {
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	if len(s.indexHTML) == 0 {
 		http.Error(w, "Frontend index missing", http.StatusNotFound)
 		return
@@ -564,6 +590,10 @@ func (s *Server) serveIndex(w http.ResponseWriter) {
 
 	w.Header().Set("Cache-Control", cacheControlNoCache)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if !strings.HasPrefix(r.URL.Path, "/share/") && !strings.HasPrefix(r.URL.Path, "/qr-share/") {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		w.Header().Set("X-Frame-Options", "DENY")
+	}
 	_, _ = w.Write(s.indexHTML)
 }
 

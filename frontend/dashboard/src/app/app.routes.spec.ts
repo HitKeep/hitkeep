@@ -8,6 +8,7 @@ import { INSTANCE_CAPABILITIES, TEAM_CAPABILITIES } from '@core/access/capabilit
 import { PermissionService } from '@services/permission.service';
 import { SiteService } from '@features/sites/services/site.service';
 import { routes } from './app.routes';
+import { privateFrameGuard } from '@core/guards/private-frame-guard';
 import { overviewDefaultGuard } from '@pages/overview/overview-default.guard';
 import { SETTINGS_ROUTES } from '@pages/settings/settings.routes';
 
@@ -85,12 +86,12 @@ describe('routes', () => {
         expect(notFound?.data?.['applicationErrorKind']).toBe('not-found');
     });
 
-    it('keeps the generic application error route lazy and outside guarded route trees', () => {
+    it('keeps the generic application error route lazy and outside authenticated route trees', () => {
         const errorRoute = routes.find((route) => route.path === 'error');
 
         expect(errorRoute?.component).toBeUndefined();
         expect(errorRoute?.loadComponent).toBeTruthy();
-        expect(errorRoute?.canActivate).toBeUndefined();
+        expect(errorRoute?.canActivate).toEqual([privateFrameGuard]);
     });
 
     it('gates system status and system settings by their backend capabilities', () => {
@@ -178,14 +179,14 @@ describe('routes', () => {
         const route = routes.find((route) => route.path === 'accept-invite');
 
         expect(route).toBeTruthy();
-        expect(route?.canActivate).toBeUndefined();
+        expect(route?.canActivate).toEqual([privateFrameGuard]);
     });
 
     it('exposes report confirmation as a public scanner-safe route', () => {
         const route = routes.find((candidate) => candidate.path === 'report-confirmation');
 
         expect(route?.loadComponent).toBeTruthy();
-        expect(route?.canActivate).toBeUndefined();
+        expect(route?.canActivate).toEqual([privateFrameGuard]);
     });
 
     it('exposes the social signup completion as a guarded public cloud route', () => {

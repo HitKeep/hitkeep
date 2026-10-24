@@ -16,6 +16,7 @@ import (
 	"hitkeep/config"
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
+	"hitkeep/oauth"
 	"hitkeep/server/shared"
 )
 
@@ -28,20 +29,21 @@ const (
 type authContextKey struct{}
 
 type service struct {
-	conf         *config.Config
-	store        *database.Store
-	tenantStores *database.TenantStoreManager
-	docs         *analyticstools.Docs
-	apiLimiter   *shared.IPRateLimiter
-	logger       *slog.Logger
-	mcp          *mcp.Server
+	conf          *config.Config
+	store         *database.Store
+	tenantStores  *database.TenantStoreManager
+	docs          *analyticstools.Docs
+	apiLimiter    *shared.IPRateLimiter
+	logger        *slog.Logger
+	mcp           *mcp.Server
+	oauthProvider *oauth.Provider
 }
 
 func Register(mux *http.ServeMux, ctx *shared.Context, logger *slog.Logger) {
-	mux.Handle(ctx.Config.MCPPath, NewHandler(ctx.Config, ctx.Store, ctx.TenantStores, ctx.ApiLimiter, logger))
+	mux.Handle(ctx.Config.MCPPath, NewHandler(ctx.Config, ctx.Store, ctx.TenantStores, ctx.ApiLimiter, logger, ctx.OAuthProvider))
 }
 
-func NewHandler(conf *config.Config, store *database.Store, tenantStores *database.TenantStoreManager, apiLimiter *shared.IPRateLimiter, logger *slog.Logger) http.Handler {
+func NewHandler(conf *config.Config, store *database.Store, tenantStores *database.TenantStoreManager, apiLimiter *shared.IPRateLimiter, logger *slog.Logger, providers ...*oauth.Provider) http.Handler {
 	if logger == nil {
 		panic("mcpserver: logger is required")
 	}
@@ -50,6 +52,9 @@ func NewHandler(conf *config.Config, store *database.Store, tenantStores *databa
 		store:        store,
 		tenantStores: tenantStores,
 		logger:       logger,
+	}
+	if len(providers) > 0 {
+		svc.oauthProvider = providers[0]
 	}
 	if conf.MCPDocsEnabled {
 		svc.docs = analyticstools.NewDocs(conf.MCPDocsURL, time.Duration(conf.MCPDocsCacheMinutes)*time.Minute)
@@ -146,8 +151,31 @@ func (s *service) hostValidationMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
+		if origins := r.Header.Values("Origin"); len(origins) > 1 || (len(origins) == 1 && !isAllowedMCPOrigin(origins[0], s.conf.PublicURL)) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAllowedMCPOrigin(raw, publicURL string) bool {
+	origin, err := url.Parse(raw)
+	if err != nil || origin.Hostname() == "" || origin.User != nil || origin.Opaque != "" || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || strings.ContainsAny(raw, "#\\ \t\r\n") || strings.HasSuffix(origin.Host, ":") {
+		return false
+	}
+	public, err := url.Parse(publicURL)
+	if err != nil || origin.Scheme != public.Scheme || !strings.EqualFold(origin.Hostname(), public.Hostname()) || defaultMCPPort(origin.Scheme) == "" {
+		return false
+	}
+	originPort, publicPort := origin.Port(), public.Port()
+	if originPort == "" {
+		originPort = defaultMCPPort(origin.Scheme)
+	}
+	if publicPort == "" {
+		publicPort = defaultMCPPort(public.Scheme)
+	}
+	return originPort == publicPort
 }
 
 func (s *service) authMiddleware(next http.Handler) http.Handler {
@@ -167,7 +195,11 @@ func (s *service) authMiddleware(next http.Handler) http.Handler {
 
 		token := extractBearerToken(r)
 		if token == "" {
+			w.Header().Set("WWW-Authenticate", s.oauthChallenge())
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if s.authenticateOAuth(w, r, next) {
 			return
 		}
 		authz, err := s.store.GetAPIClientAuth(r.Context(), token)
@@ -177,7 +209,7 @@ func (s *service) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if authz == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			s.oauthError(w, http.StatusUnauthorized)
 			return
 		}
 

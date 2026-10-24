@@ -128,10 +128,10 @@ jobs:
       - name: Install current stable formula
         run: |
           set -euo pipefail
-          brew tap PascaleBeier/hitkeep
-          stable_version="$(brew info --json=v2 PascaleBeier/hitkeep/hitkeep | jq -er '.formulae[0].versions.stable')"
+          brew tap HitKeep/hitkeep
+          stable_version="$(brew info --json=v2 HitKeep/hitkeep/hitkeep | jq -er '.formulae[0].versions.stable')"
           [[ "$stable_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          brew install --build-from-source PascaleBeier/hitkeep/hitkeep
+          brew install --build-from-source HitKeep/hitkeep/hitkeep
           test "$(hitkeep --version)" = "$stable_version"
           printf 'STABLE_VERSION=%s\n' "$stable_version" >> "$GITHUB_ENV"
       - name: Resolve candidate
@@ -152,9 +152,9 @@ jobs:
       - name: Prepare candidate formula
         run: |
           set -euo pipefail
-          candidate_url="https://github.com/PascaleBeier/hitkeep/archive/${CANDIDATE_SHA}.tar.gz"
+          candidate_url="https://github.com/HitKeep/hitkeep/archive/${CANDIDATE_SHA}.tar.gz"
           candidate_checksum="$(curl --fail --silent --show-error --location "$candidate_url" | shasum -a 256 | awk '{print $1}')"
-          formula="$(brew --repository PascaleBeier/hitkeep)/Formula/hitkeep.rb"
+          formula="$(brew --repository HitKeep/hitkeep)/Formula/hitkeep.rb"
           candidate_formula="$(mktemp)"
           awk -v version="$CANDIDATE_VERSION" -v url="$candidate_url" -v checksum="$candidate_checksum" '
             /^  version "/ { print "  version \"" version "\""; versions++; next }
@@ -172,9 +172,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(hitkeep --version)" = "$STABLE_VERSION"
-          brew upgrade --build-from-source PascaleBeier/hitkeep/hitkeep
+          brew upgrade --build-from-source HitKeep/hitkeep/hitkeep
           test "$(hitkeep --version)" = "$CANDIDATE_VERSION"
-          brew test PascaleBeier/hitkeep/hitkeep
+          brew test HitKeep/hitkeep/hitkeep
           brew uninstall hitkeep
           ! command -v hitkeep
 
@@ -231,7 +231,7 @@ jobs:
         run: |
           set -euo pipefail
           HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" \
-            env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.0 release \
+            env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.18.3 release \
               --snapshot --clean --skip=publish --config .goreleaser.yaml
           for arch in amd64 arm64; do
             mapfile -t archives < <(find dist -maxdepth 1 -type f -name "hitkeep_*_Linux_${arch}.tar.gz")

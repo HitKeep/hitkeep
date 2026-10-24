@@ -55,6 +55,7 @@ function assert(condition, message) {
 const expectedTools = new Set([
   "hitkeep_list_sites",
   "hitkeep_get_site_overview",
+  "hitkeep_get_breakdown",
   "hitkeep_get_event_names",
   "hitkeep_get_event_breakdown",
   "hitkeep_get_ecommerce",

@@ -17,21 +17,21 @@ Each `SKILL.md` is a thin external-agent adapter for production HitKeep MCP. Eac
 List only the analytics pack:
 
 ```bash
-npx skills add https://github.com/PascaleBeier/hitkeep/tree/main/skills --list
+npx skills add https://github.com/HitKeep/hitkeep/tree/main/skills --list
 ```
 
 Install the complete analytics pack for Codex:
 
 ```bash
-npx skills add https://github.com/PascaleBeier/hitkeep/tree/main/skills --skill '*' --agent codex --copy -y
+npx skills add https://github.com/HitKeep/hitkeep/tree/main/skills --skill '*' --agent codex --copy -y
 ```
 
 Install one specialist by replacing the skill name:
 
 ```bash
-npx skills add https://github.com/PascaleBeier/hitkeep/tree/main/skills --skill hitkeep-traffic-diagnosis --agent codex --copy -y
+npx skills add https://github.com/HitKeep/hitkeep/tree/main/skills --skill hitkeep-traffic-diagnosis --agent codex --copy -y
 ```
 
-For live analytics, pair the installed skill with HitKeep's scoped, read-only production MCP endpoint. Skills contain no credentials or customer data.
+For live analytics, pair the installed skill with HitKeep's scoped, read-only production MCP endpoint. Skills contain no credentials or customer data. OAuth-capable clients can use an explicit MCP-resource grant with `sites:read analytics:read` and selected sites; existing API-client bearer tokens remain supported. Authentication does not broaden the analytics procedure or privacy boundary.
 
 Contributor skills for changing HitKeep itself are canonical under `.agents/skills` and documented in `CONTRIBUTING.md`. Do not install the repository root with `--skill '*'` when only one audience is intended.

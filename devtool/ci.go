@@ -271,7 +271,7 @@ func (a *App) BuildReleaseBinaries(ctx context.Context, request ReleaseBuildRequ
 	artifacts := make([]string, 0, len(builds))
 	for _, build := range builds {
 		args := []string{
-			"go", "run", "github.com/goreleaser/goreleaser/v2@v2.18.0",
+			"go", "run", "github.com/goreleaser/goreleaser/v2@v2.18.3",
 			"build", "--config", ".goreleaser.yaml", "--snapshot", "--clean", "--single-target",
 			"--id", build.id, "--output", build.artifact,
 		}

@@ -7,7 +7,7 @@ Repository policy and product invariants live in [`AGENTS.md`](./AGENTS.md). Rea
 ## Start in One Command
 
 ```bash
-git clone https://github.com/pascalebeier/hitkeep.git
+git clone https://github.com/HitKeep/hitkeep.git
 cd hitkeep
 ./hk setup
 ```

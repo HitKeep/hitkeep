@@ -1,0 +1,120 @@
+<main class="hk-auth-page oauth-page" aria-labelledby="oauth-title">
+    <section class="hk-auth-shell oauth-shell">
+        <div class="oauth-brand"><app-brand /></div>
+        <app-auth-card>
+            <div class="oauth-content">
+                <header class="oauth-header">
+                    <h1 id="oauth-title" class="hk-auth-title">{{ 'oauth.consentTitle' | transloco }}</h1>
+                    <p class="oauth-subtitle">{{ 'oauth.consentDescription' | transloco }}</p>
+                </header>
+                @if (consent(); as request) {
+                <div class="oauth-application">
+                    <span class="oauth-application-icon" aria-hidden="true"><i class="pi pi-link"></i></span>
+                    <div class="min-w-0">
+                        <h2 class="oauth-application-name">{{ request.client.name }}</h2>
+                        <span class="oauth-origin">{{ request.client.callback_origin }}</span>
+                    </div>
+                </div>
+                } @if (profile.profile(); as account) {
+                <div class="oauth-account">
+                    <p>{{ 'oauth.signedInAs' | transloco: { email: account.email } }}</p>
+                    <button type="button" class="oauth-sign-out" (click)="accountMenu.signOut()" [disabled]="submitting()">{{ 'userMenu.signOut' | transloco }}</button>
+                </div>
+                } @if (decisionErrorKey; as error) {
+                <p-message severity="error" role="alert">{{ error | transloco }}</p-message>
+                } @if (loading()) {
+                <p role="status" class="oauth-help">{{ 'oauth.loading' | transloco }}</p>
+                } @else if (errorKey(); as error) {
+                <p-message severity="error" role="alert">{{ error | transloco }}</p-message>
+                <button pButton type="button" (click)="load()">{{ 'oauth.retry' | transloco }}</button>
+                } @else if (consent(); as request) {
+                <section aria-labelledby="oauth-abilities">
+                    <h2 id="oauth-abilities" class="oauth-section-title">{{ 'oauth.abilities' | transloco }}</h2>
+                    <ul class="oauth-permission-list">
+                        @for (scope of request.scopes; track scope) {
+                        <li>
+                            <i class="pi pi-check-circle" aria-hidden="true"></i>
+                            @if (scopeLabelKey(scope); as key) { <span>{{ key | transloco }}</span> } @else { <code>{{ scope }}</code> }
+                        </li>
+                        }
+                    </ul>
+                </section>
+                @if (expired()) {
+                <p-message severity="warn" role="alert">{{ 'oauth.expired' | transloco }}</p-message>
+                } @else {
+                <form [attr.action]="action" method="post" (submit)="submit($event)" class="oauth-form" [attr.aria-busy]="submitting()">
+                    <input type="hidden" name="decision" value="" />
+                    <input type="hidden" name="csrf_token" [value]="request.csrf_token" />
+                    <input type="hidden" name="team_id" [value]="form.team_id().value()" />
+                    @for (id of selectedSiteIds(); track id) {
+                    <input type="hidden" name="site_ids" [value]="id" />
+                    }
+                    <div class="flex flex-col gap-2">
+                        <label id="oauth-team-label" for="oauth-team" class="hk-auth-field-label">{{ 'oauth.team' | transloco }}</label>
+                        <p-select
+                            inputId="oauth-team"
+                            ariaLabelledBy="oauth-team-label"
+                            [formControl]="form.team_id().control()"
+                            [options]="request.teams"
+                            optionLabel="name"
+                            optionValue="id"
+                            [filter]="true"
+                            filterBy="name"
+                            [placeholder]="'oauth.selectTeam' | transloco"
+                            class="w-full"
+                        />
+                    </div>
+                    @if (request.teams.length === 0) {
+                    <p-message severity="warn">{{ 'oauth.noEligibleSites' | transloco }}</p-message>
+                    <a routerLink="/" class="underline">{{ 'oauth.setupSites' | transloco }}</a>
+                    } @else if (selectedTeam(); as team) {
+                    <fieldset class="oauth-sites" [disabled]="submitting()" aria-describedby="oauth-site-help">
+                        <legend class="oauth-section-title">{{ 'oauth.sites' | transloco }}</legend>
+                        <p id="oauth-site-help" class="oauth-help">{{ 'oauth.siteHelp' | transloco }}</p>
+                        <div class="oauth-site-list">
+                            @for (site of team.sites; track site.id) {
+                            <div class="oauth-site" [class.oauth-site-selected]="selectedSiteIds().includes(site.id)">
+                                <p-checkbox [inputId]="'oauth-site-' + site.id" [value]="site.id" [formControl]="form.site_ids().control()" />
+                                <label [for]="'oauth-site-' + site.id">
+                                    <span>{{ site.name || site.domain }}</span>
+                                    @if (site.name && site.name !== site.domain) { <span class="oauth-site-domain">{{ site.domain }}</span> }
+                                </label>
+                            </div>
+                            } @empty {
+                            <p-message severity="warn">{{ 'oauth.noEligibleSites' | transloco }}</p-message>
+                            <a routerLink="/" class="underline">{{ 'oauth.setupSites' | transloco }}</a>
+                            }
+                        </div>
+                    </fieldset>
+                    }
+                    <details class="oauth-details">
+                        <summary>{{ 'oauth.connectionDetails' | transloco }}</summary>
+                        <dl>
+                            <dt>{{ 'oauth.applicationId' | transloco }}</dt>
+                            <dd><code>{{ request.client.id }}</code></dd>
+                            <dt>{{ 'oauth.callbackOrigin' | transloco }}</dt>
+                            <dd><code>{{ request.client.callback_origin }}</code></dd>
+                            <dt>{{ 'oauth.resource' | transloco }}</dt>
+                            <dd><code>{{ request.resource }}</code></dd>
+                            <dt>{{ 'oauth.abilities' | transloco }}</dt>
+                            <dd><code>{{ request.scopes.join(' ') }}</code></dd>
+                            <dt>{{ 'oauth.expiresAt' | transloco }}</dt>
+                            <dd><time [attr.datetime]="request.expires_at">{{ expiryLabel() }}</time></dd>
+                        </dl>
+                    </details>
+                    <p class="oauth-help">{{ 'oauth.permissionNotice' | transloco }}</p>
+                    <div class="oauth-actions">
+                        <button pButton type="submit" value="deny" severity="secondary" [outlined]="true" [disabled]="submitting()">{{ 'oauth.deny' | transloco }}</button>
+                        <button pButton type="submit" value="approve" [disabled]="!canApprove()">{{ 'oauth.approve' | transloco }}</button>
+                    </div>
+                    @if (submitting()) {
+                    <p role="status" class="oauth-help">{{ 'oauth.submitting' | transloco }}</p>
+                    }
+                </form>
+                } } @if (!consent() || expired()) {
+                <a routerLink="/" class="underline">{{ 'oauth.cancel' | transloco }}</a>
+                }
+            </div>
+        </app-auth-card>
+    </section>
+</main>

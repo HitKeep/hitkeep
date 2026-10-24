@@ -16,6 +16,7 @@ import (
 	"hitkeep/database"
 	"hitkeep/entitlements"
 	"hitkeep/mailer"
+	"hitkeep/oauth"
 	"hitkeep/realtime"
 	"hitkeep/searchconsole"
 	"hitkeep/socialauth"
@@ -78,6 +79,7 @@ type Context struct {
 	SearchConsole  searchconsole.Client
 	SocialAuth     *socialauth.Client
 	SSO            *sso.Client
+	OAuthProvider  *oauth.Provider
 	AI             hitai.Client
 	Realtime       *realtime.Broker
 	IPFilter       *blocking.IPFilter
@@ -177,6 +179,9 @@ func (c *Context) applyAccessChecks(config HandlerConfig, handler http.HandlerFu
 }
 
 func (c *Context) applyAuthentication(config HandlerConfig, handler http.HandlerFunc) http.HandlerFunc {
+	if config.HumanOnly {
+		return c.RequireHumanAuth(handler)
+	}
 	if config.APIClientOnly {
 		return c.RequireAPIClientAuth(handler)
 	}

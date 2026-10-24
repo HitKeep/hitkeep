@@ -4,16 +4,19 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
-	stripe "github.com/stripe/stripe-go/v86"
-	"github.com/stripe/stripe-go/v86/webhook"
+	stripe "github.com/stripe/stripe-go/v87"
+	"github.com/stripe/stripe-go/v87/webhook"
 
 	json "hitkeep/jsonapi"
 )
+
+var errStripeAPIVersionMismatch = errors.New("unsupported Stripe event API version")
 
 func (c *stripeSDKClient) CreateCustomer(ctx context.Context, input createCustomerInput) (string, error) {
 	params := &stripe.CustomerCreateParams{
@@ -143,7 +146,13 @@ func (stripeWebhookSDK) ConstructEvent(payload []byte, header string, secret str
 		return event, err
 	}
 	if strings.TrimSpace(event.APIVersion) != stripeAPIVersion {
-		return event, fmt.Errorf("unexpected stripe event api version %s", strings.TrimSpace(event.APIVersion))
+		// Shared-account manual invoices need no version-specific billing processing.
+		if event.Type == "invoice.payment_failed" && event.Data != nil {
+			if invoice, err := parseStripeInvoiceEvent(event.Data.Raw); err == nil && invoice.isManualInvoice() {
+				return event, nil
+			}
+		}
+		return event, errStripeAPIVersionMismatch
 	}
 	return event, nil
 }

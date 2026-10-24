@@ -178,7 +178,7 @@ func configurationPublication(field reflect.StructField) ConfigurationPublicatio
 		return ConfigurationPublicationPersistent
 	case "Healthcheck":
 		return ConfigurationPublicationCommand
-	case "HTTPAddr", "DBPath", "BindAddr", "JoinAddr", "IngestRateLimit", "ApiRateLimit", "AuthRateLimit", "WebhookRateLimit", "DataRetentionDays", "NodeName", "DuckDBMemoryLimit", "DuckDBThreads", "DBCompactOnStart", "DBAutoRecover", "DBAutoRecoverWAL", "DBCheckpointIntervalMinutes", "DBRecoveryPath", "ArchivePath", "PublicURL", "LogLevel", "JWTSecret", "TrustedProxies", "NSQTCPAddress", "NSQHTTPAddress", "ApiBurst", "AuthBurst", "IngestBurst", "WebhookBurst", "AuthRememberMeDays", "AuthSessionMinutes", "AuthSessionWarningSeconds", "SocialGoogleClientID", "SocialGoogleClientSecret", "SocialGitHubClientID", "SocialGitHubClientSecret", "SocialMicrosoftClientID", "SocialMicrosoftClientSecret", "SocialMicrosoftTenant", "SocialSignupEnabled", "MailDriver", "MailEncryption", "MailInsecureSkipVerify", "MailHost", "MailPort", "MailUsername", "MailPassword", "MailFromAddress", "MailFromName", "SpamFilterAutoUpdate", "SpamFilterPath", "SpamFilterUpdateIntervalMin", "ImportMaxStageBytes", "ImportStageRetentionDays", "ImportAPIURL", "ImportAPIToken", "WebhookAllowDevelopmentTargets", "WebhookDeliveryTimeoutSeconds", "WebhookDeliveryConcurrency", "WebhookPerEndpointConcurrency", "WebhookMaxAttempts", "WebhookRetryBaseSeconds", "WebhookRetryMaxSeconds", "WebhookRetentionDays", "WebhookSweepSeconds", "GoogleSearchConsoleClientID", "GoogleSearchConsoleClientSecret", "GoogleSearchConsoleRedirectURL", "BackupPath", "BackupIntervalMinutes", "BackupRetentionCount", "S3AccessKeyID", "S3SecretAccessKey", "S3SessionToken", "S3Region", "S3Endpoint", "S3URLStyle", "S3UseSSL", "MCPEnabled", "MCPPath", "MCPMaxRangeDays", "MCPDocsEnabled", "MCPDocsURL", "MCPDocsCacheMinutes", "CustomTrackingDNSTarget", "CustomTrackingTLSMode", "CaddyTLSAskToken", "AIEnabled", "AskAIEnabled", "AIProvider", "AIModel", "AIBaseURL", "AIRegion", "AIAPIKey", "AITimeoutSeconds", "AIRequestLimit", "AITokenLimit", "AIBudgetWindowMinutes":
+	case "HTTPAddr", "DBPath", "BindAddr", "JoinAddr", "IngestRateLimit", "ApiRateLimit", "AuthRateLimit", "WebhookRateLimit", "DataRetentionDays", "NodeName", "DuckDBMemoryLimit", "DuckDBThreads", "DBCompactOnStart", "DBAutoRecover", "DBAutoRecoverWAL", "DBCheckpointIntervalMinutes", "DBRecoveryPath", "ArchivePath", "PublicURL", "LogLevel", "JWTSecret", "TrustedProxies", "NSQTCPAddress", "NSQHTTPAddress", "ApiBurst", "AuthBurst", "IngestBurst", "WebhookBurst", "AuthRememberMeDays", "AuthSessionMinutes", "AuthSessionWarningSeconds", "SocialGoogleClientID", "SocialGoogleClientSecret", "SocialGitHubClientID", "SocialGitHubClientSecret", "SocialMicrosoftClientID", "SocialMicrosoftClientSecret", "SocialMicrosoftTenant", "SocialSignupEnabled", "MailDriver", "MailEncryption", "MailInsecureSkipVerify", "MailHost", "MailPort", "MailUsername", "MailPassword", "MailFromAddress", "MailFromName", "SpamFilterAutoUpdate", "SpamFilterPath", "SpamFilterUpdateIntervalMin", "ImportMaxStageBytes", "ImportStageRetentionDays", "ImportAPIURL", "ImportAPIToken", "WebhookAllowDevelopmentTargets", "WebhookDeliveryTimeoutSeconds", "WebhookDeliveryConcurrency", "WebhookPerEndpointConcurrency", "WebhookMaxAttempts", "WebhookRetryBaseSeconds", "WebhookRetryMaxSeconds", "WebhookRetentionDays", "WebhookSweepSeconds", "GoogleSearchConsoleClientID", "GoogleSearchConsoleClientSecret", "GoogleSearchConsoleRedirectURL", "BackupPath", "BackupIntervalMinutes", "BackupRetentionCount", "S3AccessKeyID", "S3SecretAccessKey", "S3SessionToken", "S3Region", "S3Endpoint", "S3URLStyle", "S3UseSSL", "OAuthClients", "MCPEnabled", "MCPPath", "MCPMaxRangeDays", "MCPDocsEnabled", "MCPDocsURL", "MCPDocsCacheMinutes", "CustomTrackingDNSTarget", "CustomTrackingTLSMode", "CaddyTLSAskToken", "AIEnabled", "AskAIEnabled", "AIProvider", "AIModel", "AIBaseURL", "AIRegion", "AIAPIKey", "AITimeoutSeconds", "AIRequestLimit", "AITokenLimit", "AIBudgetWindowMinutes":
 		return ConfigurationPublicationOperator
 	default:
 		return ConfigurationPublicationUnclassified
@@ -194,6 +194,7 @@ func configurationCategories() []ConfigurationCategory {
 		{ID: "backups", Title: "Database backups"},
 		{ID: "s3", Title: "S3 archive storage"},
 		{ID: "clustering", Title: "Server and clustering"},
+		{ID: "oauth", Title: "Integration OAuth"},
 		{ID: "mcp", Title: "Optional MCP route"},
 		{ID: "ai", Title: "Optional AI model configuration"},
 		{ID: "webhooks", Title: "Outbound webhook delivery"},
@@ -227,6 +228,8 @@ func configurationCategory(field reflect.StructField) string {
 		return "s3"
 	case name == "BindAddr" || name == "JoinAddr" || name == "NodeName":
 		return "clustering"
+	case strings.HasPrefix(name, "OAuth"):
+		return "oauth"
 	case strings.HasPrefix(name, "MCP"):
 		return "mcp"
 	case strings.HasPrefix(name, "AI") || name == "AskAIEnabled":

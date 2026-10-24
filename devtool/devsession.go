@@ -332,7 +332,7 @@ func (a *App) superviseDev(ctx context.Context, record devSessionRecord, request
 				continue
 			}
 			select {
-			case <-process.done:
+			case <-process.done: //nolint:errcheck // Cleanup only waits for termination after SIGTERM.
 			case <-time.After(max(time.Until(deadline), 0)):
 				_ = syscall.Kill(-process.command.Process.Pid, syscall.SIGKILL)
 			}

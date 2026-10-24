@@ -1305,7 +1305,7 @@ func TestOpenAPISpecV1IncludesServerSideIngestPaths(t *testing.T) {
 			postOp := requireMap(t, pathItem, "post")
 
 			assertServerSideIngestDescription(t, path, postOp)
-			assertAPIClientOnlyOperation(t, path, postOp)
+			assertServerSideIngestOperation(t, path, postOp)
 			assertServerSideIngestSchema(t, path, requestJSONSchema(t, postOp))
 		})
 	}
@@ -1412,10 +1412,15 @@ func assertServerSideIngestDescription(t *testing.T, path string, postOp map[str
 	}
 }
 
-func assertAPIClientOnlyOperation(t *testing.T, path string, postOp map[string]any) {
+func assertServerSideIngestOperation(t *testing.T, path string, postOp map[string]any) {
 	t.Helper()
-	if !operationHasAPIClientOnlySecurity(postOp) {
-		t.Fatalf("expected %s to use API-client-only security, got %+v", path, postOp["security"])
+	wantSecurity := []any{
+		map[string]any{"bearerAuth": []any{}},
+		map[string]any{"apiKeyAuth": []any{}},
+		map[string]any{"oauth2": []string{"ingest:write"}},
+	}
+	if !reflect.DeepEqual(postOp["security"], wantSecurity) {
+		t.Fatalf("expected %s to require manual credentials or scoped OAuth, got %#v", path, postOp["security"])
 	}
 	responses := requireMap(t, postOp, "responses")
 	if _, ok := responses["429"]; !ok {
@@ -1504,30 +1509,6 @@ func hasNamedParam(params []any, name string) bool {
 
 func containsString(values []string, want string) bool {
 	return slices.Contains(values, want)
-}
-
-func operationHasAPIClientOnlySecurity(op map[string]any) bool {
-	security, ok := op["security"].([]any)
-	if !ok || len(security) != 2 {
-		return false
-	}
-	var bearer, apiKey bool
-	for _, item := range security {
-		entry, ok := item.(map[string]any)
-		if !ok || len(entry) != 1 {
-			return false
-		}
-		if _, ok := entry["bearerAuth"]; ok {
-			bearer = true
-		}
-		if _, ok := entry["apiKeyAuth"]; ok {
-			apiKey = true
-		}
-		if _, ok := entry["cookieAuth"]; ok {
-			return false
-		}
-	}
-	return bearer && apiKey
 }
 
 func requireMap(t *testing.T, m map[string]any, key string) map[string]any {

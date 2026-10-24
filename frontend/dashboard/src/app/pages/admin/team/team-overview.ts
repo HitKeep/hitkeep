@@ -14,6 +14,7 @@ import { SettingsCard } from '@features/settings/components/settings-card';
 import { TeamService } from '@services/team.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { BillingInterval, CloudService } from '@services/cloud.service';
 import { cloudPurchaseIntent, type CloudPurchaseIntent } from '@core/utils/cloud-purchase-intent';
 
@@ -38,6 +39,7 @@ export class TeamOverviewPage {
     private readonly activeLanguage = injectActiveLang();
     private readonly analyticsService = inject(AnalyticsService);
     private readonly cloudService = inject(CloudService);
+    protected readonly oauth = inject(OAuthService);
     protected readonly teamService = inject(TeamService);
 
     protected readonly systemStatusResource = rxResource({
@@ -46,16 +48,26 @@ export class TeamOverviewPage {
     protected readonly systemStatus = computed(() => (this.systemStatusResource.hasValue() ? this.systemStatusResource.value() : null));
     protected readonly team = this.teamService.activeTeam;
     private readonly recoveryQuery = this.route.snapshot.queryParamMap;
+    protected readonly checkoutReturned = this.recoveryQuery.get('checkout') === 'success';
     protected readonly recoveryMode = this.recoveryQuery.get('checkout') === 'canceled' ? 'canceled' : this.recoveryQuery.get('purchase') === 'review' ? 'review' : null;
     private readonly requestedIntent = cloudPurchaseIntent(this.recoveryQuery.get('plan'), this.recoveryQuery.get('billing'));
     private readonly returnTeamId = this.recoveryQuery.get('team');
     protected readonly confirmedTeamId = signal('');
     protected readonly recoveryError = signal(false);
     protected readonly billingStateResource = rxResource({
-        params: () => (this.recoveryMode && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
+        params: () => ((this.recoveryMode || this.checkoutReturned) && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
         stream: () => this.cloudService.getBillingState()
     });
     protected readonly billingState = computed(() => (this.billingStateResource.hasValue() ? this.billingStateResource.value() : null));
+    protected readonly checkoutAuthorizationReady = computed(() => {
+        const state = this.billingState();
+        // Reuse the native paid-plan rule; the checkout query is not payment proof.
+        return this.checkoutReturned && !!state && state.team_id === this.teamService.activeTeamId() && state.plan_code !== 'free';
+    });
+    protected readonly authorizationContinuation = rxResource({
+        params: () => (this.checkoutAuthorizationReady() ? true : undefined),
+        stream: () => this.oauth.continuation()
+    });
     protected readonly recoveryKind = computed(() => {
         if (!this.recoveryMode || !this.systemStatus()?.cloud?.hosted || this.requestedIntent.plan === 'free') return null;
         if (this.recoveryMode === 'canceled' && this.returnTeamId !== this.teamService.activeTeamId()) return 'switchTeam';
@@ -318,7 +330,7 @@ export class TeamOverviewPage {
     }
 
     protected continueOnFree(): void {
-        if (!this.teamConfirmed() || this.checkoutPending()) return;
+        if (!this.teamConfirmed() || this.checkoutPending() || this.oauth.resuming()) return;
         this.checkoutPending.set(true);
         this.recoveryError.set(false);
         this.cloudService
@@ -333,10 +345,20 @@ export class TeamOverviewPage {
                         this.billingStateResource.reload();
                         return;
                     }
-                    void this.router.navigateByUrl('/dashboard');
+                    this.oauth.continueAfterAuthentication('/dashboard');
                 },
                 error: () => this.recoveryError.set(true)
             });
+    }
+
+    protected continueToAuthorization(): void {
+        if (!this.checkoutAuthorizationReady() || !this.authorizationContinuation.hasValue() || !this.authorizationContinuation.value().pending) return;
+        this.oauth.continueAfterAuthentication('/admin/team/overview');
+    }
+
+    protected retryAuthorizationReturn(): void {
+        this.billingStateResource.reload();
+        this.authorizationContinuation.reload();
     }
 
     protected startCheckoutForPlan(planCode: 'pro' | 'business'): void {

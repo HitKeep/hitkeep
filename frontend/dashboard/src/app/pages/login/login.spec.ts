@@ -8,6 +8,7 @@ import { vi } from 'vitest';
 
 import { Login } from '@pages/login/login';
 import { AnalyticsService } from '@services/analytics.service';
+import { OAuthService } from '@services/oauth.service';
 import { AuthService } from '@services/auth.service';
 import { createSessionEndState, SESSION_END_STATE_KEY } from '@services/session-end-navigation.service';
 import { UserPreferencesService } from '@services/user-preferences.service';
@@ -124,6 +125,7 @@ describe('Login', () => {
                     { path: 'events', component: DummyRouteComponent }
                 ]),
                 { provide: AuthService, useValue: authMock as unknown as AuthService },
+                { provide: OAuthService, useFactory: (router: Router) => ({ resuming: () => false, continueAfterAuthentication: vi.fn((target: string) => void router.navigateByUrl(target)) }), deps: [Router] },
                 { provide: AnalyticsService, useValue: analyticsMock },
                 { provide: UserPreferencesService, useValue: preferencesMock },
                 {

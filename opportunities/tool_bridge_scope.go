@@ -3,6 +3,7 @@ package opportunities
 import (
 	"context"
 	"fmt"
+	stduuid "uuid"
 
 	"github.com/google/uuid"
 
@@ -29,15 +30,15 @@ func (s toolBridgeScope) authorize(ctx context.Context) error {
 	case "ai_scheduler":
 		return s.authorizeScheduler()
 	case "api_client":
-		return s.authorizeAPIClient()
+		return s.authorizeAPIClient(ctx)
 	default:
-		return s.authorizeUser()
+		return s.authorizeUser(ctx)
 	}
 }
 
 func (s toolBridgeScope) authorizeConfiguredSiteScope(ctx context.Context) error {
-	siteTeamID, err := s.config.Shared.GetSiteTenantID(ctx, s.config.SiteID)
-	if err != nil || siteTeamID != s.config.TeamID {
+	resource, err := s.config.Shared.GetSiteResource(ctx, stduuid.UUID(s.config.SiteID))
+	if err != nil || resource.TeamID != stduuid.UUID(s.config.TeamID) {
 		return hitai.ErrAccessDenied
 	}
 	return nil
@@ -50,7 +51,7 @@ func (s toolBridgeScope) authorizeScheduler() error {
 	return nil
 }
 
-func (s toolBridgeScope) authorizeUser() error {
+func (s toolBridgeScope) authorizeUser(ctx context.Context) error {
 	if s.config.ActorID == uuid.Nil {
 		return hitai.ErrAccessDenied
 	}
@@ -63,10 +64,21 @@ func (s toolBridgeScope) authorizeUser() error {
 	if !s.hasEffectiveSiteView() {
 		return hitai.ErrAccessDenied
 	}
+	instanceRole, err := s.config.Shared.GetInstanceRole(ctx, s.config.ActorID)
+	if err != nil {
+		return hitai.ErrAccessDenied
+	}
+	if instanceRole.HasPermission(auth.PermSiteView) {
+		return nil
+	}
+	siteRole, err := s.config.Shared.GetSiteRoleForTenant(ctx, stduuid.UUID(s.config.ActorID), stduuid.UUID(s.config.SiteID), stduuid.UUID(s.config.TeamID))
+	if err != nil || !siteRole.HasPermission(auth.PermSiteView) {
+		return hitai.ErrAccessDenied
+	}
 	return nil
 }
 
-func (s toolBridgeScope) authorizeAPIClient() error {
+func (s toolBridgeScope) authorizeAPIClient(ctx context.Context) error {
 	apiClient := s.config.APIClientAuth
 	if apiClient == nil || apiClient.ClientID == uuid.Nil || apiClient.ClientID != s.config.ActorID {
 		return hitai.ErrAccessDenied
@@ -81,10 +93,14 @@ func (s toolBridgeScope) authorizeAPIClient() error {
 		return hitai.ErrAccessDenied
 	}
 	delegatedRole, hasSiteDelegation := apiClient.SiteRoles[s.config.SiteID]
-	if hasSiteDelegation && delegatedRole.HasPermission(auth.PermSiteView) {
-		return nil
+	if !hasSiteDelegation || !delegatedRole.HasPermission(auth.PermSiteView) {
+		return hitai.ErrAccessDenied
 	}
-	if !hasSiteDelegation && apiClient.InstanceRole.HasPermission(auth.PermSiteView) {
+	current, err := s.config.Shared.RevalidateAPIClientAuth(ctx, apiClient)
+	if err != nil || current == nil || current.UserID != apiClient.UserID || current.TenantID != apiClient.TenantID {
+		return hitai.ErrAccessDenied
+	}
+	if role, ok := current.SiteRoles[s.config.SiteID]; ok && role.HasPermission(auth.PermSiteView) {
 		return nil
 	}
 	return hitai.ErrAccessDenied

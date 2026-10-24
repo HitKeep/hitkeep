@@ -257,13 +257,6 @@ func (s *Store) invalidateAPIClientAuthCache(clientID uuid.UUID) {
 	s.runtime.apiClientTokenByClient.Remove(clientID)
 }
 
-func (s *Store) getCachedInstanceRole(userID uuid.UUID) (auth.InstanceRole, bool) {
-	if s == nil || s.runtime == nil || userID == uuid.Nil {
-		return "", false
-	}
-	return s.runtime.instanceRoles.Get(userID)
-}
-
 func (s *Store) cacheInstanceRole(userID uuid.UUID, role auth.InstanceRole) {
 	if s == nil || s.runtime == nil || userID == uuid.Nil {
 		return
