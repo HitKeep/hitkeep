@@ -54,11 +54,6 @@
     </div>
     <div class="focus-header__actions">
         <app-navigation-search [disabled]="context.isContextPending()" />
-        @if (showAskAI()) {
-        <button type="button" class="ask-ai-trigger" [disabled]="!siteService.activeSite() || context.isContextPending()" [attr.aria-label]="'askAi.triggerAria' | transloco" (click)="askAI.requestOpen()">
-            <i class="pi pi-sparkles" aria-hidden="true"></i><span>{{ 'askAi.title' | transloco }}</span>
-        </button>
-        }
         <app-user-controls [compact]="true" [showMenu]="!shareService.isShareMode()" />
     </div>
 </header>

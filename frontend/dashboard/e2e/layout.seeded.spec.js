@@ -53,6 +53,8 @@ test("Focus preserves the active page while resizing, collapsing and restoring n
     await selectSeededSite(page);
     await expect(siteControl(page)).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask AI about this site" })).toBeEnabled();
+    await expect(sidebar(page).getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
+    await expect(page.locator("app-layout-page-bar .ask-ai-trigger")).toHaveCount(0);
     await expect(page.locator("main h1")).toHaveText("Dashboard");
     await expect(page.locator("main canvas").first()).toBeVisible();
     await page.getByRole("button", { name: "7d", exact: true }).first().click();
@@ -78,17 +80,19 @@ test("Focus preserves the active page while resizing, collapsing and restoring n
     await expect(sidebar(page)).not.toBeVisible();
     await expect(siteControl(page)).toBeVisible();
     await expect(page.locator("app-team-switcher")).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask AI about this site" })).not.toBeVisible();
     await expect(page.locator("main router-outlet")).toHaveAttribute("data-focus-proof", "mounted");
     expect(page.url()).toBe(route);
     await expect(page.getByRole("button", { name: "7d", exact: true }).first()).toHaveAttribute("aria-pressed", "true");
     await screenshot(page, info, "focus-desktop-collapsed");
     await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
     await expect.poll(() => sidebarWidth(page)).toBeCloseTo(width, 0);
+    await expect(sidebar(page).getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
     await sidebar(page).getByRole("button", { name: "Integration", exact: true }).click();
     await sidebar(page).getByRole("button", { name: "Account", exact: true }).click();
     await expect(sidebar(page).getByRole("button", { name: "Integration", exact: true })).toHaveAttribute("aria-expanded", "true");
     await expect(sidebar(page).getByRole("button", { name: "Account", exact: true })).toHaveAttribute("aria-expanded", "true");
+    await sidebar(page).getByRole("button", { name: "Ask AI about this site" }).scrollIntoViewIfNeeded();
     await screenshot(page, info, "focus-desktop-light");
     await page.getByRole("button", { name: "Open user menu" }).click();
     await page.getByRole("menuitem", { name: "Switch to dark mode" }).click();
@@ -122,10 +126,19 @@ test("Focus keeps context and Ask AI usable at mobile widths, breakpoints and 20
         await page.setViewportSize({ width, height: 800 });
         await expect(siteControl(page)).toBeVisible();
         await expect(page.locator("app-team-switcher")).toHaveCount(1);
-        await expect(page.getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
         await expectNoHorizontalOverflow(page);
-        if (width <= 768) await expect(sidebar(page)).not.toBeVisible();
-        else await expect(sidebar(page)).toBeVisible();
+        if (width <= 768) {
+            await expect(sidebar(page)).not.toBeVisible();
+            await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+            const askAI = page.locator(".focus-navigation-drawer").getByRole("button", { name: "Ask AI about this site" });
+            await expect(askAI).toBeInViewport({ ratio: 1 });
+            await expect(askAI).toBeFocused();
+            await page.keyboard.press("Escape");
+            await expect(page.locator(".focus-navigation-drawer")).not.toBeVisible();
+        } else {
+            await expect(sidebar(page)).toBeVisible();
+            await expect(sidebar(page).getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
+        }
     }
     await page.setViewportSize({ width: 360, height: 800 });
     const trigger = page.getByRole("button", { name: "Open navigation", exact: true });
@@ -157,6 +170,8 @@ test("Focus keeps context and Ask AI usable at mobile widths, breakpoints and 20
     await page.evaluate(() => (document.documentElement.style.zoom = "2"));
     await expectNoHorizontalOverflow(page);
     await expect(siteControl(page)).toBeVisible();
+    const zoomNavigation = page.getByRole("button", { name: "Open navigation", exact: true });
+    if (await zoomNavigation.isVisible()) await zoomNavigation.click();
     await expect(page.getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
     await screenshot(page, info, "focus-zoom-200");
 });
@@ -195,8 +210,11 @@ test("Focus keeps long German team and site names beside a visible Ask AI action
     for (const selector of ["app-team-switcher .p-select-label .truncate", "app-site-selector .site-select-option__domain"]) {
         await expect.poll(() => page.locator(selector).evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(64);
     }
-    await expect(page.locator(".ask-ai-trigger")).toHaveText(de.askAi.title);
-    await expect(page.locator(".ask-ai-trigger")).toBeEnabled();
+    await page.getByRole("button", { name: de.nav.openNavigation, exact: true }).click();
+    const askAI = page.locator(".focus-navigation-drawer .ask-ai-trigger");
+    await expect(askAI).toHaveText(de.askAi.title);
+    await expect(askAI).toBeEnabled();
+    await expect(askAI).toBeInViewport({ ratio: 1 });
     await expectNoHorizontalOverflow(page);
     await screenshot(page, info, "focus-mobile-german-long-context");
 });

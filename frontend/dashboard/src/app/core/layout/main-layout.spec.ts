@@ -461,7 +461,7 @@ describe('MainLayout', () => {
         expect(fixture.nativeElement.querySelector('.ask-ai-trigger')).toBeNull();
     });
 
-    it('opens Ask AI directly from the persistent header when available', async () => {
+    it('opens Ask AI from the top of the sidebar before navigation when available', async () => {
         seedActiveSite();
         bootstrap.status.set({
             needs_setup: false,
@@ -483,9 +483,28 @@ describe('MainLayout', () => {
         expect(askAIItem).toBeUndefined();
         const trigger = fixture.nativeElement.querySelector('.ask-ai-trigger') as HTMLButtonElement;
         expect(trigger?.textContent).toContain('Ask AI');
+        expect(fixture.nativeElement.querySelector('app-layout-sidebar > aside')?.firstElementChild).toBe(trigger);
+        expect(fixture.nativeElement.querySelector('app-layout-page-bar .ask-ai-trigger')).toBeNull();
         trigger.click();
         await fixture.whenStable();
         expect(document.body.querySelector('#ask-ai-drawer')).toBeTruthy();
+    });
+
+    it('opens the single Ask AI drawer from mobile navigation and closes navigation', async () => {
+        seedActiveSite();
+        bootstrap.status.set({ needs_setup: false, version: 'test', ask_ai: { enabled: true, available: true, status: 'available', budget_exhausted: false } });
+        layoutContext.isMobileDrawerOpen.set(true);
+        await fixture.whenStable();
+
+        const trigger = document.body.querySelector('.focus-navigation-drawer .ask-ai-trigger') as HTMLButtonElement;
+        expect(trigger).toBeTruthy();
+        expect(document.activeElement).toBe(trigger);
+        trigger.click();
+        await fixture.whenStable();
+
+        expect(layoutContext.isMobileDrawerOpen()).toBe(false);
+        expect(document.body.querySelector('#ask-ai-drawer')?.getAttribute('data-p-open')).toBe('true');
+        expect(fixture.nativeElement.querySelectorAll('app-ask-ai-control')).toHaveLength(1);
     });
 
     it('closes Ask AI on entering a shared scope and requires a new explicit request afterward', async () => {

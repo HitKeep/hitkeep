@@ -9,6 +9,8 @@ import { PanelMenuModule } from '@openng/optimus-ui/panelmenu';
 import { FreePlanChip } from '@layout/free-plan-chip';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService, type SidebarMenuSectionItem } from '@layout/sidebar-menu.service';
+import { AskAIControlService } from '@features/ask-ai/ask-ai-control.service';
+import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 
 @Component({
     selector: 'app-layout-sidebar',
@@ -21,6 +23,10 @@ import { SidebarMenuService, type SidebarMenuSectionItem } from '@layout/sidebar
 export class LayoutSidebar {
     readonly hiddenDesktop = input(false);
     protected readonly context = inject(MainLayoutContextService);
+    private readonly askAI = inject(AskAIControlService);
+    private readonly bootstrap = inject(DashboardBootstrapService);
+    protected readonly siteService = this.context.siteService;
+    protected readonly showAskAI = computed(() => !this.shareService.isShareMode() && !!this.bootstrap.status()?.ask_ai?.enabled);
     private readonly sidebarMenu = inject(SidebarMenuService);
     private readonly router = inject(Router);
     private readonly document = inject(DOCUMENT);
@@ -64,6 +70,11 @@ export class LayoutSidebar {
             });
     }
 
+    protected openAskAI(): void {
+        this.closeMobileDrawer();
+        this.askAI.requestOpen();
+    }
+
     protected closeMobileDrawer(): void {
         this.isMobileDrawerOpen.set(false);
     }
@@ -73,7 +84,11 @@ export class LayoutSidebar {
         afterNextRender(
             {
                 write: () => {
-                    if (this.isMobileDrawerOpen()) this.mobileNavigation()?.nativeElement.focus();
+                    if (this.isMobileDrawerOpen()) {
+                        const navigation = this.mobileNavigation()?.nativeElement;
+                        const firstControl = navigation?.parentElement?.querySelector<HTMLElement>('button:not(:disabled), a[href]');
+                        (firstControl ?? navigation)?.focus({ preventScroll: true });
+                    }
                 }
             },
             { injector: this.injector }
