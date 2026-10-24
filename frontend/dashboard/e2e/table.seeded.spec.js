@@ -66,9 +66,13 @@ test.describe("shared table", () => {
         await page.setViewportSize({ width: 390, height: 844 });
         const actions = usersTable(page).locator("td.app-table__actions").first();
         await expect(actions).toBeVisible();
-        const box = await actions.boundingBox();
-        expect(box.x + box.width).toBeLessThanOrEqual(390);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+        await expect
+            .poll(async () => {
+                const box = await actions.boundingBox();
+                return box ? box.x + box.width : Infinity;
+            })
+            .toBeLessThanOrEqual(390);
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
     });
 });
 
