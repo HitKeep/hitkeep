@@ -221,6 +221,6 @@ test("Focus tolerates corrupt or unavailable navigation preferences", async ({ p
     await expect(sidebar(page)).toBeVisible();
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
-    expect(await sidebarWidth(page)).toBeGreaterThanOrEqual(220);
-    expect(await sidebarWidth(page)).toBeLessThanOrEqual(320);
+    await expect.poll(() => sidebarWidth(page)).toBeGreaterThanOrEqual(220);
+    await expect.poll(() => sidebarWidth(page)).toBeLessThanOrEqual(320);
 });
