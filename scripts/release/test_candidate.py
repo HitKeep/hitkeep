@@ -2,7 +2,11 @@ import copy
 import hashlib
 import importlib.util
 import io
+import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -152,6 +156,42 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             candidate.require_matching(b'old', b'new', 'immutable')
         candidate.require_matching(b'same', b'same', 'immutable')
+
+    def test_helm_upgrade_supplies_real_smoke_preconditions(self):
+        if not shutil.which('jq'):
+            self.skipTest('workflow shell execution requires jq')
+        repo = Path(__file__).resolve().parents[2]
+        workflow = (repo / '.github/workflows/pipeline.yml').read_text()
+        step = workflow.split('      - name: Verify exact candidate against immutable supported floor\n', 1)[1]
+        block = step.split('        run: |\n', 1)[1].split('\n      - ', 1)[0]
+        script = '\n'.join(line.removeprefix('          ') for line in block.splitlines())
+        # macOS Bash lacks case conversion; use an already lowercase repository fixture.
+        script = script.replace('${GITHUB_REPOSITORY,,}', '${GITHUB_REPOSITORY}')
+        digest = 'sha256:' + 'd' * 64
+        fixture = {'supported_upgrade_floor': 'v2.12.0', 'fixtures': [{'previous_version': 'v2.12.0', 'platform': 'linux/arm64',
+                   'previous_image': 'example.invalid/previous@' + digest, 'previous_chart': 'oci://example.invalid/chart',
+                   'previous_chart_digest': digest}]}
+        fixtures = self.root / 'tests/fixtures'
+        fixtures.mkdir(parents=True)
+        (fixtures / 'release-fixtures.json').write_text(json.dumps(fixture))
+        bin_dir = self.root / 'bin'
+        bin_dir.mkdir()
+        for name, body in {'go': 'printf "%s\\n" "$FAKE_ROOT"', 'kind': 'exit 0',
+                           'docker': 'if [[ "$*" == *"image inspect"* ]]; then echo arm64; fi',
+                           'helm': 'printf "Digest: %s\\n" "$EXPECTED_DIGEST"'}.items():
+            path = bin_dir / name
+            path.write_text('#!/usr/bin/env bash\nset -euo pipefail\n' + body + '\n')
+            path.chmod(0o755)
+        scripts = self.root / 'scripts'
+        scripts.mkdir()
+        # Execute the actual smoke script's required-identity preflight without a cluster.
+        preflight = (repo / 'scripts/helm-smoke.sh').read_text().split('namespace=', 1)[0]
+        (scripts / 'helm-smoke.sh').write_text(preflight + '\ntest "$previous_chart_digest" = "$EXPECTED_DIGEST"\n')
+        env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], FAKE_ROOT=str(self.root),
+                   EXPECTED_DIGEST=digest, CANDIDATE_DIGEST=self.manifest['image_digest'], VERSION='v2.10.0',
+                   SURFACE='helm', GITHUB_RUN_ID='12', GITHUB_RUN_ATTEMPT='2', GITHUB_REPOSITORY='hitkeep/hitkeep')
+        result = subprocess.run(['bash', '-c', script], cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':

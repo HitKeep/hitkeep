@@ -790,6 +790,7 @@ jobs:
             time previous_output="$(helm pull "$previous_chart" --version "$previous_version" --destination chart 2>&1)"
             grep -Fqx "Digest: $previous_digest" <<< "$previous_output"
             export HITKEEP_PREVIOUS_CHART="$PWD/chart/hitkeep-${previous_version#v}.tgz"
+            export HITKEEP_PREVIOUS_CHART_DIGEST="$previous_digest"
             export HITKEEP_CANDIDATE_CHART="$PWD/chart/hitkeep-${VERSION#v}.tgz"
             export HITKEEP_CANDIDATE_CHART_VERSION="${VERSION#v}"
             time bash ./scripts/helm-smoke.sh "$candidate" self-hosted
