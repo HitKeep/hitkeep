@@ -215,7 +215,7 @@ def optional_command(*args):
         # Only an explicit registry not-found response is absence; outages fail closed.
         error = result.stderr.decode()
         if not (any(marker in error for marker in ('E404', 'MANIFEST_UNKNOWN', 'manifest unknown', 'not found: manifest')) or
-                re.search(r'(?m)^ERROR: \S+: not found\s*$', error)):
+                re.search(r'(?im)^error: (?:failed to perform "FetchReference" on source: )?\S+: not found\s*$', error)):
             raise ValueError('registry read failed')
         return None
     return result.stdout.decode().strip()

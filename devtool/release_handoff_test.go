@@ -28,6 +28,9 @@ func TestReleaseCandidateWaitsForEveryMandatoryCheck(t *testing.T) {
 			t.Errorf("missing mandatory pipeline job %s", job)
 		}
 	}
+	if !strings.Contains(pipeline, `--docs-revision "$DOCS_REVISION"`) {
+		t.Fatal("archive validator must receive the pinned immutable docs revision")
+	}
 	if strings.Contains(pipeline, "retention-days: 1\n") || strings.Contains(release, "gh release upload") || strings.Contains(release, "helm push") {
 		t.Fatal("stable coordinator must certify recoverable inputs without publishing")
 	}

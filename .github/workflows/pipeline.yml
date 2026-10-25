@@ -650,6 +650,7 @@ jobs:
         env:
           TAG: ${{ inputs.release_source_tag }}
           SOURCE_SHA: ${{ inputs.release_source_sha }}
+          DOCS_REVISION: ${{ vars.HITKEEP_DOCS_VALIDATION_SHA }}
         shell: bash
         run: |
           set -euo pipefail
@@ -658,7 +659,7 @@ jobs:
             --configuration "$GITHUB_WORKSPACE/configuration/hitkeep-configuration.json" \
             --manifest "$GITHUB_WORKSPACE/configuration/hitkeep-configuration-manifest.json" \
             --example "$GITHUB_WORKSPACE/configuration/hitkeep.example.yaml" \
-            --tag "$TAG" --source-sha "$SOURCE_SHA"
+            --tag "$TAG" --source-sha "$SOURCE_SHA" --docs-revision "$DOCS_REVISION"
 
   package-tracker:
     if: ${{ inputs.stable_candidate }}

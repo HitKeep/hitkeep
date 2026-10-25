@@ -160,6 +160,12 @@ else:
         with patch.object(candidate.subprocess, 'run', return_value=result):
             self.assertIsNone(candidate.optional_command('docker'))
 
+    def test_native_helm_not_found_is_absence(self):
+        message = b'Error: failed to perform "FetchReference" on source: ghcr.io/hitkeep/charts/hitkeep:999.0.0: not found\n'
+        result = subprocess.CompletedProcess(['helm'], 1, b'', message)
+        with patch.object(candidate.subprocess, 'run', return_value=result):
+            self.assertIsNone(candidate.optional_command('helm'))
+
     def test_npm_matching_package_and_latest_are_noop(self):
         import urllib.request
         writes = []
