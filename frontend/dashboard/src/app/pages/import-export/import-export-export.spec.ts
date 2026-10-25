@@ -2,12 +2,13 @@ import type { Mock } from 'vitest';
 import { HttpHeaders, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslocoTestingModule } from '@jsverse/transloco';
+import { provideTransloco, TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { SiteService } from '@features/sites/services/site.service';
 import { MenuItem } from '@openng/optimus-ui/api';
 import { vi } from 'vitest';
 
 import { ImportExportExportPage } from './import-export-export';
+import { TranslocoHttpLoader } from '../../transloco-loader';
 
 interface ExportPageTestAccess {
     allSitesExportMenuItems: () => MenuItem[];
@@ -313,4 +314,59 @@ describe('ImportExportExportPage', () => {
         expect(row).not.toBeNull();
         return row!;
     }
+});
+
+describe('ImportExportExportPage asynchronous translations', () => {
+    let component: ExportPageTestAccess;
+    let httpMock: HttpTestingController;
+    let transloco: TranslocoService;
+
+    beforeEach(() => {
+        TestBed.configureTestingModule({
+            imports: [ImportExportExportPage],
+            providers: [
+                provideHttpClient(),
+                provideHttpClientTesting(),
+                provideTransloco({
+                    config: { availableLangs: ['de', 'en'], defaultLang: 'de', reRenderOnLangChange: true, prodMode: true },
+                    loader: TranslocoHttpLoader
+                })
+            ]
+        });
+        component = TestBed.createComponent(ImportExportExportPage).componentInstance as unknown as ExportPageTestAccess;
+        httpMock = TestBed.inject(HttpTestingController);
+        transloco = TestBed.inject(TranslocoService);
+    });
+
+    afterEach(() => httpMock.verify());
+
+    it('refreshes cached per-site labels when the initial dictionary finishes loading', () => {
+        const initialMenu = component.siteExportMenuItems('site-1');
+        expect(initialMenu[3].label).toBe('common.exportFormats.json');
+        expect(component.allSitesExportMenuItems()[3].label).toBe('common.exportFormats.json');
+
+        httpMock.expectOne('/i18n/de.json').flush({ common: { exportFormats: { csv: 'CSV-Datei', xlsx: 'Excel-Datei', parquet: 'Parquet-Datei', json: 'JSON-Datei', ndjson: 'NDJSON-Datei' } } });
+
+        expect(component.allSitesExportMenuItems().map((item) => item.label)).toEqual(['CSV-Datei', 'Excel-Datei', 'Parquet-Datei', 'JSON-Datei', 'NDJSON-Datei']);
+        const translatedMenu = component.siteExportMenuItems('site-1');
+        expect(translatedMenu.map((item) => item.label)).toEqual(['CSV-Datei', 'Excel-Datei', 'Parquet-Datei', 'JSON-Datei', 'NDJSON-Datei']);
+        expect(translatedMenu).not.toBe(initialMenu);
+        expect(component.siteExportMenuItems('site-1')).toBe(translatedMenu);
+    });
+
+    it('keeps stable menu items until the switched language dictionary is ready', () => {
+        httpMock.expectOne('/i18n/de.json').flush({ common: { exportFormats: { json: 'JSON-Datei' } } });
+        const germanMenu = component.siteExportMenuItems('site-1');
+        expect(germanMenu[3].label).toBe('JSON-Datei');
+
+        transloco.setActiveLang('en');
+        expect(component.siteExportMenuItems('site-1')).toBe(germanMenu);
+        httpMock.expectOne('/i18n/en.json').flush({ common: { exportFormats: { json: 'JSON' } } });
+
+        const englishMenu = component.siteExportMenuItems('site-1');
+        expect(englishMenu[3].label).toBe('JSON');
+        expect(component.siteExportMenuItems('site-1')).toBe(englishMenu);
+        transloco.setActiveLang('de');
+        expect(component.siteExportMenuItems('site-1')[3].label).toBe('JSON-Datei');
+    });
 });

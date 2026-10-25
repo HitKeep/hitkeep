@@ -33,7 +33,10 @@ export class ImportExportExportPage {
     private readonly siteService = inject(SiteService);
     private readonly transloco = inject(TranslocoService);
     private readonly activeLanguage = injectActiveLang();
-    private readonly siteExportMenuItemsCache = new Map<string, { language: string; items: MenuItem[] }>();
+    private readonly siteExportMenuItemsCache = computed(() => {
+        this.activeLanguage();
+        return new Map<string, MenuItem[]>();
+    });
     protected readonly sites = this.siteService.sites;
     protected readonly isSitesLoading = this.siteService.isLoading;
     protected readonly allSitesExportMenuItems = computed<MenuItem[]>(() => {
@@ -62,10 +65,10 @@ export class ImportExportExportPage {
     }
 
     protected siteExportMenuItems(siteID: string): MenuItem[] {
-        const language = this.activeLanguage();
-        const cached = this.siteExportMenuItemsCache.get(siteID);
-        if (cached?.language === language) {
-            return cached.items;
+        const cache = this.siteExportMenuItemsCache();
+        const cached = cache.get(siteID);
+        if (cached) {
+            return cached;
         }
 
         const items = buildTakeoutExportMenuItems(this.transloco, (format) => {
@@ -74,7 +77,7 @@ export class ImportExportExportPage {
                 this.downloadSite(site, format);
             }
         });
-        this.siteExportMenuItemsCache.set(siteID, { language, items });
+        cache.set(siteID, items);
         return items;
     }
 
