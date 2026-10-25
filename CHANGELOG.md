@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.15.0](https://github.com/HitKeep/hitkeep/compare/v2.14.2...v2.15.0) (2026-10-25)
+
+
+### Features
+
+* connect assistants to scoped analytics and public discovery ([#411](https://github.com/HitKeep/hitkeep/issues/411)) ([fafb021](https://github.com/HitKeep/hitkeep/commit/fafb0211de2365bde570f54875a0bc8b797cd798))
+* **layout:** reorganize navigation and declutter the sidebar ([#391](https://github.com/HitKeep/hitkeep/issues/391)) ([828ccb5](https://github.com/HitKeep/hitkeep/commit/828ccb505e2be708469c718556f66fbb9b893633))
+* **oauth:** add resource-scoped integrations and client administration ([#408](https://github.com/HitKeep/hitkeep/issues/408)) ([faed560](https://github.com/HitKeep/hitkeep/commit/faed560d135422db9d385a8d5d2ef831aa57a094))
+
+
+### Bug Fixes
+
+* align OAuth management details with shared dialogs ([#419](https://github.com/HitKeep/hitkeep/issues/419)) ([0849743](https://github.com/HitKeep/hitkeep/commit/0849743e9b2170eb99cf1c053fb11334c1997c93))
+* **layout:** restore Ask AI to sidebar navigation ([#420](https://github.com/HitKeep/hitkeep/issues/420)) ([d36e8d0](https://github.com/HitKeep/hitkeep/commit/d36e8d0daed2f6cc21612f063b61267a5dd7090c))
+* migrate GitHub organization release identities ([#418](https://github.com/HitKeep/hitkeep/issues/418)) ([5587bc9](https://github.com/HitKeep/hitkeep/commit/5587bc960a61ca6fb81975a2b7e63aa88a6aa9f6))
+* **oauth:** harden MCP agent connections ([#410](https://github.com/HitKeep/hitkeep/issues/410)) ([f6cc129](https://github.com/HitKeep/hitkeep/commit/f6cc1295c77efbaa598bab50da59a0ae9f7f558f))
+* refresh export translations and compatible dependencies ([#422](https://github.com/HitKeep/hitkeep/issues/422)) ([d903126](https://github.com/HitKeep/hitkeep/commit/d90312655d187ecf61055e344092704651bf01cf))
+
 ## [2.14.2](https://github.com/PascaleBeier/hitkeep/compare/v2.14.1...v2.14.2) (2026-10-18)
 
 
