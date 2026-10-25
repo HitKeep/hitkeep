@@ -7,6 +7,10 @@ on:
         description: "Immutable digest of the exact-version candidate image"
         value: ${{ jobs.build-and-push-image.outputs.image_digest }}
     inputs:
+      stable_candidate:
+        type: boolean
+        default: false
+        description: Build unpublished stable candidate inputs
       version:
         required: true
         type: string
@@ -71,11 +75,13 @@ on:
         description: "Prefix for the short-SHA Docker tag shown in prerelease notes"
     secrets:
       token:
-        required: true
+        required: false
       DOCKERHUB_USERNAME:
-        required: true
+        required: false
       DOCKERHUB_TOKEN:
-        required: true
+        required: false
+      RELEASE_APP_PRIVATE_KEY:
+        required: false
 
 jobs:
   build-dashboard:
@@ -100,6 +106,27 @@ jobs:
       - name: Build deterministic dashboard archive
         run: ./hk ci build-dashboard
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: public-assets-${{ inputs.version }}
+          path: public-assets.tar.gz
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
+          compression-level: 0
+
+  build-configuration:
+    name: Generate release configuration
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Generate release configuration inputs
         env:
           RELEASE_INPUTS_DIR: ${{ runner.temp }}/hitkeep-release-inputs
@@ -123,16 +150,9 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: public-assets-${{ inputs.version }}
-          path: public-assets.tar.gz
-          retention-days: 1
-          compression-level: 0
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
           name: release-inputs-${{ inputs.version }}
           path: ${{ runner.temp }}/hitkeep-release-inputs
-          retention-days: 1
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
           compression-level: 0
 
   build-binaries:
@@ -233,7 +253,7 @@ jobs:
           path: |
             hitkeep-${{ matrix.artifact_suffix }}
             hitkeep-cloud-${{ matrix.artifact_suffix }}
-          retention-days: 1
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
           compression-level: 0
 
       - name: Attest Binaries
@@ -247,8 +267,7 @@ jobs:
     name: Build multi-architecture release archives
     needs:
       - build-binaries
-      - build-dashboard
-    if: ${{ !cancelled() }}
+      - build-configuration
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -331,7 +350,7 @@ jobs:
           path: |
             ${{ steps.release-artifacts.outputs.release_dir }}/*.tar.gz
             ${{ steps.release-artifacts.outputs.release_dir }}/goreleaser-SHA256SUMS
-          retention-days: 1
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
           compression-level: 0
 
   upload-release-binaries:
@@ -528,6 +547,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Login to Docker Hub
+        if: ${{ !inputs.stable_candidate }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -544,8 +564,10 @@ jobs:
         with:
           images: |
             ${{ steps.image.outputs.name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/hitkeep
+            ${{ !inputs.stable_candidate && format('{0}/hitkeep', secrets.DOCKERHUB_USERNAME) || '' }}
           tags: ${{ inputs.meta_config }}
+          labels: |
+            org.opencontainers.image.version=${{ inputs.version }}
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -576,8 +598,212 @@ jobs:
           push-to-registry: true
 
       - name: Attest Docker Hub Image
+        if: ${{ !inputs.stable_candidate }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/hitkeep
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  docs-compatibility:
+    if: ${{ inputs.stable_candidate }}
+    needs: build-configuration
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup-node-npm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ inputs.version }}
+          path: configuration
+      - name: Require reviewed docs revision
+        env:
+          DOCS_REVISION: ${{ vars.HITKEEP_DOCS_VALIDATION_SHA }}
+          APP_ID: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+        run: |
+          [[ "$DOCS_REVISION" =~ ^[a-f0-9]{40}$ && "$APP_ID" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: docs-token
+        with:
+          app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: HitKeep
+          repositories: hitkeep-docs
+          permission-contents: read
+      - name: Fetch reviewed private validator and revoke fetching credential
+        env:
+          GH_TOKEN: ${{ steps.docs-token.outputs.token }}
+          DOCS_REVISION: ${{ vars.HITKEEP_DOCS_VALIDATION_SHA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'gh api --method DELETE installation/token >/dev/null' EXIT
+          gh api "repos/HitKeep/hitkeep-docs/tarball/$DOCS_REVISION" > "$RUNNER_TEMP/docs.tar.gz"
+          mkdir "$RUNNER_TEMP/docs-validator"
+          tar -xzf "$RUNNER_TEMP/docs.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/docs-validator"
+          rm "$RUNNER_TEMP/docs.tar.gz"
+      - name: Validate candidate configuration using reviewed docs code
+        env:
+          TAG: ${{ inputs.release_source_tag }}
+          SOURCE_SHA: ${{ inputs.release_source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/docs-validator"
+          node scripts/validate-release-candidate.mjs \
+            --configuration "$GITHUB_WORKSPACE/configuration/hitkeep-configuration.json" \
+            --manifest "$GITHUB_WORKSPACE/configuration/hitkeep-configuration-manifest.json" \
+            --example "$GITHUB_WORKSPACE/configuration/hitkeep.example.yaml" \
+            --tag "$TAG" --source-sha "$SOURCE_SHA"
+
+  package-tracker:
+    if: ${{ inputs.stable_candidate }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.checkout_ref }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: $/.github/actions/setup-node-npm
+      - working-directory: frontend/dashboard
+        run: npm ci --no-audit --no-fund
+      - name: Verify and pack tracker once
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan_id="$(./hk qa plan pr --output json | jq -r '.data.plan_id')"
+          ./hk qa pr --plan-id "$plan_id" --gate tracker-package
+          test "$(jq -r .version frontend/tracker/package.json)" = "${VERSION#v}"
+          cd frontend/tracker
+          tarball="$(npm pack --ignore-scripts --json | jq -r '.[0].filename')"
+          mv "$tarball" verified-tracker.tgz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tracker-package-${{ inputs.version }}
+          path: frontend/tracker/verified-tracker.tgz
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
+          compression-level: 0
+          if-no-files-found: error
+
+  package-chart:
+    if: ${{ inputs.stable_candidate }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.checkout_ref }}
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Package exact candidate chart
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(awk '/^version:/ {print $2}' charts/hitkeep/Chart.yaml)" = "${VERSION#v}"
+          helm lint --strict charts/hitkeep
+          helm package charts/hitkeep --version "${VERSION#v}" --app-version "${VERSION#v}" --destination chart
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chart-${{ inputs.version }}
+          path: chart/*.tgz
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
+          if-no-files-found: error
+
+  upgrade-from-supported-floor:
+    name: Upgrade ${{ matrix.surface }} from supported floor
+    if: ${{ inputs.stable_candidate }}
+    needs: [build-and-push-image, package-chart]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        surface: [docker, compose, helm]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.checkout_ref }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - if: ${{ matrix.surface == 'helm' }}
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - if: ${{ matrix.surface == 'helm' }}
+        run: go install sigs.k8s.io/kind@v0.33.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: chart-${{ inputs.version }}
+          path: chart
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Verify exact candidate against immutable supported floor
+        env:
+          CANDIDATE_DIGEST: ${{ needs.build-and-push-image.outputs.image_digest }}
+          VERSION: ${{ inputs.version }}
+          SURFACE: ${{ matrix.surface }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          candidate="ghcr.io/${GITHUB_REPOSITORY,,}@${CANDIDATE_DIGEST}"
+          docker pull "$candidate"
+          platform="linux/$(docker image inspect "$candidate" --format '{{.Architecture}}')"
+          manifest=tests/fixtures/release-fixtures.json
+          previous_version="$(jq -r '.supported_upgrade_floor' "$manifest")"
+          fixture="$(jq -ce --arg platform "$platform" --arg version "$previous_version" '[.fixtures[] | select(.previous_version == $version and .platform == $platform)] | if length == 1 then .[0] else error("ambiguous fixture") end' "$manifest")"
+          export HITKEEP_PREVIOUS_IMAGE="$(jq -r .previous_image <<< "$fixture")"
+          [[ "$HITKEEP_PREVIOUS_IMAGE" == *@sha256:* ]]
+          if [[ "$SURFACE" == docker ]]; then
+            ./scripts/docker-smoke.sh "$candidate" self-hosted --recreate
+          elif [[ "$SURFACE" == compose ]]; then
+            ./scripts/compose-smoke.sh "$candidate" self-hosted
+          else
+            kind_bin="$(go env GOPATH)/bin/kind"
+            cluster="hitkeep-helm-upgrade-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            trap '"$kind_bin" delete cluster --name "$cluster"' EXIT
+            time "$kind_bin" create cluster --name "$cluster"
+            previous_chart="$(jq -r .previous_chart <<< "$fixture")"
+            previous_digest="$(jq -r .previous_chart_digest <<< "$fixture")"
+            [[ "$previous_chart" == oci://* && "$previous_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            time previous_output="$(helm pull "$previous_chart" --version "$previous_version" --destination chart 2>&1)"
+            grep -Fqx "Digest: $previous_digest" <<< "$previous_output"
+            export HITKEEP_PREVIOUS_CHART="$PWD/chart/hitkeep-${previous_version#v}.tgz"
+            export HITKEEP_CANDIDATE_CHART="$PWD/chart/hitkeep-${VERSION#v}.tgz"
+            export HITKEEP_CANDIDATE_CHART_VERSION="${VERSION#v}"
+            time bash ./scripts/helm-smoke.sh "$candidate" self-hosted
+          fi
+      - name: Record tested digest
+        env:
+          DIGEST: ${{ needs.build-and-push-image.outputs.image_digest }}
+          SURFACE: ${{ matrix.surface }}
+        run: |
+          mkdir evidence
+          printf '%s\n' "$DIGEST" > "evidence/$SURFACE.digest"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upgrade-evidence-${{ matrix.surface }}
+          path: evidence/*.digest
+          retention-days: ${{ inputs.stable_candidate && 30 || 1 }}
+          if-no-files-found: error

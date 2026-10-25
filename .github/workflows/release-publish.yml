@@ -1,0 +1,248 @@
+name: Release publication
+
+on:
+  # Exact producer and bytes are authenticated before writes; only default-branch tooling executes.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful Release candidate run
+        required: true
+        type: string
+      source_run_attempt:
+        description: Exact successful candidate attempt
+        required: true
+        type: string
+      channel:
+        description: Retry only this publication destination
+        type: choice
+        options: [all, github, npm, images, helm]
+        default: all
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: stable-publication
+  cancel-in-progress: false
+
+env:
+  SOURCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
+  SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt || github.event.workflow_run.run_attempt }}
+
+jobs:
+  verify:
+    if: ${{ vars.RELEASE_PUBLICATION_ENABLED == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    outputs:
+      ready: ${{ steps.verify.outputs.ready }}
+      tag: ${{ steps.verify.outputs.tag }}
+      source_sha: ${{ steps.verify.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify producer and every candidate byte before publication
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTOMATIC: ${{ github.event_name == 'workflow_run' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ && "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          flags=()
+          if [[ "$AUTOMATIC" == true ]]; then flags+=(--automatic); fi
+          python3 scripts/release/candidate.py verify --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified "${flags[@]}"
+
+  github:
+    needs: verify
+    if: ${{ needs.verify.outputs.ready == 'true' && (github.event_name == 'workflow_run' || inputs.channel == 'all' || inputs.channel == 'github') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Publish matching complete GitHub inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/candidate.py publish --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified --channel github
+
+  npm:
+    needs: verify
+    if: ${{ needs.verify.outputs.ready == 'true' && (github.event_name == 'workflow_run' || inputs.channel == 'all' || inputs.channel == 'npm') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: $/.github/actions/setup-node-npm
+      - name: Publish verified tracker with npm OIDC
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/candidate.py publish --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified --channel npm
+
+  images:
+    needs: verify
+    if: ${{ needs.verify.outputs.ready == 'true' && (github.event_name == 'workflow_run' || inputs.channel == 'all' || inputs.channel == 'images') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Verify evidence before exposing registry credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/candidate.py verify --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Copy exact candidate digest and advance non-stale channels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/hitkeep
+        run: python3 scripts/release/candidate.py publish --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified --channel images
+
+  helm:
+    needs: verify
+    if: ${{ needs.verify.outputs.ready == 'true' && (github.event_name == 'workflow_run' || inputs.channel == 'all' || inputs.channel == 'helm') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Verify evidence before registry login
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/candidate.py verify --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified
+      - name: Login and publish exact chart package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | helm registry login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+          python3 scripts/release/candidate.py publish --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_RUN_ATTEMPT" --directory verified --channel helm
+
+  docs:
+    needs: [verify, github]
+    if: ${{ vars.RELEASE_DOCS_DELIVERY_ENABLED == 'true' && needs.github.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: dispatch-token
+        with:
+          app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: HitKeep
+          repositories: hitkeep-docs
+          permission-actions: write
+          permission-contents: read
+      - name: Dispatch and verify only documentation delivery
+        env:
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          SOURCE_READ_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: python3 scripts/release/delivery.py --target docs --tag "$TAG" --source-sha "$SOURCE_SHA" --correlation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT.docs"
+
+  cloud:
+    needs: [verify, github, npm, images, helm]
+    if: ${{ vars.RELEASE_CLOUD_DELIVERY_ENABLED == 'true' && needs.github.result == 'success' && needs.npm.result == 'success' && needs.images.result == 'success' && needs.helm.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: dispatch-token
+        with:
+          app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: HitKeep
+          repositories: hitkeep-infra
+          permission-actions: write
+          permission-contents: read
+      - name: Dispatch and verify only cloud delivery
+        env:
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          SOURCE_READ_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: python3 scripts/release/delivery.py --target cloud --tag "$TAG" --source-sha "$SOURCE_SHA" --correlation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT.cloud"
+
+  summary:
+    if: ${{ always() }}
+    needs: [verify, github, npm, images, helm, docs, cloud]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Report independent destination results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              for name, value in json.loads(os.environ['RESULTS']).items():
+                  status = {'success': 'published or already matching', 'skipped': 'not attempted'}.get(value['result'], value['result'])
+                  if value['result'] == 'success' and name in ('docs', 'cloud'):
+                      status = 'delivery verified'
+                  if name == 'verify' and value['result'] == 'success':
+                      status = 'candidate verified' if value.get('outputs', {}).get('ready') == 'true' else 'no candidate'
+                  summary.write(f'- {name}: {status}\n')
+          PY

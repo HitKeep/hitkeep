@@ -224,6 +224,25 @@ Development information has one owner:
 
 Do not copy build tags, cloud defaults, port assignments, tool versions, or QA matrices into new documentation. Query `hk` instead. `./hk skills check` verifies both canonical skill packs and the product/contributor boundary.
 
+## Release Recovery
+
+The Release workflow keeps release-please and builds a validated candidate before
+publication. Its candidate artifact is retained for 30 days and records the exact
+source, producer attempt, tested image digest, and artifact checksums.
+
+Use the Release publication workflow with the original `source_run_id`,
+`source_run_attempt`, and one `channel` to recover a destination. Recovery verifies
+the evidence and publishes the existing bytes; it does not rebuild. Matching
+immutable content is left in place, conflicting content fails, and older retries
+cannot move stable channels backward. Expired evidence requires explicit candidate
+validation. Never overwrite a published version to recover a partial release.
+
+Documentation and cloud delivery have separate receiver workflows and completion
+status. A selected publication-channel retry does not dispatch either receiver.
+Automatic publication and each delivery path stay disabled until maintainers have
+installed and verified their scoped credentials, receiver revisions, repository
+protections, and npm trusted-publisher permissions.
+
 ## Pull Requests
 
 - Keep changes focused and explain the user-visible or maintenance outcome.
