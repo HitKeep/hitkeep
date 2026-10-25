@@ -171,7 +171,8 @@ test("Focus keeps context and Ask AI usable at mobile widths, breakpoints and 20
     await expectNoHorizontalOverflow(page);
     await expect(siteControl(page)).toBeVisible();
     const zoomNavigation = page.getByRole("button", { name: "Open navigation", exact: true });
-    if (await zoomNavigation.isVisible()) await zoomNavigation.click();
+    await expect(zoomNavigation).toBeVisible();
+    await zoomNavigation.click();
     await expect(page.getByRole("button", { name: "Ask AI about this site" })).toBeVisible();
     await screenshot(page, info, "focus-zoom-200");
 });
