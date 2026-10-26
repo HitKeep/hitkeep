@@ -16,6 +16,9 @@ SPEC = importlib.util.spec_from_file_location('candidate', Path(__file__).with_n
 candidate = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(candidate)
 
+VERIFIED_ATTESTATION = json.dumps([{'verificationResult': {'statement': {'predicate': {'runDetails': {
+    'metadata': {'invocationId': 'https://github.com/HitKeep/hitkeep/actions/runs/12/attempts/2'}}}}}}])
+
 
 class CandidateTests(unittest.TestCase):
     def setUp(self):
@@ -102,13 +105,44 @@ class CandidateTests(unittest.TestCase):
                    'assets': [{'name': 'release-candidate.json', 'id': 1}]}
         with patch.object(candidate, 'json_api', side_effect=[release, self.run, {'object': {'type': 'commit', 'sha': 'a' * 40}}]), \
                 patch.object(candidate, 'api', return_value=json.dumps(self.manifest).encode()), \
-                patch.object(candidate, 'command') as command:
+                patch.object(candidate, 'command', return_value=VERIFIED_ATTESTATION) as command:
             self.assertEqual(candidate.public_candidate('v2.10.0', 'a' * 40, self.root), self.manifest)
         args = command.call_args.args
         self.assertEqual(args[:3], ('gh', 'attestation', 'verify'))
         self.assertEqual(args[args.index('--signer-workflow') + 1], 'HitKeep/hitkeep/.github/workflows/release.yml')
         self.assertEqual(args[args.index('--source-ref') + 1], 'refs/heads/main')
         self.assertEqual(args[args.index('--source-digest') + 1], 'a' * 40)
+        self.assertEqual(args[args.index('--format') + 1], 'json')
+
+    def test_signed_certificate_and_predicate_cannot_disagree(self):
+        from unittest.mock import patch
+        expected = 'https://github.com/HitKeep/hitkeep/actions/runs/12/attempts/2'
+        wrong = expected.replace('/attempts/2', '/attempts/1')
+        for certificate_uri, predicate_uri in ((wrong, expected), (expected, wrong)):
+            verified = json.loads(VERIFIED_ATTESTATION)
+            result = verified[0]['verificationResult']
+            result['signature'] = {'certificate': {'runInvocationURI': certificate_uri}}
+            result['statement']['predicate']['runDetails']['metadata']['invocationId'] = predicate_uri
+            with self.subTest(certificate=certificate_uri), patch.object(candidate, 'command', return_value=json.dumps(verified)), self.assertRaises(ValueError):
+                candidate.verify_attestation(self.root / 'release-candidate.json', self.manifest)
+        certificate_only = [{'verificationResult': {'signature': {'certificate': {'runInvocationURI': expected}}}}]
+        with patch.object(candidate, 'command', return_value=json.dumps(certificate_only)):
+            candidate.verify_attestation(self.root / 'release-candidate.json', self.manifest)
+
+    def test_public_candidate_rejects_another_signed_attempt(self):
+        from unittest.mock import patch
+        release = {'draft': False, 'prerelease': False, 'tag_name': 'v2.10.0',
+                   'assets': [{'name': 'release-candidate.json', 'id': 1}]}
+        for invocation in ('https://github.com/HitKeep/hitkeep/actions/runs/12/attempts/1',
+                           'https://github.com/HitKeep/hitkeep/actions/runs/13/attempts/2',
+                           'https://github.com/attacker/repo/actions/runs/12/attempts/2', ''):
+            verified = json.loads(VERIFIED_ATTESTATION)
+            verified[0]['verificationResult']['statement']['predicate']['runDetails']['metadata']['invocationId'] = invocation
+            with self.subTest(invocation=invocation), \
+                    patch.object(candidate, 'json_api', side_effect=[release, self.run, {'object': {'type': 'commit', 'sha': 'a' * 40}}]), \
+                    patch.object(candidate, 'api', return_value=json.dumps(self.manifest).encode()), \
+                    patch.object(candidate, 'command', return_value=json.dumps(verified)), self.assertRaises(ValueError):
+                candidate.public_candidate('v2.10.0', 'a' * 40, self.root)
 
     def test_valid_candidate(self):
         candidate.validate_manifest(self.manifest, self.root)

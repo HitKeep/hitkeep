@@ -43,6 +43,9 @@ fault = os.environ.get('FAULT', '')
 repo = 'HitKeep/' + os.environ['RECEIVER_REPO']
 workflow = os.environ['RECEIVER_WORKFLOW']
 if args[:2] == ['run', 'watch']:
+    if os.environ['RECEIVER_REPO'] in ('hitkeep-docs', 'hitkeep-infra'):
+        print('PRIVATE_WATCH_STDOUT')
+        print('PRIVATE_WATCH_STDERR', file=sys.stderr)
     sys.exit(1 if fault == 'watch' else 0)
 endpoint = next((arg for arg in args if arg.startswith('repos/')), '')
 if endpoint.endswith('/git/ref/heads/main'):
@@ -96,6 +99,15 @@ else:
                 self.assertEqual(sum(f'repos/HitKeep/{repo}/actions/runs/42' in call for call in calls), 2)
                 self.assertIn('verified=true', (self.root / 'output').read_text())
 
+    def test_private_watch_never_exposes_progress_or_annotations(self):
+        for target in ('docs', 'cloud'):
+            for fault in ('', 'watch'):
+                with self.subTest(target=target, fault=fault):
+                    result, _ = self.execute(target, fault)
+                    self.assertEqual(result.returncode == 0, fault == '')
+                    self.assertNotIn('PRIVATE_WATCH_STDOUT', result.stdout + result.stderr)
+                    self.assertNotIn('PRIVATE_WATCH_STDERR', result.stdout + result.stderr)
+
     def test_unknown_dispatch_and_wrong_identity_fail_without_another_destination(self):
         for fault in ('empty', 'lost', 'id', 'run_id', 'repository', 'head_repository', 'path', 'event', 'head_branch',
                       'head_sha', 'watch', 'receiver', 'pending', 'readback'):
@@ -119,6 +131,14 @@ else:
                     needs = re.search(r'^    needs: (.+)$', job, re.M).group(1)
                     self.assertNotIn(other, needs)
         self.assertFalse((WORKFLOW.parents[2] / 'scripts/release/delivery.py').exists())
+
+    def test_release_groups_keep_all_native_pending_runs(self):
+        for path in (WORKFLOW, WORKFLOW.with_name('release.yml')):
+            block = path.read_text().split('\nconcurrency:\n', 1)[1].split('\n\n', 1)[0]
+            fields = dict(line.strip().split(': ', 1) for line in block.splitlines())
+            with self.subTest(workflow=path.name):
+                self.assertEqual(fields.get('queue'), 'max')
+                self.assertEqual(fields.get('cancel-in-progress'), 'false')
 
     def test_activation_conditions_preserve_source_channels_and_partial_success(self):
         from types import SimpleNamespace as NS

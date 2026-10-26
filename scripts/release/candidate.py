@@ -135,6 +135,23 @@ def json_api(path):
     return json.loads(api(path))
 
 
+def verify_attestation(path, manifest):
+    verified = json.loads(command('gh', 'attestation', 'verify', str(path), '--repo', REPO,
+                                  '--signer-workflow', REPO + '/' + WORKFLOW,
+                                  '--source-digest', manifest['producer_workflow_sha'],
+                                  '--source-ref', 'refs/heads/main', '--format', 'json'))
+    expected = f"https://github.com/{REPO}/actions/runs/{manifest['producer_run_id']}/attempts/{manifest['producer_run_attempt']}"
+    for result in verified:
+        result = result.get('verificationResult', {})
+        statement = result.get('statement', {})
+        claimed = statement.get('predicate', {}).get('runDetails', {}).get('metadata', {}).get('invocationId')
+        certificate = result.get('signature', {}).get('certificate', {})
+        invocation = certificate.get('runInvocationURI', claimed)
+        if invocation == expected and claimed in (None, expected):
+            return
+    raise ValueError('attestation does not certify the exact producer attempt')
+
+
 def verify(run_id, attempt, root, automatic=False):
     run = json_api(f'actions/runs/{run_id}/attempts/{attempt}')
     validate_run(run, run_id, attempt)
@@ -158,8 +175,7 @@ def verify(run_id, attempt, root, automatic=False):
         tag = json_api(f"git/tags/{tag['sha']}")['object']
     if tag.get('type') != 'commit' or tag['sha'] != m['source_commit']:
         raise ValueError('release tag changed')
-    command('gh', 'attestation', 'verify', str(root / 'release-candidate.json'), '--repo', REPO,
-            '--signer-workflow', REPO + '/' + WORKFLOW, '--source-digest', run['head_sha'], '--source-ref', 'refs/heads/main')
+    verify_attestation(root / 'release-candidate.json', m)
     return m
 
 
@@ -189,9 +205,7 @@ def public_candidate(tag, source_sha, root):
         tag_object = json_api('git/tags/' + tag_object['sha'])['object']
     if tag_object['type'] != 'commit' or tag_object['sha'] != source_sha:
         raise ValueError('public release tag changed')
-    command('gh', 'attestation', 'verify', str(path), '--repo', REPO,
-            '--signer-workflow', REPO + '/' + WORKFLOW,
-            '--source-ref', 'refs/heads/main', '--source-digest', manifest['producer_workflow_sha'])
+    verify_attestation(path, manifest)
     return manifest
 
 

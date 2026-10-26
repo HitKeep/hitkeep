@@ -19,7 +19,8 @@ class PublicationTests(unittest.TestCase):
     setUp = test_candidate.CandidateTests.setUp
 
     def test_bad_evidence_never_reaches_a_write_command(self):
-        for fault in ('missing', 'expired', 'untrusted', 'unsuccessful', 'tampered', 'changed-tag', 'wrong-attestation'):
+        for fault in ('missing', 'expired', 'untrusted', 'unsuccessful', 'tampered', 'changed-tag', 'wrong-attestation',
+                      'wrong-signed-run', 'wrong-signed-attempt', 'wrong-signed-repository', 'unsigned-invocation'):
             with self.subTest(fault=fault):
                 case = self.root / fault
                 case.mkdir()
@@ -45,6 +46,7 @@ class PublicationTests(unittest.TestCase):
                     'actions/runs/12/artifacts?per_page=100': {'artifacts': [] if fault == 'missing' else [artifact]},
                     'compare/' + 'a' * 40 + '...main': {'status': 'identical'},
                     'git/ref/tags/v2.10.0': {'object': {'type': 'commit', 'sha': ('d' if fault == 'changed-tag' else 'a') * 40}},
+                    'releases/tags/v2.10.0': {'tag_name': 'v2.10.0', 'draft': True, 'prerelease': False, 'assets': []},
                 }
                 (case / 'responses.json').write_text(json.dumps(responses))
                 gh = case / 'gh'
@@ -53,7 +55,16 @@ import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FAKE_GH_ROOT'])
 with (root / 'commands.jsonl').open('a') as log: log.write(json.dumps(sys.argv[1:]) + '\\n')
 if sys.argv[1:3] == ['attestation', 'verify']:
-    sys.exit(1 if root.name == 'wrong-attestation' else 0)
+    if root.name == 'wrong-attestation': sys.exit(1)
+    repo = 'attacker/repo' if root.name == 'wrong-signed-repository' else 'HitKeep/hitkeep'
+    run = 13 if root.name == 'wrong-signed-run' else 12
+    attempt = 1 if root.name == 'wrong-signed-attempt' else 2
+    uri = f'https://github.com/{repo}/actions/runs/{run}/attempts/{attempt}'
+    result = {'verificationResult': {'statement': {'predicate': {'runDetails': {'metadata': {'invocationId': uri}}}}}}
+    if root.name == 'unsigned-invocation':
+        result = {'attestation': {'invocationId': uri}, 'verificationResult': {}}
+    print(json.dumps([result]))
+    sys.exit(0)
 if sys.argv[1] != 'api': sys.exit(99)
 route = sys.argv[2].removeprefix('repos/HitKeep/hitkeep/')
 if route == 'actions/artifacts/7/zip':

@@ -27,6 +27,7 @@ permissions: {}
 
 concurrency:
   group: stable-publication
+  queue: max
   cancel-in-progress: false
 
 env:
@@ -225,7 +226,7 @@ jobs:
           gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
           jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
             '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
-          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact >/dev/null 2>&1
           gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
           jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
             '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
@@ -294,7 +295,7 @@ jobs:
           gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
           jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
             '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
-          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact >/dev/null 2>&1
           gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
           jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
             '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
