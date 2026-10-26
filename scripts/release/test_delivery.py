@@ -120,6 +120,48 @@ else:
                     self.assertNotIn(other, needs)
         self.assertFalse((WORKFLOW.parents[2] / 'scripts/release/delivery.py').exists())
 
+    def test_activation_conditions_preserve_source_channels_and_partial_success(self):
+        from types import SimpleNamespace as NS
+        source = WORKFLOW.read_text()
+        for flag in ('RELEASE_PUBLICATION_ENABLED', 'RELEASE_DOCS_DELIVERY_ENABLED', 'RELEASE_CLOUD_DELIVERY_ENABLED'):
+            self.assertNotIn(flag, source)
+        github = NS(ref='refs/heads/main', event_name='workflow_dispatch', event=NS(workflow_run=NS(conclusion='success')))
+        inputs = NS(channel='all')
+        needs = NS(verify=NS(outputs=NS(ready='true')), **{name: NS(result='success') for name in ('github', 'npm', 'images', 'helm')})
+        def enabled(job):
+            block = re.split(r'\n  [a-z][a-z-]*:\n', source.split(f'\n  {job}:\n', 1)[1], maxsplit=1)[0]
+            expression = re.search(r'^    if: \$\{\{ (.+) \}\}$', block, re.M).group(1)
+            expression = expression.replace('&&', 'and').replace('||', 'or')
+            return eval(expression, {'__builtins__': {}}, {'github': github, 'inputs': inputs, 'needs': needs})
+        self.assertTrue(enabled('verify'))
+        github.ref = 'refs/heads/untrusted'
+        self.assertFalse(enabled('verify'))
+        github.ref = 'refs/heads/main'
+        github.event_name = 'workflow_run'
+        self.assertTrue(enabled('verify'))
+        github.event.workflow_run.conclusion = 'failure'
+        self.assertFalse(enabled('verify'))
+        github.event_name = 'workflow_dispatch'
+        github.event.workflow_run.conclusion = 'success'
+        for channel in ('github', 'npm', 'images', 'helm'):
+            inputs.channel = channel
+            for target in ('github', 'npm', 'images', 'helm'):
+                self.assertEqual(enabled(target), target == channel)
+            for target in DESTINATIONS:
+                self.assertFalse(enabled(target))
+        inputs.channel = 'all'
+        needs.verify.outputs.ready = 'false'
+        for target in ('github', 'npm', 'images', 'helm'):
+            self.assertFalse(enabled(target))
+        needs.verify.outputs.ready = 'true'
+        needs.npm.result = 'failure'
+        self.assertFalse(enabled('cloud'))
+        for target in ('docs', 'assistant', 'homebrew'):
+            self.assertTrue(enabled(target))
+        needs.github.result = 'failure'
+        for target in DESTINATIONS:
+            self.assertFalse(enabled(target))
+
     def test_summary_requires_receiver_readback(self):
         script = step_script('summary', 'Report independent destination results')
         summary = self.root / 'summary'

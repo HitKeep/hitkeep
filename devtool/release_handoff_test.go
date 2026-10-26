@@ -38,12 +38,12 @@ func TestReleaseCandidateWaitsForEveryMandatoryCheck(t *testing.T) {
 
 func TestPrivilegedPublisherRunsReviewedSourceAndIndependentChannels(t *testing.T) {
 	raw := readReleaseWorkflow(t, "release-publish.yml")
-	for _, required := range []string{"RELEASE_PUBLICATION_ENABLED == 'true'", "group: stable-publication", "ref: ${{ github.sha }}", "--channel github", "--channel npm", "--channel images", "--channel helm"} {
+	for _, required := range []string{"group: stable-publication", "ref: ${{ github.sha }}", "--channel github", "--channel npm", "--channel images", "--channel helm"} {
 		if !strings.Contains(raw, required) {
 			t.Errorf("publisher missing %q", required)
 		}
 	}
-	for _, forbidden := range []string{"ref: ${{ github.event.workflow_run.head_sha }}", "secrets: inherit", "--clobber", "continue-on-error", "npm ci", "./hk"} {
+	for _, forbidden := range []string{"RELEASE_PUBLICATION_ENABLED", "RELEASE_DOCS_DELIVERY_ENABLED", "RELEASE_CLOUD_DELIVERY_ENABLED", "ref: ${{ github.event.workflow_run.head_sha }}", "secrets: inherit", "--clobber", "continue-on-error", "npm ci", "./hk"} {
 		if strings.Contains(raw, forbidden) {
 			t.Errorf("privileged publisher contains %q", forbidden)
 		}

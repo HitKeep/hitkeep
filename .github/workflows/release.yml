@@ -177,4 +177,4 @@ jobs:
         env:
           TAG: ${{ needs.resolve-candidate.outputs.tag }}
         run: |
-          printf 'Validated %s; publication is independent and gated by RELEASE_PUBLICATION_ENABLED.\n' "$TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Validated %s; publication and receiver delivery have independent results.\n' "$TAG" >> "$GITHUB_STEP_SUMMARY"

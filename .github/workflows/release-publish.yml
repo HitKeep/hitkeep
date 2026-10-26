@@ -35,7 +35,7 @@ env:
 
 jobs:
   verify:
-    if: ${{ vars.RELEASE_PUBLICATION_ENABLED == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -165,7 +165,7 @@ jobs:
 
   docs:
     needs: [verify, github]
-    if: ${{ vars.RELEASE_DOCS_DELIVERY_ENABLED == 'true' && needs.github.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    if: ${{ needs.github.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -233,7 +233,7 @@ jobs:
 
   cloud:
     needs: [verify, github, npm, images, helm]
-    if: ${{ vars.RELEASE_CLOUD_DELIVERY_ENABLED == 'true' && needs.github.result == 'success' && needs.npm.result == 'success' && needs.images.result == 'success' && needs.helm.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    if: ${{ needs.github.result == 'success' && needs.npm.result == 'success' && needs.images.result == 'success' && needs.helm.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
