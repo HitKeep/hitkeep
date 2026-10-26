@@ -172,11 +172,21 @@ jobs:
       actions: read
       contents: read
       attestations: read
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.run_url }}
+      verified: ${{ steps.dispatch.outputs.verified }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+      - name: Verify public candidate before dispatch credentials
+        id: public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         id: dispatch-token
         with:
@@ -186,13 +196,40 @@ jobs:
           repositories: hitkeep-docs
           permission-actions: write
           permission-contents: read
-      - name: Dispatch and verify only documentation delivery
+      - name: Dispatch and verify exact receiver run
+        id: dispatch
         env:
           GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
-          SOURCE_READ_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.verify.outputs.tag }}
-          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
-        run: python3 scripts/release/delivery.py --target docs --tag "$TAG" --source-sha "$SOURCE_SHA" --correlation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT.docs"
+          TAG: ${{ steps.public.outputs.tag }}
+          SOURCE_SHA: ${{ steps.public.outputs.source_sha }}
+          CONFIGURATION_SHA256: ${{ steps.public.outputs.configuration_sha256 }}
+          MANIFEST_SHA256: ${{ steps.public.outputs.manifest_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=HitKeep/hitkeep-docs
+          workflow=sync-public-hitkeep-release.yml
+          error="$RUNNER_TEMP/receiver-error"
+          trap 'echo "Receiver completion unverified; inspect the exact run before retrying." >&2' ERR
+          head="$(gh api "repos/$repo/git/ref/heads/main" --jq .object.sha 2>"$error")"
+          [[ "$head" =~ ^[a-f0-9]{40}$ ]]
+          response="$(gh api --method POST "repos/$repo/actions/workflows/$workflow/dispatches" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' -F return_run_details=true -f ref=main \
+            -f "inputs[release_tag]=$TAG" \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[configuration_sha256]=$CONFIGURATION_SHA256" \
+            -f "inputs[manifest_sha256]=$MANIFEST_SHA256" 2>"$error")"
+          run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0 and floor == .)' <<< "$response")"
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+          printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$repo" "$run_id" >> "$GITHUB_OUTPUT"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
 
   cloud:
     needs: [verify, github, npm, images, helm]
@@ -203,11 +240,21 @@ jobs:
       actions: read
       contents: read
       attestations: read
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.run_url }}
+      verified: ${{ steps.dispatch.outputs.verified }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+      - name: Verify public candidate before dispatch credentials
+        id: public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         id: dispatch-token
         with:
@@ -217,17 +264,177 @@ jobs:
           repositories: hitkeep-infra
           permission-actions: write
           permission-contents: read
-      - name: Dispatch and verify only cloud delivery
+      - name: Dispatch and verify exact receiver run
+        id: dispatch
         env:
           GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
-          SOURCE_READ_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.public.outputs.tag }}
+          SOURCE_SHA: ${{ steps.public.outputs.source_sha }}
+          ARTIFACT_SHA256: ${{ steps.public.outputs.artifact_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=HitKeep/hitkeep-infra
+          workflow=release-deploy.yml
+          error="$RUNNER_TEMP/receiver-error"
+          trap 'echo "Receiver completion unverified; inspect the exact run before retrying." >&2' ERR
+          head="$(gh api "repos/$repo/git/ref/heads/main" --jq .object.sha 2>"$error")"
+          [[ "$head" =~ ^[a-f0-9]{40}$ ]]
+          response="$(gh api --method POST "repos/$repo/actions/workflows/$workflow/dispatches" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' -F return_run_details=true -f ref=main \
+            -f "inputs[stack]=both" \
+            -f "inputs[release_version]=$TAG" \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[artifact_sha256]=$ARTIFACT_SHA256" \
+            -f "inputs[artifact_url]=https://github.com/HitKeep/hitkeep/releases/download/$TAG/hitkeep-cloud-linux-arm64" \
+            -f "inputs[mode]=deploy" 2>"$error")"
+          run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0 and floor == .)' <<< "$response")"
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+          printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$repo" "$run_id" >> "$GITHUB_OUTPUT"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+  assistant:
+    needs: [verify, github]
+    if: ${{ needs.github.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.run_url }}
+      verified: ${{ steps.dispatch.outputs.verified }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify public candidate before dispatch credentials
+        id: public
+        env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
-        run: python3 scripts/release/delivery.py --target cloud --tag "$TAG" --source-sha "$SOURCE_SHA" --correlation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT.cloud"
+        run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: dispatch-token
+        with:
+          app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: HitKeep
+          repositories: hitkeep-assistant-plugins
+          permission-actions: write
+          permission-contents: read
+      - name: Dispatch and verify exact receiver run
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          TAG: ${{ steps.public.outputs.tag }}
+          SOURCE_SHA: ${{ steps.public.outputs.source_sha }}
+          PACKAGE_SHA256: ${{ steps.public.outputs.package_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=HitKeep/hitkeep-assistant-plugins
+          workflow=sync-hitkeep-release.yml
+          error="$RUNNER_TEMP/receiver-error"
+          trap 'echo "Receiver completion unverified; inspect the exact run before retrying." >&2' ERR
+          head="$(gh api "repos/$repo/git/ref/heads/main" --jq .object.sha 2>"$error")"
+          [[ "$head" =~ ^[a-f0-9]{40}$ ]]
+          response="$(gh api --method POST "repos/$repo/actions/workflows/$workflow/dispatches" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' -F return_run_details=true -f ref=main \
+            -f "inputs[release_tag]=$TAG" \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[package_sha256]=$PACKAGE_SHA256" 2>"$error")"
+          run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0 and floor == .)' <<< "$response")"
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+          printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$repo" "$run_id" >> "$GITHUB_OUTPUT"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+  homebrew:
+    needs: [verify, github]
+    if: ${{ needs.github.result == 'success' && (github.event_name == 'workflow_run' || inputs.channel == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.run_url }}
+      verified: ${{ steps.dispatch.outputs.verified }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify public candidate before dispatch credentials
+        id: public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: dispatch-token
+        with:
+          app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: HitKeep
+          repositories: homebrew-hitkeep
+          permission-actions: write
+          permission-contents: read
+      - name: Dispatch and verify exact receiver run
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          TAG: ${{ steps.public.outputs.tag }}
+          SOURCE_SHA: ${{ steps.public.outputs.source_sha }}
+          ARCHIVE_SHA256: ${{ steps.public.outputs.archive_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=HitKeep/homebrew-hitkeep
+          workflow=update-formula.yml
+          error="$RUNNER_TEMP/receiver-error"
+          trap 'echo "Receiver completion unverified; inspect the exact run before retrying." >&2' ERR
+          head="$(gh api "repos/$repo/git/ref/heads/main" --jq .object.sha 2>"$error")"
+          [[ "$head" =~ ^[a-f0-9]{40}$ ]]
+          response="$(gh api --method POST "repos/$repo/actions/workflows/$workflow/dispatches" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' -F return_run_details=true -f ref=main \
+            -f "inputs[release_tag]=$TAG" \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[archive_sha256]=$ARCHIVE_SHA256" 2>"$error")"
+          run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0 and floor == .)' <<< "$response")"
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+          printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$repo" "$run_id" >> "$GITHUB_OUTPUT"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head' receiver.json >/dev/null
+          gh run watch "$run_id" --repo "$repo" --exit-status --compact 2>"$error"
+          gh api "repos/$repo/actions/runs/$run_id" > receiver.json 2>"$error"
+          jq -e --arg repo "$repo" --arg workflow ".github/workflows/$workflow" --arg head "$head" --argjson id "$run_id" \
+            '.id == $id and .repository.full_name == $repo and .head_repository.full_name == $repo and .path == $workflow and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $head and .status == "completed" and .conclusion == "success"' receiver.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
 
   summary:
     if: ${{ always() }}
-    needs: [verify, github, npm, images, helm, docs, cloud]
+    needs: [verify, github, npm, images, helm, docs, cloud, assistant, homebrew]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
@@ -235,14 +442,15 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          python3 - <<'PY'
+          python3 - <<'PYTHON'
           import json, os
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               for name, value in json.loads(os.environ['RESULTS']).items():
                   status = {'success': 'published or already matching', 'skipped': 'not attempted'}.get(value['result'], value['result'])
-                  if value['result'] == 'success' and name in ('docs', 'cloud'):
-                      status = 'delivery verified'
+                  outputs = value.get('outputs', {})
+                  if value['result'] == 'success' and name in ('docs', 'cloud', 'assistant', 'homebrew'):
+                      status = 'delivery verified' if outputs.get('verified') == 'true' else 'completion unverified'
                   if name == 'verify' and value['result'] == 'success':
-                      status = 'candidate verified' if value.get('outputs', {}).get('ready') == 'true' else 'no candidate'
-                  summary.write(f'- {name}: {status}\n')
-          PY
+                      status = 'candidate verified' if outputs.get('ready') == 'true' else 'no candidate'
+                  summary.write(f"- {name}: {status} {outputs.get('run_url', '')}\n")
+          PYTHON

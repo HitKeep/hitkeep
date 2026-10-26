@@ -130,6 +130,14 @@ jobs:
           path: candidate
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          name: assistant-package-${{ needs.resolve-candidate.outputs.tag }}
+          path: candidate
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: source-archive-${{ needs.resolve-candidate.outputs.tag }}
+          path: candidate
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
           pattern: upgrade-evidence-*
           path: evidence
           merge-multiple: true
@@ -140,7 +148,7 @@ jobs:
           PRODUCER_WORKFLOW_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ needs.build-release.outputs.image_digest }}
           DOCS_REVISION: ${{ vars.HITKEEP_DOCS_VALIDATION_SHA }}
-          CANDIDATE_CHECKS: '{"native":"success","archives":"success","tracker":"success","chart":"success","docker":"success","compose":"success","helm":"success","docs":"success"}'
+          CANDIDATE_CHECKS: '{"native":"success","archives":"success","tracker":"success","chart":"success","docker":"success","compose":"success","helm":"success","docs":"success","assistant-package":"success","source-archive":"success"}'
         shell: bash
         run: |
           set -euo pipefail
@@ -151,7 +159,7 @@ jobs:
           cd candidate
           sha256sum --check goreleaser-SHA256SUMS
           rm goreleaser-SHA256SUMS
-          sha256sum hitkeep-cloud-linux-* hitkeep-linux-* hitkeep_*.tar.gz hitkeep-configuration.json hitkeep.example.yaml hitkeep-configuration-manifest.json | LC_ALL=C sort > SHA256SUMS
+          sha256sum hitkeep-cloud-linux-* hitkeep-linux-* hitkeep_*.tar.gz hitkeep-source-*.tar.gz hitkeep-analytics-*.zip verified-tracker.tgz hitkeep-*.tgz hitkeep-configuration.json hitkeep.example.yaml hitkeep-configuration-manifest.json | LC_ALL=C sort > SHA256SUMS
           sha256sum --check SHA256SUMS
           cd ..
           python3 scripts/release/candidate.py assemble --directory candidate

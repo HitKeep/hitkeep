@@ -208,7 +208,7 @@ These are normal publishable skill bodies, not generated proxies. Use callable l
 
 ## Product Assistant Packages
 
-The end-user analytics pack in [`skills/`](./skills/README.md) is separate from contributor tooling. [`tests/agent-plugins`](./tests/agent-plugins/README.md) holds offline Claude and OpenAI manifest fixtures and review scenarios. Existing skill tests assemble temporary bundles containing regular copies of exactly the five canonical product skills and references, plus README and LICENSE; no second maintained skill tree or packaging command is needed.
+The end-user analytics pack in [`skills/`](./skills/README.md) is separate from contributor tooling. The [assistant distribution repository](https://github.com/HitKeep/hitkeep-assistant-plugins) owns native Claude and Codex manifests, catalogs, and packaging. The release pipeline runs its pinned packager against the exact app commit, verifies the five canonical skills and licenses against Git, and certifies one deterministic `hitkeep-analytics-X.Y.Z.zip` in the app release. The distribution receiver generates its versioned tree from those same verified bytes; its release links to the app ZIP rather than uploading another copy. [`tests/agent-plugins`](./tests/agent-plugins/README.md) retains offline manifest fixtures and review scenarios.
 
 A package does not grant data access. Use the instance's Assistants page and scoped OAuth or existing API-client setup, then verify the intended client separately. Fixture checks do not establish a working installation, live model safety, directory eligibility, or a public listing. Keep external setup text out of the five transport-neutral procedures embedded by Ask AI.
 
@@ -237,11 +237,28 @@ immutable content is left in place, conflicting content fails, and older retries
 cannot move stable channels backward. Expired evidence requires explicit candidate
 validation. Never overwrite a published version to recover a partial release.
 
-Documentation and cloud delivery have separate receiver workflows and completion
-status. A selected publication-channel retry does not dispatch either receiver.
-Automatic publication and each delivery path stay disabled until maintainers have
-installed and verified their scoped credentials, receiver revisions, repository
-protections, and npm trusted-publisher permissions.
+Documentation, cloud, assistant packages, and Homebrew have independent leaf jobs
+and repository-owned receivers. A selected core `channel` retry dispatches no
+receivers. To recover a leaf, use GitHub's native job rerun; GitHub also reruns its
+dependent summary. To recover a dispatched receiver, follow its exact run link and
+rerun that receiver after inspecting its result. A dispatch response that is lost
+or empty is unknown completion, so inspect GitHub before issuing another dispatch.
+The summary distinguishes verified delivery, failure, skipped work, and completion
+that could not be verified; a partial release does not require replaying successful
+destinations.
+
+If authorization or branch/tag protection blocks delivery, resolve that specific
+policy or credential problem before retrying. Do not bypass protection, force a
+conflicting ref, or overwrite immutable release assets. Maintainers verify scoped
+App credentials, reviewed receiver revisions, protections, and npm trusted-publisher
+permissions before activation. Older releases may publish their own immutable
+artifacts without moving newer package catalogs, formulas, or stable channels back.
+
+The Homebrew source asset is `hitkeep-source-X.Y.Z.tar.gz`, built from the exact app
+commit plus the dashboard assets already built for that candidate. It includes the
+embedded UI and trackers without a second frontend build. Assistant and source
+assets are mandatory candidate checks and inventory, alongside the existing native,
+tracker, chart, docs, and supported-floor upgrade proofs.
 
 ## Pull Requests
 

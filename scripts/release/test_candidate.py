@@ -45,6 +45,71 @@ class CandidateTests(unittest.TestCase):
                     'event': 'push', 'head_branch': 'main', 'head_sha': 'a' * 40,
                     'status': 'completed', 'conclusion': 'success'}
 
+    def test_distribution_assets_and_checks_are_mandatory(self):
+        expected = {'hitkeep-analytics-2.10.0.zip': 'assistant-package',
+                    'hitkeep-source-2.10.0.tar.gz': 'source-archive'}
+        for name, kind in expected.items():
+            with self.subTest(name=name):
+                self.assertEqual(candidate.required_files('2.10.0').get(name), kind)
+                self.assertIn(kind, candidate.CHECKS)
+                manifest = copy.deepcopy(self.manifest)
+                manifest['artifacts'] = [item for item in manifest['artifacts'] if item['name'] != name]
+                with self.assertRaisesRegex(ValueError, 'incomplete candidate inventory'):
+                    candidate.validate_manifest(manifest, self.root)
+
+    def test_public_candidate_refuses_untrusted_evidence_before_delivery(self):
+        from unittest.mock import patch
+        release = {'draft': False, 'prerelease': False, 'tag_name': 'v2.10.0',
+                   'assets': [{'name': 'release-candidate.json', 'id': 1}]}
+        cases = ('draft', 'prerelease', 'missing', 'duplicate', 'tag', 'source', 'producer', 'attempt', 'workflow', 'moved-tag', 'signature')
+        for fault in cases:
+            with self.subTest(fault=fault):
+                manifest, public, run = copy.deepcopy(self.manifest), copy.deepcopy(release), copy.deepcopy(self.run)
+                tag = {'object': {'type': 'commit', 'sha': manifest['source_commit']}}
+                if fault in ('draft', 'prerelease'):
+                    public[fault] = True
+                if fault == 'missing':
+                    public['assets'] = []
+                if fault == 'duplicate':
+                    public['assets'] *= 2
+                if fault == 'tag':
+                    manifest['tag'] = 'v2.9.0'
+                if fault == 'source':
+                    manifest['source_commit'] = 'd' * 40
+                if fault == 'producer':
+                    run['repository']['full_name'] = 'attacker/repo'
+                if fault == 'attempt':
+                    run['run_attempt'] = 1
+                if fault == 'workflow':
+                    run['head_sha'] = 'd' * 40
+                if fault == 'moved-tag':
+                    tag['object']['sha'] = 'd' * 40
+                def api(path):
+                    if path.startswith('releases/'):
+                        return public
+                    if path.startswith('actions/'):
+                        return run
+                    return tag
+                with patch.object(candidate, 'json_api', side_effect=api), \
+                        patch.object(candidate, 'api', return_value=json.dumps(manifest).encode()), \
+                        patch.object(candidate, 'command', side_effect=ValueError('bad signature') if fault == 'signature' else None), \
+                        self.assertRaises(ValueError):
+                    candidate.public_candidate('v2.10.0', 'a' * 40, self.root)
+
+    def test_public_candidate_preserves_signer_source_and_attempt(self):
+        from unittest.mock import patch
+        release = {'draft': False, 'prerelease': False, 'tag_name': 'v2.10.0',
+                   'assets': [{'name': 'release-candidate.json', 'id': 1}]}
+        with patch.object(candidate, 'json_api', side_effect=[release, self.run, {'object': {'type': 'commit', 'sha': 'a' * 40}}]), \
+                patch.object(candidate, 'api', return_value=json.dumps(self.manifest).encode()), \
+                patch.object(candidate, 'command') as command:
+            self.assertEqual(candidate.public_candidate('v2.10.0', 'a' * 40, self.root), self.manifest)
+        args = command.call_args.args
+        self.assertEqual(args[:3], ('gh', 'attestation', 'verify'))
+        self.assertEqual(args[args.index('--signer-workflow') + 1], 'HitKeep/hitkeep/.github/workflows/release.yml')
+        self.assertEqual(args[args.index('--source-ref') + 1], 'refs/heads/main')
+        self.assertEqual(args[args.index('--source-digest') + 1], 'a' * 40)
+
     def test_valid_candidate(self):
         candidate.validate_manifest(self.manifest, self.root)
         candidate.validate_run(self.run, 12, 2)
@@ -138,6 +203,51 @@ class CandidateTests(unittest.TestCase):
             if name != 'release-candidate.json':
                 with self.assertRaises(ValueError):
                     candidate.extract_candidate(raw, 'sha256:' + hashlib.sha256(raw).hexdigest(), self.root / 'out')
+
+    def test_source_archive_reuses_dashboard_and_keeps_exact_source(self):
+        repo = Path(__file__).resolve().parents[2]
+        workflow = (repo / '.github/workflows/pipeline.yml').read_text()
+        step = workflow.split('      - name: Package exact source with existing dashboard assets\n', 1)[1]
+        block = step.split('        run: |\n', 1)[1].split('\n      - ', 1)[0]
+        script = '\n'.join(line.removeprefix('          ') for line in block.splitlines())
+        source = self.root / 'source'
+        source.mkdir()
+        for name, data in {'go.mod': 'module example.test/source\n', 'go.sum': 'fixture\n', 'LICENSE': 'fixture\n',
+                           'cmd/hitkeep/main.go': 'package main\n', 'public/embed.go': 'package public\n',
+                           'frontend/dashboard/package.json': '{"version":"2.10.0"}'}.items():
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data)
+        for args in (['init', '-q'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture']):
+            subprocess.run(['git', *args], cwd=source, check=True, capture_output=True)
+        sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip()
+        assets = source / 'artifacts/public'
+        assets.mkdir(parents=True)
+        with tarfile.open(assets / 'public-assets.tar.gz', 'w:gz') as archive:
+            for name, payload in {'index.html': b'<script src="main-fixture.js"></script>', 'main-fixture.js': b'dashboard',
+                                  'hk.js': b'tracker', 'hk-vitals.js': b'vitals'}.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(payload)
+                archive.addfile(info, io.BytesIO(payload))
+        hk = source / 'hk'
+        hk.write_text('#!/bin/sh\nset -eu\ntest "$1 $2" = "ci restore-dashboard"\ntar -xzf "$4" -C public\n')
+        hk.chmod(0o755)
+        env = dict(os.environ, VERSION='v2.10.0', SOURCE_SHA=sha, RUNNER_TEMP=str(self.root), GITHUB_OUTPUT=str(self.root / 'output'))
+        def package():
+            result = subprocess.run(['bash', '-euo', 'pipefail', '-c', script], cwd=source, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return (self.root / 'source-package/hitkeep-source-2.10.0.tar.gz').read_bytes()
+        first = package()
+        self.assertEqual(first, package())
+        with tarfile.open(fileobj=io.BytesIO(first), mode='r:gz') as archive:
+            names = archive.getnames()
+            self.assertEqual(len(names), len(set(names)))
+            for name in ('public/embed.go', 'public/index.html', 'public/hk.js', 'public/hk-vitals.js', 'public/main-fixture.js', 'go.mod'):
+                self.assertEqual(archive.extractfile('hitkeep-2.10.0/' + name).read(), (source / name).read_bytes())
+            self.assertNotIn('hitkeep-2.10.0/hk', names)
+        (source / 'public/embed.go').write_text('modified source')
+        result = subprocess.run(['bash', '-euo', 'pipefail', '-c', script], cwd=source, env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
 
     def test_numeric_semver_and_stale_retry(self):
         self.assertGreater(candidate.version('v2.10.0'), candidate.version('v2.9.0'))

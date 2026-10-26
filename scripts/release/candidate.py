@@ -13,7 +13,7 @@ import zipfile
 
 REPO = 'HitKeep/hitkeep'
 WORKFLOW = '.github/workflows/release.yml'
-CHECKS = ('native', 'archives', 'tracker', 'chart', 'docker', 'compose', 'helm', 'docs')
+CHECKS = ('native', 'archives', 'tracker', 'chart', 'docker', 'compose', 'helm', 'docs', 'assistant-package', 'source-archive')
 CHANNELS = ('github', 'npm', 'images', 'helm')
 SHA = re.compile(r'[a-f0-9]{40}')
 DIGEST = re.compile(r'sha256:[a-f0-9]{64}')
@@ -39,7 +39,8 @@ def required_files(ver):
     files.update({f'hitkeep_{ver}_Linux_{arch}.tar.gz': 'archive' for arch in ('amd64', 'arm64')})
     files.update({'hitkeep-configuration.json': 'configuration', 'hitkeep.example.yaml': 'configuration',
                   'hitkeep-configuration-manifest.json': 'configuration', 'SHA256SUMS': 'checksums',
-                  'verified-tracker.tgz': 'tracker', f'hitkeep-{ver}.tgz': 'chart'})
+                  'verified-tracker.tgz': 'tracker', f'hitkeep-{ver}.tgz': 'chart',
+                  f'hitkeep-analytics-{ver}.zip': 'assistant-package', f'hitkeep-source-{ver}.tar.gz': 'source-archive'})
     return files
 
 
@@ -160,6 +161,38 @@ def verify(run_id, attempt, root, automatic=False):
     command('gh', 'attestation', 'verify', str(root / 'release-candidate.json'), '--repo', REPO,
             '--signer-workflow', REPO + '/' + WORKFLOW, '--source-digest', run['head_sha'], '--source-ref', 'refs/heads/main')
     return m
+
+
+def public_candidate(tag, source_sha, root):
+    version(tag)
+    if not SHA.fullmatch(source_sha):
+        raise ValueError('invalid release source SHA')
+    release = json_api('releases/tags/' + tag)
+    if release['draft'] or release['prerelease'] or release['tag_name'] != tag:
+        raise ValueError('release is not public and stable')
+    assets = [a for a in release['assets'] if a['name'] == 'release-candidate.json']
+    if len(assets) != 1:
+        raise ValueError('public release has no unique candidate evidence')
+    path = root / 'release-candidate.json'
+    path.write_bytes(api(f"releases/assets/{assets[0]['id']}", '-H', 'Accept: application/octet-stream', binary=True))
+    manifest = json.loads(path.read_text())
+    validate_manifest(manifest)
+    if manifest['tag'] != tag or manifest['source_commit'] != source_sha:
+        raise ValueError('public release candidate identity mismatch')
+    run_id, attempt = manifest['producer_run_id'], manifest['producer_run_attempt']
+    run = json_api(f'actions/runs/{run_id}/attempts/{attempt}')
+    validate_run(run, run_id, attempt)
+    if run['head_sha'] != manifest['producer_workflow_sha']:
+        raise ValueError('public candidate workflow revision mismatch')
+    tag_object = json_api('git/ref/tags/' + tag)['object']
+    if tag_object['type'] == 'tag':
+        tag_object = json_api('git/tags/' + tag_object['sha'])['object']
+    if tag_object['type'] != 'commit' or tag_object['sha'] != source_sha:
+        raise ValueError('public release tag changed')
+    command('gh', 'attestation', 'verify', str(path), '--repo', REPO,
+            '--signer-workflow', REPO + '/' + WORKFLOW,
+            '--source-ref', 'refs/heads/main', '--source-digest', manifest['producer_workflow_sha'])
+    return manifest
 
 
 def assemble(root):
@@ -314,13 +347,33 @@ def publish_selected(channel, m, root, publishers=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('assemble', 'verify', 'publish'))
+    parser.add_argument('action', choices=('assemble', 'verify', 'publish', 'public'))
     parser.add_argument('--directory', type=Path, required=True)
     parser.add_argument('--run-id', type=int)
     parser.add_argument('--attempt', type=int)
     parser.add_argument('--automatic', action='store_true')
+    parser.add_argument('--tag')
+    parser.add_argument('--source-sha')
     parser.add_argument('--channel', choices=('all',) + CHANNELS, default='all')
     args = parser.parse_args()
+    if args.action == 'public':
+        if not args.tag or not args.source_sha:
+            parser.error('public requires --tag and --source-sha')
+        args.directory.mkdir(parents=True, exist_ok=True)
+        manifest = public_candidate(args.tag, args.source_sha, args.directory)
+        digests = {item['name']: item['sha256'] for item in manifest['artifacts']}
+        fields = {'tag': manifest['tag'], 'source_sha': manifest['source_commit'],
+                  'configuration_sha256': digests['hitkeep-configuration.json'],
+                  'manifest_sha256': digests['hitkeep-configuration-manifest.json'],
+                  'artifact_sha256': digests['hitkeep-cloud-linux-arm64'],
+                  'package_sha256': digests[f"hitkeep-analytics-{manifest['tag'][1:]}.zip"],
+                  'archive_sha256': digests[f"hitkeep-source-{manifest['tag'][1:]}.tar.gz"]}
+        print(json.dumps(fields, sort_keys=True))
+        if os.environ.get('GITHUB_OUTPUT'):
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                for name, value in fields.items():
+                    output.write(f'{name}={value}\n')
+        return
     if args.action == 'assemble':
         assemble(args.directory)
         return
