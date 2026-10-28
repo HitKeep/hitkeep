@@ -194,10 +194,6 @@ func (a *App) removeRunTempRoot(runID string) error {
 	return os.RemoveAll(a.runTempRoot(runID))
 }
 
-func (a *App) cleanupRunTempRoot(runID string) {
-	_ = a.removeRunTempRoot(runID)
-}
-
 func (a *App) pruneTerminalRunTempRoots() error {
 	entries, err := os.ReadDir(a.runTempBase())
 	if os.IsNotExist(err) {
@@ -231,30 +227,65 @@ func (a *App) ExecuteRun(ctx context.Context, runID string) error {
 	if err := a.waitUntilRunReady(ctx, runID); err != nil {
 		return err
 	}
-	defer os.Remove(a.runReadyPath(runID))
 	run, err := a.GetRun(runID)
 	if err != nil {
-		return err
+		cleanupErr := os.Remove(a.runReadyPath(runID))
+		if errors.Is(cleanupErr, fs.ErrNotExist) {
+			cleanupErr = nil
+		}
+		return errors.Join(err, cleanupErr)
 	}
-	defer a.cleanupRunTempRoot(runID)
-	logFile, err := os.OpenFile(run.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	// Finish command writers and the cancellation watcher before indexing logs.
+	execErr := func() (err error) {
+		logFile, err := os.OpenFile(run.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			return fmt.Errorf("open run log: %w", err)
+		}
+		defer func() { err = errors.Join(err, logFile.Close()) }()
+		run.Status = "running"
+		run.PID = os.Getpid()
+		if err := a.writeRun(run); err != nil {
+			return err
+		}
+		runContext, cancel := context.WithCancel(ctx)
+		watchStopped := make(chan struct{})
+		go func() {
+			defer close(watchStopped)
+			a.watchRunCancellation(runContext, run.ID, cancel)
+		}()
+		defer func() { cancel(); <-watchStopped }()
+		run.GateResults, err = a.executeRequest(runContext, run.ID, run.Request, logFile)
+		return err
+	}()
+	run.Artifacts = a.runArtifacts(run)
+	if a.beforeRunFinalize != nil {
+		a.beforeRunFinalize()
+	}
+	paths := append([]string{run.LogPath}, run.Artifacts...)
+	for _, gate := range run.GateResults {
+		if gate.LogPath != "" {
+			paths = append(paths, gate.LogPath)
+		}
+	}
+	fingerprint, _ := DeveloperSourceFingerprint(a.workspace.Root)
+	// Indexing and screenshot retention remain best effort (reused gates may have no new log).
+	_ = a.registerArtifactPaths("run", run.ID, fingerprint, paths)
+	_ = a.maintainArtifacts()
+
+	// Serialize cancellation's read/modify/write with cleanup and terminal publication.
+	lock, err := lockStateRoot(a.workspace.StateDir, "run-"+run.ID)
 	if err != nil {
-		return fmt.Errorf("open run log: %w", err)
+		return errors.Join(execErr, fmt.Errorf("lock run completion: %w", err))
 	}
-	defer logFile.Close()
-	run.Status = "running"
-	run.PID = os.Getpid()
-	if err := a.writeRun(run); err != nil {
-		return err
+	defer unlockStateRoot(lock)
+	for _, path := range []string{a.runCancellationPath(run.ID), a.runReadyPath(run.ID)} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			execErr = errors.Join(execErr, fmt.Errorf("remove run marker: %w", err))
+		}
 	}
-
-	runContext, cancel := context.WithCancel(ctx)
-	defer cancel()
-	cancelWatchDone := make(chan struct{})
-	defer close(cancelWatchDone)
-	go a.watchRunCancellation(runContext, run.ID, cancel, cancelWatchDone)
-
-	gateResults, execErr := a.executeRequest(runContext, run.ID, run.Request, logFile)
+	if err := a.removeRunTempRoot(run.ID); err != nil {
+		execErr = errors.Join(execErr, fmt.Errorf("remove run temporary root: %w", err))
+	}
 	finished := time.Now().UTC()
 	run.FinishedAt = &finished
 	run.PID = 0
@@ -270,22 +301,10 @@ func (a *App) ExecuteRun(ctx context.Context, runID string) error {
 	} else {
 		run.Status = "passed"
 	}
-	run.Artifacts = a.runArtifacts(run)
-	run.GateResults = gateResults
 	run.ExitCode = &exitCode
 	if err := a.writeRun(run); err != nil {
-		return err
+		return errors.Join(execErr, err)
 	}
-	paths := append([]string{run.LogPath}, run.Artifacts...)
-	for _, gate := range run.GateResults {
-		if gate.LogPath != "" {
-			paths = append(paths, gate.LogPath)
-		}
-	}
-	fingerprint, _ := DeveloperSourceFingerprint(a.workspace.Root)
-	_ = a.registerArtifactPaths("run", run.ID, fingerprint, paths)
-	_ = a.maintainArtifacts()
-	_ = os.Remove(a.runCancellationPath(run.ID))
 	return execErr
 }
 
@@ -450,6 +469,15 @@ func (a *App) TailGateLogAfter(runID, gateID string, limit, cursor int) (LogTail
 }
 
 func (a *App) CancelRun(runID string) (Run, error) {
+	if err := validateRunID(runID); err != nil {
+		return Run{}, err
+	}
+	lock, err := lockStateRoot(a.workspace.StateDir, "run-"+runID)
+	if err != nil {
+		return Run{}, fmt.Errorf("lock run cancellation: %w", err)
+	}
+	defer unlockStateRoot(lock)
+
 	run, err := a.GetRun(runID)
 	if err != nil {
 		return Run{}, err
@@ -498,7 +526,7 @@ func (a *App) waitUntilRunReady(ctx context.Context, runID string) error {
 	}
 }
 
-func (a *App) watchRunCancellation(ctx context.Context, runID string, cancel context.CancelFunc, done <-chan struct{}) {
+func (a *App) watchRunCancellation(ctx context.Context, runID string, cancel context.CancelFunc) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -508,8 +536,6 @@ func (a *App) watchRunCancellation(ctx context.Context, runID string, cancel con
 		}
 		select {
 		case <-ctx.Done():
-			return
-		case <-done:
 			return
 		case <-ticker.C:
 		}

@@ -21,6 +21,7 @@ import (
 const doctorCommandTimeout = 15 * time.Second
 
 type App struct {
+	beforeRunFinalize  func()
 	workspace          Workspace
 	executable         string
 	devProbe           func(context.Context) []DevService
