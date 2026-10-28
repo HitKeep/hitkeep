@@ -11,32 +11,18 @@ import { TableRowActions, TableRowActionItem } from './table-row-actions';
 describe('TableRowActions', () => {
     let fixture: ComponentFixture<TableRowActions>;
     let ownedMenus: Set<Menu>;
-    const editCommand = vi.fn();
-    const deleteCommand = vi.fn();
-    const commandDiagnostics: unknown[] = [];
-
-    afterAll(() => {
-        const runnerConfiguration = ['__vitest_worker__', '__vitest_browser_runner__'].map((source) => {
-            const config = Reflect.get(globalThis, source)?.config;
-            return {
-                source,
-                isolate: config?.isolate ?? 'unknown',
-                fileParallelism: config?.fileParallelism ?? 'unknown',
-                clearMocks: config?.clearMocks ?? 'unknown',
-                mockReset: config?.mockReset ?? 'unknown',
-                restoreMocks: config?.restoreMocks ?? 'unknown',
-                concurrent: config?.sequence?.concurrent ?? 'unknown',
-                browserIsolate: config?.browser?.isolate ?? 'unknown',
-                browserHeadless: config?.browser?.headless ?? 'unknown'
-            };
-        });
-        // Successful gate output is suppressed by CI, so deliberately surface this temporary trace as a suite failure.
-        throw new Error(`TEMPORARY DO NOT MERGE: row command diagnostics ${JSON.stringify({ runnerConfiguration, commandDiagnostics })}`);
-    });
+    let editCommandCalls = 0;
+    let deleteCommandCalls = 0;
+    const editCommand = () => {
+        editCommandCalls++;
+    };
+    const deleteCommand = () => {
+        deleteCommandCalls++;
+    };
 
     beforeEach(async () => {
-        editCommand.mockReset();
-        deleteCommand.mockReset();
+        editCommandCalls = 0;
+        deleteCommandCalls = 0;
         ownedMenus = new Set();
 
         await TestBed.configureTestingModule({
@@ -91,7 +77,7 @@ describe('TableRowActions', () => {
 
         await clickEdit(menu);
 
-        expect(editCommand).toHaveBeenCalledTimes(1);
+        expect(editCommandCalls).toBe(1);
     });
 
     it('executes the current menu command when an inert overlay precedes it in the document', async () => {
@@ -103,7 +89,7 @@ describe('TableRowActions', () => {
         try {
             expect(document.querySelector('.table-row-actions-menu')).toBe(staleOverlay);
             await clickEdit(menu);
-            expect(editCommand).toHaveBeenCalledTimes(1);
+            expect(editCommandCalls).toBe(1);
         } finally {
             staleOverlay.remove();
         }
@@ -114,7 +100,7 @@ describe('TableRowActions', () => {
         await clickEdit(menu);
         await openMenu();
 
-        expect(editCommand).toHaveBeenCalledTimes(1);
+        expect(editCommandCalls).toBe(1);
         expect(menuElement(menu)?.textContent).toContain('Edit');
     });
 
@@ -178,48 +164,14 @@ describe('TableRowActions', () => {
     async function clickEdit(menu: Menu): Promise<void> {
         // Command closure must not depend on OptimusUI delivering onHide.
         const onHide = vi.spyOn(menu.onHide, 'emit').mockImplementation(() => undefined);
-        const itemClick = vi.spyOn(menu, 'itemClick');
         try {
-            // Temporary CI diagnostics: trace command delivery without changing the real click path.
-            const selected = menuElement(menu);
-            const owned = menu.containerViewChild()?.nativeElement;
-            const anchor = selected?.querySelector('a') as HTMLElement;
-            const editItem = menu.model?.[0];
-            commandDiagnostics.push({
-                phase: 'before',
-                test: expect.getState().currentTestName,
-                sameElement: selected === owned,
-                copies: document.querySelectorAll(`[id="${menu.id}"]`).length,
-                selectedConnected: selected?.isConnected,
-                ownedConnected: owned?.isConnected,
-                anchorText: anchor?.textContent?.trim(),
-                anchorId: anchor?.id,
-                itemRole: anchor?.closest('[role]')?.getAttribute('role'),
-                itemDisabled: anchor?.closest('[aria-disabled]')?.getAttribute('aria-disabled'),
-                inert: anchor?.closest('[inert]') !== null,
-                visible: menu.visible,
-                overlayVisible: menu.overlayVisible,
-                model: menu.model?.map((item) => ({ label: item.label, disabled: item.disabled, command: typeof item.command }))
-            });
-            anchor.click();
-            const clickedItem = itemClick.mock.calls[0]?.[0]?.item;
-            commandDiagnostics.push({
-                phase: 'sync',
-                test: expect.getState().currentTestName,
-                itemClicks: itemClick.mock.calls.length,
-                commands: editCommand.mock.calls.length,
-                sameItem: clickedItem === editItem,
-                sameCommand: clickedItem?.command === editItem?.command,
-                visible: menu.visible
-            });
+            (menuElement(menu)?.querySelector('a') as HTMLElement).click();
             await fixture.whenStable();
-            commandDiagnostics.push({ phase: 'stable', test: expect.getState().currentTestName, itemClicks: itemClick.mock.calls.length, commands: editCommand.mock.calls.length, visible: menu.visible });
-            expect(editCommand).toHaveBeenCalledTimes(1);
-            expect(deleteCommand).not.toHaveBeenCalled();
             expect(menu.visible).toBe(false);
             await expect.poll(() => menuElement(menu)).toBeNull();
+            expect(editCommandCalls).toBe(1);
+            expect(deleteCommandCalls).toBe(0);
         } finally {
-            itemClick.mockRestore();
             onHide.mockRestore();
         }
     }
