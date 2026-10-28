@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.15.1](https://github.com/HitKeep/hitkeep/compare/v2.15.0...v2.15.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **ci:** simplify verified release delivery ([#424](https://github.com/HitKeep/hitkeep/issues/424)) ([641a561](https://github.com/HitKeep/hitkeep/commit/641a5614788ea1d198a0900497893555c5cab23a))
+* **ci:** unblock verified release publication ([#425](https://github.com/HitKeep/hitkeep/issues/425)) ([71a8b2d](https://github.com/HitKeep/hitkeep/commit/71a8b2db8676040fbb637d2a6fb49cd6864f0a22))
+* **ci:** validate Homebrew with packaged browser assets ([#427](https://github.com/HitKeep/hitkeep/issues/427)) ([2bb2e5f](https://github.com/HitKeep/hitkeep/commit/2bb2e5fd3cf9a8a528c2cd372441770c82071707))
+
 ## [2.15.0](https://github.com/HitKeep/hitkeep/compare/v2.14.2...v2.15.0) (2026-10-25)
 
 
