@@ -18,8 +18,8 @@ DESTINATIONS = {
 }
 
 
-def step_script(job, name):
-    source = re.split(r'\n  [a-z][a-z-]*:\n', WORKFLOW.read_text().split(f'\n  {job}:\n', 1)[1], maxsplit=1)[0]
+def step_script(job, name, workflow=WORKFLOW):
+    source = re.split(r'\n  [a-z][a-z-]*:\n', workflow.read_text().split(f'\n  {job}:\n', 1)[1], maxsplit=1)[0]
     step = source.split(f'      - name: {name}\n', 1)[1]
     block = step.split('        run: |\n', 1)[1].split('\n      - ', 1)[0]
     return '\n'.join(line.removeprefix('          ') for line in block.splitlines())
@@ -137,6 +137,28 @@ else:
         resolver = release.split('\n  resolve-candidate:\n', 1)[1].split('\n  build-release:\n', 1)[0]
         self.assertRegex(resolver, r'(?m)^      contents: write(?:\s+#.*)?$',
                          'GitHub only exposes draft releases to tokens with push access')
+
+    def test_tracker_pack_step_accepts_both_native_npm_report_shapes(self):
+        tracker = self.root / 'frontend/tracker'
+        tracker.mkdir(parents=True)
+        (tracker / 'package.json').write_text('{"version":"2.15.1"}')
+        launcher = self.root / 'hk'
+        launcher.write_text('#!/bin/sh\necho \'{"data":{"plan_id":"fixture"}}\'\n')
+        launcher.chmod(0o755)
+        report = {'filename': 'hitkeep-tracker-2.15.1.tgz'}
+        for metadata in ([report], {'@hitkeep/tracker': report}):
+            npm = self.root / 'npm'
+            npm.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
+                           "Path('hitkeep-tracker-2.15.1.tgz').write_bytes(b'verified payload')\n"
+                           f'print({json.dumps(metadata)!r})\n')
+            npm.chmod(0o755)
+            result = subprocess.run(['bash', '-euo', 'pipefail', '-c',
+                                     step_script('package-tracker', 'Verify and pack tracker once', WORKFLOW.with_name('pipeline.yml'))],
+                                    cwd=self.root, env=dict(os.environ, VERSION='v2.15.1',
+                                                           PATH=str(self.root) + os.pathsep + os.environ['PATH']),
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((tracker / 'verified-tracker.tgz').read_bytes(), b'verified payload')
 
     def test_manual_candidate_jobs_check_their_direct_prerequisites(self):
         source = WORKFLOW.with_name('release.yml').read_text()

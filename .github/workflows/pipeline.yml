@@ -766,7 +766,7 @@ jobs:
           ./hk qa pr --plan-id "$plan_id" --gate tracker-package
           test "$(jq -r .version frontend/tracker/package.json)" = "${VERSION#v}"
           cd frontend/tracker
-          tarball="$(npm pack --ignore-scripts --json | jq -r '.[0].filename')"
+          tarball="$(npm pack --ignore-scripts --json | jq -er '.[].filename')"
           mv "$tarball" verified-tracker.tgz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

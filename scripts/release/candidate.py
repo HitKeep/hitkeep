@@ -274,16 +274,15 @@ def npm(m, root):
     if cli < (11, 21, 0) or ((12, 0, 0) <= cli < (12, 2, 0)):
         raise ValueError('npm OIDC dist-tag capability unavailable; upgrade pinned CLI before activation')
     spec = '@hitkeep/tracker@' + ver
-    metadata = optional_command('npm', 'view', spec, 'dist', '--json')
-    if metadata is not None:
-        dist = json.loads(metadata)
+    tarball = optional_command('npm', 'view', spec, 'dist.tarball')
+    if tarball is not None:
         import urllib.request
-        with urllib.request.urlopen(dist['tarball']) as response:
+        with urllib.request.urlopen(tarball) as response:
             require_matching(response.read(), (root / 'verified-tracker.tgz').read_bytes(), spec)
-    tags = json.loads(command('npm', 'view', '@hitkeep/tracker', 'dist-tags', '--json'))
-    if metadata is None:
+    latest = command('npm', 'view', '@hitkeep/tracker', 'dist-tags.latest')
+    if tarball is None:
         command('npm', 'publish', str(root / 'verified-tracker.tgz'), '--access', 'public', '--ignore-scripts', '--tag', 'release-' + ver.replace('.', '-'))
-    if tags.get('latest') != ver and (not tags.get('latest') or may_promote(ver, tags['latest'])):
+    if latest != ver and (not latest or may_promote(ver, latest)):
         command('npm', 'dist-tag', 'add', spec, 'latest')
 
 

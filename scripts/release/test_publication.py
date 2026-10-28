@@ -184,12 +184,16 @@ else:
         def command(*args):
             if args == ('npm', '--version'):
                 return '12.2.0'
-            if args[:2] == ('npm', 'view'):
-                return '{"latest":"2.10.0"}'
+            if args == ('npm', 'view', '@hitkeep/tracker', 'dist-tags.latest'):
+                return '2.10.0'
+            self.assertNotEqual(args[:2], ('npm', 'view'), 'request scalar fields across supported npm versions')
             writes.append(args)
             return ''
+        def metadata(*args):
+            self.assertEqual(args, ('npm', 'view', '@hitkeep/tracker@2.10.0', 'dist.tarball'))
+            return payload.as_uri()
         with patch.object(candidate, 'command', side_effect=command), \
-                patch.object(candidate, 'optional_command', return_value=json.dumps({'tarball': payload.as_uri()})):
+                patch.object(candidate, 'optional_command', side_effect=metadata):
             candidate.npm(self.manifest, self.root)
         self.assertEqual(writes, [])
 
@@ -198,8 +202,9 @@ else:
         def command(*args):
             if args == ('npm', '--version'):
                 return '12.2.0'
-            if args[:2] == ('npm', 'view'):
-                return '{"latest":"3.0.0"}'
+            if args == ('npm', 'view', '@hitkeep/tracker', 'dist-tags.latest'):
+                return '3.0.0'
+            self.assertNotEqual(args[:2], ('npm', 'view'), 'request scalar fields across supported npm versions')
             writes.append(args)
             return ''
         with patch.object(candidate, 'command', side_effect=command), patch.object(candidate, 'optional_command', return_value=None):
