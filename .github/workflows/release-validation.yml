@@ -80,28 +80,50 @@ jobs:
       - cross-cgo
       - helm-lifecycle
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - name: Enforce selected validation
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          set -euo pipefail
-          for result in \
-            "${{ needs.select.result }}" \
-            "${{ needs.homebrew-source.result }}" \
-            "${{ needs.homebrew-candidate.result }}" \
-            "${{ needs.cross-cgo.result }}" \
-            "${{ needs.helm-lifecycle.result }}"; do
-            case "$result" in
-              success|skipped) ;;
-              *) exit 1 ;;
-            esac
-          done
+          python3 - <<'PY'
+          import json
+          import os
+
+          results = json.loads(os.environ['RESULTS'])
+          jobs = {'select', 'homebrew-source', 'homebrew-candidate', 'cross-cgo', 'helm-lifecycle'}
+          if set(results) != jobs:
+              raise SystemExit('Missing release validation dependencies')
+          event = os.environ['EVENT_NAME']
+          if event == 'pull_request':
+              selected = results['select'].get('outputs', {}).get('selected')
+              if results['select']['result'] != 'success' or selected not in ('true', 'false'):
+                  raise SystemExit('Selector must succeed with a boolean output')
+              # Forks cannot use release credentials; validate on a maintainer branch before release.
+              expensive = selected == 'true' and os.environ['HEAD_REPOSITORY'] == os.environ['GITHUB_REPOSITORY']
+              homebrew = expensive and os.environ['HEAD_REF'].startswith('release-please--branches--main')
+              expected = {'select': 'success'}
+          elif event == 'workflow_dispatch':
+              expensive = homebrew = True
+              expected = {'select': 'skipped'}
+          else:
+              raise SystemExit('Unexpected release validation event')
+          expected.update({job: 'success' if enabled else 'skipped' for job, enabled in (
+              ('cross-cgo', expensive), ('helm-lifecycle', expensive),
+              ('homebrew-source', homebrew), ('homebrew-candidate', homebrew))})
+          for job, wanted in expected.items():
+              result = results[job]['result']
+              if result != wanted:
+                  raise SystemExit(f'{job}: expected {wanted}, got {result!r}')
+          PY
 
   homebrew-source:
     needs: select
     if: >-
-      always() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && startsWith(github.head_ref, 'release-please--branches--main')))
+      always() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--main')))
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -137,7 +159,7 @@ jobs:
   homebrew-candidate:
     needs: [select, homebrew-source]
     if: >-
-      always() && needs.homebrew-source.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && startsWith(github.head_ref, 'release-please--branches--main')))
+      always() && needs.homebrew-source.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--main')))
     strategy:
       fail-fast: false
       matrix:
