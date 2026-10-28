@@ -92,7 +92,7 @@ else:
                 return (self.root / item['name']).read_bytes()
             raise AssertionError(route)
         def json_api(route):
-            if route == 'releases/tags/v2.10.0':
+            if route == 'releases/42':
                 result = copy.deepcopy(state)
                 if final_fault and writes:
                     result.update(final_fault)
@@ -101,6 +101,9 @@ else:
                 return {'tag_name': 'v3.0.0' if newer else 'v2.10.0', 'draft': False}
             raise AssertionError(route)
         def command(*args, **kwargs):
+            if args[:3] == ('gh', 'release', 'view'):
+                self.assertEqual(args, ('gh', 'release', 'view', 'v2.10.0', '--repo', candidate.REPO, '--json', 'apiUrl'))
+                return json.dumps({'apiUrl': 'https://api.github.com/repos/HitKeep/hitkeep/releases/42'})
             if args[:3] == ('gh', 'api', '--paginate'):
                 return json.dumps([[{'tag_name': 'v3.0.0' if newer else 'v2.9.0', 'draft': False, 'prerelease': False}]])
             writes.append(args)
@@ -114,6 +117,16 @@ else:
         with fake:
             candidate.github(self.manifest, self.root)
         self.assertEqual(writes, [])
+
+    def test_github_draft_lookup_rejects_foreign_or_invalid_release_ids(self):
+        for url in ('https://api.github.com/repos/other/repo/releases/42',
+                    'https://example.com/repos/HitKeep/hitkeep/releases/42',
+                    'https://api.github.com/repos/HitKeep/hitkeep/releases/not-an-id'):
+            _, writes, fake = self.github_fixture(draft=True)
+            with self.subTest(url=url), fake, \
+                    patch.object(candidate, 'command', return_value=json.dumps({'apiUrl': url})), self.assertRaises(ValueError):
+                candidate.github(self.manifest, self.root)
+            self.assertEqual(writes, [])
 
     def test_github_conflict_fails_before_write(self):
         _, writes, fake = self.github_fixture()

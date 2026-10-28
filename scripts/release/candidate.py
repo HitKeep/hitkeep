@@ -222,7 +222,12 @@ def assemble(root):
 
 
 def github(m, root):
-    release = json_api(f"releases/tags/{m['tag']}")
+    url = json.loads(command('gh', 'release', 'view', m['tag'], '--repo', REPO, '--json', 'apiUrl'))['apiUrl']
+    release_id = url.removeprefix(f'https://api.github.com/repos/{REPO}/releases/')
+    if not re.fullmatch(r'[1-9][0-9]*', release_id):
+        raise ValueError('unexpected GitHub release identity')
+    release_path = 'releases/' + release_id
+    release = json_api(release_path)
     if release['prerelease'] or release['tag_name'] != m['tag']:
         raise ValueError('stable candidate points to prerelease')
     files = [item['name'] for item in m['artifacts']] + ['release-candidate.json']
@@ -239,7 +244,7 @@ def github(m, root):
                 raise ValueError('public release inventory incomplete')
             command('gh', 'release', 'upload', m['tag'], str(root / name), '--repo', REPO)
     # Read back the complete asset set before the one-way undraft operation.
-    final = json_api(f"releases/tags/{m['tag']}")
+    final = json_api(release_path)
     if {item['name'] for item in final['assets']} != set(files):
         raise ValueError('incomplete release assets')
     for item in final['assets']:
@@ -249,7 +254,7 @@ def github(m, root):
         releases = json.loads(command('gh', 'api', '--paginate', '--slurp', f'repos/{REPO}/releases?per_page=100'))
         newer = any(not r['draft'] and not r['prerelease'] and version(r['tag_name']) > version(m['tag']) for page in releases for r in page if re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', r['tag_name']))
         command('gh', 'release', 'edit', m['tag'], '--repo', REPO, '--draft=false', '--latest=' + str(not newer).lower())
-        published = json_api(f"releases/tags/{m['tag']}")
+        published = json_api(release_path)
         if published['draft'] or published['prerelease'] or published['tag_name'] != m['tag']:
             raise ValueError('GitHub release publication was not verified')
         if not newer and json_api('releases/latest')['tag_name'] != m['tag']:
