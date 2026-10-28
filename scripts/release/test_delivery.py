@@ -132,6 +132,12 @@ else:
                     self.assertNotIn(other, needs)
         self.assertFalse((WORKFLOW.parents[2] / 'scripts/release/delivery.py').exists())
 
+    def test_draft_candidate_resolver_has_push_access(self):
+        release = WORKFLOW.with_name('release.yml').read_text()
+        resolver = release.split('\n  resolve-candidate:\n', 1)[1].split('\n  build-release:\n', 1)[0]
+        self.assertRegex(resolver, r'(?m)^      contents: write(?:\s+#.*)?$',
+                         'GitHub only exposes draft releases to tokens with push access')
+
     def test_release_caller_allows_every_nested_pipeline_permission(self):
         release = WORKFLOW.with_name('release.yml').read_text()
         caller = release.split('\n  build-release:\n', 1)[1].split('\n  candidate:\n', 1)[0]

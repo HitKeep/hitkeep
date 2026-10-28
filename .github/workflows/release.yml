@@ -41,7 +41,7 @@ jobs:
     if: ${{ always() && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write # GitHub only exposes draft releases to tokens with push access.
     outputs:
       tag: ${{ steps.source.outputs.tag }}
       sha: ${{ steps.source.outputs.sha }}
