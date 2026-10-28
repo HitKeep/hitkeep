@@ -13,6 +13,26 @@ describe('TableRowActions', () => {
     let ownedMenus: Set<Menu>;
     const editCommand = vi.fn();
     const deleteCommand = vi.fn();
+    const commandDiagnostics: unknown[] = [];
+
+    afterAll(() => {
+        const runnerConfiguration = ['__vitest_worker__', '__vitest_browser_runner__'].map((source) => {
+            const config = Reflect.get(globalThis, source)?.config;
+            return {
+                source,
+                isolate: config?.isolate ?? 'unknown',
+                fileParallelism: config?.fileParallelism ?? 'unknown',
+                clearMocks: config?.clearMocks ?? 'unknown',
+                mockReset: config?.mockReset ?? 'unknown',
+                restoreMocks: config?.restoreMocks ?? 'unknown',
+                concurrent: config?.sequence?.concurrent ?? 'unknown',
+                browserIsolate: config?.browser?.isolate ?? 'unknown',
+                browserHeadless: config?.browser?.headless ?? 'unknown'
+            };
+        });
+        // Successful gate output is suppressed by CI, so deliberately surface this temporary trace as a suite failure.
+        throw new Error(`TEMPORARY DO NOT MERGE: row command diagnostics ${JSON.stringify({ runnerConfiguration, commandDiagnostics })}`);
+    });
 
     beforeEach(async () => {
         editCommand.mockReset();
@@ -165,37 +185,35 @@ describe('TableRowActions', () => {
             const owned = menu.containerViewChild()?.nativeElement;
             const anchor = selected?.querySelector('a') as HTMLElement;
             const editItem = menu.model?.[0];
-            console.info(
-                'row-command-before',
-                JSON.stringify({
-                    sameElement: selected === owned,
-                    copies: document.querySelectorAll(`[id="${menu.id}"]`).length,
-                    selectedConnected: selected?.isConnected,
-                    ownedConnected: owned?.isConnected,
-                    anchorText: anchor?.textContent?.trim(),
-                    anchorId: anchor?.id,
-                    itemRole: anchor?.closest('[role]')?.getAttribute('role'),
-                    itemDisabled: anchor?.closest('[aria-disabled]')?.getAttribute('aria-disabled'),
-                    inert: anchor?.closest('[inert]') !== null,
-                    visible: menu.visible,
-                    overlayVisible: menu.overlayVisible,
-                    model: menu.model?.map((item) => ({ label: item.label, disabled: item.disabled, command: typeof item.command }))
-                })
-            );
+            commandDiagnostics.push({
+                phase: 'before',
+                test: expect.getState().currentTestName,
+                sameElement: selected === owned,
+                copies: document.querySelectorAll(`[id="${menu.id}"]`).length,
+                selectedConnected: selected?.isConnected,
+                ownedConnected: owned?.isConnected,
+                anchorText: anchor?.textContent?.trim(),
+                anchorId: anchor?.id,
+                itemRole: anchor?.closest('[role]')?.getAttribute('role'),
+                itemDisabled: anchor?.closest('[aria-disabled]')?.getAttribute('aria-disabled'),
+                inert: anchor?.closest('[inert]') !== null,
+                visible: menu.visible,
+                overlayVisible: menu.overlayVisible,
+                model: menu.model?.map((item) => ({ label: item.label, disabled: item.disabled, command: typeof item.command }))
+            });
             anchor.click();
             const clickedItem = itemClick.mock.calls[0]?.[0]?.item;
-            console.info(
-                'row-command-sync',
-                JSON.stringify({
-                    itemClicks: itemClick.mock.calls.length,
-                    commands: editCommand.mock.calls.length,
-                    sameItem: clickedItem === editItem,
-                    sameCommand: clickedItem?.command === editItem?.command,
-                    visible: menu.visible
-                })
-            );
+            commandDiagnostics.push({
+                phase: 'sync',
+                test: expect.getState().currentTestName,
+                itemClicks: itemClick.mock.calls.length,
+                commands: editCommand.mock.calls.length,
+                sameItem: clickedItem === editItem,
+                sameCommand: clickedItem?.command === editItem?.command,
+                visible: menu.visible
+            });
             await fixture.whenStable();
-            console.info('row-command-stable', JSON.stringify({ itemClicks: itemClick.mock.calls.length, commands: editCommand.mock.calls.length, visible: menu.visible }));
+            commandDiagnostics.push({ phase: 'stable', test: expect.getState().currentTestName, itemClicks: itemClick.mock.calls.length, commands: editCommand.mock.calls.length, visible: menu.visible });
             expect(editCommand).toHaveBeenCalledTimes(1);
             expect(deleteCommand).not.toHaveBeenCalled();
             expect(menu.visible).toBe(false);
