@@ -16,7 +16,9 @@ Each `SKILL.md` is a thin external-agent adapter for production HitKeep MCP. Eac
 
 Open **Integration → Assistants** (`/integration/assistants`) in HitKeep to copy the canonical MCP endpoint and find setup links. Approve only the MCP resource, `sites:read analytics:read`, and the sites you intend to share. Review or revoke your OAuth grant under **Settings → Connected applications**. The configuration display does not verify a working client connection; existing scoped API-client tokens remain available for compatible clients.
 
-Skill installation supplies instructions; a custom MCP connection supplies access. Optional plugins can package the same five skills, but Claude and OpenAI use different manifest and connection formats. Offline fixture metadata and the prepared review cases live in [`tests/agent-plugins`](../tests/agent-plugins/README.md); they are not complete installable packages or a public listing. Structural tests stage transient regular-file bundles from this canonical pack, README, and LICENSE without maintaining a second copy of the skills. Real account installation and assistant behavior remain unverified.
+Skill installation supplies instructions; a custom MCP connection supplies access. The [assistant distribution repository](https://github.com/HitKeep/hitkeep-assistant-plugins) generates native Claude and Codex packages from exactly these five product skills, their procedures, agent metadata, and the license at a recorded app commit. Stable app releases include one verified `hitkeep-analytics-X.Y.Z.zip`; the distribution's versioned release links to that asset. Native manifests and catalogs remain owned by the distribution repository. Contributor skills are excluded, and Ask AI continues to embed only the five transport-neutral procedure references.
+
+Offline fixture metadata and prepared review cases live in [`tests/agent-plugins`](../tests/agent-plugins/README.md). Packaging and fixture checks do not prove installation in a particular client, authenticated analytics access, live assistant behavior, or public directory eligibility. Verify installation and the scoped MCP connection separately.
 
 ## Install
 

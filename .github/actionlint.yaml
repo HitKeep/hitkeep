@@ -1,0 +1,8 @@
+# shortcut: actionlint 1.7.12 lacks native concurrency.queue; remove these exact exceptions when a stable release supports it.
+paths:
+  .github/workflows/release-publish.yml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/release.yml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
