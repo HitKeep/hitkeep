@@ -17,7 +17,7 @@
     "url": "https://github.com/HitKeep/hitkeep",
     "source": "github"
   },
-  "version": "2.15.0",
+  "version": "2.15.1",
   "remotes": [
     {
       "type": "streamable-http",
