@@ -255,6 +255,9 @@ class CandidateTests(unittest.TestCase):
         for args in (['init', '-q'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture']):
             subprocess.run(['git', *args], cwd=source, check=True, capture_output=True)
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip()
+        packager = source / 'scripts/release/package-source.sh'
+        packager.parent.mkdir(parents=True)
+        packager.write_bytes((repo / 'scripts/release/package-source.sh').read_bytes())
         assets = source / 'artifacts/public'
         assets.mkdir(parents=True)
         with tarfile.open(assets / 'public-assets.tar.gz', 'w:gz') as archive:

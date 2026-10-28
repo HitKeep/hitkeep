@@ -51,7 +51,7 @@ jobs:
               echo "pull request file count exceeds event count" >&2
               exit 1
             fi
-            if jq -e 'any(.[]; .filename as $path | $path == ".github/workflows/release-validation.yml" or $path == ".goreleaser.yaml" or $path == "Dockerfile" or ($path | startswith("charts/hitkeep/")) or ($path | startswith("frontend/dashboard/")) or $path == "go.mod" or $path == "go.sum" or $path == "hitkeep.example.yaml" or $path == "scripts/helm-smoke.sh" or $path == "tests/fixtures/release-fixtures.json" or $path == ".release-please-manifest.json")' <<<"$files" >/dev/null; then
+            if jq -e 'any(.[]; .filename as $path | $path == ".github/workflows/release-validation.yml" or $path == ".github/workflows/pipeline.yml" or $path == "scripts/release/package-source.sh" or $path == ".goreleaser.yaml" or $path == "Dockerfile" or ($path | startswith("charts/hitkeep/")) or ($path | startswith("frontend/dashboard/")) or $path == "go.mod" or $path == "go.sum" or $path == "hitkeep.example.yaml" or $path == "scripts/helm-smoke.sh" or $path == "tests/fixtures/release-fixtures.json" or $path == ".release-please-manifest.json")' <<<"$files" >/dev/null; then
               selected=true
               break
             fi
@@ -75,6 +75,7 @@ jobs:
     if: always()
     needs:
       - select
+      - homebrew-source
       - homebrew-candidate
       - cross-cgo
       - helm-lifecycle
@@ -87,6 +88,7 @@ jobs:
           set -euo pipefail
           for result in \
             "${{ needs.select.result }}" \
+            "${{ needs.homebrew-source.result }}" \
             "${{ needs.homebrew-candidate.result }}" \
             "${{ needs.cross-cgo.result }}" \
             "${{ needs.helm-lifecycle.result }}"; do
@@ -96,10 +98,46 @@ jobs:
             esac
           done
 
-  homebrew-candidate:
+  homebrew-source:
     needs: select
     if: >-
       always() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && startsWith(github.head_ref, 'release-please--branches--main')))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      artifact_id: ${{ steps.source.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build candidate dashboard assets
+        run: |
+          ./hk ci build-dashboard
+          ./hk ci restore-dashboard --archive public-assets.tar.gz
+      - name: Package candidate source with built dashboard
+        run: |
+          VERSION="v$(jq -er '."."' .release-please-manifest.json)" \
+          SOURCE_SHA="$(git rev-parse HEAD)" \
+            bash scripts/release/package-source.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: source
+        with:
+          name: homebrew-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-package/*.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  homebrew-candidate:
+    needs: [select, homebrew-source]
+    if: >-
+      always() && needs.homebrew-source.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.select.outputs.selected == 'true' && startsWith(github.head_ref, 'release-please--branches--main')))
     strategy:
       fail-fast: false
       matrix:
@@ -149,11 +187,17 @@ jobs:
             "$STABLE_VERSION" "$candidate_version"
           printf 'CANDIDATE_SHA=%s\n' "$CANDIDATE_SHA" >> "$GITHUB_ENV"
           printf 'CANDIDATE_VERSION=%s\n' "$candidate_version" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.homebrew-source.outputs.artifact_id }}
+          path: ${{ runner.temp }}/source-package
       - name: Prepare candidate formula
         run: |
           set -euo pipefail
-          candidate_url="https://github.com/HitKeep/hitkeep/archive/${CANDIDATE_SHA}.tar.gz"
-          candidate_checksum="$(curl --fail --silent --show-error --location "$candidate_url" | shasum -a 256 | awk '{print $1}')"
+          archives=( "$RUNNER_TEMP"/source-package/hitkeep-source-*.tar.gz )
+          [[ ${#archives[@]} -eq 1 && -f "${archives[0]}" ]]
+          candidate_url="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).as_uri())' "${archives[0]}")"
+          candidate_checksum="$(shasum -a 256 "${archives[0]}" | awk '{print $1}')"
           formula="$(brew --repository HitKeep/hitkeep)/Formula/hitkeep.rb"
           candidate_formula="$(mktemp)"
           awk -v version="$CANDIDATE_VERSION" -v url="$candidate_url" -v checksum="$candidate_checksum" '
