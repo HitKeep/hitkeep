@@ -3,10 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -16,13 +19,14 @@ import (
 	json "hitkeep/jsonapi"
 )
 
-func TestDetachedCLIActionOutlivesLauncher(t *testing.T) {
+func prepareCLIAction(t *testing.T) (string, *devtool.App) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("builds the hk command")
 	}
 	projectRoot := repositoryRoot(t)
 	binary := filepath.Join(t.TempDir(), "hk")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/hk")
+	build := exec.CommandContext(t.Context(), "go", "build", "-race", "-o", binary, "./cmd/hk")
 	build.Dir = projectRoot
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build hk: %v: %s", err, output)
@@ -68,12 +72,25 @@ func TestDetachedCLIActionOutlivesLauncher(t *testing.T) {
 	installFakeManagedToolchain(t, stateDir)
 	t.Setenv("HK_STATE_DIR", stateDir)
 	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	command := exec.CommandContext(t.Context(), binary, "--workspace", workspace, "--output", "json", "setup", "--detach")
-	command.Env = os.Environ()
+	app, err := devtool.NewApp(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return binary, app
+}
+
+func TestDetachedCLIActionOutlivesLauncher(t *testing.T) {
+	binary, app := prepareCLIAction(t)
+	awaitEntry, release := blockCLIAction(t)
+	cleanup := registerRunCleanup(t, app)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, binary, "--workspace", app.Root(), "--output", "json", "setup", "--detach")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("start detached setup: %v: %s", err, output)
 	}
+	awaitEntry()
 	var envelope struct {
 		Data devtool.RunStart `json:"data"`
 	}
@@ -83,27 +100,113 @@ func TestDetachedCLIActionOutlivesLauncher(t *testing.T) {
 	if envelope.Data.RunID == "" {
 		t.Fatalf("detached setup returned no run ID: %s", output)
 	}
-
-	app, err := devtool.NewApp(workspace)
+	run, err := app.GetRun(envelope.Data.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		run, statusErr := app.GetRun(envelope.Data.RunID)
-		if statusErr != nil {
-			t.Fatal(statusErr)
+	if run.Status != "running" || run.PID <= 0 || command.ProcessState == nil || !command.ProcessState.Exited() {
+		t.Fatalf("launcher did not exit independently of blocked action: %+v", run)
+	}
+	release()
+	run, err = app.WaitRunObserved(ctx, run.ID, nil)
+	if err != nil || run.Status != "passed" {
+		t.Fatalf("setup completion: %+v, %v", run, err)
+	}
+	cleanup()
+}
+
+// Registration precedes launch and never depends on decoding a response's run ID.
+func registerRunCleanup(t *testing.T, app *devtool.App) func() {
+	t.Helper()
+	cleanup := sync.OnceFunc(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		runs, err := app.ListRuns(100)
+		if err != nil {
+			t.Errorf("list owned runs during cleanup: %v", err)
+			return
 		}
-		if run.Status == "passed" {
-			break
+		for _, run := range runs {
+			if run.Status == "passed" || run.Status == "failed" || run.Status == "cancelled" {
+				continue
+			}
+			if _, err := app.CancelRun(run.ID); err != nil {
+				t.Errorf("cancel owned run %s: %v", run.ID, err)
+			}
+			final, err := app.WaitRunObserved(ctx, run.ID, nil)
+			if final.Status != "passed" && final.Status != "failed" && final.Status != "cancelled" {
+				t.Errorf("owned writer did not quiesce: %+v, %v", final, err)
+			}
 		}
-		if run.Status == "failed" || run.Status == "cancelled" {
-			t.Fatalf("detached setup ended as %s: %+v", run.Status, run)
+	})
+	t.Cleanup(cleanup)
+	return cleanup
+}
+
+func blockCLIAction(t *testing.T) (func(), func()) {
+	t.Helper()
+	directory := t.TempDir()
+	entryPath, releasePath := filepath.Join(directory, "entered"), filepath.Join(directory, "release")
+	var pipes []*os.File
+	for _, path := range []string{entryPath, releasePath} {
+		if err := syscall.Mkfifo(path, 0600); err != nil {
+			t.Fatal(err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("detached setup did not finish: %+v", run)
+		pipe, err := os.OpenFile(path, os.O_RDWR, 0600)
+		if err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(50 * time.Millisecond)
+		pipes = append(pipes, pipe)
+		t.Cleanup(func() { _ = pipe.Close() })
+	}
+	npx := filepath.Join(os.Getenv("HK_STATE_DIR"), "shared", "toolchains", "node-26.10.0-"+runtime.GOOS+"-"+runtime.GOARCH, "bin", "npx")
+	script := fmt.Sprintf("#!/bin/sh\nprintf x > %q\nread release < %q\necho action-released\n", entryPath, releasePath)
+	if err := os.WriteFile(npx, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan error, 1)
+	go func() { var b [1]byte; _, err := pipes[0].Read(b[:]); entered <- err }()
+	release := sync.OnceFunc(func() {
+		if _, err := pipes[1].Write([]byte("release\n")); err != nil {
+			t.Errorf("release action: %v", err)
+		}
+	})
+	t.Cleanup(release)
+	return func() {
+		t.Helper()
+		select {
+		case err := <-entered:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(15 * time.Second):
+			t.Fatal("setup did not enter blocked action")
+		}
+	}, release
+}
+
+func TestDetachedCLIActionCleanupWithoutDecodedRunID(t *testing.T) {
+	binary, app := prepareCLIAction(t)
+	awaitEntry, _ := blockCLIAction(t)
+	cleanup := registerRunCleanup(t, app)
+	command := exec.CommandContext(t.Context(), binary, "--workspace", app.Root(), "--output", "json", "setup", "--detach")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("launch: %v: %s", err, output)
+	}
+	awaitEntry()
+	for _, output := range []string{"malformed", `{"data":{}}`} {
+		var envelope struct {
+			Data devtool.RunStart `json:"data"`
+		}
+		err := json.Unmarshal([]byte(output), &envelope)
+		if err == nil && envelope.Data.RunID != "" {
+			t.Fatal("fixture unexpectedly supplied a run ID")
+		}
+	}
+	cleanup()
+	runs, err := app.ListRuns(100)
+	if err != nil || len(runs) != 1 || runs[0].Status != "cancelled" {
+		t.Fatalf("undecoded run cleanup: %+v, %v", runs, err)
 	}
 }
 
@@ -250,6 +353,12 @@ func TestMCPStdioActionRunLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
+	t.Setenv("HK_STATE_DIR", stateDir)
+	app, err := devtool.NewApp(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerRunCleanup(t, app)
 	started, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "hk_run_start", Arguments: map[string]any{"kind": "setup"}})
 	if err != nil {
 		t.Fatal(err)
@@ -339,5 +448,117 @@ func installFakeManagedToolchain(t *testing.T, stateDir string) {
 		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestRunWorkerExitsBeforeStateRemoval(t *testing.T) {
+	binary, app := prepareCLIAction(t)
+	workspace, err := app.Workspace(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := devtool.Run{ID: "direct-child", WorkspaceID: workspace.ID, Request: devtool.RunRequest{Kind: "setup"}, Status: "queued", StartedAt: time.Now().UTC(), LogPath: filepath.Join(workspace.StateDir, "runs", "direct-child.log")}
+	if err := os.MkdirAll(filepath.Join(workspace.StateDir, "runs", "tmp", run.ID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeRecord := func() {
+		t.Helper()
+		raw, err := json.Marshal(run)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(workspace.StateDir, "runs", run.ID+".json"), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRecord()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	command := exec.CommandContext(ctx, binary, "__run", "--workspace", workspace.Root, "--run-id", run.ID)
+	command.Env = append(os.Environ(), "HK_CHILD_RUN=1", "HK_EXPECTED_SCHEMA="+devtool.SchemaVersion, "HK_WORKER_PROTOCOL=1", "HK_WORKSPACE_ID="+workspace.ID, "HK_SOURCE_FINGERPRINT=legacy")
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = &output
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	wait := sync.OnceValue(command.Wait)
+	t.Cleanup(func() {
+		if command.ProcessState == nil {
+			_, _ = app.CancelRun(run.ID)
+		}
+		if err := wait(); err != nil {
+			t.Errorf("worker exit: %v: %s", err, output.String())
+		}
+	})
+	run.PID = command.Process.Pid
+	run.Status = "running"
+	writeRecord()
+	if err := os.WriteFile(filepath.Join(workspace.StateDir, "runs", run.ID+".ready"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	terminal, err := app.WaitRunObserved(ctx, run.ID, nil)
+	if err != nil {
+		t.Fatalf("worker completion: %+v, %v", terminal, err)
+	}
+	retained := make(map[string][]byte)
+	for _, path := range []string{run.LogPath, filepath.Join(workspace.StateDir, "runs", run.ID+".json"), filepath.Join(workspace.StateDir, "artifacts", "index.json")} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retained[path] = raw
+	}
+	if err := wait(); err != nil {
+		t.Fatalf("worker Wait: %v: %s", err, output.String())
+	}
+	if !command.ProcessState.Success() {
+		t.Fatal("worker did not exit successfully")
+	}
+	for path, want := range retained {
+		got, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("post-terminal write to %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{filepath.Join(workspace.StateDir, "runs", "tmp", run.ID), filepath.Join(workspace.StateDir, "runs", run.ID+".ready"), filepath.Join(workspace.StateDir, "runs", run.ID+".cancel")} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("transient survives child exit: %s, %v", path, err)
+		}
+	}
+	if err := os.RemoveAll(workspace.StateDir); err != nil {
+		t.Fatalf("remove joined child's state: %v", err)
+	}
+}
+
+func TestDetachedCLIActionCleanupAfterEarlyAssertion(t *testing.T) {
+	const helper = "HK_TEST_EARLY_ASSERTION"
+	if os.Getenv(helper) == "1" {
+		binary, app := prepareCLIAction(t)
+		awaitEntry, _ := blockCLIAction(t)
+		t.Cleanup(func() {
+			runs, err := app.ListRuns(100)
+			if err != nil || len(runs) != 1 || runs[0].Status != "cancelled" {
+				t.Errorf("early assertion left active writer: %+v, %v", runs, err)
+				return
+			}
+			t.Log("early assertion writer quiesced")
+		})
+		registerRunCleanup(t, app)
+		command := exec.CommandContext(t.Context(), binary, "--workspace", app.Root(), "--output", "json", "setup", "--detach")
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("launch: %v: %s", err, output)
+		}
+		awaitEntry()
+		t.Fatal("intentional assertion before decoding run ID")
+	}
+	if testing.Short() {
+		t.Skip("builds the hk command")
+	}
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestDetachedCLIActionCleanupAfterEarlyAssertion$", "-test.v")
+	command.Env = append(os.Environ(), helper+"=1")
+	output, err := command.CombinedOutput()
+	if err == nil || !bytes.Contains(output, []byte("intentional assertion before decoding run ID")) || !bytes.Contains(output, []byte("early assertion writer quiesced")) || bytes.Contains(output, []byte("TempDir RemoveAll cleanup")) {
+		t.Fatalf("early assertion cleanup proof: %v: %s", err, output)
 	}
 }

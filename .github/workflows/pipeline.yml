@@ -74,8 +74,6 @@ on:
         default: ""
         description: "Prefix for the short-SHA Docker tag shown in prerelease notes"
     secrets:
-      token:
-        required: false
       DOCKERHUB_USERNAME:
         required: false
       DOCKERHUB_TOKEN:
@@ -394,7 +392,7 @@ jobs:
 
       - name: Upload binaries to GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
           DOCKER_TAGS_SUMMARY: ${{ inputs.docker_tags_summary }}
           DOCKER_SHA_TAG_PREFIX: ${{ inputs.docker_sha_tag_prefix }}

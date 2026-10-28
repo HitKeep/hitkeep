@@ -64,7 +64,7 @@ describe('TableRowActions', () => {
         expect(button.querySelector('.pi-ellipsis-h')).not.toBeNull();
     });
 
-    it('opens a OptimusUI menu and executes item commands', async () => {
+    it('opens an OptimusUI menu and executes item commands without onHide', async () => {
         const menu = await openMenu();
         expect(menuElement(menu)?.textContent).toContain('Edit');
         expect(menuElement(menu)?.textContent).toContain('Delete');
@@ -156,11 +156,18 @@ describe('TableRowActions', () => {
     }
 
     async function clickEdit(menu: Menu): Promise<void> {
-        const hidden = firstValueFrom(menu.onHide);
-        (menuElement(menu)?.querySelector('a') as HTMLElement).click();
-        await fixture.whenStable();
-        await hidden;
-        await fixture.whenStable();
+        // Command closure must not depend on OptimusUI delivering onHide.
+        const onHide = vi.spyOn(menu.onHide, 'emit').mockImplementation(() => undefined);
+        try {
+            (menuElement(menu)?.querySelector('a') as HTMLElement).click();
+            await fixture.whenStable();
+            expect(editCommand).toHaveBeenCalledTimes(1);
+            expect(deleteCommand).not.toHaveBeenCalled();
+            expect(menu.visible).toBe(false);
+            await expect.poll(() => menuElement(menu)).toBeNull();
+        } finally {
+            onHide.mockRestore();
+        }
     }
 
     function menuElement(menu: Menu): HTMLElement | null {

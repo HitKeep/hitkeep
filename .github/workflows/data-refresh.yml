@@ -118,12 +118,24 @@ jobs:
         timeout-minutes: 45
         run: go test ./duckdbextensions ./database ./takeout
 
+      - name: Mint refresh publication token
+        if: env.SELECTED == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        id: automation-token
+        with:
+          client-id: ${{ vars.HITKEEP_AUTOMATION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Open refresh pull request
         if: env.SELECTED == 'true'
         timeout-minutes: 10
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GHT }}
+          GH_TOKEN: ${{ steps.automation-token.outputs.token }}
           TARGET: ${{ matrix.target }}
           BRANCH: ${{ matrix.branch }}
           TITLE: ${{ matrix.title }}
