@@ -132,6 +132,18 @@ else:
                     self.assertNotIn(other, needs)
         self.assertFalse((WORKFLOW.parents[2] / 'scripts/release/delivery.py').exists())
 
+    def test_release_caller_allows_every_nested_pipeline_permission(self):
+        release = WORKFLOW.with_name('release.yml').read_text()
+        caller = release.split('\n  build-release:\n', 1)[1].split('\n  candidate:\n', 1)[0]
+        granted = dict(re.findall(r'^      ([a-z-]+): (none|read|write)(?:\s+#.*)?$', caller, re.M))
+        pipeline = WORKFLOW.with_name('pipeline.yml').read_text()
+        requested = re.findall(r'^      ([a-z-]+): (none|read|write)(?:\s+#.*)?$', pipeline, re.M)
+        self.assertTrue(requested)
+        levels = {'none': 0, 'read': 1, 'write': 2}
+        for permission, level in requested:
+            with self.subTest(permission=permission, requested=level):
+                self.assertGreaterEqual(levels[granted.get(permission, 'none')], levels[level])
+
     def test_release_groups_keep_all_native_pending_runs(self):
         for path in (WORKFLOW, WORKFLOW.with_name('release.yml')):
             block = path.read_text().split('\nconcurrency:\n', 1)[1].split('\n\n', 1)[0]

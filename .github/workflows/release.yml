@@ -71,7 +71,7 @@ jobs:
     needs: resolve-candidate
     uses: $/.github/workflows/pipeline.yml
     permissions:
-      contents: read
+      contents: write # GitHub validates permissions of every nested job, including skipped uploads.
       packages: write
       id-token: write
       attestations: write
