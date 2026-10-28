@@ -69,6 +69,7 @@ jobs:
 
   build-release:
     needs: resolve-candidate
+    if: ${{ always() && needs.resolve-candidate.result == 'success' }}
     uses: $/.github/workflows/pipeline.yml
     permissions:
       contents: write # GitHub validates permissions of every nested job, including skipped uploads.
@@ -92,6 +93,7 @@ jobs:
   candidate:
     name: Certify complete release candidate
     needs: [resolve-candidate, build-release]
+    if: ${{ always() && needs.resolve-candidate.result == 'success' && needs.build-release.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read

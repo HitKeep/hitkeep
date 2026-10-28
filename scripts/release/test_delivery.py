@@ -138,6 +138,25 @@ else:
         self.assertRegex(resolver, r'(?m)^      contents: write(?:\s+#.*)?$',
                          'GitHub only exposes draft releases to tokens with push access')
 
+    def test_manual_candidate_jobs_check_their_direct_prerequisites(self):
+        source = WORKFLOW.with_name('release.yml').read_text()
+        for name, dependencies in (('build-release', ('resolve-candidate',)),
+                                   ('candidate', ('resolve-candidate', 'build-release'))):
+            block = re.split(r'\n  [a-z][a-z-]*:\n', source.split(f'\n  {name}:\n', 1)[1], maxsplit=1)[0]
+            condition = re.search(r'^    if: \$\{\{ (.+) \}\}$', block, re.M)
+            self.assertIsNotNone(condition, f'{name} must override skipped release-please status')
+            expression = condition.group(1)
+            self.assertIn('always()', expression)
+            for dependency in dependencies:
+                self.assertIn(f"needs.{dependency}.result == 'success'", expression)
+                expression = expression.replace(f'needs.{dependency}.result', f"results['{dependency}']")
+            expression = expression.replace('always()', 'True').replace('&&', 'and').replace('||', 'or')
+            for dependency in dependencies:
+                for result in ('success', 'failure', 'cancelled', 'skipped'):
+                    results = dict.fromkeys(dependencies, 'success')
+                    results[dependency] = result
+                    self.assertEqual(eval(expression, {'__builtins__': {}}, {'results': results}), result == 'success')
+
     def test_release_caller_allows_every_nested_pipeline_permission(self):
         release = WORKFLOW.with_name('release.yml').read_text()
         caller = release.split('\n  build-release:\n', 1)[1].split('\n  candidate:\n', 1)[0]
