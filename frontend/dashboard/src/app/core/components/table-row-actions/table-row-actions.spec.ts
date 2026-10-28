@@ -158,14 +158,50 @@ describe('TableRowActions', () => {
     async function clickEdit(menu: Menu): Promise<void> {
         // Command closure must not depend on OptimusUI delivering onHide.
         const onHide = vi.spyOn(menu.onHide, 'emit').mockImplementation(() => undefined);
+        const itemClick = vi.spyOn(menu, 'itemClick');
         try {
-            (menuElement(menu)?.querySelector('a') as HTMLElement).click();
+            // Temporary CI diagnostics: trace command delivery without changing the real click path.
+            const selected = menuElement(menu);
+            const owned = menu.containerViewChild()?.nativeElement;
+            const anchor = selected?.querySelector('a') as HTMLElement;
+            const editItem = menu.model?.[0];
+            console.info(
+                'row-command-before',
+                JSON.stringify({
+                    sameElement: selected === owned,
+                    copies: document.querySelectorAll(`[id="${menu.id}"]`).length,
+                    selectedConnected: selected?.isConnected,
+                    ownedConnected: owned?.isConnected,
+                    anchorText: anchor?.textContent?.trim(),
+                    anchorId: anchor?.id,
+                    itemRole: anchor?.closest('[role]')?.getAttribute('role'),
+                    itemDisabled: anchor?.closest('[aria-disabled]')?.getAttribute('aria-disabled'),
+                    inert: anchor?.closest('[inert]') !== null,
+                    visible: menu.visible,
+                    overlayVisible: menu.overlayVisible,
+                    model: menu.model?.map((item) => ({ label: item.label, disabled: item.disabled, command: typeof item.command }))
+                })
+            );
+            anchor.click();
+            const clickedItem = itemClick.mock.calls[0]?.[0]?.item;
+            console.info(
+                'row-command-sync',
+                JSON.stringify({
+                    itemClicks: itemClick.mock.calls.length,
+                    commands: editCommand.mock.calls.length,
+                    sameItem: clickedItem === editItem,
+                    sameCommand: clickedItem?.command === editItem?.command,
+                    visible: menu.visible
+                })
+            );
             await fixture.whenStable();
+            console.info('row-command-stable', JSON.stringify({ itemClicks: itemClick.mock.calls.length, commands: editCommand.mock.calls.length, visible: menu.visible }));
             expect(editCommand).toHaveBeenCalledTimes(1);
             expect(deleteCommand).not.toHaveBeenCalled();
             expect(menu.visible).toBe(false);
             await expect.poll(() => menuElement(menu)).toBeNull();
         } finally {
+            itemClick.mockRestore();
             onHide.mockRestore();
         }
     }
