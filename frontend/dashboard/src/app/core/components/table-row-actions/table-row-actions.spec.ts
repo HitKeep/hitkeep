@@ -11,12 +11,18 @@ import { TableRowActions, TableRowActionItem } from './table-row-actions';
 describe('TableRowActions', () => {
     let fixture: ComponentFixture<TableRowActions>;
     let ownedMenus: Set<Menu>;
-    const editCommand = vi.fn();
-    const deleteCommand = vi.fn();
+    let editCommandCalls = 0;
+    let deleteCommandCalls = 0;
+    const editCommand = () => {
+        editCommandCalls++;
+    };
+    const deleteCommand = () => {
+        deleteCommandCalls++;
+    };
 
     beforeEach(async () => {
-        editCommand.mockReset();
-        deleteCommand.mockReset();
+        editCommandCalls = 0;
+        deleteCommandCalls = 0;
         ownedMenus = new Set();
 
         await TestBed.configureTestingModule({
@@ -71,7 +77,7 @@ describe('TableRowActions', () => {
 
         await clickEdit(menu);
 
-        expect(editCommand).toHaveBeenCalledTimes(1);
+        expect(editCommandCalls).toBe(1);
     });
 
     it('executes the current menu command when an inert overlay precedes it in the document', async () => {
@@ -83,7 +89,7 @@ describe('TableRowActions', () => {
         try {
             expect(document.querySelector('.table-row-actions-menu')).toBe(staleOverlay);
             await clickEdit(menu);
-            expect(editCommand).toHaveBeenCalledTimes(1);
+            expect(editCommandCalls).toBe(1);
         } finally {
             staleOverlay.remove();
         }
@@ -94,7 +100,7 @@ describe('TableRowActions', () => {
         await clickEdit(menu);
         await openMenu();
 
-        expect(editCommand).toHaveBeenCalledTimes(1);
+        expect(editCommandCalls).toBe(1);
         expect(menuElement(menu)?.textContent).toContain('Edit');
     });
 
@@ -161,10 +167,10 @@ describe('TableRowActions', () => {
         try {
             (menuElement(menu)?.querySelector('a') as HTMLElement).click();
             await fixture.whenStable();
-            expect(editCommand).toHaveBeenCalledTimes(1);
-            expect(deleteCommand).not.toHaveBeenCalled();
             expect(menu.visible).toBe(false);
             await expect.poll(() => menuElement(menu)).toBeNull();
+            expect(editCommandCalls).toBe(1);
+            expect(deleteCommandCalls).toBe(0);
         } finally {
             onHide.mockRestore();
         }
