@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.2](https://github.com/HitKeep/hitkeep/compare/v2.15.1...v2.15.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* harden CI results, run cleanup, and release authentication ([#432](https://github.com/HitKeep/hitkeep/issues/432)) ([8c3e13e](https://github.com/HitKeep/hitkeep/commit/8c3e13e5f55581e886d479a9af53a567bffd7308))
+
 ## [2.15.1](https://github.com/HitKeep/hitkeep/compare/v2.15.0...v2.15.1) (2026-10-28)
 
 

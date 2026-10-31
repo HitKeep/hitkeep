@@ -1,7 +1,7 @@
 {
     "name": "@hitkeep/dashboard",
     "license": "MIT",
-    "version": "2.15.1",
+    "version": "2.15.2",
     "packageManager": "npm@12.2.1",
     "scripts": {
         "ng": "ng",
