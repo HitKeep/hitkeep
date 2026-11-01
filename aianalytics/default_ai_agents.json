@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-15T22:28:49.971016388Z",
+  "generated_at": "2026-11-01T22:56:00.580991875Z",
   "sources": {
     "ai_robots_txt": "https://raw.githubusercontent.com/ai-robots-txt/ai.robots.txt/main/robots.json",
     "crawler_user_agents": "https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json",
@@ -49,6 +49,16 @@
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
       "url": "https://theagenttimes.com/about",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "agi agent",
+      "name": "AGI Agent",
+      "family": "AGI, Inc",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]
@@ -120,7 +130,8 @@
       "respects_robots_txt": "yes",
       "url": "https://lyrenth.com",
       "sources": [
-        "ai_robots_txt"
+        "ai_robots_txt",
+        "crawler_user_agents"
       ]
     },
     {
@@ -428,6 +439,16 @@
       ]
     },
     {
+      "token": "cartai agentic commerce",
+      "name": "CartAI Agentic Commerce",
+      "family": "CartAI that accesses online stores to support user-directed shopping and checkout workflows",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "ccbot",
       "name": "CCBot",
       "family": "Common Crawl",
@@ -575,6 +596,16 @@
       ]
     },
     {
+      "token": "cledarabot",
+      "name": "CledaraBot",
+      "family": "Cledara that visits SaaS providers to complete customer-approved administrative tasks, including invoice collection and user managem…",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "cloudflare-autorag",
       "name": "Cloudflare-AutoRAG",
       "family": "Cloudflare",
@@ -601,6 +632,16 @@
       "name": "CloudVertexBot",
       "family": "CloudVertexBot",
       "category": "ai_training_crawler",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "codex",
+      "name": "Codex",
+      "family": "Codex",
+      "category": "ai_coding_agent",
       "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
@@ -825,6 +866,28 @@
       ]
     },
     {
+      "token": "elevenlabsbot",
+      "name": "ElevenlabsBot",
+      "family": "ElevenLabs",
+      "category": "ai_assistant",
+      "respects_robots_txt": "yes",
+      "url": "https://elevenlabs.io",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "elevenlabscrawler",
+      "name": "ElevenlabsCrawler",
+      "family": "ElevenLabs",
+      "category": "ai_training_crawler",
+      "respects_robots_txt": "yes",
+      "url": "https://elevenlabs.io",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "erniebot",
       "name": "ERNIEBot",
       "family": "Baidu",
@@ -851,6 +914,16 @@
       "category": "ai_search_indexer",
       "respects_robots_txt": "unclear",
       "url": "https://exa.ai",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "exauser",
+      "name": "ExaUser",
+      "family": "ExaUser",
+      "category": "ai_assistant",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]
@@ -1150,6 +1223,16 @@
       ]
     },
     {
+      "token": "grok bot",
+      "name": "Grok Bot",
+      "family": "Grok Bot",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "grokappandroid",
       "name": "GrokAppAndroid",
       "family": "xAI",
@@ -1183,6 +1266,16 @@
       ]
     },
     {
+      "token": "harkbot",
+      "name": "HarkBot",
+      "family": "HarkBot",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "henkbot",
       "name": "HenkBot",
       "family": "HenkBot",
@@ -1203,6 +1296,17 @@
       "url": "https://huggingface.co/",
       "sources": [
         "device_detector_bots"
+      ]
+    },
+    {
+      "token": "hunyuan",
+      "name": "Hunyuan",
+      "family": "Tencent",
+      "category": "ai_training_crawler",
+      "respects_robots_txt": "unclear",
+      "url": "https://hunyuan.tencent.com",
+      "sources": [
+        "ai_robots_txt"
       ]
     },
     {
@@ -1350,6 +1454,28 @@
       "sources": [
         "ai_robots_txt",
         "crawler_user_agents"
+      ]
+    },
+    {
+      "token": "instinct",
+      "name": "Instinct",
+      "family": "Instinct",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "isonai-user",
+      "name": "IsonAI-User",
+      "family": "PT Epithre Teknologi Indonesia",
+      "category": "ai_assistant",
+      "respects_robots_txt": "unclear",
+      "url": "https://docs.isonai.com/en/bots/",
+      "sources": [
+        "crawler_user_agents",
+        "device_detector_bots"
       ]
     },
     {
@@ -1674,11 +1800,32 @@
       ]
     },
     {
+      "token": "moonshotbot",
+      "name": "MoonshotBot",
+      "family": "Kimi",
+      "category": "ai_training_crawler",
+      "respects_robots_txt": "unclear",
+      "url": "https://www.kimi.ai/",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "mozilla-tabstack",
       "name": "Mozilla-Tabstack",
       "family": "Mozilla that performs programmatic, AI-driven interactions with web content through Tabstack",
       "category": "other_ai",
       "respects_robots_txt": "yes",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "muse",
+      "name": "Muse",
+      "family": "Muse",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]
@@ -1885,6 +2032,16 @@
       "category": "other_ai",
       "respects_robots_txt": "yes",
       "url": "https://panscient.com",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "payhawk invoice fetching agent",
+      "name": "Payhawk Invoice Fetching Agent",
+      "family": "Payhawk that retrieves invoices from supplier websites for users and attaches them to expense records",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]
@@ -2133,6 +2290,17 @@
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
       "url": "https://www.zyte.com",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "scrybot",
+      "name": "ScryBot",
+      "family": "Scry",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "url": "https://scry.io/",
       "sources": [
         "ai_robots_txt"
       ]
@@ -2424,8 +2592,8 @@
     },
     {
       "token": "webzio-extended",
-      "name": "webzio-extended",
-      "family": "webzio-extended",
+      "name": "Webzio-Extended",
+      "family": "Webzio-Extended",
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
       "url": "https://docs.webz.io/reference/how-it-works-video",
@@ -2469,6 +2637,17 @@
       ]
     },
     {
+      "token": "xai-grok",
+      "name": "xAI-Grok",
+      "family": "xAI",
+      "category": "other_ai",
+      "respects_robots_txt": "unclear",
+      "url": "https://x.ai/",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "yandexadditional",
       "name": "YandexAdditional",
       "family": "Yandex",
@@ -2487,6 +2666,16 @@
       "category": "ai_training_crawler",
       "respects_robots_txt": "yes",
       "url": "https://yandex.ru",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "yibot",
+      "name": "YiBot",
+      "family": "01.ai",
+      "category": "ai_training_crawler",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]
