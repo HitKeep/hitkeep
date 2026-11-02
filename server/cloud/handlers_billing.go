@@ -502,7 +502,7 @@ func (h *handler) handleListCloudPlans() http.HandlerFunc {
 			cachedPrices = make(map[string]map[string]api.CloudPlanPrice)
 			if strings.TrimSpace(h.ctx.Config.StripeSecretKey) != "" && h.stripe != nil {
 				currency := "EUR"
-				if strings.EqualFold(h.ctx.Config.CloudJurisdiction, "US") {
+				if shared.NormalizeCloudJurisdiction(h.ctx.Config.CloudJurisdiction) == "US" {
 					currency = "USD"
 				}
 				for _, code := range planCodes[1:] {

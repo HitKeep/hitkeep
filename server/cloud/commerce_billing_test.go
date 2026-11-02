@@ -47,6 +47,34 @@ func TestCommerceGatesBeforeProvider(t *testing.T) {
 	}
 }
 
+func TestCommerceCheckoutNormalizesJurisdictionCurrency(t *testing.T) {
+	for _, tc := range []struct{ jurisdiction, currency string }{
+		{"US", "USD"}, {"us-east-1", "USD"}, {"EU", "EUR"}, {"eu-central-1", "EUR"}, {"", "EUR"}, {"unknown", "EUR"},
+	} {
+		t.Run(tc.jurisdiction, func(t *testing.T) {
+			h, store := setupCloudTestHandler(t)
+			defer store.Close()
+			h.ctx.Config.AIEnabled = true
+			h.ctx.Config.CloudJurisdiction = tc.jurisdiction
+			buyer, err := store.CreateManagedCloudAccount(t.Context(), database.CreateManagedCloudAccountInput{Email: "currency@example.test", HashedPassword: "hashed", TeamName: "Checkout"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider := h.stripe.(*fakeStripeClient)
+			provider.prices = map[string]*stripePriceOutput{"price_pro": {AmountMinor: 1200, Currency: tc.currency, Interval: "month", Active: true}}
+			req := httptest.NewRequest("POST", "/", strings.NewReader(`{"line_items":[{"id":"pro:monthly"}]}`))
+			req.Header.Set("API-Version", acpVersion)
+			req.Header.Set("Idempotency-Key", "currency")
+			req = req.WithContext(context.WithValue(req.Context(), shared.UserIDKey, buyer.UserID))
+			w := httptest.NewRecorder()
+			h.handleCommerceSession("acp", "create").ServeHTTP(w, req)
+			if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), `"requires_escalation"`) {
+				t.Fatalf("%s checkout=%d %s", tc.jurisdiction, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestCommerceStateRequiresProviderPayment(t *testing.T) {
 	for _, tc := range []struct{ status, payment, want string }{{"open", "unpaid", "requires_escalation"}, {"complete", "unpaid", "complete_in_progress"}, {"complete", "paid", "completed"}, {"expired", "unpaid", "canceled"}} {
 		t.Run(tc.status+tc.payment, func(t *testing.T) {

@@ -13,6 +13,7 @@ func OpenAPISpecV1(publicURL string) map[string]any {
 	paths := spec["paths"].(map[string]any)
 	addOAuthActionSecurity(paths)
 	maps.Copy(paths, agentDiscoveryPaths())
+	maps.Copy(paths, commerceDiscoveryPaths())
 	return spec
 }
 
@@ -49,7 +50,7 @@ func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]a
 	commerce := ctx != nil && cloud.CommerceAvailable(ctx.Config) && ctx.Store != nil && (ctx.Cluster == nil || ctx.Cluster.IsLeader())
 	if !commerce {
 		for route := range paths {
-			if strings.HasPrefix(route, "/api/cloud/commerce/") {
+			if strings.HasPrefix(route, "/api/cloud/commerce/") || route == "/.well-known/acp.json" || route == "/.well-known/ucp" {
 				delete(paths, route)
 			}
 		}

@@ -1,5 +1,13 @@
 package system
 
+func commerceDiscoveryPaths() map[string]any {
+	paths := map[string]any{}
+	for _, route := range []string{"/.well-known/acp.json", "/.well-known/ucp"} {
+		paths[route] = map[string]any{"get": op([]string{"Cloud"}, "Discover human-approved Cloud checkout", "Public ACP 2026-04-17 or UCP 2026-08-25 profile. Requires AI enabled, the Cloud billing build, hosted mode, configured Stripe Checkout and the authoritative leader/store. Advertises only REST checkout with buyer approval through continue_url; no autonomous payment rail. OAuth billing:write consent or an authorized dashboard browser session is required for checkout actions, not discovery.", nil, nil, nil, map[string]any{"200": jsonSchemaResp("Public checkout profile", map[string]any{"type": "object"}), "404": desc("Commerce unavailable or invalid canonical public URL")})}
+	}
+	return paths
+}
+
 func openAPIV1CommercePaths() map[string]any {
 	paths := map[string]any{}
 	response := map[string]any{"type": "object", "required": []string{"id", "status", "currency", "line_items", "totals", "messages", "links"}, "properties": map[string]any{

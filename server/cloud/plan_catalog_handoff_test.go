@@ -19,6 +19,10 @@ func TestCloudPlanCatalogHumanApprovedReviewURLs(t *testing.T) {
 	for _, region := range []struct{ jurisdiction, currency, publicURL, scheme, host string }{
 		{"EU", "EUR", "https://analytics.example/prefix/", "https", "analytics.example"},
 		{"US", "USD", "https://analytics.example:443/prefix/", "https", "analytics.example:443"},
+		{"us-east-1", "USD", "https://analytics.example/prefix/", "https", "analytics.example"},
+		{"eu-central-1", "EUR", "https://analytics.example/prefix/", "https", "analytics.example"},
+		{"", "EUR", "https://analytics.example/prefix/", "https", "analytics.example"},
+		{"unknown", "EUR", "https://analytics.example/prefix/", "https", "analytics.example"},
 		{"EU", "EUR", "http://analytics.example:8080/prefix/", "http", "analytics.example:8080"},
 	} {
 		t.Run(region.publicURL, func(t *testing.T) {
