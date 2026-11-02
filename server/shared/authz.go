@@ -24,6 +24,13 @@ type PermissionContext struct {
 func (c *Context) RequirePermission(perm auth.Permission) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if isSitePermission(perm) && !c.checkAgentSiteTeam(w, r) {
+				return
+			}
+			if grant, _ := r.Context().Value(OAuthGrantKey).(*auth.OAuthGrant); grant != nil {
+				c.requireOAuthSitePermission(perm, next, w, r, grant)
+				return
+			}
 			userID := GetUserIDFromContext(r)
 			apiClientAuth, _ := r.Context().Value(APIClientAuthKey).(*database.APIClientAuth)
 			if userID == uuid.Nil && apiClientAuth == nil {
@@ -116,6 +123,9 @@ func (c *Context) RequireTeamCapability(capability auth.Capability) func(http.Ha
 			if !ok {
 				return
 			}
+			if !CheckAgentTeam(w, r, teamID) {
+				return
+			}
 
 			if !c.userHasTeamCapability(r.Context(), teamID, userID, capability) {
 				http.Error(w, "Access denied", http.StatusForbidden)
@@ -127,10 +137,19 @@ func (c *Context) RequireTeamCapability(capability auth.Capability) func(http.Ha
 	}
 }
 
-// RequireActiveTeamCapability checks a human user's current team on routes without a team ID path parameter.
+// RequireActiveTeamCapability checks the session's active team or the OAuth consent team.
 func (c *Context) RequireActiveTeamCapability(capability auth.Capability) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if grant, _ := r.Context().Value(OAuthGrantKey).(*auth.OAuthGrant); grant != nil {
+				scope, _ := r.Context().Value(oauthActionScopeKey).(string)
+				if c.AuthorizeOAuthTeam(r.Context(), grant, grant.TeamID, scope, capability) != nil {
+					http.Error(w, "Access denied", http.StatusForbidden)
+					return
+				}
+				next(w, r)
+				return
+			}
 			userID := GetUserIDFromContext(r)
 			if userID == uuid.Nil || r.Context().Value(APIClientAuthKey) != nil || r.Context().Value(OAuthGrantKey) != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -143,6 +162,9 @@ func (c *Context) RequireActiveTeamCapability(capability auth.Capability) func(h
 			teamID, err := c.Store.GetActiveTenantID(r.Context(), userID)
 			if err != nil {
 				http.Error(w, "Unable to resolve active team", http.StatusBadRequest)
+				return
+			}
+			if !CheckAgentTeam(w, r, teamID) {
 				return
 			}
 			if !c.userHasTeamCapability(r.Context(), teamID, userID, capability) {
@@ -190,6 +212,13 @@ func (c *Context) sitePermissionContext(
 func (c *Context) RequireSiteOrInstancePermission(sitePerm, instancePerm auth.Permission) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if sitePerm != "" && !c.checkAgentSiteTeam(w, r) {
+				return
+			}
+			if grant, _ := r.Context().Value(OAuthGrantKey).(*auth.OAuthGrant); grant != nil {
+				c.requireOAuthSitePermission(sitePerm, next, w, r, grant)
+				return
+			}
 			userID := GetUserIDFromContext(r)
 			apiClientAuth, _ := r.Context().Value(APIClientAuthKey).(*database.APIClientAuth)
 			if userID == uuid.Nil && apiClientAuth == nil {
@@ -240,6 +269,36 @@ func (c *Context) RequireSiteOrInstancePermission(sitePerm, instancePerm auth.Pe
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		}
 	}
+}
+
+// CheckAgentTeam binds browser-agent approval to the actual resource team; it grants no authority.
+func CheckAgentTeam(w http.ResponseWriter, r *http.Request, teamID uuid.UUID) bool {
+	if len(r.Header.Values("X-Hitkeep-Agent")) == 0 {
+		return true
+	}
+	expected, err := uuid.Parse(r.Header.Get("X-Hitkeep-Agent-Team"))
+	if len(r.Header.Values("X-Hitkeep-Agent-Team")) != 1 || err != nil || expected != teamID {
+		http.Error(w, "Team changed; refresh agent context", http.StatusConflict)
+		return false
+	}
+	return true
+}
+
+func (c *Context) checkAgentSiteTeam(w http.ResponseWriter, r *http.Request) bool {
+	if len(r.Header.Values("X-Hitkeep-Agent")) == 0 {
+		return true
+	}
+	id, err := siteIDFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return false
+	}
+	team, err := c.Store.GetSiteTenantID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return false
+	}
+	return CheckAgentTeam(w, r, team)
 }
 
 func isSitePermission(perm auth.Permission) bool {

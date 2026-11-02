@@ -24,6 +24,8 @@ import { LayoutSidebar } from './layout-sidebar';
 import { MainLayoutContextService } from './main-layout-context.service';
 import { MenuItem } from '@openng/optimus-ui/api';
 import { vi } from 'vitest';
+import { AuthService } from '@services/auth.service';
+import type { DashboardAgentTool } from '@services/dashboard-webmcp.service';
 
 interface LayoutSidebarTestAccess {
     closeMobileDrawer(): void;
@@ -83,6 +85,10 @@ describe('MainLayout', () => {
                 TranslocoTestingModule.forRoot({
                     langs: {
                         en: {
+                            agentTools: {
+                                confirmTitle: 'Approve agent action',
+                                confirmAction: 'Team: {{team}}\nAction: {{action}}\n{{details}}'
+                            },
                             nav: {
                                 resizeSidebar: 'Resize sidebar',
                                 dashboard: 'Dashboard',
@@ -271,6 +277,41 @@ describe('MainLayout', () => {
         const headings = fixture.nativeElement.querySelectorAll('main h1');
         expect(headings).toHaveLength(1);
         expect(headings[0].textContent).toContain('Dashboard');
+    });
+
+    it('renders agent approval details as text in the existing dialog and waits for a real user decision', async () => {
+        const original = Object.getOwnPropertyDescriptor(document, 'modelContext');
+        const tools = new Map<string, DashboardAgentTool>();
+        Object.defineProperty(document, 'modelContext', {
+            configurable: true,
+            value: {
+                registerTool: async (tool: DashboardAgentTool, options: { signal: AbortSignal }) => {
+                    tools.set(tool.name, tool);
+                    options.signal.addEventListener('abort', () => tools.delete(tool.name), { once: true });
+                }
+            }
+        });
+        try {
+            TestBed.inject(AuthService).markAuthenticated();
+            bootstrap.status.update((status) => ({ ...status!, ai_enabled: true }));
+            await fixture.whenStable();
+            httpMock.expectOne('/openapi.json').flush({ paths: { '/api/sites/{id}/goals': { post: { summary: 'Create goal', tags: ['Goals'] } } } });
+            await fixture.whenStable();
+            const execution = tools.get('hitkeep.run_action')!.execute({ operation: 'POST /api/sites/{id}/goals', path_parameters: { id: 'site-1' }, body: { name: '<img src=x onerror=alert(1)>' } });
+            await fixture.whenStable();
+            const dialog = document.querySelector('.p-confirmdialog')!;
+            expect(dialog.textContent).toContain('<img src=x onerror=alert(1)>');
+            expect(dialog.querySelector('img')).toBeNull();
+            httpMock.expectNone('/api/sites/site-1/goals');
+            (dialog.querySelector('.p-confirmdialog-reject-button') as HTMLButtonElement).click();
+            expect(await execution).toMatchObject({ isError: true });
+            httpMock.expectNone('/api/sites/site-1/goals');
+        } finally {
+            bootstrap.status.update((status) => ({ ...status!, ai_enabled: false }));
+            await fixture.whenStable();
+            if (original) Object.defineProperty(document, 'modelContext', original);
+            else Reflect.deleteProperty(document, 'modelContext');
+        }
     });
 
     it('offers contextual site actions under the existing permission and share boundaries', () => {

@@ -30,6 +30,8 @@ import (
 )
 
 type fakeStripeClient struct {
+	checkoutCalls     int
+	sessions          []*checkoutSessionOutput
 	lastCustomerInput *createCustomerInput
 	lastCheckoutInput *createCheckoutSessionInput
 	lastPortalInput   *createPortalSessionInput
@@ -50,14 +52,17 @@ func (f *fakeStripeClient) CreateCustomer(_ context.Context, input createCustome
 }
 
 func (f *fakeStripeClient) CreateCheckoutSession(_ context.Context, input createCheckoutSessionInput) (*checkoutSessionOutput, error) {
+	f.checkoutCalls++
 	f.lastCheckoutInput = &input
 	if f.createCheckoutErr != nil {
 		return nil, f.createCheckoutErr
 	}
-	return &checkoutSessionOutput{
-		ID:  "cs_test",
-		URL: "https://checkout.stripe.test/session",
-	}, nil
+	session := &checkoutSessionOutput{PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
+	if f.checkoutCalls > 1 {
+		session.ID = fmt.Sprintf("cs_test_%d", f.checkoutCalls)
+	}
+	f.sessions = append([]*checkoutSessionOutput{session}, f.sessions...)
+	return session, nil
 }
 
 func (f *fakeStripeClient) CreatePortalSession(_ context.Context, input createPortalSessionInput) (*portalSessionOutput, error) {

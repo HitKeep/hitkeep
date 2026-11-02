@@ -66,11 +66,13 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 		},
 	}
 	setStripeVersionHeader(&params.Params)
+	setStripeIdempotencyKey(&params.Params, input.IdempotencyKey)
 	params.Locale = stripe.String(input.Locale)
 	params.AddMetadata("user_id", input.UserID.String())
 	params.AddMetadata("tenant_id", input.TenantID.String())
 	params.AddMetadata("plan_code", input.PlanCode)
 	params.AddMetadata("plan_name", input.PlanName)
+	params.AddMetadata("price_id", input.PriceID)
 	params.AddMetadata("billing_interval", input.BillingInterval)
 	params.AddMetadata("jurisdiction", input.Jurisdiction)
 
@@ -78,10 +80,7 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 	if err != nil {
 		return nil, fmt.Errorf("create checkout session: %w", err)
 	}
-	return &checkoutSessionOutput{
-		ID:  created.ID,
-		URL: created.URL,
-	}, nil
+	return checkoutSessionFromStripe(created), nil
 }
 
 func (c *stripeSDKClient) CreatePortalSession(ctx context.Context, input createPortalSessionInput) (*portalSessionOutput, error) {

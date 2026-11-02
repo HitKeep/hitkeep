@@ -740,6 +740,7 @@ export interface AssistantConnection {
 export interface SystemStatus {
     needs_setup: boolean;
     version: string;
+    ai_enabled?: boolean;
     cloud?: CloudStatus;
     ask_ai?: AskAIStatus;
     mail_delivery?: {

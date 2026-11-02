@@ -26,7 +26,7 @@
   "oauth": {
     "connectionDetails": "Detalhes da conexão",
     "consentTitle": "Autorizar um aplicativo",
-    "consentDescription": "Revise o aplicativo e escolha os sites que ele poderá acessar.",
+    "consentDescription": "Revise o aplicativo, as permissões solicitadas e a equipe que ele poderá acessar.",
     "loading": "Carregando aplicativos e permissões…",
     "retry": "Tentar novamente",
     "application": "Aplicativo",
@@ -43,7 +43,7 @@
     "siteHelp": "Selecione cada site explicitamente. Os novos sites não serão incluídos automaticamente.",
     "noEligibleSites": "As suas permissões atuais não permitem incluir sites nesta autorização.",
     "permissionNotice": "O aplicativo recebe apenas o acesso selecionado. Você pode revogá-lo em Aplicativos conectados.",
-    "approve": "Autorizar os sites selecionados",
+    "approve": "Autorizar o acesso selecionado",
     "deny": "Recusar e cancelar",
     "submitting": "Enviando sua decisão…",
     "cancel": "Voltar para o HitKeep",
@@ -64,7 +64,12 @@
       "sitesRead": "Listar os sites selecionados",
       "analyticsRead": "Ler as análises dos sites selecionados",
       "trackingDomainsRead": "Ler os domínios de rastreio dos sites selecionados",
-      "ingestWrite": "Enviar eventos de análise para os sites selecionados"
+      "ingestWrite": "Enviar eventos de análise para os sites selecionados",
+      "goalsWrite": "Gerenciar metas e funis dos sites selecionados",
+      "annotationsWrite": "Gerenciar anotações dos sites selecionados",
+      "sitesWrite": "Alterar domínios e retenção dos sites selecionados",
+      "opportunitiesWrite": "Gerenciar oportunidades dos sites selecionados",
+      "billingWrite": "Iniciar, revisar e cancelar Checkout para a equipe selecionada; o pagamento exige sua aprovação"
     },
     "signedInAs": "Conectado como {{ email }}",
     "wrongAccount": "Para usar outra conta, saia pelo menu da conta.",
@@ -74,7 +79,9 @@
     "continueAuthorization": "Continuar para a autorização",
     "resumeDescription": "A autorização do aplicativo ainda está pendente. Continue para revisar o acesso solicitado.",
     "checkoutWaiting": "O pagamento ainda não foi confirmado. Conclua o processo de cobrança em andamento ou tente novamente.",
-    "resumeFailed": "Não foi possível restaurar a autorização pendente. Suas configurações de cobrança continuam disponíveis. Tente novamente."
+    "resumeFailed": "Não foi possível restaurar a autorização pendente. Suas configurações de cobrança continuam disponíveis. Tente novamente.",
+    "noEligibleTeams": "Nenhuma equipe está disponível para esta autorização com suas permissões atuais.",
+    "billingHelp": "Este acesso se aplica à equipe selecionada. O pagamento ainda exige sua confirmação no Stripe Checkout."
   },
   "nav": {
     "resizeSidebar": "Redimensionar barra lateral",
@@ -4009,5 +4016,19 @@
     "invalid": "Insira um nome e pelo menos uma URI de redirecionamento HTTPS dentro dos limites dos campos.",
     "revokeTitle": "Revogar cliente OAuth",
     "revokeConfirm": "Revogar {{application}}? Isso impede novas autorizações e revoga todas as existentes."
+  },
+  "agentTools": {
+    "listTitle": "Ações disponíveis do HitKeep",
+    "listDescription": "Descubra as ações documentadas da API do HitKeep para esta sessão. As credenciais e exportações continuam na interface habitual.",
+    "runTitle": "Executar uma ação do HitKeep",
+    "runDescription": "Execute uma ação disponível da API com as permissões atuais. Cada alteração exige confirmação explícita.",
+    "confirmTitle": "Confirmar ação do agente",
+    "confirmAction": "Permitir esta ação do agente na equipa {{team}}?\n\n{{action}}\n\n{{details}}",
+    "unavailable": "As ações dos agentes não estão disponíveis na sessão ou no contexto atuais.",
+    "invalidAction": "Esta ação ou os seus parâmetros não estão disponíveis para agentes.",
+    "notConfirmed": "A ação não foi confirmada.",
+    "confirmPending": "Outra ação do agente está à espera de confirmação.",
+    "requestFailed": "O pedido falhou (HTTP {{status}}).",
+    "outcomeUnknown": "O pedido foi interrompido e poderá ter sido concluído. Verifique o estado atual antes de tentar novamente."
   }
 }

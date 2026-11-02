@@ -65,6 +65,7 @@ func (c *Context) SystemStatusResponse(ctx context.Context) (api.SystemStatus, e
 		mailStatus = "available"
 	}
 	return api.SystemStatus{
+		AIEnabled:  c.Config.AIEnabled,
 		NeedsSetup: userCount == 0 && !c.Config.CloudHosted,
 		Version:    c.Config.Version,
 		Cloud:      c.CloudStatus(),

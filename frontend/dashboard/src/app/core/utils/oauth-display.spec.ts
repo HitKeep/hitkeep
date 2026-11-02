@@ -1,11 +1,16 @@
 import { formatOAuthTime, oauthScopeLabelKey } from './oauth-display';
 
 describe('oauthScopeLabelKey', () => {
-    it('describes the four documented scopes without treating unknown values as permissions', () => {
+    it('describes documented scopes without treating unknown values as permissions', () => {
         expect(oauthScopeLabelKey('sites:read')).toBe('oauth.scope.sitesRead');
         expect(oauthScopeLabelKey('analytics:read')).toBe('oauth.scope.analyticsRead');
         expect(oauthScopeLabelKey('tracking_domains:read')).toBe('oauth.scope.trackingDomainsRead');
         expect(oauthScopeLabelKey('ingest:write')).toBe('oauth.scope.ingestWrite');
+        expect(oauthScopeLabelKey('goals:write')).toBe('oauth.scope.goalsWrite');
+        expect(oauthScopeLabelKey('annotations:write')).toBe('oauth.scope.annotationsWrite');
+        expect(oauthScopeLabelKey('sites:write')).toBe('oauth.scope.sitesWrite');
+        expect(oauthScopeLabelKey('opportunities:write')).toBe('oauth.scope.opportunitiesWrite');
+        expect(oauthScopeLabelKey('billing:write')).toBe('oauth.scope.billingWrite');
         expect(oauthScopeLabelKey('admin:*')).toBeNull();
         expect(oauthScopeLabelKey('__proto__')).toBeNull();
     });

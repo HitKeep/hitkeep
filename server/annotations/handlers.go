@@ -31,18 +31,22 @@ type handler struct {
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
 	mux.HandleFunc("GET /api/sites/{id}/annotations", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleList()))
 	mux.HandleFunc("POST /api/sites/{id}/annotations", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "annotations:write",
 		SitePerm:    authcore.PermSiteManageAnnotations,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleCreate()))
 	mux.HandleFunc("PUT /api/sites/{id}/annotations/{annotationID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "annotations:write",
 		SitePerm:    authcore.PermSiteManageAnnotations,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleUpdate()))
 	mux.HandleFunc("DELETE /api/sites/{id}/annotations/{annotationID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "annotations:write",
 		SitePerm:    authcore.PermSiteManageAnnotations,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleDelete()))

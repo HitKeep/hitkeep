@@ -156,3 +156,18 @@ func readPlanCatalog(t *testing.T, h *handler, provider *fakeStripeClient) ([]ap
 	}
 	return plans, body
 }
+
+func TestPlanCatalogMarkdownKeepsAuthoritativePrices(t *testing.T) {
+	h, fake := planCatalogTestHandler()
+	h.ctx.Config.AIEnabled = true
+	req := httptest.NewRequest(http.MethodGet, "/api/cloud/plans", nil)
+	req.Header.Set("Accept", "text/markdown")
+	w := httptest.NewRecorder()
+	h.handleListCloudPlans().ServeHTTP(w, req)
+	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/markdown") || !strings.Contains(w.Body.String(), "17500 EUR minor units") || !strings.Contains(w.Body.String(), "pro:monthly") || !strings.Contains(w.Body.String(), "purchase=review") {
+		t.Fatalf("catalog=%d %s", w.Code, w.Body.String())
+	}
+	if fake.checkoutCalls != 0 || fake.lastCustomerInput != nil {
+		t.Fatal("Markdown catalog mutated billing")
+	}
+}

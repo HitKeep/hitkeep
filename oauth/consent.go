@@ -93,7 +93,7 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_request")
 		return
 	}
-	if len(scopes) == 0 || len(scopes) > 4 {
+	if len(scopes) == 0 || len(scopes) > len(allowed) {
 		fail("invalid_scope")
 		return
 	}
@@ -279,7 +279,8 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 	if decision == "approve" && pending.Client.RegistrationTeamID != uuid.Nil() && pending.Client.RegistrationTeamID != teamID {
 		return ErrConsentForbidden
 	}
-	if decision == "approve" && (teamID == uuid.Nil() || len(sites) == 0 || authorize == nil) {
+	teamOnly := len(pending.Scopes) == 1 && pending.Scopes[0] == ScopeBillingWrite
+	if decision == "approve" && (teamID == uuid.Nil() || (!teamOnly && len(sites) == 0) || authorize == nil) {
 		return ErrInvalidConsent
 	}
 	grant := database.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), ClientRevision: pending.Client.RegistrationVersion, ClientID: pending.Client.ID, ClientName: pending.Client.Name, ClientURI: pending.Client.URI, Audience: pending.Resource, Scopes: slices.Clone(pending.Scopes), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(grantLifetime)}
@@ -311,6 +312,14 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 		return nil
 	}
 	seen := make(map[uuid.UUID]bool, len(sites))
+	if teamOnly {
+		if len(sites) != 0 {
+			return ErrInvalidConsent
+		}
+		if err := authorize(ctx, principal, uuid.Nil()); err != nil {
+			return err
+		}
+	}
 	for _, siteID := range sites {
 		if siteID == uuid.Nil() || seen[siteID] {
 			return ErrInvalidConsent

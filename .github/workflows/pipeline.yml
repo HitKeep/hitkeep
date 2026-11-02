@@ -678,6 +678,10 @@ jobs:
           repository: HitKeep/hitkeep-assistant-plugins
           ref: dbe2227280b43d23c0b253f8796c10eb120f82c5
           path: packager
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
       - name: Generate and verify one canonical assistant package
         env:
           VERSION: ${{ inputs.version }}

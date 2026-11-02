@@ -109,6 +109,38 @@ describe('OAuthConsentPage', () => {
         expect(payload.get('csrf_token')).toBe('csrf-binding');
     });
 
+    it('authorizes team-only billing access without inventing a site selection', async () => {
+        oauth.consent.mockReturnValue(of({ ...preview(), scopes: ['billing:write'], teams: [{ id: 'team-1', name: 'Billing team', sites: [] }] }));
+        const controls = await create();
+        const approve = () => fixture.nativeElement.querySelector('button[value="approve"]') as HTMLButtonElement;
+        expect(approve().disabled).toBe(true);
+        controls.team_id().control().setValue('team-1');
+        await fixture.whenStable();
+        expect(approve().disabled).toBe(false);
+        expect(fixture.nativeElement.querySelector('.oauth-sites')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('oauth.billingHelp');
+        const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        const event = new SubmitEvent('submit', { submitter: approve(), bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+        const payload = new FormData(form);
+        expect(payload.get('team_id')).toBe('team-1');
+        expect(payload.getAll('site_ids')).toEqual([]);
+        expect(payload.get('decision')).toBe('approve');
+    });
+
+    it('still requires explicit sites when billing and site permissions are requested together', async () => {
+        oauth.consent.mockReturnValue(of({ ...preview(), scopes: ['billing:write', 'analytics:read'] }));
+        const controls = await create();
+        controls.team_id().control().setValue('team-1');
+        await fixture.whenStable();
+        const approve = () => fixture.nativeElement.querySelector('button[value="approve"]') as HTMLButtonElement;
+        expect(approve().disabled).toBe(true);
+        controls.site_ids().control().setValue(['site-1']);
+        await fixture.whenStable();
+        expect(approve().disabled).toBe(false);
+    });
+
     it('does not expose an approval form for expired requests', async () => {
         oauth.consent.mockReturnValue(of({ ...preview(), expires_at: new Date(Date.now() - 1000).toISOString() }));
         await create();

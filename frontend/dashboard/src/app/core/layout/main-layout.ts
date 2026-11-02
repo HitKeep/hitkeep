@@ -12,13 +12,16 @@ import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService } from '@layout/sidebar-menu.service';
 import { DashboardTitleService } from '@services/dashboard-title.service';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
+import { DashboardWebMCPService } from '@services/dashboard-webmcp.service';
+import { ConfirmationService } from '@openng/optimus-ui/api';
+import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 
 @Component({
     selector: 'app-main-layout',
     encapsulation: ViewEncapsulation.None,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    providers: [MainLayoutContextService, SidebarMenuService],
-    imports: [NgTemplateOutlet, RouterOutlet, SplitterModule, LayoutSidebar, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe],
+    providers: [MainLayoutContextService, SidebarMenuService, ConfirmationService, DashboardWebMCPService],
+    imports: [NgTemplateOutlet, RouterOutlet, SplitterModule, LayoutSidebar, LayoutPageBar, LayoutOverlays, FreePlanRetentionNotice, MessageModule, TranslocoPipe, ConfirmDialogModule],
     templateUrl: './main-layout.html',
     styleUrl: './main-layout.css'
 })
@@ -38,6 +41,7 @@ export class MainLayout {
     protected readonly minSizes = computed(() => [(224 / this.containerWidth()) * 100, 100 - (324 / this.containerWidth()) * 100]);
 
     constructor() {
+        inject(DashboardWebMCPService);
         afterNextRender(() => {
             const observer = new ResizeObserver(([entry]) => {
                 const width = Math.max(1, entry.contentRect.width);
