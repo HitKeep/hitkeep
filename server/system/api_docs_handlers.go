@@ -44,7 +44,7 @@ func (h *handler) handleGetAPIDocV1() http.HandlerFunc {
 		publicURL = "http://localhost:8080"
 	}
 
-	document, err := json.Marshal(OpenAPISpecV1(publicURL))
+	document, err := json.Marshal(OpenAPISpecV1ForRuntime(publicURL, h.ctx))
 	if err != nil {
 		// The specification is assembled from plain JSON types.
 		panic("system: cannot encode OpenAPI document: " + err.Error())

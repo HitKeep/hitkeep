@@ -127,6 +127,16 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 			ctx = context.WithValue(ctx, AuthSessionKey, *sessionCtx)
 		}
 		ctx = WithLoggerAttrs(ctx, "user_id", userID.String())
+		if sessionCtx != nil && len(r.Header.Values("X-Hitkeep-Agent")) > 0 {
+			teamID, err := c.Store.GetActiveTenantID(ctx, userID)
+			if err != nil {
+				http.Error(w, "Unable to resolve active team", http.StatusBadRequest)
+				return
+			}
+			if !CheckAgentTeam(w, r, teamID) {
+				return
+			}
+		}
 		next(w, r.WithContext(ctx))
 	}
 }

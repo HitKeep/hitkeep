@@ -26,7 +26,7 @@ func (c discoveryCluster) IsLeader() bool        { return bool(c) }
 func (c discoveryCluster) GetLeaderAddr() string { return "" }
 
 func newDiscoveryServer() *Server {
-	conf := &config.Config{PublicURL: "https://analytics.example.test/tenant", MCPPath: "/tools/analytics", MCPEnabled: true, Version: "1.2.3"}
+	conf := &config.Config{PublicURL: "https://analytics.example.test/tenant", MCPPath: "/tools/analytics", MCPEnabled: true, AIEnabled: true, Version: "1.2.3"}
 	ctx := &shared.Context{Config: conf, Store: new(database.Store), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	return &Server{conf: conf, ctx: ctx, indexHTML: []byte("<html>dashboard</html>")}
 }
@@ -231,7 +231,7 @@ func TestPrefixedDiscoveryRoutingAndPrivateUnknownPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	s.registerDiscoveryRoutes(mux)
 	handler := s.stripPublicBasePath(mux)
-	for _, route := range []string{"/.well-known/api-catalog", "/tenant/.well-known/api-catalog", "/tenant/tools/analytics/server-card"} {
+	for _, route := range []string{"/.well-known/api-catalog", "/tenant/.well-known/api-catalog", "/tenant/tools/analytics/server-card", "/.well-known/agent-skills/index.json", "/tenant/.well-known/agent-skills/index.json", "/auth.md", "/tenant/auth.md", "/llms.txt", "/tenant/skills/hitkeep-analytics/skill.zip"} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, httptest.NewRequest("GET", route, nil))
 		if rec.Code != 200 {
@@ -377,5 +377,110 @@ func TestDiscoveryPublisherFormatsOnActualMetadata(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAgentDiscoveryFlagAndArtifacts(t *testing.T) {
+	s := newDiscoveryServer()
+	routes := []string{"/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/skills/hitkeep-analytics/skill.zip", "/auth.md", "/llms.txt", "/.well-known/poppy.json"}
+	for _, enabled := range []bool{false, true} {
+		s.conf.AIEnabled = enabled
+		for _, route := range routes {
+			get := discoveryRequest(s, "GET", route)
+			head := discoveryRequest(s, "HEAD", route)
+			want := 404
+			if enabled {
+				want = 200
+			}
+			if get.Code != want || head.Code != want {
+				t.Fatalf("AI=%v %s GET=%d HEAD=%d", enabled, route, get.Code, head.Code)
+			}
+			if enabled && (head.Body.Len() != 0 || head.Header().Get("Content-Length") != get.Header().Get("Content-Length") || len(get.Header().Values("Access-Control-Allow-Origin")) != 1) {
+				t.Fatalf("headers: %v", get.Header())
+			}
+		}
+		for _, route := range []string{"/.well-known/api-catalog", "/openapi.json", "/tools/analytics/server-card"} {
+			if got := discoveryRequest(s, "GET", route); got.Code != 200 {
+				t.Fatalf("existing surface disabled %s", route)
+			}
+		}
+		robots := discoveryRequest(s, "GET", "/robots.txt").Body.String()
+		links := s.discoveryLinks()
+		if strings.Contains(robots, "agent-skills") != enabled || strings.Contains(links, "agent-skills") != enabled {
+			t.Fatalf("AI=%v robots/links mismatch", enabled)
+		}
+	}
+	canonical := discoveryRequest(s, "GET", routes[0])
+	alias := discoveryRequest(s, "GET", routes[1])
+	if !bytes.Equal(canonical.Body.Bytes(), alias.Body.Bytes()) {
+		t.Fatal("alias differs")
+	}
+	var index skills.DiscoveryIndex
+	if err := json.Unmarshal(canonical.Body.Bytes(), &index); err != nil {
+		t.Fatal(err)
+	}
+	if len(index.Skills) != 5 {
+		t.Fatal("missing skills")
+	}
+	if strings.Contains(discoveryRequest(s, "GET", "/.well-known/poppy.json").Body.String(), `"auth"`) {
+		t.Fatal("advertised unsupported Poppy auth")
+	}
+}
+
+func TestDiscoveryConditionalAndPreflight(t *testing.T) {
+	s := newDiscoveryServer()
+	mux := http.NewServeMux()
+	s.registerDiscoveryRoutes(mux)
+	get := discoveryRequest(s, "GET", "/.well-known/agent-skills/index.json")
+	if get.Header().Get("ETag") == "" {
+		t.Fatal("missing ETag")
+	}
+	req := httptest.NewRequest("GET", "/.well-known/agent-skills/index.json", nil)
+	req.Header.Set("If-None-Match", get.Header().Get("ETag"))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 304 || rec.Body.Len() != 0 {
+		t.Fatalf("conditional=%d", rec.Code)
+	}
+	req = httptest.NewRequest("OPTIONS", "/.well-known/agent-skills/index.json", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 204 || rec.Header().Get("Access-Control-Allow-Headers") != "Content-Type, If-None-Match" {
+		t.Fatalf("preflight=%d %v", rec.Code, rec.Header())
+	}
+	s.conf.AIEnabled = false
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 404 {
+		t.Fatalf("disabled preflight=%d", rec.Code)
+	}
+}
+
+func TestAgentDiscoveryMetadataMatchesFlag(t *testing.T) {
+	s := newDiscoveryServer()
+	for _, enabled := range []bool{true, false} {
+		s.conf.AIEnabled = enabled
+		response := discoveryRequest(s, "GET", "/openapi.json")
+		var spec struct {
+			Paths map[string]any `json:"paths"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &spec); err != nil {
+			t.Fatal(err)
+		}
+		for _, route := range []string{"/.well-known/agent-skills/index.json", "/auth.md"} {
+			if (spec.Paths[route] != nil) != enabled {
+				t.Fatalf("AI=%v advertised %s", enabled, route)
+			}
+		}
+		catalog := discoveryRequest(s, "GET", "/.well-known/ai-catalog.json").Body.String()
+		if strings.Contains(catalog, "/skills/") != enabled {
+			t.Fatalf("AI=%v skills catalog", enabled)
+		}
+	}
+	for _, route := range []string{"/skills/hitkeep-analytics%2F../skill.zip", "/skills/hitkeep-development/skill.zip", "/.well-known/agent-skills/missing.json"} {
+		response := discoveryRequest(s, "GET", route)
+		if response.Code == 200 {
+			t.Fatalf("unsafe/unknown route served %s", route)
+		}
 	}
 }

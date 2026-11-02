@@ -359,12 +359,15 @@ func TestOpenAPISpecV1IncludesCloudSignupPaths(t *testing.T) {
 	}
 }
 
-func TestOpenAPISpecV1MarksEveryCloudOperationInternal(t *testing.T) {
+func TestOpenAPISpecV1MarksDashboardCloudOperationsInternal(t *testing.T) {
 	spec := openAPISpecV1("http://localhost:8080")
 	paths := requireMap(t, spec, "paths")
 	cloudOperations := 0
 
 	for path, rawPathItem := range paths {
+		if strings.HasPrefix(path, "/api/cloud/commerce/") {
+			continue
+		}
 		pathItem, ok := rawPathItem.(map[string]any)
 		if !ok {
 			continue

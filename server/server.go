@@ -257,6 +257,7 @@ func New(conf *config.Config, publicFS fs.FS, store *database.Store, tenantStore
 		handler = s.stripPublicBasePath(rootHandler)
 	}
 	handler = s.customTrackingHostMiddleware(publicFS, rootHandler, handler)
+	handler = s.agentRequestMiddleware(handler)
 	handler = s.requestLoggingMiddleware(handler)
 
 	s.httpServer = &http.Server{
@@ -403,6 +404,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux, publicFS fs.FS) {
 	ctx := s.ctx
 	system.Register(mux, ctx)
 	s.registerDiscoveryRoutes(mux)
+	s.registerA2ARoutes(mux)
 	mux.HandleFunc("GET /internal/caddy/on-demand-tls/{token}", s.handleCaddyOnDemandTLSAsk())
 	ingest.Register(mux, ctx)
 	serverauth.Register(mux, ctx)

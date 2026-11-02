@@ -28,6 +28,11 @@ const (
 	ScopeAnalyticsRead       = "analytics:read"
 	ScopeTrackingDomainsRead = "tracking_domains:read"
 	ScopeIngestWrite         = "ingest:write"
+	ScopeGoalsWrite          = "goals:write"
+	ScopeAnnotationsWrite    = "annotations:write"
+	ScopeSitesWrite          = "sites:write"
+	ScopeOpportunitiesWrite  = "opportunities:write"
+	ScopeBillingWrite        = "billing:write"
 	codeLifetime             = time.Minute
 	accessLifetime           = 5 * time.Minute
 	refreshLifetime          = 30 * 24 * time.Hour
@@ -40,25 +45,36 @@ var ErrInvalidToken = errors.New("invalid OAuth credential")
 var ErrInvalidConsent = errors.New("invalid OAuth consent")
 var ErrConsentForbidden = errors.New("OAuth consent forbidden")
 
+func IsActionScope(scope string) bool {
+	switch scope {
+	case ScopeGoalsWrite, ScopeAnnotationsWrite, ScopeSitesWrite, ScopeOpportunitiesWrite, ScopeBillingWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 type Options struct {
-	Issuer            string
-	MCPPath           string
-	MCPEnabled        bool
-	BrowserSigningKey []byte
-	Clients           []ClientMetadata
-	IsLeader          func() bool
+	Issuer              string
+	MCPPath             string
+	MCPEnabled          bool
+	BrowserSigningKey   []byte
+	Clients             []ClientMetadata
+	IsLeader            func() bool
+	AgentActionsEnabled func() bool
 }
 type Provider struct {
-	store      *database.Store
-	urls       issuerURLs
-	clients    *clientResolver
-	browserKey []byte
-	isLeader   func() bool
-	mcpEnabled bool
-	core       fosite.OAuth2Provider
-	storage    *fositeStorage
-	strategy   opaqueStrategy
-	mu         sync.Mutex
+	store               *database.Store
+	urls                issuerURLs
+	clients             *clientResolver
+	browserKey          []byte
+	isLeader            func() bool
+	mcpEnabled          bool
+	agentActionsEnabled func() bool
+	core                fosite.OAuth2Provider
+	storage             *fositeStorage
+	strategy            opaqueStrategy
+	mu                  sync.Mutex
 }
 
 func New(store *database.Store, options Options) (*Provider, error) {
@@ -76,6 +92,7 @@ func New(store *database.Store, options Options) (*Provider, error) {
 	key := hmac.New(sha256.New, options.BrowserSigningKey)
 	key.Write([]byte("hitkeep/oauth/browser/v1\x00" + urls.Issuer))
 	p := &Provider{mcpEnabled: options.MCPEnabled, store: store, urls: urls, clients: clients, browserKey: key.Sum(nil), isLeader: options.IsLeader, strategy: opaqueStrategy{}}
+	p.agentActionsEnabled = options.AgentActionsEnabled
 	storage := &fositeStorage{provider: p}
 	p.storage = storage
 	config := &fosite.Config{AuthorizeCodeLifespan: codeLifetime, AccessTokenLifespan: accessLifetime, RefreshTokenLifespan: refreshLifetime, EnforcePKCE: true, EnforcePKCEForPublicClients: true, EnablePKCEPlainChallengeMethod: false, ScopeStrategy: fosite.ExactScopeStrategy, AudienceMatchingStrategy: fosite.ExactAudienceMatchingStrategy, RefreshTokenScopes: []string{}, SendDebugMessagesToClients: false, TokenURL: urls.Issuer + "/oauth/token"}
@@ -121,7 +138,11 @@ func (p *Provider) DiscoveryPaths() []string {
 func (p *Provider) Ready() bool { return p != nil && p.isLeader != nil && p.isLeader() }
 func scopesForResource(p *Provider, resource string) []string {
 	if resource == p.urls.APIResource {
-		return []string{ScopeSitesRead, ScopeAnalyticsRead, ScopeTrackingDomainsRead, ScopeIngestWrite}
+		scopes := []string{ScopeSitesRead, ScopeAnalyticsRead, ScopeTrackingDomainsRead, ScopeIngestWrite}
+		if p.agentActionsEnabled != nil && p.agentActionsEnabled() {
+			scopes = append(scopes, ScopeGoalsWrite, ScopeAnnotationsWrite, ScopeSitesWrite, ScopeOpportunitiesWrite, ScopeBillingWrite)
+		}
+		return scopes
 	}
 	if p.mcpEnabled && resource == p.urls.MCPResource {
 		return []string{ScopeSitesRead, ScopeAnalyticsRead}

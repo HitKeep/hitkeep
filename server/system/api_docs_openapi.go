@@ -1,7 +1,60 @@
 package system
 
+import (
+	"maps"
+	"strings"
+
+	"hitkeep/server/cloud"
+	"hitkeep/server/shared"
+)
+
 func OpenAPISpecV1(publicURL string) map[string]any {
-	return openAPISpecV1(publicURL)
+	spec := openAPISpecV1(publicURL)
+	paths := spec["paths"].(map[string]any)
+	addOAuthActionSecurity(paths)
+	maps.Copy(paths, agentDiscoveryPaths())
+	return spec
+}
+
+// OpenAPISpecV1ForRuntime advertises optional handlers only when their runtime prerequisites hold.
+func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]any {
+	spec := OpenAPISpecV1(publicURL)
+	paths := spec["paths"].(map[string]any)
+	if ctx == nil || ctx.Config == nil || !ctx.Config.AIEnabled || ctx.OAuthProvider == nil || !ctx.OAuthProvider.Ready() {
+		scopes := spec["components"].(map[string]any)["securitySchemes"].(map[string]any)["oauth2"].(map[string]any)["flows"].(map[string]any)["authorizationCode"].(map[string]any)["scopes"].(map[string]string)
+		for _, scope := range []string{"goals:write", "annotations:write", "sites:write", "opportunities:write", "billing:write"} {
+			delete(scopes, scope)
+		}
+		for path, item := range paths {
+			for _, value := range item.(map[string]any) {
+				operation, ok := value.(map[string]any)
+				if !ok || (operation["x-hitkeep-oauth-scope"] == nil && !strings.HasPrefix(path, "/api/cloud/commerce/")) {
+					continue
+				}
+				security := operation["security"].([]any)
+				operation["security"] = security[:len(security)-1]
+				delete(operation, "x-hitkeep-oauth-scope")
+			}
+		}
+	}
+	if ctx == nil || ctx.Config == nil || !ctx.Config.AIEnabled {
+		for route := range agentDiscoveryPaths() {
+			delete(paths, route)
+		}
+	}
+	if !ctx.A2AAvailable() {
+		delete(paths, "/.well-known/agent-card.json")
+		delete(paths, "/api/a2a/message:send")
+	}
+	commerce := ctx != nil && cloud.CommerceAvailable(ctx.Config) && ctx.Store != nil && (ctx.Cluster == nil || ctx.Cluster.IsLeader())
+	if !commerce {
+		for route := range paths {
+			if strings.HasPrefix(route, "/api/cloud/commerce/") {
+				delete(paths, route)
+			}
+		}
+	}
+	return spec
 }
 
 func openAPISpecV1(publicURL string) map[string]any {
@@ -22,7 +75,7 @@ func openAPISpecV1(publicURL string) map[string]any {
 			{"name": "Auth", "description": "Authentication, password, and sign-in flows."},
 			{"name": "OAuth", "description": "Fosite authorization, consent, and connected applications."},
 			{"name": "Integrations", "description": "Scoped site discovery and integration connections."},
-			{"name": "Cloud", "description": "Internal managed HitKeep Cloud application endpoints; they are not part of the supported public API. Available only in hosted cloud builds with billing enabled."},
+			{"name": "Cloud", "description": "Managed Cloud endpoints, available only in hosted cloud builds with billing enabled. Operations marked x-internal are internal application interfaces; ACP/UCP commerce supports external assistants with explicit OAuth billing consent."},
 			{"name": "User", "description": "Authenticated user profile, preferences, and security endpoints."},
 			{"name": "Permissions", "description": "Authenticated permission context endpoints."},
 			{"name": "Admin", "description": "Instance-level admin and membership management endpoints."},

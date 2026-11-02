@@ -3,6 +3,7 @@ package system
 func openAPIV1Paths() map[string]any {
 	return mergeOpenAPIPathMaps(
 		openAPIV1CorePaths(),
+		openAPIV1CommercePaths(),
 		openAPIV1AdminSitePaths(),
 		openAPIV1WebVitalPaths(),
 		openAPIV1IntegrationPaths(),
@@ -43,6 +44,7 @@ func openAPIV1CorePaths() map[string]any {
 				"200": jsonSchemaResp("Status payload", map[string]any{
 					"type": "object",
 					"properties": map[string]any{
+						"ai_enabled":  map[string]any{"type": "boolean", "description": "Raw instance AI feature flag, independent of Ask AI and provider configuration."},
 						"needs_setup": map[string]any{"type": "boolean"},
 						"version":     map[string]any{"type": "string"},
 						"cloud":       map[string]any{"$ref": "#/components/schemas/CloudStatus"},

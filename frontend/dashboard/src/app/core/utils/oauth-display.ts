@@ -2,7 +2,12 @@ const SCOPE_LABELS = new Map([
     ['sites:read', 'oauth.scope.sitesRead'],
     ['analytics:read', 'oauth.scope.analyticsRead'],
     ['tracking_domains:read', 'oauth.scope.trackingDomainsRead'],
-    ['ingest:write', 'oauth.scope.ingestWrite']
+    ['ingest:write', 'oauth.scope.ingestWrite'],
+    ['goals:write', 'oauth.scope.goalsWrite'],
+    ['annotations:write', 'oauth.scope.annotationsWrite'],
+    ['sites:write', 'oauth.scope.sitesWrite'],
+    ['opportunities:write', 'oauth.scope.opportunitiesWrite'],
+    ['billing:write', 'oauth.scope.billingWrite']
 ]);
 
 // Display copy only; the backend owns scope validation and authorization.

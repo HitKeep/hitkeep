@@ -62,7 +62,11 @@ export class OAuthConsentPage {
         return !!consent && !(Date.parse(consent.expires_at) > this.now());
     });
     protected readonly expiryLabel = computed(() => formatOAuthTime(this.consent()?.expires_at ?? '', this.language()) ?? '');
-    protected readonly canApprove = computed(() => !!this.selectedTeam() && this.selectedSiteIds().length > 0 && !this.expired() && !this.submitting());
+    protected readonly billingOnly = computed(() => {
+        const scopes = this.consent()?.scopes ?? [];
+        return scopes.length > 0 && scopes.every((scope) => scope === 'billing:write');
+    });
+    protected readonly canApprove = computed(() => !!this.selectedTeam() && (this.billingOnly() || this.selectedSiteIds().length > 0) && !this.expired() && !this.submitting());
 
     constructor() {
         this.form

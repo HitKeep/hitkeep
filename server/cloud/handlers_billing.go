@@ -5,6 +5,8 @@ package cloud
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -39,6 +41,9 @@ const (
 type stripeClient interface {
 	CreateCustomer(context.Context, createCustomerInput) (string, error)
 	CreateCheckoutSession(context.Context, createCheckoutSessionInput) (*checkoutSessionOutput, error)
+	GetCheckoutSession(context.Context, string) (*checkoutSessionOutput, error)
+	ListCheckoutSessions(context.Context, string) ([]*checkoutSessionOutput, error)
+	ExpireCheckoutSession(context.Context, string, string) (*checkoutSessionOutput, error)
 	CreatePortalSession(context.Context, createPortalSessionInput) (*portalSessionOutput, error)
 	GetCharge(context.Context, string) (*stripeChargeOutput, error)
 	GetPrice(context.Context, string) (*stripePriceOutput, error)
@@ -49,9 +54,12 @@ type stripeWebhookVerifier interface {
 }
 
 type handler struct {
-	ctx      *shared.Context
-	stripe   stripeClient
-	webhooks stripeWebhookVerifier
+	ctx          *shared.Context
+	stripe       stripeClient
+	webhooks     stripeWebhookVerifier
+	checkoutMu   sync.Mutex
+	commerceMu   sync.Mutex
+	profileCheck func(context.Context, string) (int, error)
 }
 
 type createCustomerInput struct {
@@ -66,6 +74,7 @@ type createCustomerInput struct {
 }
 
 type createCheckoutSessionInput struct {
+	IdempotencyKey  string
 	CustomerID      string
 	PriceID         string
 	SuccessURL      string
@@ -80,8 +89,21 @@ type createCheckoutSessionInput struct {
 }
 
 type checkoutSessionOutput struct {
-	ID  string
-	URL string
+	PriceID            string
+	ID                 string
+	URL                string
+	Status             string
+	PaymentStatus      string
+	CustomerID         string
+	SubscriptionID     string
+	SubscriptionStatus string
+	TenantID           string
+	PlanCode           string
+	BillingInterval    string
+	Currency           string
+	AmountSubtotal     int64
+	AmountTotal        int64
+	ExpiresAt          int64
 }
 
 type createPortalSessionInput struct {
@@ -120,6 +142,8 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		stripe:   newStripeSDKClient(ctx.Config.StripeSecretKey),
 		webhooks: stripeWebhookSDK{},
 	}
+
+	h.registerCommerce(mux)
 
 	mux.HandleFunc("POST /api/cloud/signup", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
@@ -193,6 +217,7 @@ type billingPortalSessionRequest struct {
 }
 
 type billingCheckoutSessionRequest struct {
+	teamID          uuid.UUID
 	PlanCode        string `json:"plan_code"`
 	BillingInterval string `json:"billing"`
 	Locale          string `json:"locale"`
@@ -506,6 +531,26 @@ func (h *handler) handleListCloudPlans() http.HandlerFunc {
 		}
 		mu.Unlock()
 
+		w.Header().Add("Vary", "Accept")
+		if h.ctx.Config.AIEnabled && strings.Contains(r.Header.Get("Accept"), "text/markdown") {
+			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+			var body strings.Builder
+			body.WriteString("# HitKeep Cloud plans\n\nPrices are recurring in the displayed currency. A billing administrator reviews and approves the subscription and payment in Checkout.\n\n")
+			for _, plan := range response {
+				fmt.Fprintf(&body, "## %s\n\n", plan.Name)
+				if plan.Code == database.CloudPlanFree {
+					body.WriteString("Free plan.\n\n")
+				}
+				for _, interval := range []string{database.CloudBillingIntervalMonthly, database.CloudBillingIntervalAnnual} {
+					if price, ok := plan.Prices[interval]; ok {
+						fmt.Fprintf(&body, "- %s: %d %s minor units; item `%s:%s`; [review purchase](%s).\n", interval, price.AmountMinor, price.Currency, plan.Code, interval, price.PurchaseReviewURL)
+					}
+				}
+				body.WriteString("\n")
+			}
+			_, _ = io.WriteString(w, body.String())
+			return
+		}
 		shared.WriteJSON(r.Context(), w, http.StatusOK, response)
 	}
 }

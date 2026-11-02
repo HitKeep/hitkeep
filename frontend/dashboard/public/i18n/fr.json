@@ -26,7 +26,7 @@
   "oauth": {
     "connectionDetails": "Détails de la connexion",
     "consentTitle": "Autoriser une application",
-    "consentDescription": "Vérifiez l’application et choisissez les sites auxquels elle pourra accéder.",
+    "consentDescription": "Vérifiez l’application, les autorisations demandées et l’équipe à laquelle elle pourra accéder.",
     "loading": "Chargement des applications et des autorisations…",
     "retry": "Réessayer",
     "application": "Application",
@@ -43,7 +43,7 @@
     "siteHelp": "Sélectionnez chaque site explicitement. Les nouveaux sites ne seront pas inclus automatiquement.",
     "noEligibleSites": "Vos autorisations actuelles ne permettent d’inclure aucun site dans cette autorisation.",
     "permissionNotice": "L’application reçoit uniquement l’accès sélectionné. Vous pouvez le révoquer dans Applications connectées.",
-    "approve": "Autoriser les sites sélectionnés",
+    "approve": "Autoriser l’accès sélectionné",
     "deny": "Refuser et annuler",
     "submitting": "Envoi de votre décision…",
     "cancel": "Retour à HitKeep",
@@ -64,7 +64,12 @@
       "sitesRead": "Lister les sites sélectionnés",
       "analyticsRead": "Lire les statistiques des sites sélectionnés",
       "trackingDomainsRead": "Lire les domaines de suivi des sites sélectionnés",
-      "ingestWrite": "Envoyer des événements analytiques aux sites sélectionnés"
+      "ingestWrite": "Envoyer des événements analytiques aux sites sélectionnés",
+      "goalsWrite": "Gérer les objectifs et les entonnoirs des sites sélectionnés",
+      "annotationsWrite": "Gérer les annotations des sites sélectionnés",
+      "sitesWrite": "Modifier les domaines et la conservation des sites sélectionnés",
+      "opportunitiesWrite": "Gérer les opportunités des sites sélectionnés",
+      "billingWrite": "Démarrer, consulter et annuler Checkout pour l’équipe sélectionnée ; le paiement nécessite votre approbation"
     },
     "signedInAs": "Connecté en tant que {{ email }}",
     "wrongAccount": "Pour utiliser un autre compte, déconnectez-vous depuis le menu du compte.",
@@ -74,7 +79,9 @@
     "continueAuthorization": "Poursuivre l’autorisation",
     "resumeDescription": "L’autorisation de votre application est toujours en attente. Continuez pour examiner l’accès demandé.",
     "checkoutWaiting": "Le paiement n’est pas encore confirmé. Terminez le processus de facturation en cours ou réessayez.",
-    "resumeFailed": "Impossible de restaurer l’autorisation en attente. Vos paramètres de facturation restent accessibles. Réessayez."
+    "resumeFailed": "Impossible de restaurer l’autorisation en attente. Vos paramètres de facturation restent accessibles. Réessayez.",
+    "noEligibleTeams": "Aucune équipe n’est disponible pour cette autorisation avec vos droits actuels.",
+    "billingHelp": "Cet accès concerne l’équipe sélectionnée. Le paiement nécessite toujours votre confirmation dans Stripe Checkout."
   },
   "nav": {
     "resizeSidebar": "Redimensionner la barre latérale",
@@ -4036,5 +4043,19 @@
     "invalid": "Saisissez un nom et au moins une URI de redirection HTTPS dans les limites des champs.",
     "revokeTitle": "Révoquer le client OAuth",
     "revokeConfirm": "Révoquer {{application}} ? Cela empêche toute nouvelle autorisation et révoque toutes ses autorisations existantes."
+  },
+  "agentTools": {
+    "listTitle": "Actions HitKeep disponibles",
+    "listDescription": "Découvrez les actions documentées de l’API HitKeep pour cette session. Les identifiants et les exports restent dans l’interface habituelle.",
+    "runTitle": "Exécuter une action HitKeep",
+    "runDescription": "Exécutez une action disponible de l’API avec les autorisations actuelles. Chaque modification nécessite une confirmation explicite.",
+    "confirmTitle": "Confirmer l’action de l’agent",
+    "confirmAction": "Autoriser cette action de l’agent pour l’équipe {{team}} ?\n\n{{action}}\n\n{{details}}",
+    "unavailable": "Les actions des agents ne sont pas disponibles dans la session ou le contexte actuels.",
+    "invalidAction": "Cette action ou ses paramètres ne sont pas disponibles pour les agents.",
+    "notConfirmed": "L’action n’a pas été confirmée.",
+    "confirmPending": "Une autre action de l’agent attend une confirmation.",
+    "requestFailed": "La requête a échoué (HTTP {{status}}).",
+    "outcomeUnknown": "La requête a été interrompue et a peut-être abouti. Vérifiez l’état actuel avant de réessayer."
   }
 }

@@ -674,8 +674,12 @@ jobs:
         with:
           persist-credentials: false
           repository: HitKeep/hitkeep-assistant-plugins
-          ref: dbe2227280b43d23c0b253f8796c10eb120f82c5
+          ref: 4f2c2f8d4bc917629bbfaf61748c6636b04c88d1
           path: packager
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
       - name: Generate and verify one canonical assistant package
         env:
           VERSION: ${{ inputs.version }}
@@ -686,7 +690,7 @@ jobs:
           [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$(git -C app rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(jq -r .version app/frontend/dashboard/package.json)" = "${VERSION#v}"
-          test "$(git -C packager rev-parse HEAD)" = dbe2227280b43d23c0b253f8796c10eb120f82c5
+          test "$(git -C packager rev-parse HEAD)" = 4f2c2f8d4bc917629bbfaf61748c6636b04c88d1
           python3 packager/scripts/package.py --sync-from app --source-sha "$SOURCE_SHA" --version "${VERSION#v}"
           python3 packager/scripts/package.py --verify-source app --source-sha "$SOURCE_SHA"
           mkdir "$RUNNER_TEMP/assistant-package"
