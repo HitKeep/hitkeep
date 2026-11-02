@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.1](https://github.com/HitKeep/hitkeep/compare/v2.16.0...v2.16.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* expose gated commerce profiles and normalize regional currency ([#451](https://github.com/HitKeep/hitkeep/issues/451)) ([22bf03a](https://github.com/HitKeep/hitkeep/commit/22bf03a6e3a8e0d2fdef9b9ce4d55c03edee3d03))
+
 ## [2.16.0](https://github.com/HitKeep/hitkeep/compare/v2.15.1...v2.16.0) (2026-11-02)
 
 
