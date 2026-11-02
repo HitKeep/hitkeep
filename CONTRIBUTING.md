@@ -262,6 +262,24 @@ tracker, chart, docs, and supported-floor upgrade proofs.
 
 ## Pull Requests
 
+Main's passing-PR policy uses four required contexts: `Required CI`,
+`Required release validation`, `Run zizmor`, and `Run govulncheck`. A maintainer
+may merge their own passing PR without another reviewer's approval. Checks must
+belong to the latest PR head or its current test merge; a successful manual run
+or an older commit is not evidence for merging. Metadata-only and automation PRs
+follow the same policy.
+
+`Required CI` requires every constituent job, including the complete race-test
+matrix and email review. An unrelated PR may skip email rendering steps, but its
+email change-detection job must still succeed. Email review is skipped only on
+push runs. `Required release validation` requires a successful path selector on
+PRs, cross-CGO and Helm validation for selected same-repository PRs, and source
+packaging plus the complete Homebrew matrix for selected release-please PRs.
+Manual release validation runs all expensive families. Fork PRs run the selector
+and ordinary CI without release secrets; expensive release validation is deferred
+to a maintainer-controlled branch before release. Only explicitly unselected
+families may skip.
+
 - Keep changes focused and explain the user-visible or maintenance outcome.
 - Add tests at the narrowest useful level, then run the appropriate `hk` QA profile.
 - Describe the documentation impact when public behavior changes. The rendered docs are public, but their source repository is private; maintainers apply website changes that external contributors cannot make directly.

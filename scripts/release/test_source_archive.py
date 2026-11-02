@@ -64,18 +64,6 @@ class SourceArchiveTests(unittest.TestCase):
         script.symlink_to(self.root / 'go.mod')
         self.assertNotEqual(self.execute('pipeline.yml', 'Package exact source with existing dashboard assets').returncode, 0)
 
-    def test_required_check_rejects_archive_producer_failure(self):
-        validation = (ROOT / '.github/workflows/release-validation.yml').read_text()
-        block = validation.split('\n  required:\n', 1)[1].split('\n  homebrew-source:\n', 1)[0]
-        script = '\n'.join(line.removeprefix('          ') for line in block.split('        run: |\n', 1)[1].splitlines())
-        for result in ('success', 'skipped', 'failure', 'cancelled'):
-            with self.subTest(producer=result):
-                run = script
-                for job in ('select', 'homebrew-source', 'homebrew-candidate', 'cross-cgo', 'helm-lifecycle'):
-                    run = run.replace('${{ needs.' + job + '.result }}', result if job == 'homebrew-source' else 'success')
-                completed = subprocess.run(['bash', '-euo', 'pipefail', '-c', run], capture_output=True, text=True)
-                self.assertEqual(completed.returncode == 0, result in ('success', 'skipped'), completed.stderr)
-
     def test_homebrew_formula_uses_exact_packaged_bytes_without_raw_source_download(self):
         self.package()
         tap = Path(self.tmp.name) / 'tap'

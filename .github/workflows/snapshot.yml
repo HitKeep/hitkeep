@@ -39,6 +39,5 @@ jobs:
         - `main`
       docker_sha_tag_prefix: sha-
     secrets:
-      token: ${{ secrets.GHT }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

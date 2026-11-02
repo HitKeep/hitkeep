@@ -22,6 +22,44 @@ permissions:
   contents: read
 
 jobs:
+  required-ci:
+    name: Required CI
+    if: always()
+    needs:
+      - qa-contract
+      - lint
+      - test
+      - mcp-audit
+      - lint-dashboard
+      - test-dashboard
+      - e2e-dashboard
+      - email-review
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Enforce CI results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          results = json.loads(os.environ['RESULTS'])
+          jobs = {'qa-contract', 'lint', 'test', 'mcp-audit', 'lint-dashboard',
+                  'test-dashboard', 'e2e-dashboard', 'email-review'}
+          event = os.environ['EVENT_NAME']
+          if event not in ('pull_request', 'push') or set(results) != jobs:
+              raise SystemExit('Unexpected event or missing CI dependencies')
+          for job in sorted(jobs):
+              result = results[job]['result']
+              # Email review is PR-only; unrelated PRs still complete its detection step.
+              expected = 'skipped' if job == 'email-review' and event == 'push' else 'success'
+              if result != expected:
+                  raise SystemExit(f'{job}: expected {expected}, got {result!r}')
+          PY
+
   qa-contract:
     name: Plan canonical QA contract
     runs-on: ubuntu-latest
