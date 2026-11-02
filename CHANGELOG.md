@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.16.0](https://github.com/HitKeep/hitkeep/compare/v2.15.1...v2.16.0) (2026-11-02)
+
+
+### Features
+
+* enable consented agent actions and canonical discovery ([#449](https://github.com/HitKeep/hitkeep/issues/449)) ([523ca03](https://github.com/HitKeep/hitkeep/commit/523ca0334aa39ef3c9a8a333c21f1f20a1ebbd65))
+
+
+### Bug Fixes
+
+* harden CI results, run cleanup, and release authentication ([#432](https://github.com/HitKeep/hitkeep/issues/432)) ([8c3e13e](https://github.com/HitKeep/hitkeep/commit/8c3e13e5f55581e886d479a9af53a567bffd7308))
+* identify Auth.md in the Cloud discovery heading ([#450](https://github.com/HitKeep/hitkeep/issues/450)) ([5d5262d](https://github.com/HitKeep/hitkeep/commit/5d5262d9124dc17abe615099a003c9cd8bd685c1))
+
 ## [2.15.1](https://github.com/HitKeep/hitkeep/compare/v2.15.0...v2.15.1) (2026-10-28)
 
 
