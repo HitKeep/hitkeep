@@ -615,8 +615,14 @@ func (h *handler) handleUpdateSiteRetention() http.HandlerFunc {
 			return
 		}
 
-		site, err := h.ctx.Store.GetSite(r.Context(), siteID, userID)
-		if err != nil || site == nil {
+		var site *api.Site
+		if grant, _ := r.Context().Value(shared.OAuthGrantKey).(*authcore.OAuthGrant); grant != nil {
+			// The shared guard already checked the consent team and current site authority.
+			site, err = h.ctx.Store.GetSiteByID(r.Context(), siteID)
+		} else {
+			site, err = h.ctx.Store.GetSite(r.Context(), siteID, userID)
+		}
+		if err != nil || site == nil || site.UserID != userID {
 			http.Error(w, "Site not found", http.StatusNotFound)
 			return
 		}

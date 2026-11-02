@@ -30,6 +30,7 @@ import (
 )
 
 type fakeStripeClient struct {
+	afterCheckoutList func()
 	checkoutCalls     int
 	sessions          []*checkoutSessionOutput
 	lastCustomerInput *createCustomerInput

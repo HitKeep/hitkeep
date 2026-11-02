@@ -8,6 +8,7 @@ import { agentOperations, AgentOperation, agentRequest, redactAgentResult } from
 import { dialogCancelButton, dialogPrimaryButton } from '@components/dialog-actions/dialog-actions';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
+import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
 import { AccessService } from './access.service';
 import { AuthService } from './auth.service';
 import { DashboardBootstrapService } from './dashboard-bootstrap.service';
@@ -64,7 +65,7 @@ export class DashboardWebMCPService {
 
     private async register(model: ModelContext, controller: AbortController, current: () => boolean): Promise<void> {
         if (!this.operations) {
-            const schema = await firstValueFrom(this.http.get<unknown>('/openapi.json').pipe(takeUntil(fromEvent(controller.signal, 'abort'))));
+            const schema = await firstValueFrom(this.http.get<unknown>('/api/openapi.json').pipe(takeUntil(fromEvent(controller.signal, 'abort'))));
             this.operations = agentOperations(schema);
         }
         if (!current()) return;
@@ -81,7 +82,7 @@ export class DashboardWebMCPService {
                         if (!current()) return this.failure('agentTools.unavailable');
                         const filter = input && typeof input === 'object' ? (input as { tag?: string; operation?: string }) : {};
                         return result({
-                            openapi_url: '/openapi.json',
+                            openapi_url: browserAppUrl(this.document, '/api/openapi.json'),
                             team_id: this.context.teamService.activeTeamId(),
                             site_id: this.context.siteService.activeSite()?.id,
                             operations: operations.filter((operation) => (!filter.tag || operation.tags.includes(filter.tag)) && (!filter.operation || operation.id === filter.operation))

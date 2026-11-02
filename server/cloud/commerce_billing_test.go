@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	stripe "github.com/stripe/stripe-go/v87"
+
 	"hitkeep/auth"
 	"hitkeep/database"
 	"hitkeep/server/shared"
@@ -32,7 +34,7 @@ func TestCommerceGatesBeforeProvider(t *testing.T) {
 			case "provider":
 				h.ctx.Config.StripeSecretKey = ""
 			}
-			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"items":[{"id":"pro:monthly","quantity":1}]}`))
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"line_items":[{"id":"pro:monthly"}],"currency":"eur","capabilities":{}}`))
 			w := httptest.NewRecorder()
 			h.handleCommerceSession("acp", "create").ServeHTTP(w, req)
 			if w.Code < 400 {
@@ -108,7 +110,47 @@ func TestBillingCheckoutResubscriptionReusesPendingAfterCanceledHistory(t *testi
 }
 
 func (f *fakeStripeClient) ListCheckoutSessions(_ context.Context, _ string) ([]*checkoutSessionOutput, error) {
+	if f.afterCheckoutList != nil {
+		f.afterCheckoutList()
+	}
 	return f.sessions, nil
+}
+
+func TestCheckoutRetryPreservesConcurrentSubscriptionWebhook(t *testing.T) {
+	h, store := setupCloudTestHandler(t)
+	t.Cleanup(func() { _ = store.Close() })
+	buyer, err := store.CreateManagedCloudAccount(t.Context(), database.CreateManagedCloudAccountInput{Email: "checkout-webhook-race@example.test", HashedPassword: "hash", TeamName: "Checkout race"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertCloudBillingAccount(t.Context(), database.CloudBillingAccount{TenantID: buyer.TenantID, PlanCode: database.CloudPlanFree, PlanName: "Free", SubscriptionStatus: database.CloudSubscriptionStatusPendingCheckout, StripeCustomerID: "cus_test"}); err != nil {
+		t.Fatal(err)
+	}
+	f := h.stripe.(*fakeStripeClient)
+	f.sessions = []*checkoutSessionOutput{{ID: "cs_issued", URL: "https://checkout.stripe.test/issued", TenantID: buyer.TenantID.String(), Status: "open", PlanCode: "pro", BillingInterval: "monthly"}}
+	event := stripe.Event{ID: "evt_checkout_race", Type: "customer.subscription.updated", Data: &stripe.EventData{Raw: []byte(`{"id":"sub_paid","metadata":{"tenant_id":"` + buyer.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},"customer":{"id":"cus_test"},"status":"active","items":{"data":[{"price":{"id":"price_pro"}}]}}`)}}
+	f.afterCheckoutList = func() {
+		if err := h.handleStripeEvent(t.Context(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"plan_code":"pro","billing":"monthly"}`))
+	req = req.WithContext(context.WithValue(req.Context(), shared.UserIDKey, buyer.UserID))
+	w := httptest.NewRecorder()
+	h.handleCreateBillingCheckoutSession().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("checkout retry: %d %s", w.Code, w.Body.String())
+	}
+	account, err := store.GetCloudBillingAccount(t.Context(), buyer.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.PlanCode != database.CloudPlanPro || account.SubscriptionStatus != database.CloudSubscriptionStatusActive || account.StripeSubscriptionID != "sub_paid" {
+		t.Fatalf("checkout retry overwrote paid subscription: %+v", account)
+	}
+	if ent := h.ctx.Limits().TeamEntitlements(t.Context(), buyer.TenantID); ent.MaxRetentionDays != 365 {
+		t.Fatalf("paid entitlement lost: %+v", ent)
+	}
 }
 func (f *fakeStripeClient) GetCheckoutSession(_ context.Context, id string) (*checkoutSessionOutput, error) {
 	for _, s := range f.sessions {
@@ -148,7 +190,7 @@ func TestCommerceSessionLifecycleAndAuthorization(t *testing.T) {
 			mux := http.NewServeMux()
 			h.registerCommerce(mux)
 			base := "/api/cloud/commerce/" + protocol + "/checkout_sessions"
-			body := `{"items":[{"id":"pro:monthly","quantity":1}]}`
+			body := `{"line_items":[{"id":"pro:monthly"}],"currency":"eur","capabilities":{}}`
 			if protocol == "ucp" {
 				base = "/api/cloud/commerce/ucp/checkout-sessions"
 				body = `{"ucp":{"version":"2026-08-25"},"line_items":[{"item":{"id":"pro:monthly"},"quantity":1}]}`
@@ -179,6 +221,13 @@ func TestCommerceSessionLifecycleAndAuthorization(t *testing.T) {
 			}
 			if fake.checkoutCalls != 0 {
 				t.Fatal("unauthorized provider call")
+			}
+			if protocol == "acp" {
+				for _, invalid := range []struct{ key, body string }{{"quantity", `{"line_items":[{"id":"pro:monthly","quantity":2}]}`}, {"multiple", `{"line_items":[{"id":"pro:monthly"},{"id":"business:monthly"}]}`}} {
+					if w := call("POST", base, invalid.key, invalid.body, true, ""); w.Code != http.StatusBadRequest {
+						t.Fatalf("unsupported plan quantity: %d %s", w.Code, w.Body.String())
+					}
+				}
 			}
 			w := call("POST", base, "first", body, true, "")
 			if w.Code != 201 || !strings.Contains(w.Body.String(), `"requires_escalation"`) || !strings.Contains(w.Body.String(), `"continue_url"`) {
@@ -345,7 +394,7 @@ func TestCommerceCancelExpiresOnlyThePendingCheckout(t *testing.T) {
 		h.handleCommerceSession("acp", action).ServeHTTP(w, req)
 		return w
 	}
-	body := `{"items":[{"id":"pro:monthly","quantity":1}]}`
+	body := `{"line_items":[{"id":"pro:monthly"}],"currency":"eur","capabilities":{}}`
 	if w := call("create", "", "first", body); w.Code != 201 {
 		t.Fatalf("create=%d %s", w.Code, w.Body.String())
 	}

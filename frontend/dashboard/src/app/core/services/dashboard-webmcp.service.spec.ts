@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { ConfirmationService } from '@openng/optimus-ui/api';
@@ -10,6 +10,7 @@ import { DashboardBootstrapService } from './dashboard-bootstrap.service';
 import { AuthService } from './auth.service';
 import { AccessService } from './access.service';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
+import { basePathInterceptor } from '@core/interceptors/base-path.interceptor';
 
 @Component({ template: '', providers: [DashboardWebMCPService] })
 class Probe {
@@ -60,7 +61,7 @@ describe('DashboardWebMCPService', () => {
                 })
             ],
             providers: [
-                provideHttpClient(),
+                provideHttpClient(withInterceptors([basePathInterceptor])),
                 provideHttpClientTesting(),
                 { provide: DashboardBootstrapService, useValue: { status } },
                 { provide: AuthService, useValue: { isAuthenticated: authenticated } },
@@ -87,20 +88,40 @@ describe('DashboardWebMCPService', () => {
     async function enable() {
         status.set({ ai_enabled: true });
         await fixture.whenStable();
-        http.expectOne('/openapi.json').flush({ paths: { '/api/sites/{id}/goals': { get: { summary: 'List goals', tags: ['Goals'] }, post: { summary: 'Create goal', tags: ['Goals'] } } } });
+        http.expectOne('/api/openapi.json').flush({ paths: { '/api/sites/{id}/goals': { get: { summary: 'List goals', tags: ['Goals'] }, post: { summary: 'Create goal', tags: ['Goals'] } } } });
         await fixture.whenStable();
     }
 
     it('makes no schema request or registration while AI is disabled', () => {
-        http.expectNone('/openapi.json');
+        http.expectNone('/api/openapi.json');
         expect(tools.size).toBe(0);
+    });
+
+    it('loads and advertises the schema through the base-path interceptor on a prefixed instance', async () => {
+        const existing = document.querySelector('base');
+        const base = existing ?? document.createElement('base');
+        const originalHref = base.getAttribute('href');
+        if (!existing) document.head.append(base);
+        base.setAttribute('href', '/tenant/');
+        try {
+            status.set({ ai_enabled: true });
+            await fixture.whenStable();
+            http.expectOne('/tenant/api/openapi.json').flush({ paths: {} });
+            await fixture.whenStable();
+            const catalog = await tools.get('hitkeep.list_actions')!.execute({});
+            expect(JSON.stringify(catalog)).toContain('/tenant/api/openapi.json');
+        } finally {
+            if (!existing) base.remove();
+            else if (originalHref === null) base.removeAttribute('href');
+            else base.setAttribute('href', originalHref);
+        }
     });
 
     it('gracefully skips browsers without WebMCP', async () => {
         Reflect.deleteProperty(document, 'modelContext');
         status.set({ ai_enabled: true });
         await fixture.whenStable();
-        http.expectNone('/openapi.json');
+        http.expectNone('/api/openapi.json');
         expect(tools.size).toBe(0);
     });
 

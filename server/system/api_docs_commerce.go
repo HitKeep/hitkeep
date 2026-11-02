@@ -30,7 +30,16 @@ func openAPIV1CommercePaths() map[string]any {
 			}
 			var body any
 			if route.method != "get" {
-				body = jsonBody(map[string]any{"type": "object", "description": "One standard items (ACP) or line_items (UCP) entry with quantity 1 and catalog item id pro:monthly, pro:annual, business:monthly or business:annual. Amounts and regional currency are server-owned. Completed sessions are immutable; changing a plan requires canceling the pending checkout. No payment credential is consumed by this human-approved adapter."})
+				id := map[string]any{"type": "string", "enum": []string{"pro:monthly", "pro:annual", "business:monthly", "business:annual"}}
+				item := map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{"id": id}, "additionalProperties": false}
+				if protocol == "ucp" {
+					item = map[string]any{"type": "object", "required": []string{"item", "quantity"}, "properties": map[string]any{"item": item, "quantity": map[string]any{"type": "integer", "const": 1}}}
+				}
+				schema := map[string]any{"type": "object", "properties": map[string]any{"line_items": map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "items": item}}, "description": "One line_items entry: ACP 2026-04-17 uses a direct id and implicitly purchases one subscription; UCP uses item.id and quantity 1. Amounts and regional currency are server-owned. Completed sessions are immutable; changing a plan requires canceling the pending checkout. No payment credential is consumed by this human-approved adapter."}
+				if route.action == "Create" {
+					schema["required"] = []string{"line_items"}
+				}
+				body = jsonBody(schema)
 			}
 			success := "200"
 			if route.action == "Create" {

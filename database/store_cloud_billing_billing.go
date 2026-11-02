@@ -226,6 +226,19 @@ func (s *Store) UpsertCloudBillingAccount(ctx context.Context, account CloudBill
 	)
 }
 
+// MarkCloudBillingCheckoutPending preserves a webhook's authoritative state if it changed during Checkout.
+func (s *Store) MarkCloudBillingCheckoutPending(ctx context.Context, previous CloudBillingAccount, billingInterval, priceID string) error {
+	return s.Exec(ctx, `
+		UPDATE cloud_billing_accounts
+		SET plan_code = ?, plan_name = ?, billing_interval = ?, subscription_status = ?,
+		    stripe_subscription_id = NULL, stripe_price_id = ?, updated_at = ?
+		WHERE tenant_id = ? AND plan_code = ? AND subscription_status = ?
+		  AND COALESCE(stripe_subscription_id, '') = ? AND COALESCE(stripe_customer_id, '') = ?
+	`, CloudPlanFree, "Free", normalizeCloudBillingInterval(billingInterval), CloudSubscriptionStatusPendingCheckout,
+		nullIfBlank(priceID), time.Now().UTC(), previous.TenantID, previous.PlanCode, previous.SubscriptionStatus,
+		previous.StripeSubscriptionID, previous.StripeCustomerID)
+}
+
 func normalizeCloudBillingInterval(interval string) string {
 	if strings.EqualFold(strings.TrimSpace(interval), CloudBillingIntervalAnnual) {
 		return CloudBillingIntervalAnnual

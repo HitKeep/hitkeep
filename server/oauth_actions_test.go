@@ -135,7 +135,7 @@ func TestOffsiteOAuthActionsConsentPermissionsAndRevocation(t *testing.T) {
 	if w := request("POST", path, write, body); w.Code != 201 {
 		t.Fatalf("write: %d %s", w.Code, w.Body.String())
 	}
-	if w := request("GET", path, write, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Offsite note") {
+	if w := request("GET", path+"?from=2026-10-01T00:00:00Z&to=2026-10-02T00:00:00Z", write, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Offsite note") {
 		t.Fatalf("read: %d %s", w.Code, w.Body.String())
 	}
 	if w := request("GET", "/api/sites", write, ""); w.Code != 200 || !strings.Contains(w.Body.String(), site.Domain) {
@@ -192,11 +192,32 @@ func TestOffsiteOAuthActionsConsentPermissionsAndRevocation(t *testing.T) {
 		t.Fatalf("revoked refreshed: %d", w.Code)
 	}
 	billing, _ := approve("billing:write", nil)
+	siteWriter, _ := approve("sites:write", []string{site.ID.String()})
 	other, err := store.CreateTenant(t.Context(), user, "Unrelated active team", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetActiveTenantID(t.Context(), user, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	retentionPath := "/api/sites/" + site.ID.String() + "/retention"
+	if w := request("PUT", retentionPath, siteWriter, `{"days":30}`); w.Code != 200 {
+		t.Fatalf("consent-team retention after dashboard switch: %d %s", w.Code, w.Body.String())
+	}
+	retained, err := store.GetSiteByID(t.Context(), site.ID)
+	if err != nil || retained.DataRetentionDays != 30 {
+		t.Fatalf("retention not persisted: %v %v", retained, err)
+	}
+	if w := request("PUT", "/api/sites/"+foreign.ID.String()+"/retention", siteWriter, `{"days":30}`); w.Code != 403 {
+		t.Fatalf("unconsented retention: %d", w.Code)
+	}
+	if err := store.Exec(t.Context(), "UPDATE site_members SET role='viewer' WHERE site_id=? AND user_id=?", site.ID, user); err != nil {
+		t.Fatal(err)
+	}
+	if w := request("PUT", retentionPath, siteWriter, `{"days":60}`); w.Code != 403 {
+		t.Fatalf("demoted retention: %d", w.Code)
+	}
+	if err := store.Exec(t.Context(), "UPDATE site_members SET role='owner' WHERE site_id=? AND user_id=?", site.ID, user); err != nil {
 		t.Fatal(err)
 	}
 	create := httptest.NewRequest("POST", "/api/sites", strings.NewReader(`{"domain":"stale-create.example.test"}`))

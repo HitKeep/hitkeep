@@ -313,16 +313,7 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		return nil
 	}
 
-	if err := h.ctx.Store.UpsertCloudBillingAccount(r.Context(), database.CloudBillingAccount{
-		TenantID:             activeTenantID,
-		PlanCode:             database.CloudPlanFree,
-		PlanName:             planNameForCode(database.CloudPlanFree),
-		BillingInterval:      req.BillingInterval,
-		SubscriptionStatus:   subscriptionStatusPending,
-		StripeCustomerID:     customerID,
-		StripeSubscriptionID: "",
-		StripePriceID:        priceID,
-	}); err != nil {
+	if err := h.ctx.Store.MarkCloudBillingCheckoutPending(r.Context(), *account, req.BillingInterval, priceID); err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to persist Stripe upgrade checkout metadata", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return nil

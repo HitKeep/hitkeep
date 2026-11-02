@@ -65,7 +65,7 @@ func TestCommerceExternalOAuthLifecycle(t *testing.T) {
 			mux := http.NewServeMux()
 			h.registerCommerce(mux)
 			base := "/api/cloud/commerce/acp/checkout_sessions"
-			body := `{"items":[{"id":"pro:monthly","quantity":1}]}`
+			body := `{"line_items":[{"id":"pro:monthly"}],"currency":"eur","capabilities":{}}`
 			if protocol == "ucp" {
 				base = "/api/cloud/commerce/ucp/checkout-sessions"
 				body = `{"line_items":[{"item":{"id":"pro:monthly"},"quantity":1}]}`

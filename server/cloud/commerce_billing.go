@@ -70,15 +70,12 @@ func (h *handler) commerceGate(next http.HandlerFunc) http.HandlerFunc {
 }
 
 type commerceRequest struct {
-	Items []struct {
-		ID       string `json:"id"`
-		Quantity int    `json:"quantity"`
-	} `json:"items"`
 	LineItems []struct {
+		ID   string `json:"id"`
 		Item struct {
 			ID string `json:"id"`
 		} `json:"item"`
-		Quantity int `json:"quantity"`
+		Quantity *int `json:"quantity"`
 	} `json:"line_items"`
 	UCP struct {
 		Version      string         `json:"version"`
@@ -207,13 +204,13 @@ func (h *handler) handleCommerceSession(protocol, action string) http.HandlerFun
 		status := http.StatusOK
 		itemID := ""
 		quantity := 0
-		if protocol == "acp" && len(req.Items) == 1 {
-			itemID = req.Items[0].ID
-			quantity = req.Items[0].Quantity
+		if protocol == "acp" && len(req.LineItems) == 1 && req.LineItems[0].Quantity == nil {
+			itemID = req.LineItems[0].ID
+			quantity = 1
 		}
-		if protocol == "ucp" && len(req.LineItems) == 1 {
+		if protocol == "ucp" && len(req.LineItems) == 1 && req.LineItems[0].Quantity != nil {
 			itemID = req.LineItems[0].Item.ID
-			quantity = req.LineItems[0].Quantity
+			quantity = *req.LineItems[0].Quantity
 		}
 		if action == "create" {
 			plan, interval, ok := strings.Cut(itemID, ":")
@@ -255,7 +252,7 @@ func (h *handler) handleCommerceSession(protocol, action string) http.HandlerFun
 				http.NotFound(w, r)
 				return
 			}
-			if action == "update" && (len(req.Items) > 0 || len(req.LineItems) > 0) && (quantity != 1 || itemID != session.PlanCode+":"+session.BillingInterval) {
+			if action == "update" && len(req.LineItems) > 0 && (quantity != 1 || itemID != session.PlanCode+":"+session.BillingInterval) {
 				http.Error(w, "Cancel the existing checkout before changing the plan", http.StatusConflict)
 				return
 			}

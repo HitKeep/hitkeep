@@ -295,7 +295,7 @@ describe('MainLayout', () => {
             TestBed.inject(AuthService).markAuthenticated();
             bootstrap.status.update((status) => ({ ...status!, ai_enabled: true }));
             await fixture.whenStable();
-            httpMock.expectOne('/openapi.json').flush({ paths: { '/api/sites/{id}/goals': { post: { summary: 'Create goal', tags: ['Goals'] } } } });
+            httpMock.expectOne('/api/openapi.json').flush({ paths: { '/api/sites/{id}/goals': { post: { summary: 'Create goal', tags: ['Goals'] } } } });
             await fixture.whenStable();
             const execution = tools.get('hitkeep.run_action')!.execute({ operation: 'POST /api/sites/{id}/goals', path_parameters: { id: 'site-1' }, body: { name: '<img src=x onerror=alert(1)>' } });
             await fixture.whenStable();
