@@ -52,3 +52,23 @@ func TestRuntimeCommerceDoesNotAdvertiseUnconfiguredOAuth(t *testing.T) {
 		t.Fatal("unconfigured OAuth advertised alongside available browser Checkout")
 	}
 }
+
+func TestRuntimeCommerceDiscoveryAvailability(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		conf := &config.Config{AIEnabled: true, CloudHosted: true}
+		if configured {
+			conf.StripeSecretKey = "fixture-key"
+			conf.StripePriceProMonthly = "fixture-price"
+		}
+		spec := OpenAPISpecV1ForRuntime("https://analytics.example.com", &shared.Context{Config: conf, Store: &database.Store{}})
+		for _, path := range []string{"/.well-known/acp.json", "/.well-known/ucp"} {
+			item, ok := spec["paths"].(map[string]any)[path]
+			if ok != cloud.CommerceAvailable(conf) {
+				t.Fatalf("%s: configured=%t advertised=%t", path, configured, ok)
+			}
+			if ok && item.(map[string]any)["get"].(map[string]any)["security"] != nil {
+				t.Fatalf("public discovery requires authentication: %s", path)
+			}
+		}
+	}
+}

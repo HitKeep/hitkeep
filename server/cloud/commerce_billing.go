@@ -220,7 +220,7 @@ func (h *handler) handleCommerceSession(protocol, action string) http.HandlerFun
 			}
 			price, err := h.stripe.GetPrice(r.Context(), priceIDForPlan(h.ctx.Config, plan, interval))
 			currency := "eur"
-			if strings.EqualFold(h.ctx.Config.CloudJurisdiction, "US") {
+			if shared.NormalizeCloudJurisdiction(h.ctx.Config.CloudJurisdiction) == "US" {
 				currency = "usd"
 			}
 			cadence := "month"

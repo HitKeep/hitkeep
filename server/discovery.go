@@ -78,6 +78,8 @@ func (s *Server) registerDiscoveryRoutes(mux *http.ServeMux) {
 		return map[string]any{"protocol_version": "0.2", "organization": map[string]string{"name": "HitKeep", "domain": base.Hostname()}, "web": map[string]any{}}
 	})))
 	register("/.well-known/agent-card.json", s.agentDiscovery(s.discoveryResponse("application/json", s.a2aCard)))
+	register("/.well-known/acp.json", s.discoveryResponse("application/json", s.acpProfile))
+	register("/.well-known/ucp", s.discoveryResponse("application/json", s.ucpProfile))
 	register("/auth.md", s.agentDiscovery(s.discoveryMarkdown(s.authMarkdown)))
 	register("/llms.txt", s.agentDiscovery(s.discoveryMarkdown(s.llmsMarkdown)))
 	for _, route := range openAPIDiscoveryPaths {
@@ -324,7 +326,7 @@ func (s *Server) agentEntries(base *url.URL) []discoveryEntry {
 	if s.ctx.A2AAvailable() {
 		entries = append(entries, discoveryEntry{"", "HitKeep synchronous analytics agent", "application/a2a+json", appurl.Path(base.String(), "/.well-known/agent-card.json"), "A2A 1.0 structured read-only analytics using API-resource OAuth, current site permissions and explicit consent.", []string{"How can an agent read bounded aggregate analytics?", "Which analytics tools accept structured A2A messages?"}})
 	}
-	if s.agentAvailable() && cloudhandlers.CommerceAvailable(s.conf) && s.ctx.Store != nil && (s.ctx.Cluster == nil || s.ctx.Cluster.IsLeader()) {
+	if s.commerceAvailable() {
 		entries = append(entries, discoveryEntry{"", "HitKeep Cloud checkout", "application/vnd.oai.openapi+json", appurl.Path(base.String(), "/openapi.json") + "#/paths/~1api~1cloud~1commerce~1acp~1checkout_sessions", "ACP/UCP checkout adapters require explicit billing:write OAuth consent or an authenticated dashboard browser session, current billing administration and human Stripe Checkout approval. No autonomous payment rail.", []string{"How can a billing administrator open hosted checkout?", "How does checkout require human payment approval?"}})
 	}
 	for i := range entries {
@@ -360,7 +362,7 @@ func (s *Server) ardEntries(base *url.URL) []discoveryEntry {
 // Discovery well-known locations remain reachable at the origin for prefixed instances.
 func (s *Server) isDiscoveryRoot(requestPath string) bool {
 	switch requestPath {
-	case "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
+	case "/.well-known/acp.json", "/.well-known/ucp", "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
 		return true
 	default:
 		return false
