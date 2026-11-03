@@ -144,7 +144,10 @@ func (stripeWebhookSDK) ConstructEvent(payload []byte, header string, secret str
 	if err != nil {
 		return event, err
 	}
-	if strings.TrimSpace(event.APIVersion) != stripeAPIVersion {
+	version := strings.TrimSpace(event.APIVersion)
+	// Preserve existing webhook destinations during this compatible Endive SDK update.
+	previousEndiveVersion := stripeAPIVersion == "2026-10-28.endive" && version == "2026-09-30.endive"
+	if version != stripeAPIVersion && !previousEndiveVersion {
 		// Shared-account manual invoices need no version-specific billing processing.
 		if event.Type == "invoice.payment_failed" && event.Data != nil {
 			if invoice, err := parseStripeInvoiceEvent(event.Data.Raw); err == nil && invoice.isManualInvoice() {
