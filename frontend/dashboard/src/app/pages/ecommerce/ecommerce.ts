@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
-import { DOCUMENT, NgOptimizedImage } from '@angular/common';
+import { NgOptimizedImage } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ReactiveFormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
@@ -21,7 +21,7 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { EcommerceProductStat, EcommerceSeriesPoint, EcommerceSourceStat, EcommerceSummary, MetricStat, SiteStats } from '@models/analytics.types';
-import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
+import { injectFaviconUrl } from '@core/analytics/favicon';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_EVENT_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
@@ -54,7 +54,7 @@ export class EcommercePage {
     private analyticsService = inject(AnalyticsService);
     private localeService = inject(TranslocoLocaleService);
     private transloco = inject(TranslocoService);
-    private document = inject(DOCUMENT);
+    protected readonly faviconUrlForDomain = injectFaviconUrl();
     private destroyRef = inject(DestroyRef);
     private realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
@@ -410,10 +410,6 @@ export class EcommercePage {
     protected sourceDisplayUrl(value: string | null | undefined): string {
         if (!value) return '';
         return value.replace(/^https?:\/\//, '').replace(/^www\./, '');
-    }
-
-    protected faviconUrlForDomain(domain: string | null | undefined): string | null {
-        return domain ? browserAppUrl(this.document, `/api/favicon/${encodeURIComponent(domain)}`) : null;
     }
 
     protected formatCurrency(value: number, currency: string): string {
