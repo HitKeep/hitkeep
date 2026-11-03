@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
-import { DOCUMENT, NgOptimizedImage } from '@angular/common';
+import { NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -17,7 +17,7 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { NoSiteSelected } from '@components/no-site-selected/no-site-selected';
 import { SetupCallout } from '@components/setup-callout/setup-callout';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
-import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
+import { injectFaviconUrl } from '@core/analytics/favicon';
 import { WebVitalDimension, WebVitalDimensionRow, WebVitalMetric, WebVitalMetricBreakdown, WebVitalPageRow, WebVitalRating, WebVitalSeriesPoint, WebVitalSummaryMetric } from '@models/analytics.types';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_KINDS } from '@services/realtime.service';
@@ -81,7 +81,7 @@ export class WebVitalsPage {
     private readonly localeService = inject(TranslocoLocaleService);
     private readonly transloco = inject(TranslocoService);
     private readonly activeLanguage = injectActiveLang();
-    private readonly document = inject(DOCUMENT);
+    private readonly faviconUrl = injectFaviconUrl();
     private readonly destroyRef = inject(DestroyRef);
     private readonly realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
@@ -109,10 +109,7 @@ export class WebVitalsPage {
     protected readonly pathFilter = signal(DEFAULT_WEB_VITAL_PATH);
     protected readonly activeBreakdownTab = signal<'pages' | WebVitalDimension>('pages');
     protected readonly siteDomain = computed(() => this.siteService.activeSite()?.domain ?? null);
-    protected readonly siteFaviconUrl = computed(() => {
-        const domain = this.siteDomain();
-        return domain ? browserAppUrl(this.document, `/api/favicon/${encodeURIComponent(domain)}`) : '';
-    });
+    protected readonly siteFaviconUrl = computed(() => this.faviconUrl(this.siteDomain()));
 
     protected readonly isShortRange = this.reportRange.isShortRange;
 
