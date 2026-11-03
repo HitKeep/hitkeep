@@ -51,6 +51,19 @@ jobs:
           fi
           printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Validate GitHub OIDC namespace
+        env:
+          REGISTRY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! jq -e --arg namespace "io.github.$REGISTRY_OWNER/" \
+            '.name | strings | startswith($namespace) and (split("/") | length == 2 and .[1] != "")' \
+            server.json >/dev/null; then
+            echo "Registry name must use io.github.$REGISTRY_OWNER/<server> for GitHub OIDC." >&2
+            exit 1
+          fi
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
