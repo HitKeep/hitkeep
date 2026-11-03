@@ -4098,6 +4098,8 @@
     "revokeConfirm": "{{application}} widerrufen? Dies verhindert neue Autorisierungen und widerruft alle bestehenden Freigaben."
   },
   "agentTools": {
+    "publicTitle": "Öffentliche HitKeep-Verbindungshilfe",
+    "publicDescription": "Öffentliche Links zu Anmeldung, Authentifizierung und Dokumentation anzeigen. Dieses Werkzeug greift niemals auf Konto- oder Website-Daten zu.",
     "listTitle": "Verfügbare HitKeep-Aktionen",
     "listDescription": "Dokumentierte HitKeep-API-Aktionen für diese angemeldete Sitzung anzeigen. Zugangsdaten und Exporte bleiben in der normalen Oberfläche.",
     "runTitle": "HitKeep-Aktion ausführen",

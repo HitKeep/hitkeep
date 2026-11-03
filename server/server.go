@@ -467,6 +467,14 @@ func (s *Server) spaHandler(publicFS fs.FS) http.HandlerFunc {
 
 		// 2. Handle Root (Explicit request for index)
 		if path == "" || path == "index.html" {
+			if path == "" && s.agentAvailable() && s.discoveryBase() != nil {
+				w.Header().Add("Vary", "Accept")
+				if prefersPublicMarkdown(r.Header.Get("Accept")) {
+					w.Header().Set("Content-Signal", "search=yes, ai-input=yes, ai-train=no")
+					s.discoveryMarkdown(s.llmsMarkdown)(w, r)
+					return
+				}
+			}
 			if links := s.discoveryLinks(); links != "" {
 				w.Header().Set("Link", links)
 			}

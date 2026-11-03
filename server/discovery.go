@@ -2,7 +2,9 @@ package server
 
 import (
 	"crypto/sha256"
+	"encoding/xml"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -62,6 +64,14 @@ func (s *Server) registerDiscoveryRoutes(mux *http.ServeMux) {
 		}
 	}
 	register("/robots.txt", s.discoveryRobots)
+	register("/sitemap.xml", s.agentDiscovery(s.discoverySitemap))
+	register("/.well-known/oauth-protected-resource", s.agentDiscovery(func(w http.ResponseWriter, r *http.Request) {
+		if s.ctx.OAuthProvider == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.ctx.OAuthProvider.ProtectedResourceMetadata("api")(w, r)
+	}))
 	for _, route := range []string{"/.well-known/agent-skills/index.json", "/.well-known/skills/index.json"} {
 		register(route, s.agentDiscovery(s.discoveryResponse("application/json", func(base *url.URL) any {
 			index, err := skills.PublicIndex(base.String())
@@ -362,7 +372,7 @@ func (s *Server) ardEntries(base *url.URL) []discoveryEntry {
 // Discovery well-known locations remain reachable at the origin for prefixed instances.
 func (s *Server) isDiscoveryRoot(requestPath string) bool {
 	switch requestPath {
-	case "/.well-known/acp.json", "/.well-known/ucp", "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
+	case "/.well-known/acp.json", "/.well-known/ucp", "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/sitemap.xml", "/.well-known/oauth-protected-resource", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
 		return true
 	default:
 		return false
@@ -406,6 +416,15 @@ func (s *Server) discoveryRobots(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if s.agentAvailable() {
+			text.WriteString("Content-Signal: search=yes, ai-input=yes, ai-train=no\n")
+			text.WriteString("Sitemap: " + appurl.Path(base.String(), "/sitemap.xml") + "\n")
+			allow("/sitemap.xml")
+			if s.ctx.OAuthProvider != nil {
+				allow("/.well-known/oauth-protected-resource")
+				if base.Path != "" {
+					text.WriteString("Allow: /.well-known/oauth-protected-resource$\n")
+				}
+			}
 			for _, route := range []string{"/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/auth.md", "/llms.txt"} {
 				allow(route)
 				if base.Path != "" {
@@ -450,6 +469,72 @@ func (s *Server) discoveryRobots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) agentAvailable() bool { return s.conf != nil && s.conf.AIEnabled }
+
+func (s *Server) discoverySitemap(w http.ResponseWriter, r *http.Request) {
+	base := s.discoveryBase()
+	if base == nil {
+		http.NotFound(w, r)
+		return
+	}
+	type entry struct {
+		Location string `xml:"loc"`
+	}
+	document := struct {
+		XMLName xml.Name `xml:"urlset"`
+		XMLNS   string   `xml:"xmlns,attr"`
+		URLs    []entry  `xml:"url"`
+	}{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+	// Only public integration documents belong here, never dashboard or shared analytics URLs.
+	for _, route := range []string{"/openapi.json", "/auth.md", "/llms.txt", "/.well-known/api-catalog", "/.well-known/agent-skills/index.json"} {
+		document.URLs = append(document.URLs, entry{Location: appurl.Path(base.String(), route)})
+	}
+	data, err := xml.Marshal(document)
+	if err != nil {
+		http.Error(w, "Unable to encode sitemap", http.StatusInternalServerError)
+		return
+	}
+	s.writeDiscovery(w, r, "application/xml; charset=utf-8", append([]byte(xml.Header), data...))
+}
+
+func prefersPublicMarkdown(accept string) bool {
+	var markdown, html float64
+	htmlSpecificity := -1
+	for item := range strings.SplitSeq(accept, ",") {
+		media, parameters, err := mime.ParseMediaType(strings.TrimSpace(item))
+		if err != nil {
+			continue
+		}
+		quality := 1.0
+		if raw, ok := parameters["q"]; ok {
+			quality, err = strconv.ParseFloat(raw, 64)
+			if err != nil || !(quality >= 0 && quality <= 1) {
+				continue
+			}
+		}
+		if media == "text/markdown" {
+			markdown = max(markdown, quality)
+			continue
+		}
+		specificity := -1
+		switch media {
+		case "text/html":
+			specificity = 2
+		case "text/*":
+			specificity = 1
+		case "*/*":
+			specificity = 0
+		}
+		if specificity < 0 {
+			continue
+		}
+		if specificity > htmlSpecificity {
+			html, htmlSpecificity = quality, specificity
+		} else if specificity == htmlSpecificity {
+			html = max(html, quality)
+		}
+	}
+	return markdown > 0 && markdown >= html
+}
 
 func (s *Server) agentDiscovery(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

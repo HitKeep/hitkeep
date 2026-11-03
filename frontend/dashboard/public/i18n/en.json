@@ -4161,6 +4161,8 @@
     "revokeConfirm": "Revoke {{application}}? This stops new authorizations and revokes all of its existing grants."
   },
   "agentTools": {
+    "publicTitle": "Public HitKeep connection help",
+    "publicDescription": "Read public sign-in, authentication and documentation links. This tool never accesses account or site data.",
     "listTitle": "Available HitKeep actions",
     "listDescription": "Discover the documented HitKeep API actions for this signed-in session. Credentials and exports use the normal UI.",
     "runTitle": "Run a HitKeep action",

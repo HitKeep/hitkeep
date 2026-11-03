@@ -43,6 +43,9 @@ func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]a
 			delete(paths, route)
 		}
 	}
+	if ctx == nil || ctx.OAuthProvider == nil {
+		delete(paths, "/.well-known/oauth-protected-resource")
+	}
 	if !ctx.A2AAvailable() {
 		delete(paths, "/.well-known/agent-card.json")
 		delete(paths, "/api/a2a/message:send")

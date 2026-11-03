@@ -13,6 +13,12 @@ func TestRuntimeOpenAPIOptionalAvailability(t *testing.T) {
 		if (paths["/.well-known/agent-skills/index.json"] != nil) != enabled {
 			t.Fatalf("AI=%v index availability", enabled)
 		}
+		if (paths["/sitemap.xml"] != nil) != enabled {
+			t.Fatalf("AI=%v sitemap availability", enabled)
+		}
+		if paths["/.well-known/oauth-protected-resource"] != nil {
+			t.Fatal("OAuth bootstrap advertised without a provider")
+		}
 		for _, route := range []string{"/api/a2a/message:send", "/.well-known/agent-card.json", "/api/cloud/commerce/acp/checkout_sessions"} {
 			if paths[route] != nil {
 				t.Fatalf("unavailable handler advertised: %s", route)

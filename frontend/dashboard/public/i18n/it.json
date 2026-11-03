@@ -4051,6 +4051,8 @@
     "revokeConfirm": "Revocare {{application}}? Questa azione impedisce nuove autorizzazioni e revoca tutte quelle esistenti."
   },
   "agentTools": {
+    "publicTitle": "Guida pubblica alla connessione a HitKeep",
+    "publicDescription": "Consulta i link pubblici per accesso, autenticazione e documentazione. Questo strumento non accede mai ai dati di account o siti.",
     "listTitle": "Azioni HitKeep disponibili",
     "listDescription": "Scopri le azioni documentate dell’API HitKeep per questa sessione. Credenziali ed esportazioni restano nell’interfaccia abituale.",
     "runTitle": "Esegui un’azione HitKeep",
