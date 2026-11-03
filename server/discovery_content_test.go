@@ -125,7 +125,7 @@ func TestRootProtectedResourceAliasKeepsActualAPIResource(t *testing.T) {
 func TestAuthMarkdownDescribesOnlyAvailableHumanClaimFlow(t *testing.T) {
 	s := newDiscoveryServer()
 	enabled := true
-	p, err := oauth.New(s.ctx.Store, oauth.Options{Issuer: s.conf.PublicURL, BrowserSigningKey: bytes.Repeat([]byte("b"), 32), IsLeader: func() bool { return true }, AgentActionsEnabled: func() bool { return enabled }})
+	p, err := oauth.New(s.ctx.Store, oauth.Options{Issuer: s.conf.PublicURL, MCPPath: s.conf.MCPPath, BrowserSigningKey: bytes.Repeat([]byte("b"), 32), IsLeader: func() bool { return true }, AgentActionsEnabled: func() bool { return enabled }})
 	if err != nil {
 		t.Fatal(err)
 	}

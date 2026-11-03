@@ -38,7 +38,7 @@ func TestAgentRefreshUsesCurrentApplicationMembership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := provider.New(store, provider.Options{Issuer: "https://hitkeep.example", BrowserSigningKey: []byte(strings.Repeat("a", 32)), IsLeader: func() bool { return true }, AgentActionsEnabled: func() bool { return true }})
+	p, err := provider.New(store, provider.Options{Issuer: "https://hitkeep.example", MCPPath: "/mcp", BrowserSigningKey: []byte(strings.Repeat("a", 32)), IsLeader: func() bool { return true }, AgentActionsEnabled: func() bool { return true }})
 	if err != nil {
 		t.Fatal(err)
 	}
