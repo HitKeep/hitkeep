@@ -10,12 +10,17 @@ func oauthSecurityScheme(publicURL string) map[string]any {
 	issuer := strings.TrimRight(publicURL, "/")
 	return map[string]any{
 		"type":        "oauth2",
-		"description": "Authorization Code with mandatory PKCE S256. Access is bound to one API or MCP resource, one team, explicitly consented sites, scopes, and the user's current permissions. Dashboard administration does not accept OAuth tokens. Existing API-client credentials remain supported separately.",
+		"description": "Authorization Code with mandatory PKCE S256. Access is bound to one API or MCP resource, one team, explicitly consented sites, scopes, and the user's current permissions. AI-enabled ordinary REST actions accept only their documented scopes. Billing-only consent may select a team without sites and still requires human payment approval. Credentials, impersonation, raw exports and instance administration are excluded. Existing API-client credentials remain supported separately; MCP remains read-only.",
 		"flows": map[string]any{"authorizationCode": map[string]any{
 			"authorizationUrl": issuer + "/oauth/authorize", "tokenUrl": issuer + "/oauth/token",
 			"scopes": map[string]string{
 				"sites:read": "Discover granted sites.", "analytics:read": "Read approved aggregate analytics.",
 				"tracking_domains:read": "Discover eligible active tracking domains.", "ingest:write": "Submit server-side analytics for granted sites.",
+				"goals:write":         "Create, update and delete goals and funnels on consented sites.",
+				"annotations:write":   "Create, update and delete timeline annotations on consented sites.",
+				"sites:write":         "Change consented site domains, retention and exclusions.",
+				"opportunities:write": "Generate opportunities and change their status on consented sites.",
+				"billing:write":       "Manage approved team Checkout sessions; payment requires human approval.",
 			},
 		}},
 	}

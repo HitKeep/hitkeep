@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/appurl"
+	authcore "hitkeep/auth"
 	"hitkeep/config"
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
@@ -91,6 +92,10 @@ func (h *handler) handleCreateBillingPortalSession() http.HandlerFunc {
 			return
 		}
 
+		if !shared.CheckAgentTeam(w, r, activeTenantID) {
+			return
+		}
+
 		account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
 		if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
 			newAccount := database.CloudBillingAccount{
@@ -146,157 +151,184 @@ func (h *handler) handleCreateBillingPortalSession() http.HandlerFunc {
 
 func (h *handler) handleCreateBillingCheckoutSession() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !h.ctx.Config.CloudHosted {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
-		if h.ctx.Store == nil {
-			http.Error(w, "Service not available on this node", http.StatusServiceUnavailable)
-			return
-		}
-
-		userID := shared.GetUserIDFromContext(r)
-		if userID == uuid.Nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		activeTenantID, err := h.ctx.Store.GetActiveTenantID(r.Context(), userID)
-		if err != nil {
-			http.Error(w, "Unable to resolve active team", http.StatusBadRequest)
-			return
-		}
-
-		account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
-		if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
-			// Auto-create a free billing account for legacy users who signed up
-			// before the billing account table existed.
-			newAccount := database.CloudBillingAccount{
-				TenantID:           activeTenantID,
-				PlanCode:           database.CloudPlanFree,
-				PlanName:           planNameForCode(database.CloudPlanFree),
-				SubscriptionStatus: database.CloudSubscriptionStatusFree,
-			}
-			if upsertErr := h.ctx.Store.UpsertCloudBillingAccount(r.Context(), newAccount); upsertErr != nil {
-				shared.LoggerFromContext(r.Context()).Error("Failed to auto-create cloud billing account", "error", upsertErr, "team_id", activeTenantID)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			account = &newAccount
-		}
-		if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
-			shared.LoggerFromContext(r.Context()).Error("Failed to load cloud billing account", "error", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		if strings.TrimSpace(h.ctx.Config.StripeSecretKey) == "" {
-			http.Error(w, "Stripe secret key is not configured", http.StatusNotImplemented)
-			return
-		}
-
 		var req billingCheckoutSessionRequest
-		if err := json.UnmarshalRead(r.Body, &req); err != nil {
+		if err := json.UnmarshalRead(http.MaxBytesReader(w, r.Body, 64<<10), &req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
-
-		req.PlanCode = normalizePlanCode(req.PlanCode)
-		req.BillingInterval = normalizeBillingInterval(req.BillingInterval)
-		req.Locale = normalizeStripeLocale(req.Locale)
-		if req.PlanCode != database.CloudPlanPro && req.PlanCode != database.CloudPlanBusiness {
-			http.Error(w, "Paid plan code is required", http.StatusBadRequest)
-			return
+		if session := h.createBillingCheckout(w, r, req); session != nil {
+			shared.WriteJSON(r.Context(), w, http.StatusOK, billingCheckoutSessionResponse{URL: session.URL})
 		}
+	}
+}
 
-		currentPlanCode, _ := effectivePlanCode(account)
-		if currentPlanCode != database.CloudPlanFree {
-			http.Error(w, "Use billing portal to manage an existing paid plan", http.StatusConflict)
-			return
+func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, req billingCheckoutSessionRequest) *checkoutSessionOutput {
+	h.checkoutMu.Lock()
+	defer h.checkoutMu.Unlock()
+	if h.ctx.Cluster != nil && !h.ctx.Cluster.IsLeader() {
+		http.Error(w, "Service not available on this node", http.StatusServiceUnavailable)
+		return nil
+	}
+
+	if !h.ctx.Config.CloudHosted {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return nil
+	}
+	if h.ctx.Store == nil {
+		http.Error(w, "Service not available on this node", http.StatusServiceUnavailable)
+		return nil
+	}
+
+	userID := shared.GetUserIDFromContext(r)
+	if userID == uuid.Nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+
+	activeTenantID := req.teamID
+	if activeTenantID == uuid.Nil {
+		var err error
+		activeTenantID, err = h.ctx.Store.GetActiveTenantID(r.Context(), userID)
+		if err != nil {
+			http.Error(w, "Unable to resolve active team", http.StatusBadRequest)
+			return nil
 		}
+	}
+	if !shared.CheckAgentTeam(w, r, activeTenantID) {
+		return nil
+	}
+	role, err := h.ctx.Store.GetTenantRole(r.Context(), activeTenantID, userID)
+	if err != nil || !authcore.TeamRoleHasCapability(role, authcore.CapTeamManageSettings) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return nil
+	}
 
-		user, err := h.ctx.Store.GetUserByID(r.Context(), userID)
-		if err != nil || user == nil {
-			shared.LoggerFromContext(r.Context()).Error("Failed to load user for billing checkout", "error", err)
+	account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
+	if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
+		// Auto-create a free billing account for legacy users who signed up
+		// before the billing account table existed.
+		newAccount := database.CloudBillingAccount{
+			TenantID:           activeTenantID,
+			PlanCode:           database.CloudPlanFree,
+			PlanName:           planNameForCode(database.CloudPlanFree),
+			SubscriptionStatus: database.CloudSubscriptionStatusFree,
+		}
+		if upsertErr := h.ctx.Store.UpsertCloudBillingAccount(r.Context(), newAccount); upsertErr != nil {
+			shared.LoggerFromContext(r.Context()).Error("Failed to auto-create cloud billing account", "error", upsertErr, "team_id", activeTenantID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
+			return nil
 		}
+		account = &newAccount
+	}
+	if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
+		shared.LoggerFromContext(r.Context()).Error("Failed to load cloud billing account", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil
+	}
+	if strings.TrimSpace(h.ctx.Config.StripeSecretKey) == "" {
+		http.Error(w, "Stripe secret key is not configured", http.StatusNotImplemented)
+		return nil
+	}
 
-		team, err := h.ctx.Store.GetTenant(r.Context(), activeTenantID)
-		if err != nil || team == nil {
-			shared.LoggerFromContext(r.Context()).Error("Failed to load team for billing checkout", "error", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
+	req.PlanCode = normalizePlanCode(req.PlanCode)
+	req.BillingInterval = normalizeBillingInterval(req.BillingInterval)
+	req.Locale = normalizeStripeLocale(req.Locale)
+	if req.PlanCode != database.CloudPlanPro && req.PlanCode != database.CloudPlanBusiness {
+		http.Error(w, "Paid plan code is required", http.StatusBadRequest)
+		return nil
+	}
 
-		customerID := strings.TrimSpace(account.StripeCustomerID)
-		if customerID == "" {
-			customerID, err = h.stripe.CreateCustomer(r.Context(), createCustomerInput{
-				Email:          strings.TrimSpace(strings.ToLower(user.Email)),
-				Name:           stripeCustomerName(user, team.Name),
-				UserID:         user.ID,
-				TenantID:       activeTenantID,
-				PlanCode:       req.PlanCode,
-				Jurisdiction:   strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
-				IdempotencyKey: stripeCustomerCreateIdempotencyKey(user.ID, activeTenantID, user.Email),
-			})
-			if err != nil {
-				shared.LoggerFromContext(r.Context()).Error("Failed to create Stripe customer for billing checkout", slog.Group("stripe", stripeErrorLogAttrs(err)...))
-				http.Error(w, "Unable to start checkout", http.StatusBadGateway)
-				return
-			}
-		}
+	currentPlanCode, _ := effectivePlanCode(account)
+	if currentPlanCode != database.CloudPlanFree {
+		http.Error(w, "Use billing portal to manage an existing paid plan", http.StatusConflict)
+		return nil
+	}
 
-		priceID := priceIDForPlan(h.ctx.Config, req.PlanCode, req.BillingInterval)
-		if priceID == "" {
-			http.Error(w, "Plan is not configured for checkout", http.StatusBadRequest)
-			return
-		}
+	user, err := h.ctx.Store.GetUserByID(r.Context(), userID)
+	if err != nil || user == nil {
+		shared.LoggerFromContext(r.Context()).Error("Failed to load user for billing checkout", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil
+	}
 
-		session, err := h.stripe.CreateCheckoutSession(r.Context(), createCheckoutSessionInput{
-			CustomerID:      customerID,
-			PriceID:         priceID,
-			SuccessURL:      checkoutSuccessURL(h.ctx.Config),
-			CancelURL:       checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
-			Locale:          req.Locale,
-			UserID:          user.ID,
-			TenantID:        activeTenantID,
-			PlanCode:        req.PlanCode,
-			PlanName:        planNameForCode(req.PlanCode),
-			BillingInterval: req.BillingInterval,
-			Jurisdiction:    strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
+	team, err := h.ctx.Store.GetTenant(r.Context(), activeTenantID)
+	if err != nil || team == nil {
+		shared.LoggerFromContext(r.Context()).Error("Failed to load team for billing checkout", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil
+	}
+
+	priceID := priceIDForPlan(h.ctx.Config, req.PlanCode, req.BillingInterval)
+	if priceID == "" {
+		http.Error(w, "Plan is not configured for checkout", http.StatusBadRequest)
+		return nil
+	}
+
+	customerID := strings.TrimSpace(account.StripeCustomerID)
+	if customerID == "" {
+		customerID, err = h.stripe.CreateCustomer(r.Context(), createCustomerInput{
+			Email:          strings.TrimSpace(strings.ToLower(user.Email)),
+			Name:           stripeCustomerName(user, team.Name),
+			UserID:         user.ID,
+			TenantID:       activeTenantID,
+			PlanCode:       req.PlanCode,
+			Jurisdiction:   strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
+			IdempotencyKey: stripeCustomerCreateIdempotencyKey(user.ID, activeTenantID, user.Email),
 		})
 		if err != nil {
-			shared.LoggerFromContext(r.Context()).Error("Failed to create Stripe upgrade checkout session", slog.Group("stripe", stripeErrorLogAttrs(err)...))
+			shared.LoggerFromContext(r.Context()).Error("Failed to create Stripe customer for billing checkout", slog.Group("stripe", stripeErrorLogAttrs(err)...))
 			http.Error(w, "Unable to start checkout", http.StatusBadGateway)
-			return
+			return nil
 		}
-
-		if err := h.ctx.Store.UpsertCloudBillingAccount(r.Context(), database.CloudBillingAccount{
-			TenantID:             activeTenantID,
-			PlanCode:             database.CloudPlanFree,
-			PlanName:             planNameForCode(database.CloudPlanFree),
-			BillingInterval:      req.BillingInterval,
-			SubscriptionStatus:   subscriptionStatusPending,
-			StripeCustomerID:     customerID,
-			StripeSubscriptionID: "",
-			StripePriceID:        priceID,
-		}); err != nil {
-			shared.LoggerFromContext(r.Context()).Error("Failed to persist Stripe upgrade checkout metadata", "error", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		if _, err := h.ctx.Store.RecordCloudConversionEvent(r.Context(), database.CloudConversionEvent{
-			TenantID:        activeTenantID,
-			EventName:       database.CloudConversionCheckoutStarted,
-			PlanCode:        req.PlanCode,
-			BillingInterval: req.BillingInterval,
-			DedupeKey:       activeTenantID.String() + ":checkout:" + session.ID,
-		}); err != nil {
-			shared.LoggerFromContext(r.Context()).Warn("Failed to record checkout conversion", "error", err, "team_id", activeTenantID, "checkout_session_id", session.ID)
-		}
-
-		shared.WriteJSON(r.Context(), w, http.StatusOK, billingCheckoutSessionResponse{URL: session.URL})
 	}
+
+	if account.StripeCustomerID != customerID {
+		account.StripeCustomerID = customerID
+		if err := h.ctx.Store.UpsertCloudBillingAccount(r.Context(), *account); err != nil {
+			http.Error(w, "Unable to persist billing customer", http.StatusServiceUnavailable)
+			return nil
+		}
+	}
+
+	session, err := h.reuseOrCreateCheckout(r.Context(), createCheckoutSessionInput{
+		CustomerID:      customerID,
+		PriceID:         priceID,
+		SuccessURL:      checkoutSuccessURL(h.ctx.Config),
+		CancelURL:       checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
+		Locale:          req.Locale,
+		UserID:          user.ID,
+		TenantID:        activeTenantID,
+		PlanCode:        req.PlanCode,
+		PlanName:        planNameForCode(req.PlanCode),
+		BillingInterval: req.BillingInterval,
+		Jurisdiction:    strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
+	})
+	if errors.Is(err, errCheckoutConflict) {
+		http.Error(w, errCheckoutConflict.Error(), http.StatusConflict)
+		return nil
+	}
+	if err != nil {
+		shared.LoggerFromContext(r.Context()).Error("Failed to create Stripe upgrade checkout session", slog.Group("stripe", stripeErrorLogAttrs(err)...))
+		http.Error(w, "Unable to start checkout", http.StatusBadGateway)
+		return nil
+	}
+
+	if err := h.ctx.Store.MarkCloudBillingCheckoutPending(r.Context(), *account, req.BillingInterval, priceID); err != nil {
+		shared.LoggerFromContext(r.Context()).Error("Failed to persist Stripe upgrade checkout metadata", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil
+	}
+	if _, err := h.ctx.Store.RecordCloudConversionEvent(r.Context(), database.CloudConversionEvent{
+		TenantID:        activeTenantID,
+		EventName:       database.CloudConversionCheckoutStarted,
+		PlanCode:        req.PlanCode,
+		BillingInterval: req.BillingInterval,
+		DedupeKey:       activeTenantID.String() + ":checkout:" + session.ID,
+	}); err != nil {
+		shared.LoggerFromContext(r.Context()).Warn("Failed to record checkout conversion", "error", err, "team_id", activeTenantID, "checkout_session_id", session.ID)
+	}
+
+	return session
 }
 
 type billingStateResponse struct {
@@ -323,6 +355,10 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 			http.Error(w, "Unable to resolve active team", http.StatusBadRequest)
 			return
 		}
+		if !shared.CheckAgentTeam(w, r, teamID) {
+			return
+		}
+
 		state := billingStateResponse{TeamID: teamID, PlanCode: database.CloudPlanFree, SubscriptionStatus: database.CloudSubscriptionStatusFree}
 		account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), teamID)
 		if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {

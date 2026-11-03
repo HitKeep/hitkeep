@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	stdUUID "uuid"
 
 	"github.com/google/uuid"
 
@@ -31,6 +32,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	requireExclusionAccess := ctx.RequireSiteOrInstancePermission(authcore.PermSiteManageData, authcore.PermInstanceManageSiteExclusions)
 
 	mux.HandleFunc("GET /api/sites", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:read",
 		RequireAuth: true,
 		AllowAPIKey: true,
 		RateLimiter: ctx.ApiLimiter,
@@ -49,6 +51,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleDeleteSite()))
 	mux.HandleFunc("GET /api/sites/{id}/stats", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteStats()))
@@ -57,14 +60,17 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleResetSiteStats()))
 	mux.HandleFunc("GET /api/sites/{id}/setup-state", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteSetupState()))
 	mux.HandleFunc("GET /api/sites/{id}/tracking/status", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteTrackingStatus()))
 	mux.HandleFunc("GET /api/sites/{id}/tracking-domain-options", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteTrackingDomainOptions()))
@@ -81,38 +87,47 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteRealtime()))
 	mux.HandleFunc("GET /api/sites/{id}/ecommerce", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteEcommerceSummary()))
 	mux.HandleFunc("GET /api/sites/{id}/ecommerce/timeseries", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteEcommerceTimeseries()))
 	mux.HandleFunc("GET /api/sites/{id}/ecommerce/products", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteEcommerceProducts()))
 	mux.HandleFunc("GET /api/sites/{id}/ecommerce/sources", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteEcommerceSources()))
 	mux.HandleFunc("GET /api/sites/{id}/ai-activity", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteAIActivity()))
 	mux.HandleFunc("GET /api/sites/{id}/web-vitals/summary", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteWebVitalsSummary()))
 	mux.HandleFunc("GET /api/sites/{id}/web-vitals/timeseries", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteWebVitalsTimeseries()))
 	mux.HandleFunc("GET /api/sites/{id}/web-vitals/pages", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteWebVitalsPages()))
 	mux.HandleFunc("GET /api/sites/{id}/web-vitals/breakdown", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteWebVitalsBreakdown()))
@@ -120,10 +135,12 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetFavicon()))
 	mux.HandleFunc("PUT /api/sites/{id}/domain", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:write",
 		SitePerm:    authcore.PermSiteManageData,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleRenameSiteDomain()))
 	mux.HandleFunc("PUT /api/sites/{id}/retention", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:write",
 		SitePerm:    authcore.PermSiteManageData,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleUpdateSiteRetention()))
@@ -132,16 +149,19 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleTransferSiteTeam()))
 	mux.HandleFunc("GET /api/sites/{id}/exclusions", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:write",
 		RequireAuth: true,
 		AllowAPIKey: true,
 		RateLimiter: ctx.ApiLimiter,
 	}, requireExclusionAccess(h.handleListSiteExclusions())))
 	mux.HandleFunc("POST /api/sites/{id}/exclusions", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:write",
 		RequireAuth: true,
 		AllowAPIKey: true,
 		RateLimiter: ctx.ApiLimiter,
 	}, requireExclusionAccess(h.handleCreateSiteExclusion())))
 	mux.HandleFunc("DELETE /api/sites/{id}/exclusions/{ruleID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "sites:write",
 		RequireAuth: true,
 		AllowAPIKey: true,
 		RateLimiter: ctx.ApiLimiter,
@@ -182,6 +202,7 @@ func (h *handler) handleGetSites() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := shared.GetUserIDFromContext(r)
 		apiClientAuth, _ := r.Context().Value(shared.APIClientAuthKey).(*database.APIClientAuth)
+		grant, _ := r.Context().Value(shared.OAuthGrantKey).(*authcore.OAuthGrant)
 		if userID == uuid.Nil && apiClientAuth == nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -197,6 +218,8 @@ func (h *handler) handleGetSites() http.HandlerFunc {
 			err   error
 		)
 		switch {
+		case grant != nil:
+			sites, err = h.ctx.Store.ListSitesForTenant(r.Context(), uuid.UUID(grant.TeamID))
 		case userID != uuid.Nil:
 			sites, err = h.ctx.Store.GetSites(r.Context(), userID)
 		case apiClientAuth != nil && apiClientAuth.TenantID != uuid.Nil:
@@ -211,6 +234,15 @@ func (h *handler) handleGetSites() http.HandlerFunc {
 			return
 		}
 
+		if grant != nil {
+			filtered := make([]api.Site, 0, len(sites))
+			for _, site := range sites {
+				if h.ctx.AuthorizeOAuthSite(r.Context(), grant, stdUUID.UUID(site.ID), h.ctx.OAuthProvider.Resource("api"), "sites:read", authcore.PermSiteView) == nil {
+					filtered = append(filtered, site)
+				}
+			}
+			sites = filtered
+		}
 		if apiClientAuth != nil {
 			filtered := make([]api.Site, 0, len(sites))
 			for _, site := range sites {
@@ -265,6 +297,9 @@ func (h *handler) handleCreateSite() http.HandlerFunc {
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to resolve active team for site creation", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !shared.CheckAgentTeam(w, r, teamID) {
 			return
 		}
 		site, err := h.ctx.Store.CreateSiteWithQuota(r.Context(), userID, teamID, domain, h.ctx.Limits().TeamSiteLimit(r.Context(), teamID))
@@ -580,8 +615,14 @@ func (h *handler) handleUpdateSiteRetention() http.HandlerFunc {
 			return
 		}
 
-		site, err := h.ctx.Store.GetSite(r.Context(), siteID, userID)
-		if err != nil || site == nil {
+		var site *api.Site
+		if grant, _ := r.Context().Value(shared.OAuthGrantKey).(*authcore.OAuthGrant); grant != nil {
+			// The shared guard already checked the consent team and current site authority.
+			site, err = h.ctx.Store.GetSiteByID(r.Context(), siteID)
+		} else {
+			site, err = h.ctx.Store.GetSite(r.Context(), siteID, userID)
+		}
+		if err != nil || site == nil || site.UserID != userID {
 			http.Error(w, "Site not found", http.StatusNotFound)
 			return
 		}

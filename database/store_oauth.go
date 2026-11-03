@@ -95,7 +95,8 @@ func (o *OAuthTransaction) CreateGrant(ctx context.Context, g OAuthGrant) error 
 	if err := o.pruneExpiredGrants(ctx); err != nil {
 		return err
 	}
-	if g.ID == uuid.Nil() || g.UserID == uuid.Nil() || g.TeamID == uuid.Nil() || len(g.SiteIDs) == 0 || len(g.SiteIDs) > 512 || len(g.Scopes) == 0 || len(g.Scopes) > 4 || g.ClientID == "" || g.ClientName == "" || g.Audience == "" || !g.ExpiresAt.After(g.CreatedAt) {
+	teamOnly := len(g.Scopes) == 1 && g.Scopes[0] == "billing:write"
+	if g.ID == uuid.Nil() || g.UserID == uuid.Nil() || g.TeamID == uuid.Nil() || (!teamOnly && len(g.SiteIDs) == 0) || len(g.SiteIDs) > 512 || len(g.Scopes) == 0 || len(g.Scopes) > 9 || g.ClientID == "" || g.ClientName == "" || g.Audience == "" || !g.ExpiresAt.After(g.CreatedAt) {
 		return errors.New("invalid OAuth grant")
 	}
 	scopes, err := json.Marshal(g.Scopes)
@@ -191,7 +192,8 @@ func (o *OAuthTransaction) GetGrant(ctx context.Context, id uuid.UUID) (*OAuthGr
 	if err := rows.Err(); err != nil {
 		return nil, oauthStoreError(err)
 	}
-	g.Active = g.Active && g.RevokedAt == nil && time.Now().UTC().Before(g.ExpiresAt) && len(g.SiteIDs) > 0
+	teamOnly := len(g.Scopes) == 1 && g.Scopes[0] == "billing:write"
+	g.Active = g.Active && g.RevokedAt == nil && time.Now().UTC().Before(g.ExpiresAt) && (len(g.SiteIDs) > 0 || teamOnly)
 	return &g, nil
 }
 

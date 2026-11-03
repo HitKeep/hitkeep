@@ -26,7 +26,7 @@
   "oauth": {
     "connectionDetails": "Verbindingsgegevens",
     "consentTitle": "Een toepassing autoriseren",
-    "consentDescription": "Controleer de toepassing en kies de websites waartoe deze toegang krijgt.",
+    "consentDescription": "Controleer de applicatie, de gevraagde rechten en het team waartoe deze toegang krijgt.",
     "loading": "Toepassingen en rechten laden…",
     "retry": "Opnieuw proberen",
     "application": "Toepassing",
@@ -43,7 +43,7 @@
     "siteHelp": "Selecteer elke website expliciet. Nieuwe websites worden niet automatisch toegevoegd.",
     "noEligibleSites": "Met je huidige rechten zijn er geen websites beschikbaar voor deze autorisatie.",
     "permissionNotice": "De toepassing krijgt alleen de geselecteerde toegang. Je kunt deze intrekken bij Verbonden toepassingen.",
-    "approve": "Geselecteerde websites autoriseren",
+    "approve": "Geselecteerde toegang toestaan",
     "deny": "Weigeren en annuleren",
     "submitting": "Je beslissing verzenden…",
     "cancel": "Terug naar HitKeep",
@@ -64,7 +64,12 @@
       "sitesRead": "Geselecteerde websites weergeven",
       "analyticsRead": "Analytics voor geselecteerde websites lezen",
       "trackingDomainsRead": "Trackingdomeinen van geselecteerde websites lezen",
-      "ingestWrite": "Analyticsgebeurtenissen naar geselecteerde websites sturen"
+      "ingestWrite": "Analyticsgebeurtenissen naar geselecteerde websites sturen",
+      "goalsWrite": "Doelen en trechters voor geselecteerde sites beheren",
+      "annotationsWrite": "Annotaties voor geselecteerde sites beheren",
+      "sitesWrite": "Domeinen en bewaartermijnen voor geselecteerde sites wijzigen",
+      "opportunitiesWrite": "Kansen voor geselecteerde sites beheren",
+      "billingWrite": "Checkout voor het geselecteerde team starten, bekijken en annuleren; betaling vereist je goedkeuring"
     },
     "signedInAs": "Aangemeld als {{ email }}",
     "wrongAccount": "Meld je af via het accountmenu om een ander account te gebruiken.",
@@ -74,7 +79,9 @@
     "continueAuthorization": "Doorgaan naar autorisatie",
     "resumeDescription": "De autorisatie van je toepassing staat nog open. Ga verder om de gevraagde toegang te bekijken.",
     "checkoutWaiting": "De betaling is nog niet bevestigd. Rond het bestaande betaalproces af of probeer het opnieuw.",
-    "resumeFailed": "De openstaande autorisatie kon niet worden hersteld. Je factureringsinstellingen blijven beschikbaar. Probeer het opnieuw."
+    "resumeFailed": "De openstaande autorisatie kon niet worden hersteld. Je factureringsinstellingen blijven beschikbaar. Probeer het opnieuw.",
+    "noEligibleTeams": "Met je huidige rechten zijn er geen teams beschikbaar voor deze autorisatie.",
+    "billingHelp": "Deze toegang geldt voor het geselecteerde team. Betaling vereist nog steeds je bevestiging in Stripe Checkout."
   },
   "nav": {
     "resizeSidebar": "Breedte van zijbalk wijzigen",
@@ -4019,5 +4026,19 @@
     "invalid": "Voer een naam en minstens één HTTPS-omleidings-URI in binnen de veldlimieten.",
     "revokeTitle": "OAuth-client intrekken",
     "revokeConfirm": "{{application}} intrekken? Dit blokkeert nieuwe autorisaties en trekt alle bestaande machtigingen in."
+  },
+  "agentTools": {
+    "listTitle": "Beschikbare HitKeep-acties",
+    "listDescription": "Ontdek de gedocumenteerde HitKeep-API-acties voor deze aangemelde sessie. Inloggegevens en exports blijven in de gewone interface.",
+    "runTitle": "Een HitKeep-actie uitvoeren",
+    "runDescription": "Voer een beschikbare API-actie uit met de huidige rechten. Elke wijziging vereist uitdrukkelijke bevestiging.",
+    "confirmTitle": "Agentactie bevestigen",
+    "confirmAction": "Deze agentactie toestaan voor team {{team}}?\n\n{{action}}\n\n{{details}}",
+    "unavailable": "Agentacties zijn niet beschikbaar in de huidige sessie of context.",
+    "invalidAction": "Deze actie of de bijbehorende parameters zijn niet beschikbaar voor agents.",
+    "notConfirmed": "De actie is niet bevestigd.",
+    "confirmPending": "Een andere agentactie wacht op bevestiging.",
+    "requestFailed": "Het verzoek is mislukt (HTTP {{status}}).",
+    "outcomeUnknown": "Het verzoek is onderbroken en kan al zijn uitgevoerd. Controleer de huidige status voordat je het opnieuw probeert."
   }
 }

@@ -673,6 +673,7 @@ type PermissionContext struct {
 }
 
 type SystemStatus struct {
+	AIEnabled    bool                `json:"ai_enabled"`
 	NeedsSetup   bool                `json:"needs_setup"`
 	Version      string              `json:"version"`
 	Cloud        *CloudStatus        `json:"cloud,omitempty"`

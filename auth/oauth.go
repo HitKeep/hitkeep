@@ -14,19 +14,26 @@ func AuthorizeOAuth(grant *OAuthGrant, principal Principal, action Capability, r
 		return false
 	}
 	// A protocol scope cannot be used as a broader application permission.
-	switch scope {
-	case "sites:read", "analytics:read", "tracking_domains:read":
-		if action != Capability(PermSiteView) {
-			return false
-		}
-	case "ingest:write":
-		if action != Capability(PermSiteManageData) {
-			return false
-		}
-	default:
+	if permission := OAuthScopePermission(scope); permission == "" || action != Capability(permission) {
 		return false
 	}
 	principal.Kind = PrincipalOAuth
 	principal.InstanceRole = ""
 	return Authorize(principal, action, resource)
+}
+
+// OAuthScopePermission is the permission ceiling shared by consent and execution.
+func OAuthScopePermission(scope string) Permission {
+	switch scope {
+	case "sites:read", "analytics:read", "tracking_domains:read":
+		return PermSiteView
+	case "ingest:write", "sites:write", "opportunities:write":
+		return PermSiteManageData
+	case "goals:write":
+		return PermSiteManageGoals
+	case "annotations:write":
+		return PermSiteManageAnnotations
+	default:
+		return ""
+	}
 }

@@ -27,47 +27,58 @@ type handler struct {
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
 	mux.HandleFunc("GET /api/sites/{id}/goals", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetGoals()))
 	mux.HandleFunc("GET /api/sites/{id}/goals/timeseries", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetGoalTimeseries()))
 	mux.HandleFunc("POST /api/sites/{id}/goals", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleCreateGoal()))
 	mux.HandleFunc("PUT /api/sites/{id}/goals/{goalID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleUpdateGoal()))
 	mux.HandleFunc("DELETE /api/sites/{id}/goals/{goalID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleDeleteGoal()))
 
 	mux.HandleFunc("GET /api/sites/{id}/funnels", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetFunnels()))
 	mux.HandleFunc("GET /api/sites/{id}/funnels/timeseries", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetFunnelTimeseries()))
 	mux.HandleFunc("POST /api/sites/{id}/funnels", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleCreateFunnel()))
 	mux.HandleFunc("PUT /api/sites/{id}/funnels/{funnelID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleUpdateFunnel()))
 	mux.HandleFunc("DELETE /api/sites/{id}/funnels/{funnelID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "goals:write",
 		SitePerm:    authcore.PermSiteManageGoals,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleDeleteFunnel()))
 	mux.HandleFunc("GET /api/sites/{id}/funnels/{funnelID}/stats", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetFunnelStats()))

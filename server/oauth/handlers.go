@@ -106,10 +106,16 @@ func (h *handler) authorizeSite(ctx context.Context, g *auth.OAuthGrant, siteID 
 		return provider.ErrConsentForbidden
 	}
 	for _, scope := range g.Scopes {
-		permission := auth.PermSiteView
-		if scope == provider.ScopeIngestWrite {
-			permission = auth.PermSiteManageData
+		if provider.IsActionScope(scope) && (h.ctx.Config == nil || !h.ctx.Config.AIEnabled) {
+			return provider.ErrConsentForbidden
 		}
+		if scope == provider.ScopeBillingWrite {
+			if h.ctx.AuthorizeOAuthTeam(ctx, g, g.TeamID, scope, auth.CapTeamManageSettings) != nil {
+				return provider.ErrConsentForbidden
+			}
+			continue
+		}
+		permission := auth.OAuthScopePermission(scope)
 		if err := h.ctx.AuthorizeOAuthSite(ctx, g, siteID, audience, scope, permission); err != nil {
 			return provider.ErrConsentForbidden
 		}
@@ -140,6 +146,14 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 	}
 	for _, team := range teams {
 		if info.RegistrationTeamID != uuid.Nil() && info.RegistrationTeamID != uuid.UUID(team.ID) {
+			continue
+		}
+		teamOnly := len(info.Scopes) == 1 && info.Scopes[0] == provider.ScopeBillingWrite
+		if teamOnly {
+			candidate := &auth.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: uuid.UUID(team.ID), Scopes: info.Scopes, Audience: info.Resource}
+			if h.authorizeSite(r.Context(), candidate, uuid.Nil()) == nil {
+				info.Teams = append(info.Teams, api.OAuthTeam{ID: uuid.UUID(team.ID), Name: team.Name, Sites: []api.OAuthSite{}})
+			}
 			continue
 		}
 		sites, err := h.ctx.Store.ListSitesForTenant(r.Context(), team.ID)

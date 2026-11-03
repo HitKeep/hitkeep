@@ -720,6 +720,7 @@ func openAPIV1AccountSchemas() map[string]any {
 		"SystemStatus": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"ai_enabled":    map[string]any{"type": "boolean", "description": "Raw instance AI feature flag, independent of Ask AI and provider configuration."},
 				"needs_setup":   map[string]any{"type": "boolean"},
 				"version":       map[string]any{"type": "string"},
 				"cloud":         map[string]any{"$ref": "#/components/schemas/CloudStatus"},

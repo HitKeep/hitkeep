@@ -26,18 +26,22 @@ const maxGenerateRangeDays = 366
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
 	mux.HandleFunc("GET /api/sites/{id}/opportunities", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleList()))
 	mux.HandleFunc("GET /api/sites/{id}/opportunities/digest-preview", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleDigestPreview()))
 	mux.HandleFunc("POST /api/sites/{id}/opportunities/generate", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "opportunities:write",
 		SitePerm:    authcore.PermSiteManageData,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGenerate()))
 	mux.HandleFunc("PATCH /api/sites/{id}/opportunities/{opportunityID}", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "opportunities:write",
 		SitePerm:    authcore.PermSiteManageData,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleUpdateStatus()))

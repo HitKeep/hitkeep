@@ -36,3 +36,8 @@
     </p-splitter>
     <app-layout-overlays />
 </div>
+<p-confirmdialog key="agent-action" [style]="{ width: 'min(40rem, 90vw)' }">
+    <ng-template #message let-confirmation>
+        <p class="m-0 max-h-[60vh] max-w-full overflow-y-auto whitespace-pre-wrap wrap-anywhere">{{ confirmation.message }}</p>
+    </ng-template>
+</p-confirmdialog>

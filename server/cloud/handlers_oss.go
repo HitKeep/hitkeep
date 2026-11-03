@@ -13,3 +13,6 @@ func Register(_ *http.ServeMux, _ *shared.Context) {}
 
 // PlansAvailable is false in builds without Cloud billing routes.
 func PlansAvailable(_ *config.Config) bool { return false }
+
+// CommerceAvailable is false without the Cloud billing implementation.
+func CommerceAvailable(_ *config.Config) bool { return false }

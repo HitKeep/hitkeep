@@ -41,6 +41,7 @@ type HandlerConfig struct {
 	AllowAPIKey   bool
 	APIClientOnly bool
 	HumanOnly     bool
+	OAuthScope    string
 	RateLimiter   *IPRateLimiter
 }
 
@@ -92,6 +93,11 @@ type Context struct {
 	BackupStatus             *database.BackupStatusTracker
 	ImportStageCleanupStatus *database.ImportStageCleanupStatusTracker
 	MailTestTracker          *database.MailTestTracker
+}
+
+// A2AAvailable is shared by protocol execution and runtime discovery.
+func (c *Context) A2AAvailable() bool {
+	return c != nil && c.Config != nil && c.Config.AIEnabled && c.Store != nil && c.TenantStores != nil && c.OAuthProvider != nil && c.OAuthProvider.Ready() && (c.Cluster == nil || c.Cluster.IsLeader())
 }
 
 // AnalyticsStore resolves the tenant-specific store that holds analytics data for the given site.
@@ -180,19 +186,27 @@ func (c *Context) applyAccessChecks(config HandlerConfig, handler http.HandlerFu
 
 func (c *Context) applyAuthentication(config HandlerConfig, handler http.HandlerFunc) http.HandlerFunc {
 	if config.HumanOnly {
-		return c.RequireHumanAuth(handler)
+		ordinary := c.RequireHumanAuth(handler)
+		if config.OAuthScope != "" {
+			return c.RequireActionOAuth(config.OAuthScope, handler, ordinary)
+		}
+		return ordinary
 	}
 	if config.APIClientOnly {
 		return c.RequireAPIClientAuth(handler)
 	}
 	if config.requiresUserAuth() {
-		return c.RequireAuth(config.allowsAPIKey(), handler)
+		ordinary := c.RequireAuth(config.allowsAPIKey(), handler)
+		if config.OAuthScope != "" {
+			return c.RequireActionOAuth(config.OAuthScope, handler, ordinary)
+		}
+		return ordinary
 	}
 	return handler
 }
 
 func (config HandlerConfig) requiresUserAuth() bool {
-	return config.RequireAuth || config.InstancePerm != "" || config.SitePerm != "" || config.TeamCap != "" || config.ActiveTeamCap != ""
+	return config.RequireAuth || config.InstancePerm != "" || config.SitePerm != "" || config.TeamCap != "" || config.ActiveTeamCap != "" || config.OAuthScope != ""
 }
 
 func (config HandlerConfig) allowsAPIKey() bool {

@@ -26,6 +26,7 @@ func TestHandlerConfigAuthHelpers(t *testing.T) {
 		{"human-only permission", HandlerConfig{SitePerm: auth.PermSiteManageWebhooks, HumanOnly: true}, true, false},
 		{"team capability", HandlerConfig{TeamCap: auth.CapTeamManageSettings}, true, false},
 		{"active team capability", HandlerConfig{ActiveTeamCap: auth.CapTeamManageSettings}, true, false},
+		{"oauth action", HandlerConfig{OAuthScope: "annotations:write"}, true, false},
 		{"api client only", HandlerConfig{APIClientOnly: true}, false, false},
 		{"open route", HandlerConfig{}, false, false},
 	}
@@ -249,4 +250,99 @@ func sitePermissionRequest(userID, siteID uuid.UUID) *http.Request {
 func newSharedTestStore(t *testing.T) *database.Store {
 	t.Helper()
 	return testdb.Shared(t)
+}
+
+func TestRequireActiveTeamCapabilityAgentContext(t *testing.T) {
+	store := newSharedTestStore(t)
+	user, err := store.CreateUser(t.Context(), "agent-team-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := store.GetActiveTenantID(t.Context(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &Context{Store: store}
+	next := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+	for _, tc := range []struct {
+		name, expected string
+		marked         bool
+		want           int
+	}{
+		{"unmarked stale header", uuid.New().String(), false, 204},
+		{"matching", team.String(), true, 204},
+		{"changed team", uuid.New().String(), true, 409},
+		{"missing team", "", true, 409},
+		{"malformed", "invalid", true, 409},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "/api/cloud/billing/state", nil)
+			r = r.WithContext(context.WithValue(r.Context(), UserIDKey, user))
+			r.Header.Set("X-HitKeep-Agent-Team", tc.expected)
+			if tc.marked {
+				r.Header.Set("X-HitKeep-Agent", "webmcp")
+			}
+			w := httptest.NewRecorder()
+			app.RequireActiveTeamCapability(auth.CapTeamManageSettings)(next).ServeHTTP(w, r)
+			if w.Code != tc.want {
+				t.Fatalf("%d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAgentExplicitResourcesStayOnApprovedTeam(t *testing.T) {
+	store := newSharedTestStore(t)
+	user, err := store.CreateUser(t.Context(), "agent-explicit-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := store.GetActiveTenantID(t.Context(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.CreateTenant(t.Context(), user, "Other administered team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetActiveTenantID(t.Context(), user, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	site, err := store.CreateSite(t.Context(), user, "other-approved-team.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateInstanceRole(t.Context(), user, auth.InstanceOwner, user); err != nil {
+		t.Fatal(err)
+	}
+	app := &Context{Store: store}
+	next := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }
+	for _, expected := range []uuid.UUID{approved, other.ID} {
+		want := 409
+		if expected == other.ID {
+			want = 204
+		}
+		for _, strict := range []bool{false, true} {
+			r := sitePermissionRequest(user, site.ID)
+			r.Header.Set("X-HitKeep-Agent", "webmcp")
+			r.Header.Set("X-HitKeep-Agent-Team", expected.String())
+			w := httptest.NewRecorder()
+			if strict {
+				app.RequireSiteOrInstancePermission(auth.PermSiteManageData, auth.PermInstanceManageImports)(next)(w, r)
+			} else {
+				app.RequirePermission(auth.PermSiteView)(next)(w, r)
+			}
+			if w.Code != want {
+				t.Fatalf("site strict=%v: got %d want %d", strict, w.Code, want)
+			}
+		}
+		r := teamRequest(user, other.ID.String())
+		r.Header.Set("X-HitKeep-Agent", "webmcp")
+		r.Header.Set("X-HitKeep-Agent-Team", expected.String())
+		w := httptest.NewRecorder()
+		app.RequireTeamCapability(auth.CapTeamArchive)(next)(w, r)
+		if w.Code != want {
+			t.Fatalf("team: got %d want %d", w.Code, want)
+		}
+	}
 }

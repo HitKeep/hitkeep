@@ -26,7 +26,7 @@
   "oauth": {
     "connectionDetails": "Connection details",
     "consentTitle": "Authorize an application",
-    "consentDescription": "Review the application and choose the sites it may access.",
+    "consentDescription": "Review the application, requested permissions and the team it may access.",
     "loading": "Loading applications and permissions…",
     "retry": "Try again",
     "application": "Application",
@@ -43,7 +43,7 @@
     "siteHelp": "Select each site explicitly. New sites will not be included automatically.",
     "noEligibleSites": "No sites are available for this authorization with your current permissions.",
     "permissionNotice": "The application receives only the selected access. You can revoke it in Connected applications.",
-    "approve": "Authorize selected sites",
+    "approve": "Authorize selected access",
     "deny": "Deny and cancel",
     "submitting": "Submitting your decision…",
     "cancel": "Return to HitKeep",
@@ -64,7 +64,12 @@
       "sitesRead": "List selected sites",
       "analyticsRead": "Read analytics for selected sites",
       "trackingDomainsRead": "Read tracking domains for selected sites",
-      "ingestWrite": "Send analytics events to selected sites"
+      "ingestWrite": "Send analytics events to selected sites",
+      "goalsWrite": "Manage goals and funnels for selected sites",
+      "annotationsWrite": "Manage annotations for selected sites",
+      "sitesWrite": "Change domains and retention for selected sites",
+      "opportunitiesWrite": "Manage opportunities for selected sites",
+      "billingWrite": "Start, review and cancel Checkout for the selected team; payment requires your approval"
     },
     "signedInAs": "Signed in as {{ email }}",
     "wrongAccount": "To use another account, sign out from the account menu.",
@@ -74,7 +79,9 @@
     "continueAuthorization": "Continue to authorization",
     "resumeDescription": "Your application authorization is still pending. Continue to review the requested access.",
     "checkoutWaiting": "Checkout is not confirmed yet. Finish the existing billing flow or try again.",
-    "resumeFailed": "The pending authorization could not be restored. Your billing settings are still available. Try again."
+    "resumeFailed": "The pending authorization could not be restored. Your billing settings are still available. Try again.",
+    "noEligibleTeams": "No teams are available for this authorization with your current permissions.",
+    "billingHelp": "This access applies to the selected team. Payment still requires your confirmation in Stripe Checkout."
   },
   "nav": {
     "resizeSidebar": "Resize sidebar",
@@ -4143,5 +4150,19 @@
     "invalid": "Enter a name and at least one HTTPS redirect URI within the field limits.",
     "revokeTitle": "Revoke OAuth client",
     "revokeConfirm": "Revoke {{application}}? This stops new authorizations and revokes all of its existing grants."
+  },
+  "agentTools": {
+    "listTitle": "Available HitKeep actions",
+    "listDescription": "Discover the documented HitKeep API actions for this signed-in session. Credentials and exports use the normal UI.",
+    "runTitle": "Run a HitKeep action",
+    "runDescription": "Run a discovered API action with current permissions. Every change requires explicit user confirmation.",
+    "confirmTitle": "Confirm agent action",
+    "confirmAction": "Allow this agent action on team {{team}}?\n\n{{action}}\n\n{{details}}",
+    "unavailable": "Agent actions are unavailable in the current session or context.",
+    "invalidAction": "This action or its parameters are not available to agents.",
+    "notConfirmed": "The action was not confirmed.",
+    "confirmPending": "Another agent action is waiting for confirmation.",
+    "requestFailed": "The request failed (HTTP {{status}}).",
+    "outcomeUnknown": "The request was interrupted and may have completed. Check the current state before retrying."
   }
 }

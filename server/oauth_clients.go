@@ -24,5 +24,6 @@ func newOAuthProvider(conf *config.Config, store *database.Store, isLeader func(
 	return oauth.New(store, oauth.Options{
 		Issuer: conf.PublicURL, MCPPath: conf.MCPPath, MCPEnabled: conf.MCPEnabled,
 		BrowserSigningKey: []byte(conf.JWTSecret), Clients: clients, IsLeader: isLeader,
+		AgentActionsEnabled: func() bool { return conf.AIEnabled },
 	})
 }

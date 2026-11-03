@@ -65,9 +65,11 @@
                         />
                     </div>
                     @if (request.teams.length === 0) {
-                    <p-message severity="warn">{{ 'oauth.noEligibleSites' | transloco }}</p-message>
+                    <p-message severity="warn">{{ (billingOnly() ? 'oauth.noEligibleTeams' : 'oauth.noEligibleSites') | transloco }}</p-message>
                     <a routerLink="/" class="underline">{{ 'oauth.setupSites' | transloco }}</a>
-                    } @else if (selectedTeam(); as team) {
+                    } @else if (selectedTeam(); as team) { @if (billingOnly()) {
+                    <p class="oauth-help">{{ 'oauth.billingHelp' | transloco }}</p>
+                    } @else {
                     <fieldset class="oauth-sites" [disabled]="submitting()" aria-describedby="oauth-site-help">
                         <legend class="oauth-section-title">{{ 'oauth.sites' | transloco }}</legend>
                         <p id="oauth-site-help" class="oauth-help">{{ 'oauth.siteHelp' | transloco }}</p>
@@ -86,7 +88,7 @@
                             }
                         </div>
                     </fieldset>
-                    }
+                    } }
                     <details class="oauth-details">
                         <summary>{{ 'oauth.connectionDetails' | transloco }}</summary>
                         <dl>
