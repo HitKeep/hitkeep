@@ -24,6 +24,12 @@
     "connections": "Toegang van assistenten controleren"
   },
   "oauth": {
+        "agentCodeLabel": "Code van je assistent",
+        "agentCodeHelp": "Voer de zescijferige code van je assistent in en controleer de gevraagde toegang.",
+        "agentCodeInvalid": "De code komt niet overeen. Controleer de code van je assistent en probeer het opnieuw.",
+        "agentReturnTitle": "Verder met je assistent",
+        "agentReturnHelp": "Je assistent meldt het resultaat van de registratie. Bekijk of trek goedgekeurde toegang in bij Verbonden applicaties.",
+
     "createSiteTitle": "Site maken",
     "createSiteHelp": "Voeg je website toe aan dit team en keur daarna hieronder de verbinding goed.",
     "siteDomain": "Websitedomein",

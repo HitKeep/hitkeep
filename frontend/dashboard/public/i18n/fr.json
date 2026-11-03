@@ -24,6 +24,12 @@
     "connections": "Vérifier l’accès des assistants"
   },
   "oauth": {
+        "agentCodeLabel": "Code de votre assistant",
+        "agentCodeHelp": "Saisissez le code à six chiffres affiché par votre assistant, puis vérifiez les accès demandés.",
+        "agentCodeInvalid": "Ce code ne correspond pas. Vérifiez le code de votre assistant et réessayez.",
+        "agentReturnTitle": "Continuer avec votre assistant",
+        "agentReturnHelp": "Votre assistant vous indiquera le résultat de l’inscription. Consultez ou révoquez les accès approuvés dans Applications connectées.",
+
     "createSiteTitle": "Créer un site",
     "createSiteHelp": "Ajoutez votre site à cette équipe, puis autorisez la connexion ci-dessous.",
     "siteDomain": "Domaine du site web",

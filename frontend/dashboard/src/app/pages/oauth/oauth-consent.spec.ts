@@ -27,6 +27,7 @@ const preview = (): OAuthConsent => ({
 interface ConsentControls {
     form: {
         team_id: () => { control: () => FormControl<string> };
+        claim_code: () => { control: () => FormControl<string> };
         site_ids: () => { control: () => FormControl<string[]> };
     };
 }
@@ -144,6 +145,47 @@ describe('OAuthConsentPage', () => {
         expect(payload.get('team_id')).toBe('team-1');
         expect(payload.getAll('site_ids')).toEqual(['site-1']);
         expect(payload.get('csrf_token')).toBe('csrf-binding');
+    });
+
+    it('requires the human code for agent approval and preserves it in the native payload', async () => {
+        oauth.consent.mockReturnValue(of({ ...preview(), agent_claim: true }));
+        const controls = await create();
+        controls.team_id().control().setValue('team-1');
+        controls.site_ids().control().setValue(['site-1']);
+        await fixture.whenStable();
+        const approve = () => fixture.nativeElement.querySelector('button[value="approve"]') as HTMLButtonElement;
+        expect(approve().disabled).toBe(true);
+        controls.claim_code().control().setValue('１２３４５６');
+        await fixture.whenStable();
+        expect(approve().disabled).toBe(true);
+        controls.claim_code().control().setValue('012345');
+        await fixture.whenStable();
+        expect(approve().disabled).toBe(false);
+        const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        const event = new SubmitEvent('submit', { submitter: approve(), bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        await fixture.whenStable();
+        expect(event.defaultPrevented).toBe(false);
+        expect(new FormData(form).getAll('claim_code')).toEqual(['012345']);
+    });
+
+    it('allows agent denial without a code, team or site', async () => {
+        oauth.consent.mockReturnValue(of({ ...preview(), agent_claim: true }));
+        await create();
+        const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        const deny = form.querySelector('button[value="deny"]') as HTMLButtonElement;
+        const event = new SubmitEvent('submit', { submitter: deny, bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+        expect(new FormData(form).get('decision')).toBe('deny');
+    });
+
+    it('returns to the assistant without claiming approval or reloading consumed consent', async () => {
+        TestBed.overrideProvider(ActivatedRoute, { useValue: { snapshot: { queryParamMap: convertToParamMap({ claim: 'complete' }) } } });
+        await create();
+        expect(oauth.consent).not.toHaveBeenCalled();
+        expect(fixture.nativeElement.querySelector('form')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('oauth.agentReturnHelp');
     });
 
     it('authorizes team-only billing access without inventing a site selection', async () => {

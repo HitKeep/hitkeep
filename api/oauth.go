@@ -26,6 +26,7 @@ type OAuthTeamSummary struct {
 	Name string    `json:"name"`
 }
 type OAuthConsent struct {
+	AgentClaim         bool               `json:"agent_claim,omitzero"`
 	SuggestedDomain    string             `json:"suggested_domain,omitempty"`
 	RegistrationTeamID uuid.UUID          `json:"-"`
 	Client             OAuthClientSummary `json:"client"`

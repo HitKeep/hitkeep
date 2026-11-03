@@ -121,3 +121,23 @@ func TestRootProtectedResourceAliasKeepsActualAPIResource(t *testing.T) {
 		t.Fatal("AI-off bootstrap alias enabled")
 	}
 }
+
+func TestAuthMarkdownDescribesOnlyAvailableHumanClaimFlow(t *testing.T) {
+	s := newDiscoveryServer()
+	enabled := true
+	p, err := oauth.New(s.ctx.Store, oauth.Options{Issuer: s.conf.PublicURL, BrowserSigningKey: bytes.Repeat([]byte("b"), 32), IsLeader: func() bool { return true }, AgentActionsEnabled: func() bool { return enabled }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ctx.OAuthProvider = p
+	body := discoveryRequest(s, "GET", "/auth.md").Body.String()
+	for _, want := range []string{"service_auth", "https://analytics.example.test/tenant/agent/identity", "claim_token", "user_code", "urn:workos:agent-auth:grant-type:claim", "urn:ietf:params:oauth:grant-type:jwt-bearer", "Connected applications"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("auth.md missing %s", want)
+		}
+	}
+	s.ctx.OAuthProvider = nil
+	if body := discoveryRequest(s, "GET", "/auth.md").Body.String(); strings.Contains(body, "Human-approved agent registration") {
+		t.Fatal("unavailable registration advertised")
+	}
+}

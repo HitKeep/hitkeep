@@ -24,6 +24,12 @@
     "connections": "Review assistant access"
   },
   "oauth": {
+        "agentCodeLabel": "Code from your assistant",
+        "agentCodeHelp": "Enter the six-digit code shown by your assistant, then review the requested access.",
+        "agentCodeInvalid": "That code did not match. Check the code from your assistant and try again.",
+        "agentReturnTitle": "Continue with your assistant",
+        "agentReturnHelp": "Your assistant will report the registration result. Review or revoke any approved access in Connected applications.",
+
     "createSiteTitle": "Create a site",
     "createSiteHelp": "Add your website to this team, then approve the connection below.",
     "siteDomain": "Website domain",

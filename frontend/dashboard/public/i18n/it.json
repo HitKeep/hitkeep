@@ -24,6 +24,12 @@
     "connections": "Verifica l’accesso degli assistenti"
   },
   "oauth": {
+        "agentCodeLabel": "Codice del tuo assistente",
+        "agentCodeHelp": "Inserisci il codice di sei cifre mostrato dal tuo assistente, quindi verifica l’accesso richiesto.",
+        "agentCodeInvalid": "Il codice non corrisponde. Controlla il codice del tuo assistente e riprova.",
+        "agentReturnTitle": "Continua con il tuo assistente",
+        "agentReturnHelp": "Il tuo assistente comunicherà l’esito della registrazione. Controlla o revoca gli accessi approvati in Applicazioni connesse.",
+
     "createSiteTitle": "Crea un sito",
     "createSiteHelp": "Aggiungi il tuo sito web a questo team, poi approva la connessione qui sotto.",
     "siteDomain": "Dominio del sito web",

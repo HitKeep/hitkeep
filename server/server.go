@@ -522,7 +522,7 @@ func (s *Server) serveSPAFallback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) isNonDashboardPath(requestPath string) bool {
 	requestPath = "/" + strings.TrimPrefix(requestPath, "/")
-	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/skills", "/q", "/healthz", "/readyz", "/scalar", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
+	prefixes := []string{"/api", "/ingest", "/internal", "/.well-known", "/skills", "/q", "/healthz", "/readyz", "/scalar", "/agent", "/oauth/agent-claim", "/oauth/authorize", "/oauth/token", "/oauth/revoke"}
 	if s.conf != nil {
 		mcpPath := strings.TrimRight(strings.TrimSpace(s.conf.MCPPath), "/")
 		if mcpPath != "" {

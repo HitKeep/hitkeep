@@ -24,6 +24,12 @@
     "connections": "Assistentenzugriff prüfen"
   },
   "oauth": {
+        "agentCodeLabel": "Code von deinem Assistenten",
+        "agentCodeHelp": "Gib den sechsstelligen Code deines Assistenten ein und prüfe dann den angefragten Zugriff.",
+        "agentCodeInvalid": "Der Code stimmt nicht überein. Prüfe den Code deines Assistenten und versuche es erneut.",
+        "agentReturnTitle": "Mit deinem Assistenten fortfahren",
+        "agentReturnHelp": "Dein Assistent meldet das Ergebnis der Registrierung. Unter Verbundene Anwendungen kannst du genehmigten Zugriff prüfen oder widerrufen.",
+
     "createSiteTitle": "Website erstellen",
     "createSiteHelp": "Füge deine Website diesem Team hinzu und genehmige anschließend unten die Verbindung.",
     "siteDomain": "Domain der Website",

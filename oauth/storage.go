@@ -23,6 +23,7 @@ type providerOperation struct {
 	securityRevocation bool
 	rollback           bool
 	revoking           bool
+	agentRegistration  bool
 }
 
 func operationFrom(ctx context.Context) (*providerOperation, error) {
@@ -59,16 +60,17 @@ func (s *oauthSession) Clone() fosite.Session {
 }
 
 type storedRequest struct {
-	ID              string         `json:"id"`
-	RequestedAt     time.Time      `json:"requested_at"`
-	Client          ClientMetadata `json:"client"`
-	RequestedScopes []string       `json:"requested_scopes"`
-	GrantedScopes   []string       `json:"granted_scopes"`
-	Audience        string         `json:"audience"`
-	RedirectURI     string         `json:"redirect_uri,omitempty"`
-	Challenge       string         `json:"code_challenge,omitempty"`
-	ChallengeMethod string         `json:"code_challenge_method,omitempty"`
-	Session         oauthSession   `json:"session"`
+	AgentRegistration bool           `json:"agent_registration,omitzero"`
+	ID                string         `json:"id"`
+	RequestedAt       time.Time      `json:"requested_at"`
+	Client            ClientMetadata `json:"client"`
+	RequestedScopes   []string       `json:"requested_scopes"`
+	GrantedScopes     []string       `json:"granted_scopes"`
+	Audience          string         `json:"audience"`
+	RedirectURI       string         `json:"redirect_uri,omitempty"`
+	Challenge         string         `json:"code_challenge,omitempty"`
+	ChallengeMethod   string         `json:"code_challenge_method,omitempty"`
+	Session           oauthSession   `json:"session"`
 }
 
 type fositeStorage struct{ provider *Provider }
@@ -126,6 +128,7 @@ func (s *fositeStorage) save(ctx context.Context, kind, signature, accessSignatu
 		return fosite.ErrServerError
 	}
 	snapshot := storedRequest{ID: request.GetID(), RequestedAt: request.GetRequestedAt(), Client: cloneClientMetadata(op.client), RequestedScopes: slices.Clone(request.GetRequestedScopes()), GrantedScopes: slices.Clone(request.GetGrantedScopes()), Audience: op.resource, Session: *session}
+	snapshot.AgentRegistration = op.agentRegistration
 	snapshot.RedirectURI = request.GetRequestForm().Get("redirect_uri")
 	snapshot.Challenge = request.GetRequestForm().Get("code_challenge")
 	snapshot.ChallengeMethod = request.GetRequestForm().Get("code_challenge_method")
