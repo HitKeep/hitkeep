@@ -28,6 +28,7 @@ import { ExportSplitButton, ExportStatusBanner } from '@components/export-split-
 import { FilterChipItem, FilterChipRow } from '@components/filter-chip-row/filter-chip-row';
 import { KPI_PERCENT_FORMAT, KPI_SHORT_DECIMAL_FORMAT, KpiCard } from '@features/analytics/components/kpi-card';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 import { translateRangeLabel } from '@components/range-toolbar/range-toolbar';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
@@ -97,6 +98,7 @@ interface KpiCardData {
 export class Dashboard {
     protected siteService = inject(SiteService);
     private shareService = inject(ShareService);
+    protected readonly embed = inject(EmbedService);
     private teamService = inject(TeamService);
     private takeoutDownloadService = inject(TakeoutDownloadService);
     private localeService = inject(TranslocoLocaleService);
@@ -115,7 +117,7 @@ export class Dashboard {
     private aiActivityQuery = injectAIActivityQuery();
     private validationRequestKey: string | null = null;
     private validationAfterResultSequence = 0;
-    protected isShareMode = computed(() => this.shareService.isShareMode());
+    protected isShareMode = computed(() => this.shareService.isShareMode() || this.embed.isEmbedMode());
     protected trafficShareToken = computed(() => this.shareService.token());
     protected stats = this.statsQuery.stats;
     protected isStatsLoading = this.statsQuery.isLoading;

@@ -93,8 +93,11 @@ export class Login {
     protected readonly mfaShowsFallbackDivider = computed(() => this.mfaHasFallback() && (this.mfaHasTotp() || (this.mfaHasRecoveryCode() && this.mfaHasActionFallback())));
     protected readonly showSignupLink = computed(() => Boolean(this.cloudStatus()?.hosted && this.cloudStatus()?.signup_enabled));
     protected readonly signupQueryParams =
-        this.route.snapshot.queryParamMap.has('plan') || this.route.snapshot.queryParamMap.has('billing')
-            ? cloudPurchaseQuery(cloudPurchaseIntent(this.route.snapshot.queryParamMap.get('plan'), this.route.snapshot.queryParamMap.get('billing')))
+        this.route.snapshot.queryParamMap.has('plan') || this.route.snapshot.queryParamMap.has('billing') || this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent'
+            ? {
+                  ...cloudPurchaseQuery(cloudPurchaseIntent(this.route.snapshot.queryParamMap.get('plan'), this.route.snapshot.queryParamMap.get('billing'))),
+                  ...(this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent' ? { oauth: '1' } : {})
+              }
             : null;
     protected readonly recoveryQueryParams = (() => {
         if (!this.signupQueryParams || this.signupQueryParams.plan === 'free') return this.signupQueryParams;

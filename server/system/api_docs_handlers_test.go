@@ -1442,7 +1442,18 @@ func requestJSONSchema(t *testing.T, postOp map[string]any) map[string]any {
 func assertServerSideIngestSchema(t *testing.T, path string, schema map[string]any) {
 	t.Helper()
 	required := asStringSlice(t, schema["required"])
-	for _, field := range []string{"url", "timestamp", "visitor_ip", "user_agent"} {
+	wantRequired := []string{"url", "timestamp"}
+	if path == "/api/ingest/server/pageview" {
+		wantRequired = append(wantRequired, "visitor_ip", "user_agent")
+	} else {
+		wantRequired = append(wantRequired, "name")
+		for _, field := range []string{"visitor_ip", "user_agent"} {
+			if containsString(required, field) {
+				t.Fatalf("expected anonymous server events to allow omitting %q, got %v", field, required)
+			}
+		}
+	}
+	for _, field := range wantRequired {
 		if !containsString(required, field) {
 			t.Fatalf("expected %s request to require %q, got %v", path, field, required)
 		}

@@ -24,6 +24,13 @@
     "connections": "Toegang van assistenten controleren"
   },
   "oauth": {
+    "createSiteTitle": "Site maken",
+    "createSiteHelp": "Voeg je website toe aan dit team en keur daarna hieronder de verbinding goed.",
+    "siteDomain": "Websitedomein",
+    "createSiteAction": "Site maken",
+    "siteCreateInvalid": "Voer een geldig websitedomein in.",
+    "siteCreateExists": "Deze site bestaat al. Selecteer deze hierboven.",
+    "siteCreateFailed": "De site kan niet worden gemaakt. Probeer het opnieuw.",
     "connectionDetails": "Verbindingsgegevens",
     "consentTitle": "Een toepassing autoriseren",
     "consentDescription": "Controleer de applicatie, de gevraagde rechten en het team waartoe deze toegang krijgt.",
@@ -2904,6 +2911,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "Je regio is gekozen in de integratie. Start de verbinding opnieuw vanuit WordPress om deze te wijzigen.",
     "pageTitle": "Maak je HitKeep-account aan",
     "paidTitle": "Aan de slag met HitKeep {{plan}}",
     "paidSubtitle": "Maak je account aan, bevestig je e-mail en bekijk daarna de betaling.",
@@ -3494,6 +3502,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Dit rapport bevat meerdere valuta’s. Gebruik één rapportagevaluta per site; HitKeep rekent valuta’s niet om.",
     "setup": {
       "title": "E-commerce-tracking instellen",
       "description": "Omzetanalyse heeft aankoop- en checkout-events uit je webshop nodig. Zodra er events binnenkomen, vult deze pagina zich automatisch.",
@@ -4040,5 +4049,10 @@
     "confirmPending": "Een andere agentactie wacht op bevestiging.",
     "requestFailed": "Het verzoek is mislukt (HTTP {{status}}).",
     "outcomeUnknown": "Het verzoek is onderbroken en kan al zijn uitgevoerd. Controleer de huidige status voordat je het opnieuw probeert."
+  },
+  "embed": {
+    "readOnly": "Alleen-lezenstatistieken",
+    "connectionError": "Kan geen verbinding maken met HitKeep. Probeer het opnieuw of verbind HitKeep opnieuw in WordPress.",
+    "analyticsNavigation": "Statistiekpagina’s"
   }
 }

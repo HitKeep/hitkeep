@@ -24,6 +24,7 @@ import { calcDelta, safeRate } from '@core/analytics/delta-utils';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { SetupStateService } from '@services/setup-state.service';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
+import { EmbedService } from '@services/embed.service';
 import { ChatbotMetricKey, ChatbotSeriesState, computeComparisonPeriod, createEmptySeries, mergeChatbotChartSeries, totalFor } from '@pages/ai-chatbots/ai-chatbots.utils';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_KINDS } from '@services/realtime.service';
@@ -55,6 +56,7 @@ const CHATBOT_EVENTS: Record<ChatbotMetricKey, string> = {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIChatbots {
+    protected readonly embed = inject(EmbedService);
     protected readonly docsUrl = 'https://hitkeep.com/guides/analytics/ai-chatbot-analytics/';
     private readonly siteService = inject(SiteService);
     private readonly analyticsService = inject(AnalyticsService);

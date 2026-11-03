@@ -83,12 +83,15 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <app-filter-chip-row [chips]="filterChips()" (clearAll)="clearFilter()" />
+        @if (!embed.isEmbedMode()) {
         <app-export-split-button [isExporting]="isExportingFiltered()" [disabled]="!exportUrl() || isExportingFiltered()" (export)="exportFiltered($event)" />
+        }
     </div>
     <app-export-status-banner [state]="filteredExportState()" successKey="dashboard.exportStatus.success" errorKey="dashboard.exportStatus.error" />
 
     <app-metric-card-group class="mb-6" [tabs]="metricCardTabs()" (rowClicked)="onMetricCardClick($event)" (actionClicked)="onMetricCardAction($event)" />
 
+    @if (!embed.isEmbedMode()) {
     <app-traffic-records-card
         [siteId]="siteService.activeSite()?.id || null"
         [siteDomain]="siteDomain()"
@@ -100,7 +103,7 @@
         [refreshKey]="trafficRefreshKey()"
         [shareToken]="trafficShareToken()"
     />
-    @if (searchConsoleDateRange(); as searchConsoleRange) {
+    } @if (searchConsoleDateRange(); as searchConsoleRange) {
     <app-search-console-drilldown
         class="mt-6 block"
         [siteId]="siteService.activeSite()?.id || null"

@@ -8,6 +8,7 @@ import { ButtonModule } from '@openng/optimus-ui/button';
 import { CheckboxModule } from '@openng/optimus-ui/checkbox';
 import { MessageModule } from '@openng/optimus-ui/message';
 import { SelectModule } from '@openng/optimus-ui/select';
+import { InputTextModule } from '@openng/optimus-ui/inputtext';
 import { finalize } from 'rxjs';
 
 import { OAuthConsent } from '@models/oauth.types';
@@ -22,7 +23,7 @@ import { UserMenuService } from '@services/user-menu.service';
 
 @Component({
     selector: 'app-oauth-consent',
-    imports: [ReactiveFormsModule, RouterLink, TranslocoPipe, ButtonModule, CheckboxModule, MessageModule, SelectModule, AuthCard, Brand],
+    imports: [ReactiveFormsModule, RouterLink, TranslocoPipe, ButtonModule, CheckboxModule, MessageModule, SelectModule, InputTextModule, AuthCard, Brand],
     templateUrl: './oauth-consent.html',
     styleUrl: './oauth-consent.scss',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -46,6 +47,9 @@ export class OAuthConsentPage {
     protected readonly loading = signal(false);
     protected readonly errorKey = signal<string | null>(null);
     protected readonly submitting = signal(false);
+    protected readonly siteDomain = new FormControl('', { nonNullable: true });
+    protected readonly creatingSite = signal(false);
+    protected readonly createSiteErrorKey = signal<string | null>(null);
     private readonly now = signal(Date.now());
     private readonly model = signal({
         team_id: new FormControl('', { nonNullable: true }),
@@ -66,20 +70,23 @@ export class OAuthConsentPage {
         const scopes = this.consent()?.scopes ?? [];
         return scopes.length > 0 && scopes.every((scope) => scope === 'billing:write');
     });
-    protected readonly canApprove = computed(() => !!this.selectedTeam() && (this.billingOnly() || this.selectedSiteIds().length > 0) && !this.expired() && !this.submitting());
+    protected readonly canApprove = computed(() => !!this.selectedTeam() && (this.billingOnly() || this.selectedSiteIds().length > 0) && !this.expired() && !this.submitting() && !this.creatingSite());
 
     constructor() {
         this.form
             .team_id()
             .control()
             .valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe(() => this.form.site_ids().control().setValue([]));
+            .subscribe(() => {
+                this.form.site_ids().control().setValue([]);
+                this.createSiteErrorKey.set(null);
+            });
         const timer = setInterval(() => this.now.set(Date.now()), 1000);
         this.destroyRef.onDestroy(() => clearInterval(timer));
         this.load();
     }
 
-    protected load(): void {
+    protected load(selectedTeamId?: string, selectedSiteId?: string): void {
         if (this.loading()) return;
         this.loading.set(true);
         this.errorKey.set(null);
@@ -92,14 +99,44 @@ export class OAuthConsentPage {
                 finalize(() => this.loading.set(false))
             )
             .subscribe({
-                next: (consent) => this.consent.set(consent),
+                next: (consent) => {
+                    this.consent.set(consent);
+                    this.siteDomain.setValue(consent.suggested_domain ?? '');
+                    const team = consent.teams.find((team) => team.id === selectedTeamId) ?? (consent.teams.length === 1 ? consent.teams[0] : undefined);
+                    if (team) {
+                        this.form.team_id().control().setValue(team.id);
+                        if (selectedSiteId && team.sites.some((site) => site.id === selectedSiteId)) this.form.site_ids().control().setValue([selectedSiteId]);
+                    }
+                },
                 error: (error: { status?: number }) => this.errorKey.set(error.status === 410 || error.status === 400 ? 'oauth.expired' : error.status === 401 || error.status === 403 ? 'oauth.permissionDenied' : 'oauth.loadFailed')
+            });
+    }
+
+    protected createSite(): void {
+        const team = this.selectedTeam();
+        const consent = this.consent();
+        const domain = this.siteDomain.value.trim();
+        if (!team?.can_create_site || !consent || !domain || this.creatingSite() || this.submitting() || this.expired()) return;
+        this.creatingSite.set(true);
+        this.createSiteErrorKey.set(null);
+        this.oauth
+            .createSite(team.id, consent.csrf_token, domain)
+            .pipe(
+                takeUntilDestroyed(this.destroyRef),
+                finalize(() => this.creatingSite.set(false))
+            )
+            .subscribe({
+                next: (site) => this.load(team.id, site.id),
+                error: (error: { status?: number }) =>
+                    this.createSiteErrorKey.set(
+                        error.status === 400 ? 'oauth.siteCreateInvalid' : error.status === 403 ? 'oauth.permissionDenied' : error.status === 409 ? 'oauth.siteCreateExists' : error.status === 410 ? 'oauth.expired' : 'oauth.siteCreateFailed'
+                    )
             });
     }
 
     protected submit(event: SubmitEvent): void {
         const decision = (event.submitter as HTMLButtonElement | null)?.value;
-        if (this.submitting() || this.expired() || !this.consent() || (decision !== 'approve' && decision !== 'deny') || (decision === 'approve' && !this.canApprove())) {
+        if (this.submitting() || this.creatingSite() || this.expired() || !this.consent() || (decision !== 'approve' && decision !== 'deny') || (decision === 'approve' && !this.canApprove())) {
             event.preventDefault();
             return;
         }

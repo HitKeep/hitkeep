@@ -4,12 +4,14 @@ import { EMPTY, catchError, throwError } from 'rxjs';
 import { AuthService } from '@services/auth.service';
 import { SessionEndNavigationService } from '@services/session-end-navigation.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 
 export { resolveCurrentReturnUrl, shouldRedirectAfterUnauthorized } from '@services/session-end-navigation.service';
 
 export const SKIP_AUTH_REDIRECT = new HttpContextToken<boolean>(() => false);
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
+    if (inject(EmbedService).isEmbedMode()) return next(req.clone({ withCredentials: false }));
     const auth = inject(AuthService);
     const sessionEndNavigation = inject(SessionEndNavigationService);
     const share = inject(ShareService);

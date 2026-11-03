@@ -28,13 +28,14 @@ const pendingCookieName = "hk_oauth_pending"
 const browserCookieName = "hk_oauth_browser"
 
 type pendingAuthorization struct {
-	Client      ClientMetadata `json:"client"`
-	RedirectURI string         `json:"redirect_uri"`
-	Resource    string         `json:"resource"`
-	Scopes      []string       `json:"scopes"`
-	State       string         `json:"state"`
-	Challenge   string         `json:"code_challenge"`
-	ExpiresAt   time.Time      `json:"expires_at"`
+	SuggestedDomain string         `json:"suggested_domain,omitempty"`
+	Client          ClientMetadata `json:"client"`
+	RedirectURI     string         `json:"redirect_uri"`
+	Resource        string         `json:"resource"`
+	Scopes          []string       `json:"scopes"`
+	State           string         `json:"state"`
+	Challenge       string         `json:"code_challenge"`
+	ExpiresAt       time.Time      `json:"expires_at"`
 }
 
 func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +78,14 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	state := form.Get("state")
 	fail := func(code string) { p.callback(w, r, redirect, state, "", code) }
+	suggestedDomain := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(form.Get("site_domain"))), "www.")
+	if suggestedDomain != "" {
+		callbackURL, err := url.Parse(redirect)
+		if err != nil || len(suggestedDomain) > 253 || !strings.Contains(suggestedDomain, ".") || suggestedDomain != strings.TrimPrefix(strings.ToLower(callbackURL.Hostname()), "www.") {
+			fail("invalid_request")
+			return
+		}
+	}
 	resource := form.Get("resource")
 	scopes := strings.Fields(form.Get("scope"))
 	allowed := scopesForResource(p, resource)
@@ -145,6 +154,7 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pending := pendingAuthorization{Client: client, RedirectURI: redirect, Resource: resource, Scopes: scopes, State: state, Challenge: form.Get("code_challenge"), ExpiresAt: time.Now().UTC().Add(browserLifetime)}
+	pending.SuggestedDomain = suggestedDomain
 	payload, err := json.Marshal(pending)
 	if err != nil {
 		fail("temporarily_unavailable")
@@ -159,7 +169,11 @@ func (p *Provider) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	p.setBrowserCookie(w, browserCookieName, browser, int(browserLifetime.Seconds()))
 	p.setBrowserCookie(w, pendingCookieName, p.signedHandle(handle, pending.ExpiresAt, browser), int(browserLifetime.Seconds()))
-	http.Redirect(w, r, p.urls.Issuer+"/oauth/consent", http.StatusSeeOther)
+	target := "/oauth/consent"
+	if form.Get("screen_hint") == "signup" {
+		target = "/signup?oauth=1"
+	}
+	http.Redirect(w, r, p.urls.Issuer+target, http.StatusSeeOther)
 }
 func (p *Provider) signedHandle(handle string, expires time.Time, browser string) string {
 	value := handle + "." + strconv.FormatInt(expires.Unix(), 10)
@@ -256,7 +270,7 @@ func (p *Provider) Consent(ctx context.Context, r *http.Request, userID uuid.UUI
 	if err != nil {
 		return nil, ErrInvalidConsent
 	}
-	return &api.OAuthConsent{RegistrationTeamID: pending.Client.RegistrationTeamID, Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
+	return &api.OAuthConsent{SuggestedDomain: pending.SuggestedDomain, RegistrationTeamID: pending.Client.RegistrationTeamID, Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
 }
 func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userID, teamID uuid.UUID, sites []uuid.UUID, decision, csrf string, authorize func(context.Context, *auth.OAuthGrant, uuid.UUID) error) error {
 	if !p.Ready() {

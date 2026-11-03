@@ -79,7 +79,9 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <app-filter-chip-row [chips]="filterChips()" (clearAll)="clearFilters()" />
+        @if (!embed.isEmbedMode()) {
         <app-export-split-button [isExporting]="isExporting()" [disabled]="!exportUrl() || isExporting()" (export)="exportFiltered($event)" />
+        }
     </div>
     <app-export-status-banner [state]="exportState()" successKey="aiChatbots.exportStatus.success" errorKey="aiChatbots.exportStatus.error" />
 

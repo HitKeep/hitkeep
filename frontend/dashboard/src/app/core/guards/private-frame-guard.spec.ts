@@ -27,6 +27,13 @@ describe('private frame routing', () => {
         }
     });
 
+    it('limits dedicated embeds to the read-only analytics routes', () => {
+        for (const url of ['/embed/site-a', '/embed/site-a/dashboard?launch=descriptor', '/embed/site-a/events', '/embed/site-a/goals']) expect(check(url), url).toBe(true);
+        for (const url of ['/embed', '/embed/site-a/settings', '/embed/site-a/signup', '/embed/site-a/utm/builder', '/embed/site-a/dashboard/admin']) expect(check(url), url).toBe(false);
+        const embedRoutes = routes.find((route) => route.path === 'embed/:siteId')!;
+        expect(embedRoutes.children?.map((route) => route.path)).toEqual(['dashboard', 'events', 'goals', 'funnels', 'ecommerce', 'web-vitals', 'ai-agents', 'ai-chatbots', 'utm', '']);
+    });
+
     it('allows private routes in a top-level document', () => {
         TestBed.overrideProvider(DOCUMENT, { useValue: { defaultView: { self: ownWindow, top: ownWindow } } });
         expect(check('/oauth/consent')).toBe(true);

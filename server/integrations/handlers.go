@@ -25,6 +25,8 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("GET /api/integrations/sites", wrap(oauth.ScopeSitesRead, h.sites))
 	mux.HandleFunc("GET /api/integrations/sites/{id}/tracking-domains", wrap(oauth.ScopeTrackingDomainsRead, h.trackingDomains))
 	mux.HandleFunc("GET /api/integrations/sites/{id}/preview", wrap(oauth.ScopeAnalyticsRead, h.preview))
+	mux.HandleFunc("POST /api/integrations/sites/{id}/embed", wrap(oauth.ScopeAnalyticsRead, h.embed))
+	mux.HandleFunc("GET /api/embed/sites/{id}/site", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.ApiLimiter}, ctx.RequireEmbedAuth(h.embedSite)))
 }
 func response(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")

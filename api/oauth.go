@@ -16,15 +16,17 @@ type OAuthSite struct {
 	Name   string    `json:"name,omitempty"`
 }
 type OAuthTeam struct {
-	ID    uuid.UUID   `json:"id"`
-	Name  string      `json:"name"`
-	Sites []OAuthSite `json:"sites"`
+	ID            uuid.UUID   `json:"id"`
+	Name          string      `json:"name"`
+	Sites         []OAuthSite `json:"sites"`
+	CanCreateSite bool        `json:"can_create_site"`
 }
 type OAuthTeamSummary struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 }
 type OAuthConsent struct {
+	SuggestedDomain    string             `json:"suggested_domain,omitempty"`
 	RegistrationTeamID uuid.UUID          `json:"-"`
 	Client             OAuthClientSummary `json:"client"`
 	Resource           string             `json:"resource"`

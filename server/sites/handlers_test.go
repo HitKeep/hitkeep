@@ -424,7 +424,7 @@ func TestHandleCreateSite(t *testing.T) {
 			}
 
 			w := httptest.NewRecorder()
-			handler := h.handleCreateSite()
+			handler := h.handleCreateSite(uuid.Nil)
 			handler.ServeHTTP(w, req)
 
 			if w.Code != tc.expectedStatus {
@@ -463,9 +463,29 @@ func TestHandleCreateSiteReturnsForbiddenAtLimit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sites", bytes.NewReader(body))
 	req = req.WithContext(context.WithValue(req.Context(), shared.UserIDKey, userID))
 	w := httptest.NewRecorder()
-	h.handleCreateSite().ServeHTTP(w, req)
+	h.handleCreateSite(uuid.Nil).ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Site limit reached" {
 		t.Fatalf("expected site limit 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestOnboardingSiteCreationRejectsChangedActiveTeam(t *testing.T) {
+	h, store, _ := setupTestEnv(t)
+	defer store.Close()
+	userID, err := store.CreateUser(t.Context(), "changed-onboarding-team@test.dev", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/sites", strings.NewReader(`{"domain":"must-not-create.test"}`))
+	request = request.WithContext(context.WithValue(request.Context(), shared.UserIDKey, userID))
+	w := httptest.NewRecorder()
+	h.handleCreateSite(uuid.New()).ServeHTTP(w, request)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("changed team accepted: %d %s", w.Code, w.Body.String())
+	}
+	site, err := store.FindSiteByDomain(t.Context(), "must-not-create.test")
+	if err != nil || site != nil {
+		t.Fatalf("created site under unconfirmed team: %+v %v", site, err)
 	}
 }
 

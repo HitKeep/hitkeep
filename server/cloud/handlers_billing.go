@@ -399,6 +399,14 @@ func (h *handler) handleVerifySignup() http.HandlerFunc {
 			return
 		}
 
+		// Validate before consuming the one-time email link so an OAuth outage can be retried.
+		continueOAuth, err := h.ctx.OAuthProvider.HasContinuation(r.Context(), r)
+		if err != nil {
+			w.Header().Set("Retry-After", "5")
+			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+
 		entry, err := h.ctx.Store.CompletePendingSignup(r.Context(), token)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Signup verification failed", "error", err)
@@ -464,7 +472,11 @@ func (h *handler) handleVerifySignup() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/dashboard"), http.StatusFound)
+		destination := "/dashboard"
+		if continueOAuth {
+			destination = "/oauth/consent"
+		}
+		http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, destination), http.StatusFound)
 	}
 }
 

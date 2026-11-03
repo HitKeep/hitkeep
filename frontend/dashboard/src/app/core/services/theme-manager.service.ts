@@ -279,7 +279,11 @@ export class ThemeManagerService {
         if (typeof window === 'undefined') {
             return DEFAULT_THEME_ID;
         }
-        const saved = localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
-        return saved && saved.length > 0 ? saved : DEFAULT_THEME_ID;
+        try {
+            const saved = localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
+            return saved && saved.length > 0 ? saved : DEFAULT_THEME_ID;
+        } catch {
+            return DEFAULT_THEME_ID;
+        }
     }
 }
