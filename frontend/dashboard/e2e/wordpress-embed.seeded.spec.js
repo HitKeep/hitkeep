@@ -8,7 +8,10 @@ for (const width of [1440, 390]) {
         const bootstrap = await (await page.request.get("/api/user/bootstrap")).json();
         const site = bootstrap.sites.find((site) => site.domain === "acme-analytics.io");
         expect(site).toBeTruthy();
-        const shell = await (await page.request.get("/login")).text();
+        const shellResponse = await page.request.get("/login", { headers: { Accept: "text/html" } });
+        expect(shellResponse.ok()).toBeTruthy();
+        expect(shellResponse.headers()["content-type"]).toContain("text/html");
+        const shell = await shellResponse.text();
         const origin = new URL(page.url()).origin;
         // Only the broker/signature are fixtures: the iframe runs the real dashboard and chart components.
         const launch = `fixture.${Buffer.from(JSON.stringify({ site_id: site.id, parent_origin: origin, exp: Math.floor(Date.now() / 1000) + 300 })).toString("base64url")}.fixture`;
@@ -17,6 +20,7 @@ for (const width of [1440, 390]) {
         await page.route("**/embed/**", (route) => route.fulfill({ contentType: "text/html", body: shell }));
         await page.route("**/api/**", async (route) => {
             const request = route.request();
+            if (request.frame() === page.mainFrame()) return route.continue();
             const headers = await request.allHeaders();
             expect(request.method()).toBe("GET");
             expect(headers.cookie).toBeUndefined();

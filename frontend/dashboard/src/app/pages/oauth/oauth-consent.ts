@@ -102,7 +102,7 @@ export class OAuthConsentPage {
                 next: (consent) => {
                     this.consent.set(consent);
                     this.siteDomain.setValue(consent.suggested_domain ?? '');
-                    const team = consent.teams.find((team) => team.id === selectedTeamId) ?? (consent.teams.length === 1 ? consent.teams[0] : undefined);
+                    const team = consent.teams.find((team) => team.id === selectedTeamId) ?? (!this.billingOnly() && consent.teams.length === 1 ? consent.teams[0] : undefined);
                     if (team) {
                         this.form.team_id().control().setValue(team.id);
                         if (selectedSiteId && team.sites.some((site) => site.id === selectedSiteId)) this.form.site_ids().control().setValue([selectedSiteId]);
