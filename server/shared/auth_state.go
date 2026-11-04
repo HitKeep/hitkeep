@@ -533,6 +533,12 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 	s.socialOAuthMu.Lock()
 	for _, key := range s.socialOAuth.Keys() {
 		if entry, ok := s.socialOAuth.Peek(key); ok && entry.UserID == userID {
+			// Receipt creation uses this same OAuth -> POST lock order.
+			if receiptID, err := uuid.Parse(entry.AppleReceiptID); err == nil {
+				s.socialPOSTMu.Lock()
+				s.socialPOSTReceipts.Remove(receiptID)
+				s.socialPOSTMu.Unlock()
+			}
 			s.socialOAuth.Remove(key)
 		}
 	}
