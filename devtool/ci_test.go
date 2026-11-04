@@ -177,4 +177,7 @@ func TestDefaultTenantMigrationAcceptanceIsFullProfileOnly(t *testing.T) {
 	if !slices.Contains(gate.Command, "HITKEEP_DEFAULT_TENANT_MIGRATION_ACCEPTANCE=1") {
 		t.Fatalf("acceptance command does not enable its opt-in tests: %v", gate.Command)
 	}
+	if !slices.Contains(gate.Command, "-timeout=25m") {
+		t.Fatalf("acceptance command must allow the exhaustive cases to finish within the outer gate deadline: %v", gate.Command)
+	}
 }

@@ -2,6 +2,7 @@ package devtool
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestStartRunDeduplicatesAtomicallyAcrossAppInstances(t *testing.T) {
@@ -59,6 +61,42 @@ func TestStartRunDeduplicatesAtomicallyAcrossAppInstances(t *testing.T) {
 	if err := syscall.Kill(-run.PID, syscall.SIGKILL); err != nil {
 		t.Fatalf("stop test worker: %v", err)
 	}
+}
+
+func TestStartRunReapsExitedWorker(t *testing.T) {
+	root := initTestRepository(t)
+	t.Setenv("HK_STATE_DIR", filepath.Join(t.TempDir(), "state"))
+	worker := filepath.Join(t.TempDir(), "hk-worker")
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApp(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.executable = worker
+	start, err := app.StartRun(t.Context(), RunRequest{Kind: "setup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.GetRun(start.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		var status syscall.WaitStatus
+		_, _ = syscall.Wait4(run.PID, &status, syscall.WNOHANG, nil)
+	})
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(run.PID, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		} else if err != nil {
+			t.Fatalf("inspect worker: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("exited worker %d was not reaped", run.PID)
 }
 
 func TestContainerDevResetRemovesOnlyWorkspaceVolume(t *testing.T) {

@@ -147,9 +147,8 @@ func (a *App) StartRun(ctx context.Context, request RunRequest) (RunStart, error
 		_ = a.removeRunTempRoot(id)
 		return RunStart{}, fmt.Errorf("release run worker: %w", err)
 	}
-	if err := command.Process.Release(); err != nil {
-		return RunStart{}, fmt.Errorf("release run worker: %w", err)
-	}
+	// Reap exited workers while a long-lived MCP parent remains alive.
+	go func() { _ = command.Wait() }()
 	return runStart(run), nil
 }
 

@@ -31,6 +31,8 @@ func TestStripeWebhookInvoiceRelevance(t *testing.T) {
 		{"manual invoice with subscription", "2026-02-25.clover", `{"billing_reason":"manual","customer":"cus_invoice","subscription":"sub_invoice"}`, false, http.StatusBadRequest, false},
 		{"manual invoice with subscription parent", "2026-02-25.clover", `{"billing_reason":"manual","customer":"cus_invoice","parent":{"type":"subscription_details","subscription_details":{"subscription":{"id":"sub_invoice"}}}}`, false, http.StatusBadRequest, false},
 		{"current subscription invoice", stripeAPIVersion, `{"billing_reason":"subscription_cycle","customer":"cus_invoice","parent":{"type":"subscription_details","subscription_details":{"subscription":"sub_invoice"}}}`, false, http.StatusOK, true},
+		{"previous SDK subscription invoice", "2026-09-30.endive", `{"billing_reason":"subscription_cycle","customer":"cus_invoice","parent":{"type":"subscription_details","subscription_details":{"subscription":"sub_invoice"}}}`, false, http.StatusOK, true},
+		{"invalid signature on previous SDK invoice", "2026-09-30.endive", `{"billing_reason":"subscription_cycle","customer":"cus_invoice","parent":{"type":"subscription_details","subscription_details":{"subscription":"sub_invoice"}}}`, true, http.StatusBadRequest, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, store, _ := setupSignedCloudWebhookTestHandler(t)
