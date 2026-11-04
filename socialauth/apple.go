@@ -41,7 +41,7 @@ type appleCredential struct {
 // SealAppleRefreshToken authenticates the immutable identity and audience with the token.
 func SealAppleRefreshToken(key, clientID, subject, refreshToken string) (string, error) {
 	if len(strings.TrimSpace(key)) < 32 || clientID == "" || subject == "" || refreshToken == "" {
-		return "", errors.New("Apple credential unavailable")
+		return "", errors.New("social sign-in: Apple credential unavailable")
 	}
 	box, err := sso.NewPurposeSecretBox(key, "hitkeep/apple/refresh-token/v1")
 	if err != nil {
@@ -49,14 +49,14 @@ func SealAppleRefreshToken(key, clientID, subject, refreshToken string) (string,
 	}
 	payload, err := json.Marshal(appleCredential{ClientID: clientID, Subject: subject, RefreshToken: refreshToken})
 	if err != nil {
-		return "", errors.New("Apple credential unavailable")
+		return "", errors.New("social sign-in: Apple credential unavailable")
 	}
 	return box.Seal(string(payload))
 }
 
 func OpenAppleRefreshToken(key, clientID, subject, ciphertext string) (string, error) {
 	if len(strings.TrimSpace(key)) < 32 {
-		return "", errors.New("Apple credential unavailable")
+		return "", errors.New("social sign-in: Apple credential unavailable")
 	}
 	box, err := sso.NewPurposeSecretBox(key, "hitkeep/apple/refresh-token/v1")
 	if err != nil {
@@ -64,11 +64,11 @@ func OpenAppleRefreshToken(key, clientID, subject, ciphertext string) (string, e
 	}
 	plaintext, err := box.Open(ciphertext)
 	if err != nil {
-		return "", errors.New("Apple credential unavailable")
+		return "", errors.New("social sign-in: Apple credential unavailable")
 	}
 	var credential appleCredential
 	if json.Unmarshal([]byte(plaintext), &credential) != nil || credential.ClientID != clientID || credential.Subject != subject || credential.RefreshToken == "" {
-		return "", errors.New("Apple credential unavailable")
+		return "", errors.New("social sign-in: Apple credential unavailable")
 	}
 	return credential.RefreshToken, nil
 }

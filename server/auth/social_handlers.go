@@ -242,6 +242,7 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider callback failed", "provider", providerName, "category", socialErrorCategory(err))
 			h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", providerName, "provider="+providerName+";reason="+socialErrorCategory(err))
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, socialCallbackErrorCode(err), continueOAuth), http.StatusSeeOther)
 			return
 		}
@@ -257,6 +258,7 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 				category := socialDatabaseErrorCategory(err)
 				shared.LoggerFromContext(r.Context()).Warn("Social identity link failed", "provider", providerName, "category", category, "user_id", state.UserID)
 				h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_link_failed", "failure", "provider="+providerName+";reason="+category, true)
+				//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 				http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_identity_conflict", continueOAuth), http.StatusSeeOther)
 				return
 			}
@@ -275,6 +277,7 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			identity.AppleClientID = ""
 		}
 		if err != nil {
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
 			return
 		}
@@ -284,6 +287,7 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			user, err = h.ctx.Store.GetUserByEmail(r.Context(), identity.Email)
 		}
 		if err != nil || (state.UserID != uuid.Nil && user != nil && user.ID != state.UserID) {
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
 			return
 		}
