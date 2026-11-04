@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
@@ -176,7 +177,7 @@ func TestNativeManagementPasskeyHTTPFlowAndReceiptIsolation(t *testing.T) {
 }
 
 func TestNativeManagementSearchConsoleBrowserBindingsAndPrefix(t *testing.T) {
-	for _, mode := range []string{"success", "wrong-user", "wrong-browser", "lost-team-role", "changed-credential"} {
+	for _, mode := range []string{"success", "wrong-user", "wrong-browser", "lost-team-role", "changed-credential", "during-role-removal", "during-role-demotion", "during-logout", "during-credential-change"} {
 		t.Run(mode, func(t *testing.T) {
 			h, store, id := setupUserSecurityTestEnv(t)
 			defer store.Close()
@@ -184,6 +185,12 @@ func TestNativeManagementSearchConsoleBrowserBindingsAndPrefix(t *testing.T) {
 			h.ctx.Config.GoogleSearchConsoleClientID = "fixture-client"
 			h.ctx.Config.GoogleSearchConsoleClientSecret = "fixture-secret"
 			h.ctx.SearchConsole = &fakeSearchConsoleClient{token: searchconsole.Token{AccessToken: "fixture-access", RefreshToken: "fixture-refresh", TokenType: "Bearer", Scope: searchconsole.ReadOnlyScope}}
+			var blocked *blockedSearchConsoleClient
+			if strings.HasPrefix(mode, "during-") {
+				blocked = &blockedSearchConsoleClient{fakeSearchConsoleClient: h.ctx.SearchConsole.(*fakeSearchConsoleClient), entered: make(chan struct{}), release: make(chan struct{})}
+				h.ctx.SearchConsole = blocked
+				defer blocked.unblock()
+			}
 			teamID, err := store.GetActiveTenantID(t.Context(), id)
 			if err != nil {
 				t.Fatal(err)
@@ -224,6 +231,7 @@ func TestNativeManagementSearchConsoleBrowserBindingsAndPrefix(t *testing.T) {
 				return r
 			}
 			mux := http.NewServeMux()
+			serverauth.Register(mux, h.ctx)
 			Register(mux, h.ctx)
 			startPath := "/api/user/teams/" + teamID.String() + "/integrations/google-search-console/connect"
 
@@ -281,7 +289,48 @@ func TestNativeManagementSearchConsoleBrowserBindingsAndPrefix(t *testing.T) {
 				}
 			}
 			out := httptest.NewRecorder()
-			mux.ServeHTTP(out, callback)
+			if blocked == nil {
+				mux.ServeHTTP(out, callback)
+			} else {
+				done := make(chan struct{})
+				go func() { defer close(done); mux.ServeHTTP(out, callback) }()
+				select {
+				case <-blocked.entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("callback did not reach exchange")
+				}
+				if mode == "during-role-removal" || mode == "during-role-demotion" {
+					owner, err := store.CreateUserWithoutDefaultTenant(t.Context(), "other-owner@example.test", "unused")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := store.AddTeamMember(t.Context(), teamID, owner, "owner", owner); err != nil {
+						t.Fatal(err)
+					}
+					if mode == "during-role-removal" {
+						err = store.RemoveTeamMember(t.Context(), teamID, id)
+					} else {
+						err = store.AddTeamMember(t.Context(), teamID, id, "member", owner)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if mode == "during-logout" {
+					logout := httptest.NewRecorder()
+					mux.ServeHTTP(logout, request("POST", "/api/logout"))
+					if logout.Code != 200 {
+						t.Fatalf("logout=%d %s", logout.Code, logout.Body.String())
+					}
+				} else if err := store.UpdatePasswordByID(t.Context(), id.String(), "changed-during-exchange"); err != nil {
+					t.Fatal(err)
+				}
+				blocked.unblock()
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal("callback did not finish")
+				}
+			}
 			if out.Code != want {
 				t.Fatalf("callback=%d want=%d %s", out.Code, want, out.Body.String())
 			}
@@ -300,12 +349,86 @@ func TestNativeManagementSearchConsoleBrowserBindingsAndPrefix(t *testing.T) {
 			} else if connection != nil && connection.Connected {
 				t.Fatal("denied callback persisted connection")
 			}
+			if mode != "success" {
+				if entry, ok := h.ctx.AuthState.GetNativeAuth(handle); ok && entry.Management.Phase == "succeeded" {
+					t.Fatal("denied callback issued a success receipt")
+				}
+			}
 			replay := httptest.NewRecorder()
 			mux.ServeHTTP(replay, request("GET", callbackPath))
 			if replay.Code != 400 {
 				t.Fatalf("replay=%d", replay.Code)
 			}
 		})
+	}
+}
+
+type blockedSearchConsoleClient struct {
+	*fakeSearchConsoleClient
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (c *blockedSearchConsoleClient) unblock() {
+	select {
+	case <-c.release:
+	default:
+		close(c.release)
+	}
+}
+
+func (c *blockedSearchConsoleClient) ExchangeCode(ctx context.Context, code, redirectURL string) (searchconsole.Token, error) {
+	close(c.entered)
+	select {
+	case <-c.release:
+		return c.fakeSearchConsoleClient.ExchangeCode(ctx, code, redirectURL)
+	case <-ctx.Done():
+		return searchconsole.Token{}, ctx.Err()
+	}
+}
+
+func TestGoogleSearchConsoleOrdinaryCallbackRechecksRoleAfterExchange(t *testing.T) {
+	h, store, id := setupUserSecurityTestEnv(t)
+	defer store.Close()
+	teamID, err := store.GetActiveTenantID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := store.CreateUserWithoutDefaultTenant(t.Context(), "other-owner@example.test", "unused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddTeamMember(t.Context(), teamID, owner, "owner", owner); err != nil {
+		t.Fatal(err)
+	}
+	blocked := &blockedSearchConsoleClient{fakeSearchConsoleClient: &fakeSearchConsoleClient{token: searchconsole.Token{RefreshToken: "fixture-refresh"}}, entered: make(chan struct{}), release: make(chan struct{})}
+	defer blocked.unblock()
+	h.ctx.SearchConsole = blocked
+	state := h.ctx.AuthState.CreateGoogleSearchConsoleOAuthState(id, teamID, "/integration/google-search-console", time.Now().Add(time.Minute))
+	r := withTestUser(httptest.NewRequest("GET", "/api/integrations/google-search-console/oauth/callback?state="+state+"&code=fixture", nil), id)
+	out := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() { defer close(done); h.handleGoogleSearchConsoleCallback()(out, r) }()
+	select {
+	case <-blocked.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("exchange did not start")
+	}
+	if err := store.AddTeamMember(t.Context(), teamID, id, "member", owner); err != nil {
+		t.Fatal(err)
+	}
+	blocked.unblock()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("callback did not finish")
+	}
+	connection, err := store.GetGoogleSearchConsoleConnection(t.Context(), teamID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Code != 403 || connection != nil {
+		t.Fatalf("stale web callback persisted: status=%d connection=%v", out.Code, connection != nil)
 	}
 }
 

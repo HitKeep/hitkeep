@@ -16,6 +16,8 @@ import (
 const NativeManagementBrowserCookie = "hk_native_management_browser"
 const NativeManagementHeader = "X-Hitkeep-Native-Management"
 
+var ErrNativeManagementUnavailable = errors.New("management authorization unavailable")
+
 type NativeManagement struct {
 	Action        string
 	Provider      string
@@ -207,6 +209,37 @@ func (c *Context) FinishNativeManagementMutation(r *http.Request, handle string,
 		return false
 	}
 	return c.AuthState.CompleteNativeManagementMutation(handle, id, security)
+}
+
+// CommitNativeManagementConnection runs under the store lifecycle lock, then nativeMu;
+// invalidation cannot pass the final attempt check before persistence and success marking.
+func (c *Context) CommitNativeManagementConnection(r *http.Request, handle string, teamID uuid.UUID, operation string, persist func() error) error {
+	id, session, err := c.CurrentHumanSession(r)
+	if err != nil {
+		return err
+	}
+	cookie, cookieErr := r.Cookie(NativeManagementBrowserCookie)
+	if id == uuid.Nil || session == nil || cookieErr != nil || operation == "" {
+		return ErrNativeManagementUnavailable
+	}
+	_, security, err := c.NativeAccountSecurity(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	s := c.AuthState
+	s.nativeMu.Lock()
+	defer s.nativeMu.Unlock()
+	entry, ok := s.nativeLocked(handle)
+	if !ok || entry.Start.Purpose != "management" || entry.UserID != id || !entry.PrimaryComplete || !nativeHashMatches(entry.PrimaryJTIHash, session.ID) || !nativeHashMatches(entry.BrowserHash, cookie.Value) || entry.Security != security || entry.Management.Action != "search_console_connect" || entry.Management.Provider != "" || entry.Management.TeamID != teamID || entry.Management.Phase != "mutating" || !nativeHashMatches(entry.Management.OperationHash, operation) {
+		return ErrNativeManagementUnavailable
+	}
+	if err := persist(); err != nil {
+		return err
+	}
+	entry.Management.Phase = "succeeded"
+	entry.CSRFHash = [32]byte{}
+	s.nativeRequests[nativeHash(handle)] = entry
+	return nil
 }
 
 func (s *AuthStateStore) FailNativeManagement(handle string) {

@@ -132,6 +132,13 @@ type GoogleSearchConsoleSystemStatus struct {
 
 const GoogleSearchConsoleErrorMessageRetention = 30 * 24 * time.Hour
 
+// SerializeGoogleSearchConsoleConnection protects final authority checks and persistence
+// from membership, credential, and account removal changes, after provider HTTP finishes.
+func (s *Store) SerializeGoogleSearchConsoleConnection() func() {
+	s.lifecycleMu.Lock()
+	return s.lifecycleMu.Unlock
+}
+
 func (s *Store) UpsertGoogleSearchConsoleConnection(ctx context.Context, input GoogleSearchConsoleConnectionInput) error {
 	return upsertGoogleSearchConsoleConnection(ctx, s.db, input)
 }
