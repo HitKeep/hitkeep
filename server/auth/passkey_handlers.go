@@ -53,7 +53,7 @@ func (h *handler) handlePasskeyLoginStart() http.HandlerFunc {
 			return
 		}
 		if h.deletionReauthentication(input.ReturnURL) {
-			if _, ok := h.ctx.AuthState.AccountDeletionSubject(input.ReturnURL, shared.NativeAuthIssuer(h.ctx.Config.PublicURL)); !ok {
+			if _, ok := h.ctx.AuthState.AccountDeletionSubject(input.ReturnURL, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL)); !ok {
 				nativeError(w, r, 400, "invalid_grant")
 				return
 			}

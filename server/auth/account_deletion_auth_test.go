@@ -16,6 +16,7 @@ import (
 
 	"hitkeep/api"
 	authcore "hitkeep/auth"
+	"hitkeep/database"
 	json "hitkeep/jsonapi"
 	"hitkeep/mailer"
 	"hitkeep/security"
@@ -211,118 +212,128 @@ func deletionJSONRequest(path string, body []byte) *http.Request {
 }
 
 func TestAccountDeletionSSOAppliesLocalMFAAndResumeNeverMints(t *testing.T) {
-	h, store := setupAuthTestEnv(t)
-	defer store.Close()
-	provider := newFakeOIDCProvider(t, "delete-sso@example.com", true)
-	h.ctx.SSO = sso.NewClient(provider.server.Client())
-	team := configureTestSSO(t, h, store, provider.issuerURL())
-	id := addTestSSOMember(t, store, team, "delete-sso@example.com")
-	h.ctx.Config.PublicURL = "https://example.test/prefix"
-	callback := func(returnPath string) *httptest.ResponseRecorder {
-		authorization := startTestSSOLogin(t, h, "delete-sso@example.com", returnPath, false)
-		u, _ := url.Parse(authorization)
-		provider.setNonce(u.Query().Get("nonce"))
-		out := httptest.NewRecorder()
-		h.handleSSOCallback()(out, httptest.NewRequest("GET", "/api/auth/sso/callback?state="+url.QueryEscape(u.Query().Get("state"))+"&code=test-code", nil))
-		return out
+	for _, publicURL := range []string{"https://example.test/prefix", "http://localhost:8080/prefix"} {
+		t.Run(publicURL, func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			provider := newFakeOIDCProvider(t, "delete-sso@example.com", true)
+			h.ctx.SSO = sso.NewClient(provider.server.Client())
+			team := configureTestSSO(t, h, store, provider.issuerURL())
+			id := addTestSSOMember(t, store, team, "delete-sso@example.com")
+			h.ctx.Config.PublicURL = publicURL
+			parsedIssuer, _ := url.Parse(publicURL)
+			origin := parsedIssuer.Scheme + "://" + parsedIssuer.Host
+			callback := func(returnPath string) *httptest.ResponseRecorder {
+				authorization := startTestSSOLogin(t, h, "delete-sso@example.com", returnPath, false)
+				u, _ := url.Parse(authorization)
+				provider.setNonce(u.Query().Get("nonce"))
+				out := httptest.NewRecorder()
+				h.handleSSOCallback()(out, httptest.NewRequest("GET", "/api/auth/sso/callback?state="+url.QueryEscape(u.Query().Get("state"))+"&code=test-code", nil))
+				return out
+			}
+			// Establish the existing linked subject through a real signed OIDC completion.
+			ordinary := callback("/events")
+			if ordinary.Code != 303 {
+				t.Fatal("ordinary OIDC failed")
+			}
+			responseSessionID(t, h, ordinary)
+			const secret = "JBSWY3DPEHPK3PXP"
+			if err := store.EnableUserTOTP(t.Context(), id, secret); err != nil {
+				t.Fatal(err)
+			}
+			hash := strings.Repeat("a", 64)
+			attempt := h.ctx.AuthState.CreateAccountDeletionAttempt(id, shared.AccountDeletionIssuer(publicURL), hash, "/settings", time.Now().Add(time.Minute))
+			if attempt == "" {
+				t.Fatal("browser deletion attempt missing")
+			}
+			target := shared.AccountDeletionReturnPath(attempt)
+			out := callback(target)
+			if out.Code != 303 {
+				t.Fatalf("callback %d %s", out.Code, out.Body.String())
+			}
+			u, _ := url.Parse(out.Header().Get("Location"))
+			fragment, _ := url.ParseQuery(u.Fragment)
+			challenge := fragment.Get("mfa_challenge")
+			if challenge == "" || u.Query().Get("returnUrl") != target {
+				t.Fatalf("missing local MFA return: %s", u.Path)
+			}
+			var browser *http.Cookie
+			for _, c := range out.Result().Cookies() {
+				if c.Name == authcore.CookieName || c.Name == authcore.RememberMeCookieName {
+					t.Fatal("OIDC skipped configured MFA")
+				}
+				if c.Name == mfaResumeCookie {
+					browser = c
+				}
+			}
+			if browser == nil || !browser.HttpOnly || browser.Secure != (parsedIssuer.Scheme == "https") {
+				t.Fatal("missing browser binding")
+			}
+			body, _ := json.Marshal(map[string]string{"challenge_id": challenge})
+			resume := func(cookie *http.Cookie, origin string, body []byte) *httptest.ResponseRecorder {
+				r := deletionJSONRequest("/api/auth/mfa/resume", body)
+				if cookie != nil {
+					r.AddCookie(cookie)
+				}
+				if origin != "" {
+					r.Header.Set("Origin", origin)
+				}
+				rr := httptest.NewRecorder()
+				h.handleMFAResume()(rr, r)
+				return rr
+			}
+			for _, tc := range []struct {
+				cookie *http.Cookie
+				origin string
+			}{{nil, origin}, {browser, ""}, {browser, "https://evil.test"}, {&http.Cookie{Name: mfaResumeCookie, Value: "wrong"}, origin}} {
+				if rr := resume(tc.cookie, tc.origin, body); rr.Code == 200 || len(rr.Result().Cookies()) != 0 {
+					t.Fatal("invalid resume accepted")
+				}
+			}
+			for _, invalid := range []string{`{"challenge_id":"` + challenge + `","challenge_id":"` + challenge + `"}`, `{"challenge_id":"` + challenge + `","user_id":"other"}`} {
+				if rr := resume(browser, origin, []byte(invalid)); rr.Code != 400 {
+					t.Fatal("non-strict resume")
+				}
+			}
+			resumed := resume(browser, origin, body)
+			if resumed.Code != 200 || len(resumed.Result().Cookies()) != 0 {
+				t.Fatalf("resume %d %s", resumed.Code, resumed.Body.String())
+			}
+			var response loginResponse
+			if err := json.Unmarshal(resumed.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Status != "mfa_required" || response.ChallengeToken != challenge || len(response.Factors) != 1 || response.Factors[0] != "totp" {
+				t.Fatal("resume changed factors")
+			}
+			if h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, "current", hash) {
+				t.Fatal("resume proved deletion")
+			}
+			// Cancellation leaves the original challenge available and emits no credentials.
+			if rr := resume(browser, origin, body); rr.Code != 200 || len(rr.Result().Cookies()) != 0 {
+				t.Fatal("resume cannot recover cancellation")
+			}
+			code, err := security.GenerateCurrentTOTPCode(secret, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ = json.Marshal(mfaTotpVerifyRequest{ChallengeToken: challenge, Code: code})
+			completed := httptest.NewRecorder()
+			h.handleMFATOTPVerify()(completed, deletionJSONRequest("/api/auth/mfa/totp/verify", body))
+			if completed.Code != 200 || !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, responseSessionID(t, h, completed), hash) {
+				t.Fatalf("final factor %d %s", completed.Code, completed.Body.String())
+			}
+			if rr := resume(browser, origin, []byte(`{"challenge_id":"`+challenge+`"}`)); rr.Code == 200 {
+				t.Fatal("spent challenge resumed")
+			}
+			// Ordinary SSO keeps its established direct-session policy even with local MFA.
+			ordinary = callback("/events")
+			if ordinary.Code != 303 {
+				t.Fatal("ordinary SSO changed")
+			}
+			responseSessionID(t, h, ordinary)
+		})
 	}
-	// Establish the existing linked subject through a real signed OIDC completion.
-	ordinary := callback("/events")
-	if ordinary.Code != 303 {
-		t.Fatal("ordinary OIDC failed")
-	}
-	responseSessionID(t, h, ordinary)
-	const secret = "JBSWY3DPEHPK3PXP"
-	if err := store.EnableUserTOTP(t.Context(), id, secret); err != nil {
-		t.Fatal(err)
-	}
-	attempt, hash := deletionAttemptFixture(t, h, id)
-	target := shared.AccountDeletionReturnPath(attempt)
-	out := callback(target)
-	if out.Code != 303 {
-		t.Fatalf("callback %d %s", out.Code, out.Body.String())
-	}
-	u, _ := url.Parse(out.Header().Get("Location"))
-	fragment, _ := url.ParseQuery(u.Fragment)
-	challenge := fragment.Get("mfa_challenge")
-	if challenge == "" || u.Query().Get("returnUrl") != target {
-		t.Fatalf("missing local MFA return: %s", u.Path)
-	}
-	var browser *http.Cookie
-	for _, c := range out.Result().Cookies() {
-		if c.Name == authcore.CookieName || c.Name == authcore.RememberMeCookieName {
-			t.Fatal("OIDC skipped configured MFA")
-		}
-		if c.Name == mfaResumeCookie {
-			browser = c
-		}
-	}
-	if browser == nil || !browser.HttpOnly || !browser.Secure {
-		t.Fatal("missing browser binding")
-	}
-	body, _ := json.Marshal(map[string]string{"challenge_id": challenge})
-	resume := func(cookie *http.Cookie, origin string, body []byte) *httptest.ResponseRecorder {
-		r := deletionJSONRequest("/api/auth/mfa/resume", body)
-		if cookie != nil {
-			r.AddCookie(cookie)
-		}
-		if origin != "" {
-			r.Header.Set("Origin", origin)
-		}
-		rr := httptest.NewRecorder()
-		h.handleMFAResume()(rr, r)
-		return rr
-	}
-	for _, tc := range []struct {
-		cookie *http.Cookie
-		origin string
-	}{{nil, "https://example.test"}, {browser, ""}, {browser, "https://evil.test"}, {&http.Cookie{Name: mfaResumeCookie, Value: "wrong"}, "https://example.test"}} {
-		if rr := resume(tc.cookie, tc.origin, body); rr.Code == 200 || len(rr.Result().Cookies()) != 0 {
-			t.Fatal("invalid resume accepted")
-		}
-	}
-	for _, invalid := range []string{`{"challenge_id":"` + challenge + `","challenge_id":"` + challenge + `"}`, `{"challenge_id":"` + challenge + `","user_id":"other"}`} {
-		if rr := resume(browser, "https://example.test", []byte(invalid)); rr.Code != 400 {
-			t.Fatal("non-strict resume")
-		}
-	}
-	resumed := resume(browser, "https://example.test", body)
-	if resumed.Code != 200 || len(resumed.Result().Cookies()) != 0 {
-		t.Fatalf("resume %d %s", resumed.Code, resumed.Body.String())
-	}
-	var response loginResponse
-	if err := json.Unmarshal(resumed.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Status != "mfa_required" || response.ChallengeToken != challenge || len(response.Factors) != 1 || response.Factors[0] != "totp" {
-		t.Fatal("resume changed factors")
-	}
-	if h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, "current", hash) {
-		t.Fatal("resume proved deletion")
-	}
-	// Cancellation leaves the original challenge available and emits no credentials.
-	if rr := resume(browser, "https://example.test", body); rr.Code != 200 || len(rr.Result().Cookies()) != 0 {
-		t.Fatal("resume cannot recover cancellation")
-	}
-	code, err := security.GenerateCurrentTOTPCode(secret, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ = json.Marshal(mfaTotpVerifyRequest{ChallengeToken: challenge, Code: code})
-	completed := httptest.NewRecorder()
-	h.handleMFATOTPVerify()(completed, deletionJSONRequest("/api/auth/mfa/totp/verify", body))
-	if completed.Code != 200 || !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, responseSessionID(t, h, completed), hash) {
-		t.Fatalf("final factor %d %s", completed.Code, completed.Body.String())
-	}
-	if rr := resume(browser, "https://example.test", []byte(`{"challenge_id":"`+challenge+`"}`)); rr.Code == 200 {
-		t.Fatal("spent challenge resumed")
-	}
-	// Ordinary SSO keeps its established direct-session policy even with local MFA.
-	ordinary = callback("/events")
-	if ordinary.Code != 303 {
-		t.Fatal("ordinary SSO changed")
-	}
-	responseSessionID(t, h, ordinary)
 }
 
 func TestAccountDeletionPrimaryRequiresConfiguredFactors(t *testing.T) {
@@ -610,5 +621,85 @@ func TestAccountDeletionPrimaryStartsRejectForeignOriginAndDelegatedHeaders(t *t
 				t.Fatalf("%s %s status=%d", method, header, out.Code)
 			}
 		}
+	}
+}
+
+func TestAccountDeletionHTTPBrowserProofDoesNotEnableNative(t *testing.T) {
+	h, store := setupAuthTestEnv(t)
+	defer store.Close()
+	h.ctx.Config.PublicURL = "http://localhost:8080"
+	password, err := HashPassword("password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := store.CreateUser(t.Context(), "http-proof@example.test", password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := strings.Repeat("a", 64)
+	attempt := h.ctx.AuthState.CreateAccountDeletionAttempt(id, h.ctx.Config.PublicURL, hash, "/settings", time.Now().Add(time.Minute))
+	if attempt == "" {
+		t.Fatal("HTTP browser deletion unavailable")
+	}
+	body, _ := json.Marshal(map[string]string{"email": "http-proof@example.test", "password": "password123", "return_url": shared.AccountDeletionReturnPath(attempt)})
+	req := deletionJSONRequest("/api/login", body)
+	req.Header.Set("Origin", "http://localhost:8080")
+	out := httptest.NewRecorder()
+	h.handleLogin()(out, req)
+	if out.Code != 200 || !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, responseSessionID(t, h, out), hash) {
+		t.Fatalf("HTTP primary %d %s", out.Code, out.Body.String())
+	}
+	if h.ctx.NativeAuthReady() || h.ctx.NativeAuthStatus() != nil {
+		t.Fatal("native advertised over HTTP")
+	}
+	mux := http.NewServeMux()
+	Register(mux, h.ctx)
+	out = httptest.NewRecorder()
+	mux.ServeHTTP(out, deletionJSONRequest("/api/auth/native/start", []byte(`{}`)))
+	if out.Code != 503 {
+		t.Fatal("native HTTP start accepted")
+	}
+}
+
+func TestOrdinarySSONewIdentityInvalidatesExistingDeletionProof(t *testing.T) {
+	h, store := setupAuthTestEnv(t)
+	defer store.Close()
+	provider := newFakeOIDCProvider(t, "sso-link@example.com", true)
+	h.ctx.SSO = sso.NewClient(provider.server.Client())
+	team := configureTestSSO(t, h, store, provider.issuerURL())
+	password, err := HashPassword("password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := store.CreateUserWithoutDefaultTenant(t.Context(), "sso-link@example.com", password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddTeamMember(t.Context(), team, id, database.TenantRoleMember, uuid.Nil); err != nil {
+		t.Fatal(err)
+	}
+	attempt, hash, jti := freshSocialMutationProof(t, h, id, "sso-link@example.com")
+	authorization := startTestSSOLogin(t, h, "sso-link@example.com", "/dashboard", false)
+	u, _ := url.Parse(authorization)
+	provider.setNonce(u.Query().Get("nonce"))
+	out := httptest.NewRecorder()
+	h.handleSSOCallback()(out, httptest.NewRequest("GET", "/api/auth/sso/callback?state="+url.QueryEscape(u.Query().Get("state"))+"&code=test-code", nil))
+	if out.Code != 303 {
+		t.Fatalf("SSO callback %d", out.Code)
+	}
+	responseSessionID(t, h, out)
+	if h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+		t.Fatal("new SSO primary retained deletion proof")
+	}
+	// A later normal login using the same subject is usage-only.
+	attempt, hash, jti = freshSocialMutationProof(t, h, id, "sso-link@example.com")
+	authorization = startTestSSOLogin(t, h, "sso-link@example.com", "/dashboard", false)
+	u, _ = url.Parse(authorization)
+	provider.setNonce(u.Query().Get("nonce"))
+	out = httptest.NewRecorder()
+	h.handleSSOCallback()(out, httptest.NewRequest("GET", "/api/auth/sso/callback?state="+url.QueryEscape(u.Query().Get("state"))+"&code=test-code", nil))
+	responseSessionID(t, h, out)
+	if !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+		t.Fatal("ordinary SSO usage invalidated proof")
 	}
 }

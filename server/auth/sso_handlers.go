@@ -349,12 +349,10 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			return
 		}
 
-		if h.deletionReauthentication(state.ReturnPath) {
-			linked, err := h.ctx.Store.GetUserBySSOIdentity(r.Context(), config.TeamID, config.IssuerURL, identity.Subject)
-			if err != nil || linked == nil || !h.validateDeletionSubject(state.ReturnPath, linked.ID) {
-				http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
-				return
-			}
+		linked, err := h.ctx.Store.GetUserBySSOIdentity(r.Context(), config.TeamID, config.IssuerURL, identity.Subject)
+		if err != nil || (h.deletionReauthentication(state.ReturnPath) && (linked == nil || !h.validateDeletionSubject(state.ReturnPath, linked.ID))) {
+			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+			return
 		}
 		randomPassword, err := security.GenerateRandomChallenge(48)
 		if err != nil {
@@ -384,6 +382,9 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, decision.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonIdentityLinkFailed, decision.Mode, "SSO identity could not be linked")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_failed"), http.StatusSeeOther)
 			return
+		}
+		if linked == nil && !resolved.Created {
+			h.ctx.AuthState.InvalidateNativeAuth(resolved.UserID)
 		}
 		if decision.UserID != uuid.Nil && decision.UserID != resolved.UserID {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, resolved.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonAccessDenied, decision.Mode, "SSO identity resolved to a different authorized user")

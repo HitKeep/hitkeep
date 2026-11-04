@@ -283,7 +283,7 @@ export class Login {
         if (!fragment || fragment.length > 64 || !proofAuthReturnPath(this.resolveReturnUrl())) return null;
         const match = /^mfa_challenge=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.exec(fragment);
         if (!match) return null;
-        void this.router.navigate([], { relativeTo: this.route, fragment: null, replaceUrl: true });
+        void this.router.navigate([], { relativeTo: this.route, queryParamsHandling: 'preserve', replaceUrl: true });
         return match[1];
     }
 

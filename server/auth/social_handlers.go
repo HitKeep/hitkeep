@@ -221,7 +221,6 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 				http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_identity_conflict", continueOAuth), http.StatusSeeOther)
 				return
 			}
-			h.ctx.AuthState.InvalidateNativeAuth(state.UserID)
 			h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/settings?tab=security&social=linked"), http.StatusSeeOther)
 			return
@@ -306,6 +305,13 @@ func (h *handler) socialStateCookiePath() string {
 	return prefix + socialStateCookieRoute
 }
 
+// Linking can commit before the store's final read fails; invalidate either way.
+func (h *handler) linkPrimarySocialIdentity(r *http.Request, input database.LinkSocialIdentityInput) (*database.SocialIdentity, error) {
+	identity, err := h.ctx.Store.LinkSocialIdentity(r.Context(), input)
+	h.ctx.AuthState.InvalidateNativeAuth(input.UserID)
+	return identity, err
+}
+
 func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.UUID, identity socialauth.Identity) error {
 	if userID == uuid.Nil {
 		return errors.New("authenticated user is required")
@@ -326,7 +332,7 @@ func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.U
 	if err != nil {
 		return err
 	}
-	_, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+	_, err = h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 		AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
 		UserID: userID, Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 	})
@@ -419,7 +425,7 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 			return
 		}
 		if user != nil {
-			identity, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+			identity, err = h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 				ObservedEmail: completion.ObservedEmail, MarkUsed: true,
 				AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
@@ -518,7 +524,7 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 		h.writeInviteAcceptanceError(r.Context(), w, err, user.ID)
 		return
 	}
-	if _, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+	if _, err := h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 		UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 		ObservedEmail: completion.ObservedEmail, MarkUsed: true,
 		AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
@@ -745,7 +751,7 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 				http.Redirect(w, r, h.loginErrorRedirectURL("social_confirmation_invalid")+oauthQuery, http.StatusSeeOther)
 				return
 			}
-			if _, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+			if _, err := h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: entry.Provider, Subject: entry.Subject, ObservedEmail: entry.ObservedEmail,
 			}); err != nil {
 				http.Redirect(w, r, h.loginErrorRedirectURL("social_identity_conflict")+oauthQuery, http.StatusSeeOther)

@@ -7,7 +7,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"hitkeep/database"
 )
+
+// Browser reauthentication follows the configured instance; native handoff stays HTTPS-only.
+func AccountDeletionIssuer(raw string) string { return canonicalAuthIssuer(raw, true) }
+
+func (c *Context) AccountDeletionReady() bool {
+	return c != nil && c.Config != nil && AccountDeletionIssuer(c.Config.PublicURL) != "" && c.AuthState != nil && c.Store != nil && c.Store.DatabaseStatus().State == database.DatabaseStateHealthy && (c.Cluster == nil || c.Cluster.IsLeader())
+}
 
 type accountDeletionAttempt struct {
 	UserID                          uuid.UUID
@@ -43,9 +52,10 @@ func validAuthHandle(handle string) bool {
 }
 
 func (s *AuthStateStore) CreateAccountDeletionAttempt(userID uuid.UUID, issuer, consequenceHash, returnPath string, expiresAt time.Time) string {
+	issuer = AccountDeletionIssuer(issuer)
 	now := time.Now().UTC()
 	digest, err := hex.DecodeString(consequenceHash)
-	if s == nil || userID == uuid.Nil || issuer == "" || NativeAuthIssuer(issuer) != issuer || returnPath != "/settings" || err != nil || len(digest) != 32 || strings.ToLower(consequenceHash) != consequenceHash || !expiresAt.After(now) || expiresAt.After(now.Add(NativeAuthTTL)) {
+	if s == nil || userID == uuid.Nil || issuer == "" || returnPath != "/settings" || err != nil || len(digest) != 32 || strings.ToLower(consequenceHash) != consequenceHash || !expiresAt.After(now) || expiresAt.After(now.Add(NativeAuthTTL)) {
 		return ""
 	}
 	s.nativeMu.Lock()
@@ -70,6 +80,7 @@ func (s *AuthStateStore) deletionLocked(attemptID string) (accountDeletionAttemp
 
 // AccountDeletionSubject returns only the frozen subject of an active attempt.
 func (s *AuthStateStore) AccountDeletionSubject(returnPath, issuer string) (uuid.UUID, bool) {
+	issuer = AccountDeletionIssuer(issuer)
 	if s == nil {
 		return uuid.Nil, false
 	}
@@ -90,6 +101,7 @@ func (s *AuthStateStore) AccountDeletionSubject(returnPath, issuer string) (uuid
 // CompleteAccountDeletionPrimary is called only after actual primary plus MFA.
 // A native primary records readiness only; its browser session gets no proof.
 func (s *AuthStateStore) CompleteAccountDeletionPrimary(returnPath string, userID uuid.UUID, issuer, jti string) bool {
+	issuer = AccountDeletionIssuer(issuer)
 	if s == nil || jti == "" || userID == uuid.Nil {
 		return false
 	}

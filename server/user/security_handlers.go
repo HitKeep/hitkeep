@@ -140,7 +140,9 @@ func (h *handler) handleVerifyTOTPSetup() http.HandlerFunc {
 			return
 		}
 
-		if err := h.ctx.Store.EnableUserTOTP(r.Context(), userID, secret); err != nil {
+		err := h.ctx.Store.EnableUserTOTP(r.Context(), userID, secret)
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
+		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to enable totp", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -154,7 +156,6 @@ func (h *handler) handleVerifyTOTPSetup() http.HandlerFunc {
 			return
 		}
 
-		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }
@@ -187,7 +188,9 @@ func (h *handler) handleDisableTOTP() http.HandlerFunc {
 			return
 		}
 
-		if err := h.ctx.Store.DisableUserTOTP(r.Context(), userID); err != nil {
+		err = h.ctx.Store.DisableUserTOTP(r.Context(), userID)
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
+		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to disable user totp", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -200,7 +203,6 @@ func (h *handler) handleDisableTOTP() http.HandlerFunc {
 			return
 		}
 
-		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }
@@ -323,7 +325,9 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			name = "Passkey " + time.Now().Format("2006-01-02")
 		}
 
-		if _, err := h.ctx.Store.CreateUserPasskeyCredential(r.Context(), userID, name, *credential); err != nil {
+		_, err = h.ctx.Store.CreateUserPasskeyCredential(r.Context(), userID, name, *credential)
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
+		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to create user passkey", "error", err, "user_id", userID)
 			http.Error(w, "Failed to save passkey", http.StatusBadRequest)
 			return
@@ -338,7 +342,6 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			return
 		}
 
-		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }

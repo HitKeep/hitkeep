@@ -145,3 +145,23 @@ func TestAccountDeletionCredentialChangeInvalidatesBrowserProof(t *testing.T) {
 		t.Fatal("credential change preserved proof")
 	}
 }
+
+func TestAccountDeletionHTTPBrowserIssuerIsCanonical(t *testing.T) {
+	s := NewAuthStateStore()
+	id := uuid.New()
+	hash := strings.Repeat("a", 64)
+	attempt := s.CreateAccountDeletionAttempt(id, "HTTP://LOCALHOST:80/prefix/", hash, "/settings", time.Now().Add(time.Minute))
+	if attempt == "" {
+		t.Fatal("configured HTTP browser issuer refused")
+	}
+	path := AccountDeletionReturnPath(attempt)
+	if s.CompleteAccountDeletionPrimary(path, id, "https://localhost/prefix", "fresh") {
+		t.Fatal("changed instance accepted")
+	}
+	if !s.CompleteAccountDeletionPrimary(path, id, "http://localhost/prefix", "fresh") || !s.ConsumeAccountDeletionProof(attempt, id, "fresh", hash) {
+		t.Fatal("canonical browser issuer mismatch")
+	}
+	if NativeAuthIssuer("http://localhost/prefix") != "" {
+		t.Fatal("native HTTPS requirement weakened")
+	}
+}

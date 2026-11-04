@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/api"
-	"hitkeep/database"
 )
 
 const (
@@ -57,9 +56,11 @@ func NativeAuthToken() string {
 	return base64.RawURLEncoding.EncodeToString(value[:])
 }
 
-func NativeAuthIssuer(raw string) string {
+func NativeAuthIssuer(raw string) string { return canonicalAuthIssuer(raw, false) }
+
+func canonicalAuthIssuer(raw string, allowHTTP bool) string {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.RawPath != "" || u.EscapedPath() != u.Path || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) {
+	if err != nil || (u.Scheme != "https" && (!allowHTTP || u.Scheme != "http")) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.RawPath != "" || u.EscapedPath() != u.Path || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) {
 		return ""
 	}
 	if port := u.Port(); port != "" {
@@ -73,7 +74,7 @@ func NativeAuthIssuer(raw string) string {
 		return ""
 	}
 	u.Host = strings.ToLower(u.Host)
-	if u.Port() == "443" {
+	if (u.Scheme == "https" && u.Port() == "443") || (u.Scheme == "http" && u.Port() == "80") {
 		u.Host = strings.ToLower(u.Hostname())
 		if strings.Contains(u.Host, ":") {
 			u.Host = "[" + u.Host + "]"
@@ -114,7 +115,7 @@ func NativeAuthHandle(returnPath string) string {
 }
 
 func (c *Context) NativeAuthReady() bool {
-	return c != nil && c.Config != nil && NativeAuthIssuer(c.Config.PublicURL) != "" && c.AuthState != nil && c.Store != nil && c.Store.DatabaseStatus().State == database.DatabaseStateHealthy && (c.Cluster == nil || c.Cluster.IsLeader())
+	return c.AccountDeletionReady() && NativeAuthIssuer(c.Config.PublicURL) != ""
 }
 
 func (c *Context) NativeAuthStatus() *api.NativeAuthStatus {

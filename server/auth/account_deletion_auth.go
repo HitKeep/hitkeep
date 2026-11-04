@@ -23,10 +23,10 @@ func (h *handler) validateDeletionSubject(returnPath string, id uuid.UUID) bool 
 	if !h.deletionReauthentication(returnPath) {
 		return true
 	}
-	if !h.ctx.NativeAuthReady() {
+	if !h.ctx.AccountDeletionReady() {
 		return false
 	}
-	expected, ok := h.ctx.AuthState.AccountDeletionSubject(returnPath, shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
+	expected, ok := h.ctx.AuthState.AccountDeletionSubject(returnPath, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
 	return ok && expected == id
 }
 
@@ -40,7 +40,7 @@ func (h *handler) issueVerifiedLoginSession(r *http.Request, w http.ResponseWrit
 	if err != nil {
 		return err
 	}
-	if h.deletionReauthentication(returnPath) && !h.ctx.AuthState.CompleteAccountDeletionPrimary(returnPath, id, shared.NativeAuthIssuer(h.ctx.Config.PublicURL), jti) {
+	if h.deletionReauthentication(returnPath) && !h.ctx.AuthState.CompleteAccountDeletionPrimary(returnPath, id, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL), jti) {
 		w.Header()["Set-Cookie"] = original
 		return fmt.Errorf("reauthentication unavailable")
 	}

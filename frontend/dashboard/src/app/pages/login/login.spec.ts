@@ -666,7 +666,7 @@ describe('Login', () => {
         fixture = TestBed.createComponent(Login);
         component = fixture.componentInstance;
         expect(authMock.resumeMfa).toHaveBeenCalledWith('12345678-1234-1234-1234-123456789abc');
-        expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ fragment: null, replaceUrl: true }));
+        expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParamsHandling: 'preserve', replaceUrl: true }));
         expect(component['isMfaRequired']()).toBe(true);
         expect(component['mfaFactors']()).toEqual(['totp']);
         expect(authMock.login).not.toHaveBeenCalled();

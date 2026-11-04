@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/appurl"
+	authcore "hitkeep/auth"
 	"hitkeep/server/shared"
 )
 
@@ -21,8 +22,8 @@ func (h *handler) redirectDeletionMFA(w http.ResponseWriter, r *http.Request, re
 	if !h.ctx.AuthState.BindMFAResume(id, browser, response.Factors, response.Passkey) {
 		return false
 	}
-	issuer, _ := url.Parse(shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
-	http.SetCookie(w, &http.Cookie{Name: mfaResumeCookie, Value: browser, Path: issuer.Path + "/api/auth/mfa", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 300})
+	issuer, _ := url.Parse(shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
+	http.SetCookie(w, &http.Cookie{Name: mfaResumeCookie, Value: browser, Path: issuer.Path + "/api/auth/mfa", HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL), SameSite: http.SameSiteStrictMode, MaxAge: 300})
 	destination := "/login?" + url.Values{"returnUrl": {returnPath}}.Encode() + "#mfa_challenge=" + url.QueryEscape(response.ChallengeToken)
 	http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, destination), http.StatusSeeOther)
 	return true
@@ -31,7 +32,7 @@ func (h *handler) redirectDeletionMFA(w http.ResponseWriter, r *http.Request, re
 func (h *handler) handleMFAResume() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nativeHeaders(w)
-		if !h.ctx.NativeAuthReady() {
+		if !h.ctx.AccountDeletionReady() {
 			nativeError(w, r, 503, "temporarily_unavailable")
 			return
 		}

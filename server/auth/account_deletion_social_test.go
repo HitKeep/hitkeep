@@ -14,10 +14,12 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
 	"github.com/go-jose/go-jose/v4"
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
+	"hitkeep/mailer"
 	"hitkeep/security"
 	"hitkeep/server/shared"
 	"hitkeep/socialauth"
@@ -188,4 +190,104 @@ func completeDeletionSocialProvider(t *testing.T, h *handler, fixture *deletionS
 	out := httptest.NewRecorder()
 	h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
 	return out
+}
+
+func freshSocialMutationProof(t *testing.T, h *handler, id uuid.UUID, email string) (string, string, string) {
+	t.Helper()
+	attempt, hash := deletionAttemptFixture(t, h, id)
+	body, _ := json.Marshal(map[string]string{"email": email, "password": "password123", "return_url": shared.AccountDeletionReturnPath(attempt)})
+	out := httptest.NewRecorder()
+	h.handleLogin()(out, deletionJSONRequest("/api/login", body))
+	if out.Code != 200 {
+		t.Fatalf("actual primary %d %s", out.Code, out.Body.String())
+	}
+	jti := responseSessionID(t, h, out)
+	if !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+		t.Fatal("primary proof missing")
+	}
+	return attempt, hash, jti
+}
+
+func TestAutomaticSocialLinkInvalidatesExistingDeletionProof(t *testing.T) {
+	for _, provider := range []string{"google", "github", "microsoft"} {
+		for _, lateFailure := range []bool{false, true} {
+			if provider == "microsoft" && lateFailure {
+				continue
+			}
+			t.Run(provider+map[bool]string{false: "/linked", true: "/later_login_read_fails"}[lateFailure], func(t *testing.T) {
+				h, store := setupAuthTestEnv(t)
+				defer store.Close()
+				password, err := HashPassword("password123")
+				if err != nil {
+					t.Fatal(err)
+				}
+				id, err := store.CreateUser(t.Context(), "social-link@example.test", password)
+				if err != nil {
+					t.Fatal(err)
+				}
+				attempt, hash, jti := freshSocialMutationProof(t, h, id, "social-link@example.test")
+				key, err := rsa.GenerateKey(rand.Reader, 2048)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixture := &deletionSocialProvider{name: provider, subject: "new-primary-subject", email: "social-link@example.test", key: key}
+				h.ctx.SocialAuth = socialauth.NewClient(sso.NewClient(&http.Client{Transport: fixture}))
+				h.ctx.Config.SocialGoogleClientID = "deletion-client"
+				h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+				h.ctx.Config.SocialGitHubClientID = "deletion-client"
+				h.ctx.Config.SocialGitHubClientSecret = "fixture-secret"
+				h.ctx.Config.SocialMicrosoftClientID = "deletion-client"
+				h.ctx.Config.SocialMicrosoftClientSecret = "fixture-secret"
+				driver := &authTestMailDriver{}
+				if provider == "microsoft" {
+					h.ctx.Mailer = mailer.NewWithDriver(driver, h.ctx.Config)
+				}
+				if lateFailure {
+					if err := store.Exec(t.Context(), "DROP TABLE user_recovery_codes"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				out := completeDeletionSocialProvider(t, h, fixture, "/dashboard")
+				want := 200
+				if lateFailure {
+					want = 500
+				}
+				if out.Code != want {
+					t.Fatalf("link %d want%d: %s", out.Code, want, out.Body.String())
+				}
+				subject := fixture.subject
+				if provider == "github" {
+					subject = "42"
+				}
+				if provider == "microsoft" {
+					subject = deletionMicrosoftTenant + ":" + deletionMicrosoftObject
+					const marker = "/api/auth/social/confirm?token="
+					_, raw, found := strings.Cut(driver.textBody, marker)
+					if !found {
+						t.Fatal("confirmation mail missing")
+					}
+					fields := strings.Fields(raw)
+					if len(fields) == 0 {
+						t.Fatal("confirmation token missing")
+					}
+					token, err := url.QueryUnescape(fields[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					confirmed := httptest.NewRecorder()
+					h.handleSocialConfirmation()(confirmed, httptest.NewRequest("GET", "/api/auth/social/confirm?token="+url.QueryEscape(token), nil))
+					if confirmed.Code != 303 {
+						t.Fatal("confirmation failed")
+					}
+				}
+				linked, err := store.GetSocialIdentity(t.Context(), provider, subject)
+				if err != nil || linked == nil || linked.UserID != id {
+					t.Fatal("new primary identity did not commit")
+				}
+				if h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+					t.Fatal("new linked primary retained prior deletion proof")
+				}
+			})
+		}
+	}
 }

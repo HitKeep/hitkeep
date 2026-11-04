@@ -72,7 +72,7 @@ func (h *handler) nativeOrigin(r *http.Request, required bool) bool {
 	if len(values) == 0 {
 		return !required
 	}
-	issuer, _ := url.Parse(shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
+	issuer, _ := url.Parse(shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
 	return len(values) == 1 && values[0] == issuer.Scheme+"://"+issuer.Host
 }
 
