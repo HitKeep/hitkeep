@@ -29,6 +29,7 @@ import (
 	"hitkeep/realtime"
 	"hitkeep/searchconsole"
 	"hitkeep/server"
+	"hitkeep/server/shared"
 	"hitkeep/webhookdispatcher"
 	"hitkeep/worker"
 )
@@ -329,6 +330,7 @@ func startLeaderServices(ctx context.Context, conf *config.Config, logger *slog.
 		tenantOpts = append(tenantOpts, database.WithTenantCompaction(compaction))
 	}
 	tenantOpts = append(tenantOpts, database.WithTenantDataPlane(true))
+	tenantOpts = append(tenantOpts, database.WithAccountDeletionProviderRevoker(shared.NewAccountDeletionProviderRevoker(conf, store)))
 	tenantMgr := database.NewTenantStoreManager(store, conf.DataPath, tenantOpts...)
 	closeStores := func() {
 		if err := tenantMgr.Close(); err != nil {
