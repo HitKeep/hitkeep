@@ -189,9 +189,9 @@ jobs:
         run: |
           set -euo pipefail
           brew tap HitKeep/hitkeep
+          brew install --build-from-source HitKeep/hitkeep/hitkeep
           stable_version="$(brew info --json=v2 HitKeep/hitkeep/hitkeep | jq -er '.formulae[0].versions.stable')"
           [[ "$stable_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          brew install --build-from-source HitKeep/hitkeep/hitkeep
           test "$(hitkeep --version)" = "$stable_version"
           printf 'STABLE_VERSION=%s\n' "$stable_version" >> "$GITHUB_ENV"
       - name: Resolve candidate
