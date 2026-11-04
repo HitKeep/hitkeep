@@ -39,8 +39,10 @@ func TestAccountDeletionProofBindingsAndOneConsumer(t *testing.T) {
 			t.Fatal("wrong destructive binding accepted")
 		}
 	}
-	if !s.AccountDeletionProofVerified(attempt, id, "fresh", hash) || !s.AccountDeletionProofVerified(attempt, id, "fresh", hash) {
-		t.Fatal("read mutated proof")
+	for range 2 {
+		if !s.AccountDeletionProofVerified(attempt, id, "fresh", hash) {
+			t.Fatal("read mutated proof")
+		}
 	}
 	var winners atomic.Int32
 	var wg sync.WaitGroup
