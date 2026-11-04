@@ -439,9 +439,8 @@ func (h *handler) bindNativeLogin(r *http.Request, w http.ResponseWriter, return
 }
 
 func nativeSignupDestination(returnPath, fallback string) string {
-	returnPath = nativeSignupReturnPath(returnPath)
-	if shared.NativeAuthHandle(returnPath) != "" {
-		return returnPath
+	if handle := shared.NativeAuthHandle(nativeSignupReturnPath(returnPath)); handle != "" {
+		return shared.NativeAuthReturnPath(handle)
 	}
 	return fallback
 }

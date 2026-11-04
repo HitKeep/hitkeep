@@ -633,3 +633,16 @@ func TestNativeCanonicalHTTPSIssuesOnlySecureCookies(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeSignupDestinationRebuildsOnlyValidatedReference(t *testing.T) {
+	handle := strings.Repeat("a", 43)
+	canonical := shared.NativeAuthReturnPath(handle)
+	for _, tc := range []struct{ input, want string }{
+		{canonical, canonical}, {"/%61uth/native/consent?request=" + handle, canonical}, {"/signup/social/complete?native=" + handle, canonical},
+		{"https://evil.example/", "/dashboard"}, {"//evil.example/", "/dashboard"}, {canonical + "&redirect=https://evil.example", "/dashboard"}, {"/auth/native/consent?request=invalid", "/dashboard"},
+	} {
+		if got := nativeSignupDestination(tc.input, "/dashboard"); got != tc.want {
+			t.Errorf("destination %q = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
