@@ -76,6 +76,10 @@ func TestAccountDeletionRoutedPasswordMFAAndCopiedSession(t *testing.T) {
 	if err := json.Unmarshal(prepared.Body.Bytes(), &review); err != nil || review.AttemptID == "" || review.Reauth.Verified {
 		t.Fatalf("review=%+v err=%v", review, err)
 	}
+	pendingAttempt := h.ctx.AuthState.CreateAccountDeletionAttempt(departing, h.ctx.Config.PublicURL, review.ConsequenceHash, "/settings", time.Now().Add(time.Minute))
+	if pendingAttempt == "" {
+		t.Fatal("create second pending deletion attempt")
+	}
 	confirmation := api.AccountDeletionConfirmation{AttemptID: review.AttemptID, ConsequenceHash: review.ConsequenceHash, Confirm: true}
 	if w := request(http.MethodDelete, "/api/user/account", confirmation, original); w.Code != http.StatusUnauthorized {
 		t.Fatalf("ambient session deleted: %d %s", w.Code, w.Body.String())
@@ -141,6 +145,9 @@ func TestAccountDeletionRoutedPasswordMFAAndCopiedSession(t *testing.T) {
 	}
 	if remaining, err := store.GetUserByID(ctx, owner); err != nil || remaining == nil {
 		t.Fatalf("remaining owner=%+v err=%v", remaining, err)
+	}
+	if _, ok := h.ctx.AuthState.AccountDeletionSubject(shared.AccountDeletionReturnPath(pendingAttempt), h.ctx.Config.PublicURL); ok {
+		t.Fatal("other pending deletion attempt survived account removal")
 	}
 	if h.ctx.AuthState.AccountDeletionProofVerified(review.AttemptID, departing, "unused", review.ConsequenceHash) {
 		t.Fatal("deleted proof survived")

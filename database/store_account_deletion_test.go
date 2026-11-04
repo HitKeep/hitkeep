@@ -2,9 +2,12 @@ package database
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
+	stduuid "uuid"
 
 	"github.com/google/uuid"
 
@@ -278,6 +281,33 @@ func TestPersonalRemovalPreservesSharedSitesAndRequiresSameTeamOwner(t *testing.
 		t.Fatal(err)
 	}
 
+	grants := []OAuthGrant{
+		{ID: stduuid.NewV7(), UserID: stduuid.UUID(departing)},
+		{ID: stduuid.NewV7(), UserID: stduuid.UUID(owner)},
+	}
+	signatures := make([]string, len(grants))
+	op, err := s.BeginOAuth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer op.Rollback()
+	for i := range grants {
+		grant := &grants[i]
+		grant.TeamID = stduuid.UUID(teamID)
+		grant.ClientID, grant.ClientName, grant.Audience = "https://client.example.test", "Deletion fixture", "https://hitkeep.example.test/api"
+		grant.Scopes, grant.SiteIDs = []string{"sites:read"}, []stduuid.UUID{stduuid.UUID(site.ID)}
+		grant.CreatedAt, grant.ExpiresAt = time.Now(), time.Now().Add(time.Hour)
+		if err := op.CreateGrant(ctx, *grant); err != nil {
+			t.Fatal(err)
+		}
+		signatures[i] = fmt.Sprintf("%x", sha256.Sum256([]byte(grant.ID.String())))
+		if err := op.CreateCredential(ctx, OAuthCredential{Kind: "refresh", Signature: signatures[i], GrantID: grant.ID, TeamID: grant.TeamID, Payload: []byte(`{"fixture":true}`), ExpiresAt: grant.ExpiresAt}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := op.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: teamID, UserID: owner}}}
 	plan, err := s.PlanAccountDeletion(ctx, departing, choices, false)
 	if err != nil || len(plan.Blockers) != 0 {
@@ -314,6 +344,27 @@ func TestPersonalRemovalPreservesSharedSitesAndRequiresSameTeamOwner(t *testing.
 	}
 	if identities, err := s.ListUserSocialIdentities(ctx, departing); err != nil || len(identities) != 0 {
 		t.Fatalf("social identities survived: %v %v", identities, err)
+	}
+
+	if _, err := s.GetOAuthGrant(ctx, grants[0].ID); !errors.Is(err, ErrOAuthNotFound) {
+		t.Fatalf("personal OAuth grant survived: %v", err)
+	}
+	if _, err := s.GetOAuthGrant(ctx, grants[1].ID); err != nil {
+		t.Fatalf("unrelated OAuth grant removed: %v", err)
+	}
+	op, err = s.BeginOAuth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer op.Rollback()
+	if _, err := op.GetCredential(ctx, "refresh", signatures[0]); !errors.Is(err, ErrOAuthNotFound) {
+		t.Fatalf("personal OAuth refresh credential survived: %v", err)
+	}
+	if _, err := op.GetCredential(ctx, "refresh", signatures[1]); err != nil {
+		t.Fatalf("unrelated OAuth refresh credential removed: %v", err)
+	}
+	if err := op.Rollback(); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := s.RemovePersonalAccount(ctx, departing, choices, false); !errors.Is(err, ErrUserNotFound) {
