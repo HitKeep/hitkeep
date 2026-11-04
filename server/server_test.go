@@ -311,6 +311,48 @@ func TestServerRoutesPrefixedAPIRequests(t *testing.T) {
 	}
 }
 
+// Go keeps valid raw pchars in RawPath even when the decoded path is unchanged.
+func TestNativeAuthSupportsServedRawPathPrefix(t *testing.T) {
+	conf := testServerConfig(t)
+	conf.PublicURL = "https://example.test/team!stats/"
+	store := testServerStore(t)
+	defer store.Close()
+	srv := New(conf, testPublicFS(), store, nil, entitlements.NewProvider(conf), nil, nil, nil, nil, testServerLogger())
+	defer func() { _ = srv.Shutdown(t.Context()) }()
+	const issuer = "https://example.test/team!stats"
+	for _, prefix := range []string{"/team!stats", "/team%21stats"} {
+		t.Run(prefix, func(t *testing.T) {
+			for _, path := range []string{"/dashboard", "/api/status"} {
+				req := httptest.NewRequest(http.MethodGet, "https://example.test"+prefix+path, nil)
+				req.Header.Set("Accept", "text/html")
+				out := httptest.NewRecorder()
+				srv.httpServer.Handler.ServeHTTP(out, req)
+				if out.Code != 200 {
+					t.Fatalf("ordinary route %s status=%d", path, out.Code)
+				}
+				if path == "/api/status" && !strings.Contains(out.Body.String(), `"issuer":"`+issuer+`"`) {
+					t.Fatal("native status missing canonical issuer")
+				}
+			}
+			body := `{"client_id":"hitkeep-ios","redirect_uri":"https://hitkeep.com/auth/native/ios/callback","code_challenge":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","code_challenge_method":"S256","state":"prefix-state-0123456789","intent":"login","remember_me":false}`
+			req := httptest.NewRequest(http.MethodPost, "https://example.test"+prefix+"/api/auth/native/start", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Origin", "https://example.test")
+			out := httptest.NewRecorder()
+			srv.httpServer.Handler.ServeHTTP(out, req)
+			if out.Code != 200 || !strings.Contains(out.Body.String(), issuer+"/api/auth/native/authorize?request=") {
+				t.Fatalf("native start status=%d body=%s", out.Code, out.Body.String())
+			}
+		})
+	}
+	if got := shared.AccountDeletionIssuer("http://EXAMPLE.test:80/team!stats/"); got != "http://example.test/team!stats" {
+		t.Fatalf("browser canonical issuer=%q", got)
+	}
+	if got := shared.NativeAuthIssuer("http://example.test/team!stats"); got != "" {
+		t.Fatal("native accepted HTTP")
+	}
+}
+
 func TestServerRejectsUnprefixedAPIRequestsWhenPublicURLHasPath(t *testing.T) {
 	conf := testServerConfig(t)
 	conf.PublicURL = "https://www.example.net/hitkeep/"

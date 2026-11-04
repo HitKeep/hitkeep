@@ -105,6 +105,24 @@ func TestNativeCanonicalIssuer(t *testing.T) {
 		{"https://cloud.hitkeep.eu/", "https://cloud.hitkeep.eu"},
 		{"https://cloud.hitkeep.com", "https://cloud.hitkeep.com"},
 		{"https://example.test:80/prefix", "https://example.test:80/prefix"},
+		{"HTTPS://EXAMPLE.test:443/team!stats/", "https://example.test/team!stats"},
+		{"https://example.test/team!stats", "https://example.test/team!stats"},
+		{"https://example.test/a'b(c)*d", "https://example.test/a'b(c)*d"},
+		{"https://example.test/café", ""},
+		{"https://example.test/caf%C3%A9", ""},
+		{"https://example.test/%70refix", ""},
+		{"https://example.test/team%21stats", ""},
+		{"https://example.test/a%2fb", ""},
+		{"https://example.test/a%2Fb", ""},
+		{"https://example.test/a%5cb", ""},
+		{"https://example.test/%2e%2e/prefix", ""},
+		{"https://example.test/%252e%252e/prefix", ""},
+		{"https://example.test/prefix%00", ""},
+		{"https://example.test/prefix%0A", ""},
+		{"https://example.test//prefix", ""},
+		{"https://example.test/a/./prefix", ""},
+		{"https://example.test/prefix#fragment", ""},
+		{"https://example.test/prefix?", ""},
 		{"https://example.test:65536/prefix", ""},
 		{"https://example.test/a/../prefix", ""},
 		{"https://example.test/%2fother", ""},
@@ -114,6 +132,8 @@ func TestNativeCanonicalIssuer(t *testing.T) {
 	} {
 		if got := NativeAuthIssuer(tc.input); got != tc.want {
 			t.Errorf("%q = %q want %q", tc.input, got, tc.want)
+		} else if got != "" && NativeAuthIssuer(got) != got {
+			t.Errorf("canonical issuer is not stable: %q", got)
 		}
 	}
 }
