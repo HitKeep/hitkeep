@@ -161,6 +161,12 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 
 func (h *handler) handleSocialCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if strings.EqualFold(strings.TrimSpace(r.PathValue("provider")), socialauth.ProviderApple) && r.Context().Value(appleReceiptContextKey{}) != true {
+			writeSocialError(r.Context(), w, http.StatusBadRequest, "social_request_invalid")
+			return
+		}
+
 		continueOAuth, err := h.ctx.OAuthProvider.HasContinuation(r.Context(), r)
 		if err != nil {
 			w.Header().Set("Retry-After", "5")
@@ -221,9 +227,19 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			return
 		}
 
+		credential, err := h.appleLinkCredential(identity)
+		if credential == "" {
+			identity.AppleClientID = ""
+		}
+		if err != nil {
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
+			return
+		}
+
 		completionToken := h.ctx.AuthState.CreateSocialCompletion(shared.SocialCompletion{
 			Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 			EmailVerified: identity.EmailVerified, Flow: state.Flow,
+			AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
 			InviteToken: state.InviteToken, ReturnPath: state.ReturnPath, RememberMe: state.RememberMe,
 			ExpiresAt: time.Now().UTC().Add(socialCompletionTTL),
 		})
@@ -303,7 +319,15 @@ func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.U
 			return database.ErrSocialIdentityConflict
 		}
 	}
-	_, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+	credential, err := h.appleLinkCredential(identity)
+	if credential == "" {
+		identity.AppleClientID = ""
+	}
+	if err != nil {
+		return err
+	}
+	_, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+		AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
 		UserID: userID, Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 	})
 	return err
@@ -398,6 +422,7 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 			identity, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 				ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+				AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 			})
 			if err != nil {
 				h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", completion.Provider, "provider="+completion.Provider+";reason=identity_conflict")
@@ -411,6 +436,7 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		_, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
 			UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 			ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+			AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 		})
 		if err != nil {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_identity_conflict")
@@ -452,6 +478,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
+	if completion.Provider == socialauth.ProviderApple && !completion.EmailVerified {
+		writeSocialError(r.Context(), w, http.StatusForbidden, "social_email_unverified")
+		return
+	}
 	if h.socialSignupEnabled() {
 		shared.WriteJSON(r.Context(), w, http.StatusOK, h.socialSignupRequiredResponse(completion))
 		return
@@ -491,6 +521,7 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 	if _, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
 		UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 		ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+		AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 	}); err != nil {
 		writeSocialError(r.Context(), w, http.StatusConflict, "social_identity_conflict")
 		return
@@ -565,6 +596,10 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			return
 		}
 
+		if completion.Provider == socialauth.ProviderApple && !completion.EmailVerified {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_email_unverified")
+			return
+		}
 		targetEmail := completion.ObservedEmail
 		if completion.Provider == socialauth.ProviderMicrosoft {
 			targetEmail = req.Email
@@ -663,6 +698,8 @@ func providerDisplayName(provider string) string {
 		return "Google"
 	case socialauth.ProviderGitHub:
 		return "GitHub"
+	case socialauth.ProviderApple:
+		return "Apple"
 	case socialauth.ProviderMicrosoft:
 		return "Microsoft"
 	default:
@@ -776,6 +813,7 @@ func (h *handler) createSocialCloudAccount(r *http.Request, completion shared.So
 	account, err := h.ctx.Store.CreateManagedSocialAccount(r.Context(), database.CreateManagedSocialAccountInput{
 		Email: email, HashedPassword: passwordHash, TeamName: req.TeamName, Locale: req.Locale,
 		Provider: completion.Provider, Subject: completion.Subject, ObservedEmail: completion.ObservedEmail,
+		AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 		PlanCode: req.PlanCode, BillingInterval: req.BillingInterval,
 	})
 	if err != nil {
@@ -814,7 +852,10 @@ func (h *handler) handleSocialUnlink() http.HandlerFunc {
 			}
 		}
 
-		if err := h.ctx.Store.DeleteSocialIdentityWithGuard(r.Context(), userID, provider, passwordConfirmed); err != nil {
+		manualRevocation := false
+		if err := h.ctx.Store.DeleteSocialIdentityWithGuardAndHook(r.Context(), userID, provider, passwordConfirmed, func(identity *database.SocialIdentity) {
+			manualRevocation = !h.revokeAppleIdentity(r.Context(), identity)
+		}); err != nil {
 			reason := "storage"
 			switch {
 			case errors.Is(err, database.ErrSocialIdentityNotFound):
@@ -831,6 +872,14 @@ func (h *handler) handleSocialUnlink() http.HandlerFunc {
 		}
 		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		h.appendAuthAuditForUserTeams(r, userID, "auth.social_identity_unlinked", "success", "provider="+provider+";reason=alternative_method_available", true)
+		if provider == socialauth.ProviderApple {
+			status := "revoked"
+			if manualRevocation {
+				status = "manual_revocation_required"
+			}
+			shared.WriteJSON(r.Context(), w, http.StatusOK, api.SocialUnlinkResponse{Status: "unlinked", ProviderRevocations: []api.AccountDeletionProviderRevocation{{Provider: socialauth.ProviderApple, Status: status}}})
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

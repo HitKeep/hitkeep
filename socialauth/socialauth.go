@@ -144,7 +144,7 @@ func ProviderStatuses(conf *config.Config) []ProviderStatus {
 		}
 		if input.provider == ProviderApple {
 			hasKey := len(strings.TrimSpace(conf.SocialAppleTokenEncryptionKey)) >= 32
-			configured := hasID && hasSecret && hasKey
+			configured := hasID && hasSecret && hasKey && validAppleCallback(appurl.Path(conf.PublicURL, "/api/auth/social/apple/callback"))
 			statuses = append(statuses, ProviderStatus{Provider: input.provider, DisplayName: input.name, Configured: configured, Partial: (hasID || hasSecret || strings.TrimSpace(conf.SocialAppleTokenEncryptionKey) != "") && !configured})
 			continue
 		}
@@ -166,7 +166,7 @@ func ConfigForProvider(conf *config.Config, provider string) (ProviderConfig, er
 	result := ProviderConfig{Provider: provider, RedirectURL: callback}
 	switch provider {
 	case ProviderApple:
-		if len(strings.TrimSpace(conf.SocialAppleTokenEncryptionKey)) < 32 {
+		if len(strings.TrimSpace(conf.SocialAppleTokenEncryptionKey)) < 32 || !validAppleCallback(callback) {
 			return ProviderConfig{}, ErrNotConfigured
 		}
 		result.DisplayName = "Apple"

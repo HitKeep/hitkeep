@@ -148,6 +148,8 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/auth/social/{provider}/start", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleSocialStart(false)))
+	mux.HandleFunc("POST /api/auth/social/apple/callback", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleApplePOSTCallback()))
+	mux.HandleFunc("GET /api/auth/social/apple/resume", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleAppleResume()))
 	mux.HandleFunc("GET /api/auth/social/{provider}/callback", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleSocialCallback()))

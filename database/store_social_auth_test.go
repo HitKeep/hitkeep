@@ -2,10 +2,16 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	"hitkeep/database/migrations"
 )
 
 func TestSocialIdentityUsesImmutableSubjectAndRejectsCrossAccountConflicts(t *testing.T) {
@@ -362,5 +368,61 @@ func TestAppleIdentityTokenRetentionAndPublicDTO(t *testing.T) {
 	}
 	if _, err := store.CreatePendingSocialConfirmation(ctx, PendingSocialConfirmation{Provider: "apple", Subject: "subject", TargetEmail: "apple@private.icloud.com"}); err != nil {
 		t.Fatalf("second CHECK rejects Apple: %v", err)
+	}
+}
+
+func TestAppleForwardMigrationPreservesLegacyRowsAndConstraints(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "legacy@migration.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := migrations.Fs.ReadFile("2026_07_14_030000_add_social_auth.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tables, _ := strings.Cut(string(legacy), "CREATE TABLE IF NOT EXISTS social_identities")
+	if err := store.Exec(ctx, "DROP TABLE pending_social_confirmations; DROP TABLE social_identities; CREATE TABLE IF NOT EXISTS social_identities"+tables); err != nil {
+		t.Fatal(err)
+	}
+	identityID := uuid.New()
+	if err := store.Exec(ctx, "INSERT INTO social_identities(id,user_id,provider,subject,observed_email) VALUES (?,?,'google','legacy-sub','legacy@migration.test')", identityID, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Exec(ctx, "INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,target_user_id,expires_at) VALUES ('hash','microsoft','legacy-pending','legacy@migration.test',?,now()+INTERVAL '1 hour')", userID); err != nil {
+		t.Fatal(err)
+	}
+	forward, err := migrations.Fs.ReadFile("2026_11_04_030000_add_apple_social_auth.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Transact(ctx, func(tx *sql.Tx) error { _, err := tx.ExecContext(ctx, string(forward)); return err }); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := store.GetSocialIdentity(ctx, "google", "legacy-sub")
+	if err != nil || identity == nil || identity.ID != identityID || identity.UserID != userID || identity.AppleRefreshTokenCiphertext != "" {
+		t.Fatalf("legacy identity changed: %v", err)
+	}
+	var pending int
+	if err := store.db.QueryRowContext(ctx, "SELECT count(*) FROM pending_social_confirmations WHERE token_hash='hash' AND target_user_id=?", userID).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("pending confirmation lost: %v", err)
+	}
+	for _, query := range []string{
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'unknown','subject')",
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'google','other-sub')",
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'google','legacy-sub')",
+		"INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,expires_at) VALUES ('other','unknown','subject','mail@test',now())",
+	} {
+		args := []any{}
+		if strings.Contains(query, "?") {
+			args = append(args, userID)
+		}
+		if err := store.Exec(ctx, query, args...); err == nil {
+			t.Fatal("constraint removed by migration")
+		}
+	}
+	if err := store.Exec(ctx, "INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'apple','orphan')", uuid.New()); err == nil {
+		t.Fatal("foreign key removed")
 	}
 }

@@ -4,17 +4,19 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/coreos/go-oidc/v3/oidc/oidctest"
-	"hitkeep/config"
-	json "hitkeep/jsonapi"
-	"hitkeep/sso"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/coreos/go-oidc/v3/oidc/oidctest"
+
+	"hitkeep/config"
+	json "hitkeep/jsonapi"
+	"hitkeep/sso"
 )
 
 func TestAppleConfigurationAndClaims(t *testing.T) {
@@ -38,6 +40,24 @@ func TestAppleConfigurationAndClaims(t *testing.T) {
 		if err != nil || identity.EmailVerified {
 			t.Fatalf("unverified claims: %+v %v", identity, err)
 		}
+	}
+}
+
+func TestApplePartialConfigurationAndReturnURL(t *testing.T) {
+	conf := &config.Config{PublicURL: "https://example.test/prefix", SocialAppleClientID: "service", SocialAppleClientSecret: "signed", SocialAppleTokenEncryptionKey: strings.Repeat("k", 32)}
+	if !ProviderStatuses(conf)[3].Configured {
+		t.Fatal("complete Apple configuration disabled")
+	}
+	for _, publicURL := range []string{"http://example.test", "https://127.0.0.1", "https://localhost"} {
+		conf.PublicURL = publicURL
+		if _, err := ConfigForProvider(conf, ProviderApple); !errors.Is(err, ErrNotConfigured) {
+			t.Fatal("invalid Apple return URL accepted")
+		}
+	}
+	conf.PublicURL = "https://example.test"
+	conf.SocialAppleClientID = ""
+	if ProviderStatuses(conf)[3].Configured || !ProviderStatuses(conf)[3].Partial {
+		t.Fatal("missing Services ID not partial")
 	}
 }
 
@@ -67,6 +87,7 @@ func TestAppleOIDCCodeFlowAndRevocation(t *testing.T) {
 	var server *httptest.Server
 	claims := map[string]any{}
 	revokeStatus := http.StatusOK
+	algorithm := oidc.RS256
 	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/token":
@@ -76,7 +97,7 @@ func TestAppleOIDCCodeFlowAndRevocation(t *testing.T) {
 				return
 			}
 			raw, _ := json.Marshal(claims)
-			token := oidctest.SignIDToken(key, "apple-fixture", oidc.RS256, string(raw))
+			token := oidctest.SignIDToken(key, "apple-fixture", algorithm, string(raw))
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.MarshalWrite(w, map[string]any{"access_token": "discarded-access", "token_type": "Bearer", "refresh_token": "current-refresh", "id_token": token})
 		case "/revoke":
@@ -122,6 +143,11 @@ func TestAppleOIDCCodeFlowAndRevocation(t *testing.T) {
 		if _, err := client.Complete(t.Context(), cfg, request.FlowState, "code"); !errors.Is(err, ErrTokenValidation) {
 			t.Fatalf("accepted invalid %s: %v", invalid.key, err)
 		}
+	}
+	reset()
+	algorithm = oidc.RS384
+	if _, err := client.Complete(t.Context(), cfg, request.FlowState, "code"); !errors.Is(err, ErrTokenValidation) {
+		t.Fatal("non-RS256 Apple signature accepted")
 	}
 	if err := client.RevokeApple(t.Context(), cfg, "service", "current-refresh"); err != nil {
 		t.Fatal(err)

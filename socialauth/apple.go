@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+
 	json "hitkeep/jsonapi"
 	"hitkeep/sso"
 )
@@ -98,4 +100,13 @@ func (c *Client) RevokeApple(ctx context.Context, cfg ProviderConfig, clientID, 
 		return ErrProviderUnavailable
 	}
 	return nil
+}
+
+func validAppleCallback(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host != "localhost" && !strings.HasSuffix(host, ".localhost") && net.ParseIP(host) == nil
 }

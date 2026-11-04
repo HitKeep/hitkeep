@@ -62,27 +62,30 @@ type SSOOAuthState struct {
 }
 
 type SocialOAuthState struct {
-	Provider     string
-	Flow         string
-	InviteToken  string
-	ReturnPath   string
-	RememberMe   bool
-	UserID       uuid.UUID
-	Nonce        string
-	CodeVerifier string
-	ExpiresAt    time.Time
+	Provider       string
+	Flow           string
+	InviteToken    string
+	ReturnPath     string
+	RememberMe     bool
+	UserID         uuid.UUID
+	Nonce          string
+	CodeVerifier   string
+	AppleReceiptID string
+	ExpiresAt      time.Time
 }
 
 type SocialCompletion struct {
-	Provider      string
-	Subject       string
-	ObservedEmail string
-	EmailVerified bool
-	Flow          string
-	InviteToken   string
-	ReturnPath    string
-	RememberMe    bool
-	ExpiresAt     time.Time
+	AppleClientID               string `json:"-"`
+	AppleRefreshTokenCiphertext string `json:"-"`
+	Provider                    string
+	Subject                     string
+	ObservedEmail               string
+	EmailVerified               bool
+	Flow                        string
+	InviteToken                 string
+	ReturnPath                  string
+	RememberMe                  bool
+	ExpiresAt                   time.Time
 }
 
 type AuthStateStore struct {
@@ -98,6 +101,8 @@ type AuthStateStore struct {
 	ssoOAuth                *lru.LRU[uuid.UUID, SSOOAuthState]
 	socialOAuth             *lru.LRU[uuid.UUID, SocialOAuthState]
 	socialCompletions       *lru.LRU[uuid.UUID, SocialCompletion]
+	socialPOSTReceipts      *lru.LRU[uuid.UUID, SocialPOSTReceipt]
+	socialPOSTMu            sync.Mutex
 	socialOAuthMu           sync.Mutex
 	socialCompletionMu      sync.Mutex
 
@@ -121,6 +126,7 @@ func NewAuthStateStore() *AuthStateStore {
 		ssoOAuth:                lru.NewLRU[uuid.UUID, SSOOAuthState](authStateCacheSize, nil, ssoOAuthStateTTL),
 		socialOAuth:             lru.NewLRU[uuid.UUID, SocialOAuthState](authStateCacheSize, nil, socialOAuthStateTTL),
 		socialCompletions:       lru.NewLRU[uuid.UUID, SocialCompletion](authStateCacheSize, nil, socialCompletionTTL),
+		socialPOSTReceipts:      lru.NewLRU[uuid.UUID, SocialPOSTReceipt](authStateCacheSize, nil, 90*time.Second),
 		loginChallenges:         lru.NewLRU[uuid.UUID, database.LoginChallenge](authStateCacheSize, nil, passkeyLoginChallengeTTL),
 		loginChallengeIDsByUser: lru.NewLRU[uuid.UUID, map[uuid.UUID]struct{}](
 			authStateCacheSize,
