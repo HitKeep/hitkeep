@@ -30,6 +30,7 @@ type passkeyLoginStartResponse struct {
 }
 
 type passkeyLoginFinishRequest struct {
+	ReturnURL      string                               `json:"return_url,omitempty"`
 	ChallengeToken string                               `json:"challenge_token"`
 	Credential     protocol.CredentialAssertionResponse `json:"credential"`
 	RememberMe     bool                                 `json:"remember_me"`
@@ -192,6 +193,13 @@ func (h *handler) handlePasskeyLoginFinish() http.HandlerFunc {
 		rememberMe := req.RememberMe
 		if flow == "mfa" {
 			rememberMe = challenge.RememberMe
+		}
+		returnPath := req.ReturnURL
+		if flow == "mfa" {
+			returnPath = challenge.NativeReturnPath
+		}
+		if !h.bindNativeLogin(r, w, returnPath, userID) {
+			return
 		}
 		if err := h.issueLoginSession(r.Context(), w, userID, rememberMe); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after passkey verification", "error", err, "user_id", userID)

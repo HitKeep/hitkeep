@@ -207,6 +207,7 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 				http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_identity_conflict", continueOAuth), http.StatusSeeOther)
 				return
 			}
+			h.ctx.AuthState.InvalidateNativeAuth(state.UserID)
 			h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/settings?tab=security&social=linked"), http.StatusSeeOther)
 			return
@@ -486,6 +487,10 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 }
 
 func (h *handler) writeCompletedSocialLogin(w http.ResponseWriter, r *http.Request, userID uuid.UUID, completion shared.SocialCompletion) {
+	if !h.bindNativeLogin(r, w, completion.ReturnPath, userID) {
+		return
+	}
+	r = withNativeReturnPath(r, completion.ReturnPath)
 	response, err := h.beginUserLogin(r, w, userID, completion.RememberMe, completion.Provider)
 	if err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to complete social login", "error_kind", socialLoginErrorCategory(err), "provider", completion.Provider, "user_id", userID)
@@ -589,6 +594,9 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			writeSocialError(r.Context(), w, status, code)
 			return
 		}
+		if !h.bindNativeLogin(r, w, completion.ReturnPath, account.UserID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, account.UserID, false); err != nil {
 			writeSocialError(r.Context(), w, http.StatusInternalServerError, "social_signup_failed")
 			return
@@ -596,7 +604,7 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 		h.appendAuthAuditForUserTeams(r, account.UserID, "auth.social_signup_succeeded", "success", "provider="+completion.Provider+";reason=verified_provider_email", true)
 		shared.WriteJSON(r.Context(), w, http.StatusCreated, map[string]any{
 			"status": "ok", "plan_code": req.PlanCode, "billing": req.BillingInterval,
-			"redirect_url": socialSignupRedirect(req.PlanCode, req.BillingInterval),
+			"redirect_url": nativeSignupDestination(completion.ReturnPath, socialSignupRedirect(req.PlanCode, req.BillingInterval)),
 		})
 	}
 }
@@ -609,7 +617,7 @@ func (h *handler) sendSocialConfirmation(r *http.Request, completion shared.Soci
 		Provider: completion.Provider, Subject: completion.Subject, ObservedEmail: completion.ObservedEmail,
 		TargetEmail: targetEmail, TargetUserID: targetUserID, TeamName: signup.TeamName,
 		Jurisdiction: signup.Jurisdiction, Locale: signup.Locale, PlanCode: signup.PlanCode,
-		BillingInterval: signup.BillingInterval, ReturnPath: completion.ReturnPath,
+		BillingInterval: signup.BillingInterval, ReturnPath: nativeSignupReturnPath(completion.ReturnPath),
 		RememberMe: completion.RememberMe,
 	}
 	if signup.AcceptedTOS {
@@ -646,8 +654,12 @@ func providerDisplayName(provider string) string {
 func (h *handler) socialSignupRequiredResponse(completion shared.SocialCompletion) socialCompleteResponse {
 	completion.Flow = "signup"
 	completion.ExpiresAt = time.Now().UTC().Add(socialCompletionTTL)
+	destination := "/signup/social/complete"
+	if handle := shared.NativeAuthHandle(completion.ReturnPath); handle != "" {
+		destination += "?native=" + url.QueryEscape(handle)
+	}
 	return socialCompleteResponse{
-		Status: "signup_required", RedirectURL: "/signup/social/complete",
+		Status: "signup_required", RedirectURL: destination,
 		CompletionToken: h.ctx.AuthState.CreateSocialCompletion(completion),
 	}
 }
@@ -690,6 +702,9 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 				ExpiresAt: time.Now().UTC().Add(socialCompletionTTL),
 			})
 			query := url.Values{"info": {"social_confirmed"}, "email": {user.Email}}
+			if shared.NativeAuthHandle(entry.ReturnPath) != "" {
+				query.Set("returnUrl", entry.ReturnPath)
+			}
 			if continueOAuth {
 				query.Set("oauth", "1")
 			}
@@ -713,12 +728,15 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/signup?error=social_confirmation_invalid"+oauthQuery), http.StatusSeeOther)
 			return
 		}
+		if !h.bindNativeLogin(r, w, entry.ReturnPath, account.UserID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, account.UserID, entry.RememberMe); err != nil {
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/signup?error=social_confirmation_invalid"+oauthQuery), http.StatusSeeOther)
 			return
 		}
 		h.appendAuthAuditForUserTeams(r, account.UserID, "auth.social_signup_succeeded", "success", "provider="+entry.Provider+";reason=hitkeep_email_confirmed", true)
-		destination := socialSignupRedirect(entry.PlanCode, entry.BillingInterval)
+		destination := nativeSignupDestination(entry.ReturnPath, socialSignupRedirect(entry.PlanCode, entry.BillingInterval))
 		if continueOAuth && destination == "/dashboard" {
 			destination = "/oauth/consent"
 		}
@@ -791,6 +809,7 @@ func (h *handler) handleSocialUnlink() http.HandlerFunc {
 			h.appendAuthAuditForUserTeams(r, userID, "auth.social_identity_unlink_failed", "failure", "provider="+provider+";reason="+reason, true)
 			return
 		}
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		h.appendAuthAuditForUserTeams(r, userID, "auth.social_identity_unlinked", "success", "provider="+provider+";reason=alternative_method_available", true)
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -810,9 +829,17 @@ func (h *handler) socialCompletionRedirectURL(state shared.SocialOAuthState, tok
 		}
 		return appurl.Path(h.ctx.Config.PublicURL, path) + fragment
 	case "invite":
-		return appurl.Path(h.ctx.Config.PublicURL, "/accept-invite?token="+url.QueryEscape(state.InviteToken)) + fragment
+		destination := "/accept-invite?token=" + url.QueryEscape(state.InviteToken)
+		if shared.NativeAuthHandle(state.ReturnPath) != "" {
+			destination += "&returnUrl=" + url.QueryEscape(state.ReturnPath)
+		}
+		return appurl.Path(h.ctx.Config.PublicURL, destination) + fragment
 	default:
-		return appurl.Path(h.ctx.Config.PublicURL, "/login") + fragment
+		loginPath := "/login"
+		if shared.NativeAuthHandle(state.ReturnPath) != "" {
+			loginPath += "?returnUrl=" + url.QueryEscape(state.ReturnPath)
+		}
+		return appurl.Path(h.ctx.Config.PublicURL, loginPath) + fragment
 	}
 }
 

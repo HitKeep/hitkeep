@@ -13,6 +13,7 @@ export interface PasskeyLoginStartResponse {
 }
 
 export interface PasskeyLoginFinishRequest {
+    return_url?: string;
     challenge_token: string;
     credential: PublicKeyCredentialAssertionJson;
     remember_me?: boolean;
@@ -130,7 +131,7 @@ export class AuthService {
     });
     readonly sessionExpired = computed(() => !!this.session() && this.sessionDisplayRemainingMs() <= 0);
 
-    login(credentials: { email: string; password: string; remember_me?: boolean }): Observable<LoginResponse> {
+    login(credentials: { email: string; password: string; remember_me?: boolean; return_url?: string }): Observable<LoginResponse> {
         return this.http.post<LoginResponse>('/api/login', credentials).pipe(
             tap((resp) => {
                 if (resp.status === 'ok') {
@@ -220,8 +221,8 @@ export class AuthService {
         );
     }
 
-    requestPasswordReset(email: string, intent?: { plan: string; billing: string }): Observable<void> {
-        return this.http.post<void>('/api/auth/forgot-password', { email, ...(intent ? { plan: intent.plan, billing: intent.billing } : {}) });
+    requestPasswordReset(email: string, intent?: { plan: string; billing: string }, returnUrl?: string): Observable<void> {
+        return this.http.post<void>('/api/auth/forgot-password', { email, ...(intent ? { plan: intent.plan, billing: intent.billing } : {}), ...(returnUrl ? { return_url: returnUrl } : {}) });
     }
 
     resetPassword(token: string, password: string): Observable<void> {
@@ -231,8 +232,8 @@ export class AuthService {
         });
     }
 
-    acceptInvite(token: string, password?: string): Observable<LoginResponse> {
-        return this.http.post<LoginResponse>('/api/auth/accept-invite', password ? { token, password } : { token }).pipe(
+    acceptInvite(token: string, password?: string, returnUrl?: string): Observable<LoginResponse> {
+        return this.http.post<LoginResponse>('/api/auth/accept-invite', { token, ...(password ? { password } : {}), ...(returnUrl ? { return_url: returnUrl } : {}) }).pipe(
             tap((resp) => {
                 if (resp.status === 'ok') {
                     this.status.set('authenticated');

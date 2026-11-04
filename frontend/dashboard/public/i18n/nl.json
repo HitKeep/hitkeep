@@ -4091,5 +4091,12 @@
     "readOnly": "Alleen-lezenstatistieken",
     "connectionError": "Kan geen verbinding maken met HitKeep. Probeer het opnieuw of verbind HitKeep opnieuw in WordPress.",
     "analyticsNavigation": "Statistiekpagina’s"
+  },
+  "nativeAuth": {
+      "title": "Aanmelden bij de HitKeep-app",
+      "authority": "De app krijgt volledige toegang tot je account, inclusief het wijzigen van gegevens en accountinstellingen. Je teamrechten en beveiligingscontroles blijven gelden.",
+      "publicClient": "De openbare appnaam verifieert de geïnstalleerde app niet. Ga alleen verder als je deze aanmelding in de HitKeep-app hebt gestart.",
+      "approve": "Aanmelden bij app",
+      "restart": "Deze aanvraag is verlopen of kon niet worden geverifieerd. Start de aanmelding opnieuw in de app."
   }
 }

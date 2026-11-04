@@ -4081,5 +4081,12 @@
     "readOnly": "Estatísticas somente para leitura",
     "connectionError": "Não foi possível conectar ao HitKeep. Tente novamente ou reconecte o HitKeep no WordPress.",
     "analyticsNavigation": "Páginas de estatísticas"
+  },
+  "nativeAuth": {
+      "title": "Entrar na app HitKeep",
+      "authority": "A app terá acesso completo à sua conta, incluindo alterações aos dados e definições. As permissões da equipa e verificações de segurança continuam a aplicar-se.",
+      "publicClient": "O nome público não verifica a app instalada. Continue apenas se iniciou esta entrada na app HitKeep.",
+      "approve": "Entrar na app",
+      "restart": "Este pedido expirou ou não pôde ser verificado. Reinicie a entrada na app."
   }
 }

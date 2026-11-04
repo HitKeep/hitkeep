@@ -17,6 +17,9 @@ import (
 // method. It issues a session only when no configured local factor requires a
 // challenge; callers remain responsible for method-specific audit details.
 func (h *handler) beginUserLogin(r *http.Request, w http.ResponseWriter, userID uuid.UUID, rememberMe bool, authProvider string) (loginResponse, error) {
+	if !h.ctx.AuthState.BindNativeReturnPath(nativeReturnPath(r), userID) {
+		return loginResponse{}, fmt.Errorf("native continuation unavailable")
+	}
 	totpEnabled, err := h.ctx.Store.HasEnabledTOTP(r.Context(), userID)
 	if err != nil {
 		return loginResponse{}, fmt.Errorf("check user TOTP status: %w", err)
@@ -74,7 +77,8 @@ func (h *handler) beginUserLogin(r *http.Request, w http.ResponseWriter, userID 
 		expiresAt = session.Expires
 	}
 	challengeID := h.ctx.AuthState.CreatePasskeyLoginChallenge(challenge, database.CreateLoginChallengeInput{
-		UserID: &userID, RememberMe: rememberMe, Flow: "mfa", AuthProvider: authProvider,
+		NativeReturnPath: nativeReturnPath(r),
+		UserID:           &userID, RememberMe: rememberMe, Flow: "mfa", AuthProvider: authProvider,
 	}, expiresAt, session)
 
 	factors := make([]string, 0, 4)

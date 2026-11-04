@@ -7,6 +7,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { TranslocoPipe } from '@jsverse/transloco';
 
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
+
 // OptimusUI
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { InputTextModule } from '@openng/optimus-ui/inputtext';
@@ -32,6 +34,8 @@ export class ForgotPassword {
     private readonly route = inject(ActivatedRoute);
     protected readonly purchaseIntent = cloudPurchaseIntent(this.route.snapshot.queryParamMap.get('plan'), this.route.snapshot.queryParamMap.get('billing'));
     protected readonly loginQueryParams = (() => {
+        const nativeReturn = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'));
+        if (nativeReturn) return { returnUrl: nativeReturn };
         if (this.purchaseIntent.plan === 'free') return {};
         const query = cloudPurchaseQuery(this.purchaseIntent);
         const reviewUrl = cloudBillingReviewUrl(this.purchaseIntent);
@@ -59,7 +63,7 @@ export class ForgotPassword {
         this.errorMessage.set(null);
 
         this.authService
-            .requestPasswordReset(this.form.email().value(), this.purchaseIntent.plan === 'free' ? undefined : this.purchaseIntent)
+            .requestPasswordReset(this.form.email().value(), this.purchaseIntent.plan === 'free' ? undefined : this.purchaseIntent, nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? undefined)
             .pipe(finalize(() => this.isLoading.set(false)))
             .subscribe({
                 next: () => this.successMessage.set(true),

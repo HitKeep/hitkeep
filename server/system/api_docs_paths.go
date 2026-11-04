@@ -9,6 +9,7 @@ func openAPIV1Paths() map[string]any {
 		openAPIV1IntegrationPaths(),
 		openAPIV1SSOPaths(),
 		openAPIV1SocialAuthPaths(),
+		nativeAuthPaths(),
 		openAPIV1QRPaths(),
 		openAPIV1SearchConsoleReportPaths(),
 		openAPIV1WebhookPaths(),
@@ -130,7 +131,7 @@ func openAPIV1CorePaths() map[string]any {
 		},
 		"/api/login": map[string]any{
 			"post": op([]string{"Auth"}, "Login", "Authenticates user credentials and issues session cookie.", nil, nil,
-				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "password": map[string]any{"type": "string"}, "remember_me": map[string]any{"type": "boolean"}}, "required": []string{"email", "password"}}),
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "password": map[string]any{"type": "string"}, "remember_me": map[string]any{"type": "boolean"}, "return_url": map[string]any{"type": "string", "description": "Optional bounded native consent continuation; never grants approval."}}, "required": []string{"email", "password"}}),
 				map[string]any{"200": jsonRefResp("Login response", "#/components/schemas/LoginResponse"), "401": errResp("Invalid credentials")}),
 		},
 		"/api/logout": map[string]any{
@@ -147,20 +148,21 @@ func openAPIV1CorePaths() map[string]any {
 		"/api/auth/forgot-password": map[string]any{
 			"post": op([]string{"Auth"}, "Request password reset", "Sends password reset email if account exists. Hosted Cloud may include a validated plan and billing interval in the reset link.", nil, nil,
 				jsonBody(map[string]any{"type": "object", "properties": map[string]any{
-					"email":   map[string]any{"type": "string", "format": "email"},
-					"plan":    map[string]any{"type": "string", "enum": []string{"free", "pro", "business"}},
-					"billing": map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},
+					"email":      map[string]any{"type": "string", "format": "email"},
+					"return_url": map[string]any{"type": "string", "description": "Optional bounded native continuation preserved in server-created reset email."},
+					"plan":       map[string]any{"type": "string", "enum": []string{"free", "pro", "business"}},
+					"billing":    map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},
 				}, "required": []string{"email"}}),
 				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status")}),
 		},
 		"/api/auth/reset-password": map[string]any{
 			"post": op([]string{"Auth"}, "Complete password reset", "Resets password using reset token.", nil, nil,
-				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}}, "required": []string{"token", "password"}}),
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}, "return_url": map[string]any{"type": "string"}}, "required": []string{"token", "password"}}),
 				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status"), "400": errResp("Invalid or expired link")}),
 		},
 		"/api/auth/accept-invite": map[string]any{
 			"post": op([]string{"Auth"}, "Accept invite", "Accepts a team invite. New invite-created users provide a password and receive a session cookie; existing users must sign in first and can accept with the token only.", nil, nil,
-				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}}, "required": []string{"token"}}),
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}, "return_url": map[string]any{"type": "string"}}, "required": []string{"token"}}),
 				map[string]any{"200": jsonRefResp("Login response", "#/components/schemas/LoginResponse"), "400": errResp("Invalid or expired link"), "401": errResp("Sign in to accept this invitation"), "403": errResp("Invite cannot be accepted")}),
 		},
 		"/api/auth/passkey/login/start": map[string]any{
@@ -169,7 +171,7 @@ func openAPIV1CorePaths() map[string]any {
 		},
 		"/api/auth/passkey/login/finish": map[string]any{
 			"post": op([]string{"Auth"}, "Finish passkey login", "Verifies passkey assertion and issues session.", nil, nil,
-				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"challenge_token": map[string]any{"type": "string"}, "credential": map[string]any{"type": "object", "additionalProperties": true}, "remember_me": map[string]any{"type": "boolean"}}, "required": []string{"challenge_token", "credential"}}),
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"challenge_token": map[string]any{"type": "string"}, "credential": map[string]any{"type": "object", "additionalProperties": true}, "remember_me": map[string]any{"type": "boolean"}, "return_url": map[string]any{"type": "string", "description": "Optional bounded native consent continuation; never grants approval."}}, "required": []string{"challenge_token", "credential"}}),
 				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status")}),
 		},
 		"/api/auth/mfa/totp/verify": map[string]any{
@@ -209,6 +211,7 @@ func openAPIV1CorePaths() map[string]any {
 						"password":     map[string]any{"type": "string", "minLength": 8},
 						"given_name":   map[string]any{"type": "string"},
 						"last_name":    map[string]any{"type": "string"},
+						"return_url":   map[string]any{"type": "string", "description": "Optional bounded native continuation associated with the verification token server-side."},
 						"team_name":    map[string]any{"type": "string"},
 						"plan_code":    map[string]any{"type": "string", "enum": []string{"free", "pro", "business"}},
 						"billing":      map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},

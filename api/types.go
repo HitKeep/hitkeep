@@ -674,6 +674,7 @@ type PermissionContext struct {
 }
 
 type SystemStatus struct {
+	NativeAuth   *NativeAuthStatus   `json:"native_auth,omitempty"`
 	AIEnabled    bool                `json:"ai_enabled"`
 	NeedsSetup   bool                `json:"needs_setup"`
 	Version      string              `json:"version"`

@@ -154,6 +154,7 @@ func (h *handler) handleVerifyTOTPSetup() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }
@@ -199,6 +200,7 @@ func (h *handler) handleDisableTOTP() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }
@@ -336,6 +338,7 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, status)
 	}
 }
@@ -367,6 +370,7 @@ func (h *handler) handleDeleteUserPasskey() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -418,6 +422,7 @@ func (h *handler) handleRegenerateRecoveryCodes() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, api.UserRecoveryCodesResponse{
 			Codes:     codes,
 			Remaining: len(codes),

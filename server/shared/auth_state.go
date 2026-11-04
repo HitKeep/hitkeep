@@ -86,6 +86,10 @@ type SocialCompletion struct {
 }
 
 type AuthStateStore struct {
+	nativeMu             sync.Mutex
+	nativeEmailReturns   map[[32]byte]nativeEmailReturn
+	nativeRequests       map[[32]byte]NativeAuthRequest
+	nativeCodes          map[[32]byte][32]byte
 	pendingTOTP          *lru.LRU[uuid.UUID, PendingTOTPSetup]
 	passkeyRegistrations *lru.LRU[uuid.UUID, PasskeyRegistrationChallenge]
 	mfaEmailLinks        *lru.LRU[uuid.UUID, MFAEmailLink]
@@ -103,6 +107,9 @@ type AuthStateStore struct {
 
 func NewAuthStateStore() *AuthStateStore {
 	return &AuthStateStore{
+		nativeEmailReturns:   make(map[[32]byte]nativeEmailReturn),
+		nativeRequests:       make(map[[32]byte]NativeAuthRequest),
+		nativeCodes:          make(map[[32]byte][32]byte),
 		pendingTOTP:          lru.NewLRU[uuid.UUID, PendingTOTPSetup](authStateCacheSize, nil, pendingTOTPSetupTTL),
 		passkeyRegistrations: lru.NewLRU[uuid.UUID, PasskeyRegistrationChallenge](authStateCacheSize, nil, passkeyRegistrationTTL),
 		mfaEmailLinks:        lru.NewLRU[uuid.UUID, MFAEmailLink](authStateCacheSize, nil, passkeyLoginChallengeTTL),
@@ -426,13 +433,14 @@ func (s *AuthStateStore) CreatePasskeyLoginChallenge(challenge string, input dat
 	}
 
 	entry := database.LoginChallenge{
-		ID:           challengeID,
-		RememberMe:   input.RememberMe,
-		Flow:         flow,
-		AuthProvider: strings.TrimSpace(input.AuthProvider),
-		Challenge:    strings.TrimSpace(challenge),
-		Session:      session,
-		ExpiresAt:    expiresAt.UTC(),
+		ID:               challengeID,
+		NativeReturnPath: input.NativeReturnPath,
+		RememberMe:       input.RememberMe,
+		Flow:             flow,
+		AuthProvider:     strings.TrimSpace(input.AuthProvider),
+		Challenge:        strings.TrimSpace(challenge),
+		Session:          session,
+		ExpiresAt:        expiresAt.UTC(),
 	}
 	if input.UserID != nil && *input.UserID != uuid.Nil {
 		entry.UserID = *input.UserID
@@ -492,6 +500,7 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 		return
 	}
 
+	s.InvalidateNativeAuth(userID)
 	s.DeletePendingTOTPSetup(userID)
 	s.DeletePasskeyChallenge(userID)
 

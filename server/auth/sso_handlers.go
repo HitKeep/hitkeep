@@ -382,6 +382,9 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
 			return
 		}
+		if !h.bindNativeLogin(r, w, state.ReturnPath, resolved.UserID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, resolved.UserID, state.RememberMe); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue SSO login session", "error_kind", ssoErrorKind(err, "session_issue_failed"), "user_id", resolved.UserID)
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, resolved.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonSessionFailed, decision.Mode, "SSO login session could not be issued")

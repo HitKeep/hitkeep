@@ -529,6 +529,7 @@ func (h *handler) handleDeleteUser() http.HandlerFunc {
 			http.Error(w, "Failed to delete user", http.StatusInternalServerError)
 			return
 		}
+		h.ctx.AuthState.ClearUser(targetUserID)
 		h.ctx.EmitWebhookEvent(r.Context(), webhooks.Event{
 			Type: webhooks.EventSystemUserDeleted,
 			Data: map[string]any{"user_id": targetUserID.String()},

@@ -13,6 +13,7 @@ import type { DashboardTitleScope } from '@services/dashboard-title.service';
 const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') => ({ titleKey, titleScope });
 
 export const routes: Routes = [
+    { path: 'auth/native/consent', loadComponent: () => import('@pages/native-auth/native-consent').then((m) => m.NativeConsentPage), canActivate: [setupGuard, authGuard], data: titleData('nativeAuth.title') },
     {
         path: 'account-deleted',
         loadComponent: () => import('@pages/account-deleted/account-deleted').then((m) => m.AccountDeleted),

@@ -24,9 +24,10 @@ import (
 
 func (h *handler) handleForgotPassword() http.HandlerFunc {
 	type request struct {
-		Email   string `json:"email"`
-		Plan    string `json:"plan"`
-		Billing string `json:"billing"`
+		ReturnURL string `json:"return_url,omitempty"`
+		Email     string `json:"email"`
+		Plan      string `json:"plan"`
+		Billing   string `json:"billing"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +59,7 @@ func (h *handler) handleForgotPassword() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.SaveNativeEmailReturn(token, req.ReturnURL)
 		resetLink := appurl.Path(h.ctx.Config.PublicURL, "/reset-password?token="+token)
 		if h.ctx.Config.CloudHosted && h.ctx.Config.CloudSignupEnabled {
 			plan := normalizeSocialPlan(req.Plan)
@@ -68,6 +70,9 @@ func (h *handler) handleForgotPassword() http.HandlerFunc {
 				}
 				resetLink += "&plan=" + url.QueryEscape(plan) + "&billing=" + url.QueryEscape(billing)
 			}
+		}
+		if nativeReturn := h.ctx.AuthState.NativeEmailReturn(token); nativeReturn != "" {
+			resetLink += "&returnUrl=" + url.QueryEscape(nativeReturn)
 		}
 		locale := h.preferredMailLocale(r, user.ID)
 
@@ -116,6 +121,8 @@ func (h *handler) handleResetPassword() http.HandlerFunc {
 			return
 		}
 
+		resetEmail, _ := h.ctx.Store.ResolvePasswordResetEmail(r.Context(), req.Token)
+		resetUser, _ := h.ctx.Store.GetUserByEmail(r.Context(), resetEmail)
 		err = h.ctx.Store.CompletePasswordReset(r.Context(), req.Token, hashedPassword)
 		if err != nil {
 			if errors.Is(err, database.ErrPasswordResetInvalid) || errors.Is(err, database.ErrPasswordResetExpired) {
@@ -128,6 +135,9 @@ func (h *handler) handleResetPassword() http.HandlerFunc {
 			return
 		}
 
+		if resetUser != nil {
+			h.ctx.AuthState.InvalidateNativeAuth(resetUser.ID)
+		}
 		shared.LoggerFromContext(r.Context()).Info("Password reset successful")
 
 		w.WriteHeader(http.StatusOK)
@@ -141,7 +151,8 @@ func (h *handler) handleResetPassword() http.HandlerFunc {
 }
 func (h *handler) handleAcceptInvite() http.HandlerFunc {
 	type request struct {
-		Token string `json:"token"`
+		ReturnURL string `json:"return_url,omitempty"`
+		Token     string `json:"token"`
 		//nolint:gosec // request payload intentionally accepts plaintext password input.
 		Password string `json:"password"`
 	}
@@ -218,6 +229,9 @@ func (h *handler) handleAcceptInvite() http.HandlerFunc {
 				h.writeInviteAcceptanceError(r.Context(), w, err, authenticatedUser.ID)
 				return
 			}
+			if !h.bindNativeLogin(r, w, req.ReturnURL, authenticatedUser.ID) {
+				return
+			}
 			h.appendInviteAcceptedAuditEvents(r, authenticatedUser.ID, acceptedEmail, acceptedInvites)
 
 			shared.LoggerFromContext(r.Context()).Info("Invite accepted by existing user", "user_id", authenticatedUser.ID)
@@ -261,6 +275,9 @@ func (h *handler) handleAcceptInvite() http.HandlerFunc {
 		}
 		h.appendInviteAcceptedAuditEvents(r, userID, acceptedEmail, acceptedInvites)
 
+		if !h.bindNativeLogin(r, w, req.ReturnURL, userID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, userID, false); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue invite acceptance session", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -405,6 +422,7 @@ func (h *handler) handleChangePassword() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		shared.LoggerFromContext(r.Context()).Info("User changed password", "user_id", userID)
 		w.WriteHeader(http.StatusOK)
 		_ = json.MarshalWrite(w, map[string]string{"status": "ok"})
@@ -444,6 +462,7 @@ func (h *handler) handleLogout() http.HandlerFunc {
 			}
 		}
 
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		authcore.ClearCookies(w, isSecure)
 		if userID != uuid.Nil {
 			h.appendAuthAuditForUserTeams(r, userID, "auth.logout", "success", "User logged out", true)

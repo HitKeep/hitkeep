@@ -1,6 +1,8 @@
 import { DOCUMENT } from '@angular/common';
 import { inject, Service } from '@angular/core';
 
+import { isNativeAuthPage } from '@core/utils/native-auth';
+
 const CLOUD_SIGNUP_TRACKER_ID = 'hk-cloud-signup-tracker';
 const MAX_PENDING_EVENTS = 20;
 
@@ -23,6 +25,7 @@ export class CloudSignupTrackingService {
     private readonly pendingEvents: PendingEvent[] = [];
 
     install(): void {
+        if (isNativeAuthPage(this.document)) return;
         const existingScript = this.document.getElementById(CLOUD_SIGNUP_TRACKER_ID);
         if (existingScript) {
             this.flushPendingEvents();
@@ -43,6 +46,7 @@ export class CloudSignupTrackingService {
     }
 
     trackEvent(name: string, properties: EventProperties = {}): void {
+        if (isNativeAuthPage(this.document)) return;
         const win = this.document.defaultView as HitKeepWindow | null;
         if (win?.hk?.event) {
             win.hk.event(name, properties);

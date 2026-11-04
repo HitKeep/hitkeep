@@ -4359,5 +4359,12 @@
     "readOnly": "Analíticas de solo lectura",
     "connectionError": "No se ha podido conectar con HitKeep. Reinténtalo o vuelve a conectar HitKeep en WordPress.",
     "analyticsNavigation": "Páginas de analíticas"
+  },
+  "nativeAuth": {
+      "title": "Iniciar sesión en la app de HitKeep",
+      "authority": "La app tendrá acceso completo a tu cuenta, incluidos los cambios en datos y ajustes. Se mantienen tus permisos de equipo y las comprobaciones de seguridad.",
+      "publicClient": "El nombre público no verifica la app instalada. Continúa solo si has iniciado este proceso desde la app de HitKeep.",
+      "approve": "Iniciar sesión en la app",
+      "restart": "Esta solicitud ha caducado o no se pudo verificar. Vuelve a iniciar sesión desde la app."
   }
 }

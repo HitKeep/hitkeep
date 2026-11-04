@@ -37,22 +37,24 @@ type PasskeyCredential struct {
 }
 
 type CreateLoginChallengeInput struct {
-	UserID       *uuid.UUID
-	RememberMe   bool
-	Flow         string
-	AuthProvider string
+	NativeReturnPath string
+	UserID           *uuid.UUID
+	RememberMe       bool
+	Flow             string
+	AuthProvider     string
 }
 
 type LoginChallenge struct {
-	ID           uuid.UUID
-	UserID       uuid.UUID
-	HasUserID    bool
-	RememberMe   bool
-	Flow         string
-	AuthProvider string
-	Challenge    string
-	Session      *webauthnlib.SessionData
-	ExpiresAt    time.Time
+	NativeReturnPath string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	HasUserID        bool
+	RememberMe       bool
+	Flow             string
+	AuthProvider     string
+	Challenge        string
+	Session          *webauthnlib.SessionData
+	ExpiresAt        time.Time
 }
 
 type DisableUserMFAResult struct {

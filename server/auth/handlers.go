@@ -123,6 +123,7 @@ func (h *handler) appendAuthAuditSystem(r *http.Request, action, outcome, target
 
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
+	h.registerNativeAuth(mux)
 	mux.HandleFunc("POST /api/initial-user", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleCreateInitialUser()))
@@ -326,6 +327,7 @@ func (h *handler) handleLogin() http.HandlerFunc {
 		//nolint:gosec // request payload intentionally accepts plaintext password input.
 		Password   string `json:"password"`
 		RememberMe bool   `json:"remember_me"`
+		ReturnURL  string `json:"return_url,omitempty"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -371,6 +373,10 @@ func (h *handler) handleLogin() http.HandlerFunc {
 			return
 		}
 
+		if !h.bindNativeLogin(r, w, req.ReturnURL, user.ID) {
+			return
+		}
+		r = withNativeReturnPath(r, req.ReturnURL)
 		resp, err := h.beginUserLogin(r, w, user.ID, req.RememberMe, "")
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to prepare login", "error", err, "user_id", user.ID)
@@ -436,6 +442,20 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			return
 		}
 
+		if h.ctx.Store == nil {
+			http.Error(w, "Service not available", http.StatusServiceUnavailable)
+			return
+		}
+		user, err := h.ctx.Store.GetUserByID(r.Context(), userID)
+		if err != nil {
+			http.Error(w, "Service not available", http.StatusServiceUnavailable)
+			return
+		}
+		if user == nil {
+			authcore.ClearCookies(w, strings.HasPrefix(h.ctx.Config.PublicURL, "https://"))
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		duration := h.ctx.Config.AuthSessionDuration()
 		token, expiresAt, err := authcore.GenerateTokenWithDuration(h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL, userID, duration)
 		if err != nil {

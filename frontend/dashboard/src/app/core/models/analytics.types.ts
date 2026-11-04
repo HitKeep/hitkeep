@@ -737,7 +737,21 @@ export interface AssistantConnection {
     endpoint?: string;
 }
 
+export interface NativeAuthStatus {
+    enabled: boolean;
+    available: boolean;
+    issuer: string;
+    start_url: string;
+    authorize_url: string;
+    exchange_url: string;
+    code_challenge_methods_supported: 'S256'[];
+    browser_passkeys: boolean;
+    native_ios_passkeys: boolean;
+    native_android_passkeys: boolean;
+}
+
 export interface SystemStatus {
+    native_auth?: NativeAuthStatus;
     needs_setup: boolean;
     version: string;
     ai_enabled?: boolean;

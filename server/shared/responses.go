@@ -66,6 +66,7 @@ func (c *Context) SystemStatusResponse(ctx context.Context) (api.SystemStatus, e
 	}
 	return api.SystemStatus{
 		AIEnabled:  c.Config.AIEnabled,
+		NativeAuth: c.NativeAuthStatus(),
 		NeedsSetup: userCount == 0 && !c.Config.CloudHosted,
 		Version:    c.Config.Version,
 		Cloud:      c.CloudStatus(),

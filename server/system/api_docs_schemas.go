@@ -64,6 +64,7 @@ func openAPIV1Schemas() map[string]any {
 		openAPIV1AccountSchemas(),
 		openAPIV1WebhookSchemas(),
 		openAPIV1OAuthSchemas(),
+		nativeAuthSchemas(),
 	)
 }
 

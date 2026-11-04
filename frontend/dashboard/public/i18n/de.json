@@ -4152,5 +4152,12 @@
     "readOnly": "Schreibgeschützte Statistiken",
     "connectionError": "Die Verbindung zu HitKeep ist fehlgeschlagen. Versuche es erneut oder verbinde HitKeep in WordPress neu.",
     "analyticsNavigation": "Statistikseiten"
+  },
+  "nativeAuth": {
+      "title": "In der HitKeep-App anmelden",
+      "authority": "Die App erhält vollständigen Zugriff auf dein Konto, einschließlich Änderungen an Daten und Kontoeinstellungen. Deine Teamberechtigungen und Sicherheitsprüfungen gelten weiterhin.",
+      "publicClient": "Der öffentliche App-Name bestätigt die installierte App nicht. Fahre nur fort, wenn du diese Anmeldung in der HitKeep-App gestartet hast.",
+      "approve": "In der App anmelden",
+      "restart": "Diese Anmeldung ist abgelaufen oder konnte nicht überprüft werden. Starte die Anmeldung in der App erneut."
   }
 }

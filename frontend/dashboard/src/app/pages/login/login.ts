@@ -30,6 +30,8 @@ import { readSessionEndState, SessionEndReason } from '@services/session-end-nav
 import { toAssertionResponseJson, toPublicKeyRequestOptions } from '@core/utils/webauthn';
 import { cloudBillingReviewUrl, cloudPurchaseIntent, cloudPurchaseQuery } from '@core/utils/cloud-purchase-intent';
 
+import { nativeAuthReturnPath, nativeAuthErrorKey } from '@core/utils/native-auth';
+
 type MfaFactor = 'totp' | 'passkey' | 'recovery_code' | 'email_link';
 type AuthMode = 'password' | 'sso' | 'social';
 
@@ -92,15 +94,16 @@ export class Login {
     protected readonly mfaHasFallback = computed(() => this.mfaHasRecoveryCode() || this.mfaHasActionFallback());
     protected readonly mfaShowsFallbackDivider = computed(() => this.mfaHasFallback() && (this.mfaHasTotp() || (this.mfaHasRecoveryCode() && this.mfaHasActionFallback())));
     protected readonly showSignupLink = computed(() => Boolean(this.cloudStatus()?.hosted && this.cloudStatus()?.signup_enabled));
-    protected readonly signupQueryParams =
-        this.route.snapshot.queryParamMap.has('plan') || this.route.snapshot.queryParamMap.has('billing') || this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent'
-            ? {
-                  ...cloudPurchaseQuery(cloudPurchaseIntent(this.route.snapshot.queryParamMap.get('plan'), this.route.snapshot.queryParamMap.get('billing'))),
-                  ...(this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent' ? { oauth: '1' } : {})
-              }
-            : null;
+    protected readonly signupQueryParams = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'))
+        ? { returnUrl: this.route.snapshot.queryParamMap.get('returnUrl')! }
+        : this.route.snapshot.queryParamMap.has('plan') || this.route.snapshot.queryParamMap.has('billing') || this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent'
+          ? {
+                ...cloudPurchaseQuery(cloudPurchaseIntent(this.route.snapshot.queryParamMap.get('plan'), this.route.snapshot.queryParamMap.get('billing'))),
+                ...(this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent' ? { oauth: '1' } : {})
+            }
+          : null;
     protected readonly recoveryQueryParams = (() => {
-        if (!this.signupQueryParams || this.signupQueryParams.plan === 'free') return this.signupQueryParams;
+        if (!this.signupQueryParams || !('plan' in this.signupQueryParams) || this.signupQueryParams.plan === 'free') return this.signupQueryParams;
         const reviewUrl = cloudBillingReviewUrl(this.signupQueryParams);
         return this.route.snapshot.queryParamMap.get('returnUrl') === reviewUrl ? { ...this.signupQueryParams, returnUrl: reviewUrl } : this.signupQueryParams;
     })();
@@ -361,7 +364,7 @@ export class Login {
             },
             error: (err) => {
                 this.isLoading.set(false);
-                this.errorMessage.set(this.socialErrorKey(err?.error?.code));
+                this.errorMessage.set(nativeAuthErrorKey(err) ?? this.socialErrorKey(err?.error?.code));
             }
         });
     }
@@ -393,9 +396,11 @@ export class Login {
                             this.errorMessage.set('social.errors.failed');
                             return;
                         }
-                        void this.router.navigate(['/signup/social/complete'], {
-                            fragment: `social_token=${encodeURIComponent(signupToken)}`
-                        });
+                        if (socialReturnUrl?.startsWith('/signup/social/complete?native=')) {
+                            void this.router.navigateByUrl(`${socialReturnUrl}#social_token=${encodeURIComponent(signupToken)}`);
+                        } else {
+                            void this.router.navigate(['/signup/social/complete'], { fragment: `social_token=${encodeURIComponent(signupToken)}` });
+                        }
                         return;
                     }
                     if (response.status === 'verification_sent') {
@@ -410,7 +415,7 @@ export class Login {
                 error: (err) => {
                     this.pendingSocialReturnUrl.set(null);
                     this.authMode.set('password');
-                    this.errorMessage.set(this.socialErrorKey(err?.error?.code));
+                    this.errorMessage.set(nativeAuthErrorKey(err) ?? this.socialErrorKey(err?.error?.code));
                 }
             });
     }
@@ -467,7 +472,7 @@ export class Login {
         const rememberMe = this.loginForm.rememberMe().value();
 
         this.auth
-            .login({ email, password, remember_me: rememberMe })
+            .login({ email, password, remember_me: rememberMe, ...(nativeAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {}) })
             .pipe(finalize(() => this.isLoading.set(false)))
             .subscribe({
                 next: (resp) => {
@@ -483,7 +488,7 @@ export class Login {
                     if (err.status === 401) {
                         this.errorMessage.set('login.errors.invalidCredentials');
                     } else {
-                        this.errorMessage.set('login.errors.unexpected');
+                        this.errorMessage.set(nativeAuthErrorKey(err) ?? 'login.errors.unexpected');
                     }
                 }
             });
@@ -535,11 +540,7 @@ export class Login {
             if (!this.isMfaRequired()) {
                 this.clearStandalonePasskeyStart();
             }
-            if ((err as { status?: number })?.status === 401 || (err as { status?: number })?.status === 403) {
-                this.errorMessage.set('login.errors.passkeyFailed');
-            } else {
-                this.errorMessage.set('login.errors.passkeyFailed');
-            }
+            this.errorMessage.set(nativeAuthErrorKey(err) ?? 'login.errors.passkeyFailed');
         } finally {
             this.isPasskeyLoading.set(false);
         }
@@ -690,7 +691,7 @@ export class Login {
                     if (err.status === 401 || err.status === 403) {
                         this.errorMessage.set('login.errors.invalidTotp');
                     } else {
-                        this.errorMessage.set('login.errors.unexpected');
+                        this.errorMessage.set(nativeAuthErrorKey(err) ?? 'login.errors.unexpected');
                     }
                 }
             });
@@ -723,7 +724,7 @@ export class Login {
                     if (err.status === 401 || err.status === 403) {
                         this.errorMessage.set('login.errors.invalidRecoveryCode');
                     } else {
-                        this.errorMessage.set('login.errors.unexpected');
+                        this.errorMessage.set(nativeAuthErrorKey(err) ?? 'login.errors.unexpected');
                     }
                 }
             });
@@ -865,7 +866,8 @@ export class Login {
         return {
             challenge_token: challengeToken,
             credential: serialized,
-            remember_me: rememberMe
+            remember_me: rememberMe,
+            ...(nativeAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {})
         };
     }
 

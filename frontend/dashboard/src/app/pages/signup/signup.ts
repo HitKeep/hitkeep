@@ -30,6 +30,8 @@ import { cloudBillingReviewUrl, cloudPurchaseIntent, cloudPurchaseQuery } from '
 import { AUTH_FIELDSET_DESIGN_TOKENS, AUTH_SELECT_BUTTON_DESIGN_TOKENS } from '@core/theme/hitkeep-preset';
 import { AuthService, SocialProvider, SocialProviderID } from '@services/auth.service';
 
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
+
 type Jurisdiction = 'EU' | 'US';
 
 @Component({
@@ -51,6 +53,7 @@ export class Signup {
     private readonly router = inject(Router);
     protected readonly oauth = inject(OAuthService);
     private readonly route = inject(ActivatedRoute);
+    private readonly nativeReturn = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'));
     protected readonly isOAuthSignup = this.route.snapshot.queryParamMap.get('oauth') === '1';
     private readonly analytics = inject(AnalyticsService);
     private readonly auth = inject(AuthService);
@@ -74,7 +77,11 @@ export class Signup {
     protected readonly selectedBilling = signal<BillingInterval>('monthly');
     protected readonly loginQueryParams = computed(() => {
         const intent = { plan: this.selectedPlan(), billing: this.selectedBilling() };
-        return { ...cloudPurchaseQuery(intent), ...(this.isOAuthSignup ? { oauth: '1' } : {}), returnUrl: intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent) };
+        return {
+            ...cloudPurchaseQuery(intent),
+            ...(this.isOAuthSignup ? { oauth: '1' } : {}),
+            returnUrl: this.nativeReturn ?? (intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent))
+        };
     });
     private readonly activeLanguage = injectActiveLang();
     protected readonly currentYear = new Date().getFullYear();
@@ -189,7 +196,8 @@ export class Signup {
             billing: this.selectedBilling(),
             jurisdiction: this.currentJurisdiction(),
             locale: this.activeLanguage(),
-            accepted_tos: true
+            accepted_tos: true,
+            ...(this.nativeReturn ? { return_url: this.nativeReturn } : {})
         };
 
         this.isLoading.set(true);
@@ -282,6 +290,7 @@ export class Signup {
             region: this.currentJurisdiction()
         });
         if (this.isOAuthSignup) query.set('oauth', '1');
+        if (this.nativeReturn) query.set('native', new URLSearchParams(this.nativeReturn.split('?')[1]).get('request')!);
         this.auth
             .startSocial(provider, {
                 flow: 'signup',
