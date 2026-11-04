@@ -4154,6 +4154,7 @@
     "analyticsNavigation": "Statistikseiten"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "Diese Anmeldung bereitet die Kontolöschung vor. Du musst die Folgen prüfen und die Löschung anschließend separat in der App bestätigen.",
       "title": "In der HitKeep-App anmelden",
       "authority": "Die App erhält vollständigen Zugriff auf dein Konto, einschließlich Änderungen an Daten und Kontoeinstellungen. Deine Teamberechtigungen und Sicherheitsprüfungen gelten weiterhin.",
       "publicClient": "Der öffentliche App-Name bestätigt die installierte App nicht. Fahre nur fort, wenn du diese Anmeldung in der HitKeep-App gestartet hast.",

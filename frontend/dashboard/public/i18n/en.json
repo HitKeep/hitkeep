@@ -4217,6 +4217,7 @@
     "analyticsNavigation": "Analytics pages"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "This sign-in prepares account deletion. You must review the consequences and confirm deletion separately in the app.",
       "title": "Sign in to the HitKeep app",
       "authority": "This gives the app your full account access, including changing data and account settings. Your current team permissions and security checks still apply.",
       "publicClient": "The public app name does not verify the installed app. Continue only if you started this sign-in in the HitKeep app.",

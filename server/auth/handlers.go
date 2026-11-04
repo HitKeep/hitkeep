@@ -197,6 +197,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/auth/passkey/login/finish", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handlePasskeyLoginFinish()))
+	mux.HandleFunc("POST /api/auth/mfa/resume", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleMFAResume()))
 	mux.HandleFunc("POST /api/auth/mfa/totp/verify", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleMFATOTPVerify()))
@@ -337,11 +338,14 @@ func (h *handler) handleLogin() http.HandlerFunc {
 		}
 
 		var req request
-		if err := json.UnmarshalRead(r.Body, &req); err != nil {
+		if err := json.UnmarshalReadStrict(http.MaxBytesReader(w, r.Body, 4096), &req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
 		user, err := h.ctx.Store.GetUserByEmail(r.Context(), req.Email)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Database error during login", "error", err)
@@ -401,25 +405,41 @@ type loginResponse struct {
 }
 
 func (h *handler) issueLoginSession(ctx context.Context, w http.ResponseWriter, userID uuid.UUID, rememberMe bool) error {
+	_, err := h.issueLoginSessionWithID(ctx, w, userID, rememberMe)
+	return err
+}
+
+func (h *handler) issueLoginSessionWithID(ctx context.Context, w http.ResponseWriter, userID uuid.UUID, rememberMe bool) (string, error) {
+	available, err := h.ctx.HumanSessionUserAvailable(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if !available {
+		return "", fmt.Errorf("account unavailable")
+	}
 	duration := h.ctx.Config.AuthSessionDuration()
 	token, _, err := authcore.GenerateTokenWithDuration(h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL, userID, duration)
 	if err != nil {
-		return fmt.Errorf("could not generate auth token: %w", err)
+		return "", fmt.Errorf("could not generate auth token: %w", err)
 	}
 
 	isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
-	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 
 	if rememberMe {
 		rememberDuration := h.ctx.Config.AuthRememberMeDuration()
 		rememberToken, err := h.ctx.Store.CreateRememberMeTokenWithDuration(ctx, userID, rememberDuration)
 		if err != nil {
 			shared.LoggerFromContext(ctx).Error("Failed to create remember me token", "error", err, "user_id", userID)
-			return nil
+			return "", err
 		}
 		authcore.SetRememberMeCookieWithDuration(w, rememberToken, isSecure, rememberDuration)
 	}
-	return nil
+	claims, err := authcore.ValidateTokenClaims(token, h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL)
+	if err != nil {
+		return "", err
+	}
+	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
+	return claims.ID, nil
 }
 
 func (h *handler) handleGetSession() http.HandlerFunc {
@@ -446,12 +466,12 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			http.Error(w, "Service not available", http.StatusServiceUnavailable)
 			return
 		}
-		user, err := h.ctx.Store.GetUserByID(r.Context(), userID)
+		available, err := h.ctx.HumanSessionUserAvailable(r.Context(), userID)
 		if err != nil {
 			http.Error(w, "Service not available", http.StatusServiceUnavailable)
 			return
 		}
-		if user == nil {
+		if !available {
 			authcore.ClearCookies(w, strings.HasPrefix(h.ctx.Config.PublicURL, "https://"))
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

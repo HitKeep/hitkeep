@@ -28,3 +28,21 @@ func TestNativeContractKeepsHumanSessionSeparate(t *testing.T) {
 		}
 	}
 }
+
+func TestDeletionAuthenticationContractIsNarrow(t *testing.T) {
+	spec := OpenAPISpecV1("https://example.test/prefix")
+	paths := spec["paths"].(map[string]any)
+	if paths["/api/auth/mfa/resume"] == nil {
+		t.Fatal("missing verified-primary MFA resume")
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	start := schemas["NativeAuthStart"].(map[string]any)
+	props := start["properties"].(map[string]any)
+	if props["purpose"].(map[string]any)["const"] != "account_delete" || start["dependentRequired"] == nil || start["allOf"] == nil {
+		t.Fatal("purpose/attempt pairing missing")
+	}
+	exchange := schemas["NativeAuthExchange"].(map[string]any)
+	if len(exchange["properties"].(map[string]any)) != 4 {
+		t.Fatal("native exchange changed")
+	}
+}

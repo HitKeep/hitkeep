@@ -115,14 +115,45 @@ func validNativeVerifier(value string) bool {
 
 func (h *handler) handleNativeStart() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var input api.NativeAuthStart
-		if !h.nativeJSON(w, r, &input) {
+		var wire struct {
+			api.NativeAuthStart
+			Purpose       *string `json:"purpose,omitempty"`
+			ReauthAttempt *string `json:"reauth_attempt,omitempty"`
+		}
+		if !h.nativeJSON(w, r, &wire) {
+			return
+		}
+		input := wire.NativeAuthStart
+		if wire.Purpose != nil {
+			input.Purpose = *wire.Purpose
+		}
+		if wire.ReauthAttempt != nil {
+			input.ReauthAttempt = *wire.ReauthAttempt
+		}
+		if (wire.Purpose != nil || wire.ReauthAttempt != nil) && (wire.Purpose == nil || wire.ReauthAttempt == nil || input.Purpose != "account_delete" || input.ReauthAttempt == "" || input.Intent != "login") {
+			nativeError(w, r, 400, "invalid_request")
 			return
 		}
 		challenge, err := base64.RawURLEncoding.DecodeString(input.CodeChallenge)
 		if !shared.NativeAuthClient(input.ClientID, input.RedirectURI) || input.CodeChallengeMethod != "S256" || err != nil || len(challenge) != 32 || base64.RawURLEncoding.EncodeToString(challenge) != input.CodeChallenge || !validNativeOpaque(input.State, 16, 512) || (input.Intent != "login" && input.Intent != "signup") {
 			nativeError(w, r, 400, "invalid_request")
 			return
+		}
+		if input.Purpose == "account_delete" {
+			id, ok := h.ctx.AuthState.AccountDeletionSubject(shared.AccountDeletionReturnPath(input.ReauthAttempt), shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
+			if !ok {
+				nativeError(w, r, 400, "invalid_grant")
+				return
+			}
+			available, err := h.ctx.HumanSessionUserAvailable(r.Context(), id)
+			if err != nil {
+				nativeError(w, r, 503, "temporarily_unavailable")
+				return
+			}
+			if !available {
+				nativeError(w, r, 400, "invalid_grant")
+				return
+			}
 		}
 		if input.Intent == "signup" {
 			cloud := h.ctx.CloudStatus()
@@ -159,7 +190,7 @@ func (h *handler) handleNativeAuthorize() http.HandlerFunc {
 			return
 		}
 		destination := shared.NativeAuthReturnPath(handle)
-		if h.userIDFromLogoutRequest(r) == uuid.Nil {
+		if entry.Start.Purpose == "account_delete" || h.userIDFromLogoutRequest(r) == uuid.Nil {
 			page := "/login"
 			if entry.Start.Intent == "signup" {
 				page = "/signup"
@@ -175,6 +206,13 @@ func (h *handler) handleNativeAuthorize() http.HandlerFunc {
 var errNativeAccountMissing = errors.New("account unavailable")
 
 func (h *handler) nativeAccountSecurity(r *http.Request, id uuid.UUID) (string, string, error) {
+	available, err := h.ctx.HumanSessionUserAvailable(r.Context(), id)
+	if err != nil {
+		return "", "", err
+	}
+	if !available {
+		return "", "", errNativeAccountMissing
+	}
 	user, err := h.ctx.Store.GetUserByID(r.Context(), id)
 	if err != nil {
 		return "", "", err
@@ -210,6 +248,11 @@ func (h *handler) handleNativeConsent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		handle := nativeRequestHandle(r)
 		id := shared.GetUserIDFromContext(r)
+		session, _ := r.Context().Value(shared.AuthSessionKey).(shared.AuthSessionContext)
+		if !h.ctx.AuthState.NativeDeletionPrimaryVerified(handle, id, session.ID) {
+			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
 		email, security, err := h.nativeAccountSecurity(r, id)
 		if err != nil {
 			if errors.Is(err, errNativeAccountMissing) {
@@ -233,7 +276,7 @@ func (h *handler) handleNativeConsent() http.HandlerFunc {
 			nativeError(w, r, 400, "invalid_grant")
 			return
 		}
-		shared.WriteJSON(r.Context(), w, 200, api.NativeAuthConsent{Request: handle, ClientID: entry.Start.ClientID, Issuer: entry.Issuer, Email: email, CSRFToken: csrf, RememberMe: entry.Start.RememberMe, ExpiresAt: entry.ExpiresAt})
+		shared.WriteJSON(r.Context(), w, 200, api.NativeAuthConsent{Purpose: entry.Start.Purpose, Request: handle, ClientID: entry.Start.ClientID, Issuer: entry.Issuer, Email: email, CSRFToken: csrf, RememberMe: entry.Start.RememberMe, ExpiresAt: entry.ExpiresAt})
 	}
 }
 
@@ -265,6 +308,11 @@ func (h *handler) handleNativeDecision() http.HandlerFunc {
 		entry, ok := h.ctx.AuthState.GetNativeAuth(handle)
 		if !ok || entry.Issuer != shared.NativeAuthIssuer(h.ctx.Config.PublicURL) {
 			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
+		session, _ := r.Context().Value(shared.AuthSessionKey).(shared.AuthSessionContext)
+		if decision == "approve" && !h.ctx.AuthState.NativeDeletionPrimaryVerified(handle, shared.GetUserIDFromContext(r), session.ID) {
+			nativeError(w, r, 403, "access_denied")
 			return
 		}
 		_, security, err := h.nativeAccountSecurity(r, shared.GetUserIDFromContext(r))
@@ -327,7 +375,8 @@ func (h *handler) handleNativeExchange() http.HandlerFunc {
 		}
 		original := append([]string(nil), w.Header().Values("Set-Cookie")...)
 		authcore.ClearCookies(w, true)
-		if err := h.issueLoginSession(r.Context(), w, entry.UserID, entry.RememberMe); err != nil {
+		jti, err := h.issueLoginSessionWithID(r.Context(), w, entry.UserID, entry.RememberMe)
+		if err != nil {
 			w.Header()["Set-Cookie"] = original
 			nativeError(w, r, 503, "temporarily_unavailable")
 			return
@@ -345,6 +394,11 @@ func (h *handler) handleNativeExchange() http.HandlerFunc {
 				return
 			}
 		}
+		if !h.ctx.AuthState.BindNativeAccountDeletionProof(entry, entry.UserID, jti) {
+			w.Header()["Set-Cookie"] = original
+			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
 		shared.WriteJSON(r.Context(), w, 200, map[string]string{"status": "ok"})
 	}
 }
@@ -354,7 +408,7 @@ func (h *handler) handleNativeExchange() http.HandlerFunc {
 type nativeReturnKey struct{}
 
 func withNativeReturnPath(r *http.Request, returnPath string) *http.Request {
-	if shared.NativeAuthHandle(returnPath) == "" {
+	if shared.NativeAuthHandle(returnPath) == "" && shared.AccountDeletionHandle(returnPath) == "" {
 		return r
 	}
 	return r.WithContext(context.WithValue(r.Context(), nativeReturnKey{}, returnPath))
@@ -367,6 +421,12 @@ func nativeReturnPath(r *http.Request) string {
 
 func (h *handler) bindNativeLogin(r *http.Request, w http.ResponseWriter, returnPath string, id uuid.UUID) bool {
 	returnPath = nativeSignupReturnPath(returnPath)
+	if isDeletionReturnCandidate(returnPath) || h.deletionReauthentication(returnPath) {
+		if shared.AccountDeletionHandle(returnPath) == "" && shared.NativeAuthHandle(returnPath) == "" || !h.validateDeletionSubject(returnPath, id) {
+			nativeError(w, r, 400, "invalid_grant")
+			return false
+		}
+	}
 	if shared.NativeAuthHandle(returnPath) == "" {
 		return true
 	}

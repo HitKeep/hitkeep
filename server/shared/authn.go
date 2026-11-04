@@ -145,14 +145,13 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 			}
 			if restoreSession {
 				duration := c.Config.AuthSessionDuration()
-				newToken, expiresAt, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
+				newToken, _, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
 				if err == nil {
 					auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
 					claims, validationErr := auth.ValidateTokenClaims(newToken, c.Config.JWTSecret, c.Config.PublicURL)
 					if validationErr == nil {
 						sessionCtx = authSessionContextFromClaims(claims)
 					}
-					_ = expiresAt
 				}
 			}
 		}

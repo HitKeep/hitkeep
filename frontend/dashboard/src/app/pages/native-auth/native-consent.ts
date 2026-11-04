@@ -13,6 +13,7 @@ import { Brand } from '@components/brand/brand';
 import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
 
 interface NativeConsent {
+    purpose?: 'account_delete';
     request: string;
     client_id: string;
     issuer: string;

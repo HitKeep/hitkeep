@@ -4107,6 +4107,7 @@
     "analyticsNavigation": "Pagine delle statistiche"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "Questo accesso prepara l’eliminazione dell’account. Devi esaminare le conseguenze e confermare separatamente l’eliminazione nell’app.",
       "title": "Accedi all’app HitKeep",
       "authority": "L’app avrà accesso completo al tuo account, comprese le modifiche ai dati e alle impostazioni. Restano validi i permessi del team e i controlli di sicurezza.",
       "publicClient": "Il nome pubblico non verifica l’app installata. Continua solo se hai avviato questo accesso dall’app HitKeep.",

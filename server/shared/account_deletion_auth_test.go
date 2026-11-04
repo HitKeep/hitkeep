@@ -129,3 +129,17 @@ func TestNativeDeletionProofOnlyExchangeSession(t *testing.T) {
 		t.Fatal("native JTI binding failed")
 	}
 }
+
+func TestAccountDeletionCredentialChangeInvalidatesBrowserProof(t *testing.T) {
+	s := NewAuthStateStore()
+	id := uuid.New()
+	hash := strings.Repeat("a", 64)
+	attempt := s.CreateAccountDeletionAttempt(id, "https://example.test", hash, "/settings", time.Now().Add(time.Minute))
+	if !s.CompleteAccountDeletionPrimary(AccountDeletionReturnPath(attempt), id, "https://example.test", "fresh") {
+		t.Fatal("primary")
+	}
+	s.InvalidateNativeAuth(id)
+	if s.ConsumeAccountDeletionProof(attempt, id, "fresh", hash) {
+		t.Fatal("credential change preserved proof")
+	}
+}

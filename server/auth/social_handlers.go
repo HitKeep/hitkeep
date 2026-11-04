@@ -134,6 +134,10 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			}
 		}
 
+		if h.deletionReauthentication(req.ReturnURL) && flow != "login" {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+			return
+		}
 		authorization, err := h.ctx.SocialAuth.Begin(r.Context(), providerConfig)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider authorization could not be prepared", "provider", providerName, "category", socialErrorCategory(err))
@@ -352,6 +356,13 @@ func (h *handler) handleSocialComplete() http.HandlerFunc {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
+		if h.deletionReauthentication(completion.ReturnPath) && completion.Flow != "login" {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+			return
+		}
+		if !h.deletionAuthRequest(w, r, completion.ReturnPath) {
+			return
+		}
 		switch completion.Flow {
 		case "invite":
 			h.completeSocialInvite(w, r, completion)
@@ -367,6 +378,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 	user, identity, err := h.ctx.Store.GetUserBySocialIdentity(r.Context(), completion.Provider, completion.Subject)
 	if err != nil {
 		writeSocialError(r.Context(), w, http.StatusInternalServerError, "social_login_failed")
+		return
+	}
+	if h.deletionReauthentication(completion.ReturnPath) && (identity == nil || user == nil || !h.validateDeletionSubject(completion.ReturnPath, user.ID)) {
+		writeSocialError(r.Context(), w, http.StatusForbidden, "social_login_failed")
 		return
 	}
 	if identity == nil && completion.EmailVerified && completion.Provider != socialauth.ProviderMicrosoft {

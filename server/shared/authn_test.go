@@ -1,8 +1,10 @@
 package shared
 
 import (
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -208,5 +210,68 @@ func assertClearedHumanCookies(t *testing.T, w *httptest.ResponseRecorder) {
 		if cookie.Name != name || cookie.Value != "" || !cookie.Expires.Before(time.Now()) || !cookie.Secure || !cookie.HttpOnly {
 			t.Errorf("cookie %s was not securely cleared: %v", name, cookie)
 		}
+	}
+}
+
+func TestAuthSessionIDIsAdditiveAndRememberRestorationNeverProvesDeletion(t *testing.T) {
+	store := newSharedTestStore(t)
+	id, err := store.CreateUserWithoutDefaultTenant(t.Context(), "proof-session@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Context{Store: store, AuthState: NewAuthStateStore(), Config: &config.Config{JWTSecret: "proof-jti-test", PublicURL: "https://example.test"}}
+	attempt := c.AuthState.CreateAccountDeletionAttempt(id, c.Config.PublicURL, strings.Repeat("a", 64), "/settings", time.Now().Add(time.Minute))
+	token, err := auth.GenerateToken(c.Config.JWTSecret, c.Config.PublicURL, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := auth.ValidateTokenClaims(token, c.Config.JWTSecret, c.Config.PublicURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, legacy := range []bool{false, true} {
+		if legacy {
+			claims.ID = ""
+			token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(c.Config.JWTSecret))
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		request := httptest.NewRequest("GET", "/api/auth/session", nil)
+		request.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		out := httptest.NewRecorder()
+		c.RequireHumanAuth(func(w http.ResponseWriter, r *http.Request) {
+			session := r.Context().Value(AuthSessionKey).(AuthSessionContext)
+			if (session.ID == "") != legacy {
+				t.Error("legacy session ID compatibility")
+			}
+			if c.AuthState.AccountDeletionProofVerified(attempt, id, session.ID, strings.Repeat("a", 64)) {
+				t.Error("cookie authentication created proof")
+			}
+			w.WriteHeader(204)
+		})(out, request)
+		if out.Code != 204 {
+			t.Fatalf("ordinary legacy=%v session rejected %d", legacy, out.Code)
+		}
+	}
+	remembered, err := store.CreateRememberMeToken(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("GET", "/api/auth/session", nil)
+	request.AddCookie(&http.Cookie{Name: auth.RememberMeCookieName, Value: remembered})
+	out := httptest.NewRecorder()
+	c.RequireHumanAuth(func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(AuthSessionKey).(AuthSessionContext)
+		if session.ID == "" {
+			t.Error("restored session missing internal ID")
+		}
+		if c.AuthState.AccountDeletionProofVerified(attempt, id, session.ID, strings.Repeat("a", 64)) {
+			t.Error("remember restoration created proof")
+		}
+		w.WriteHeader(204)
+	})(out, request)
+	if out.Code != 204 {
+		t.Fatalf("remember restoration %d", out.Code)
 	}
 }

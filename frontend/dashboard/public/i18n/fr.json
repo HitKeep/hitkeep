@@ -4110,6 +4110,7 @@
     "analyticsNavigation": "Pages de statistiques"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "Cette connexion prépare la suppression du compte. Vous devez vérifier les conséquences et confirmer séparément la suppression dans l’application.",
       "title": "Se connecter à l’application HitKeep",
       "authority": "L’application aura un accès complet à votre compte, y compris pour modifier les données et les paramètres. Vos autorisations d’équipe et les contrôles de sécurité restent applicables.",
       "publicClient": "Le nom public ne vérifie pas l’application installée. Continuez uniquement si vous avez lancé cette connexion dans l’application HitKeep.",

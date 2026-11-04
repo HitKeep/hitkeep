@@ -8,6 +8,9 @@
                 <p-message severity="error" role="alert">{{ 'nativeAuth.restart' | transloco }}</p-message>
                 } @else if (consent(); as request) {
                 <p>{{ 'nativeAuth.authority' | transloco }}</p>
+                @if (request.purpose === 'account_delete') {
+                <p-message severity="warn">{{ 'nativeAuth.accountDeletionPurpose' | transloco }}</p-message>
+                }
                 <p>{{ 'nativeAuth.publicClient' | transloco }}</p>
                 <dl class="flex flex-col gap-2 break-all">
                     <dt>{{ 'oauth.signedInAs' | transloco: { email: request.email } }}</dt>

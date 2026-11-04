@@ -4361,6 +4361,7 @@
     "analyticsNavigation": "Páginas de analíticas"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "Este inicio de sesión prepara la eliminación de la cuenta. Debes revisar las consecuencias y confirmar la eliminación por separado en la aplicación.",
       "title": "Iniciar sesión en la app de HitKeep",
       "authority": "La app tendrá acceso completo a tu cuenta, incluidos los cambios en datos y ajustes. Se mantienen tus permisos de equipo y las comprobaciones de seguridad.",
       "publicClient": "El nombre público no verifica la app instalada. Continúa solo si has iniciado este proceso desde la app de HitKeep.",

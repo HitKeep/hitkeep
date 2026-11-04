@@ -141,6 +141,10 @@ export class AuthService {
         );
     }
 
+    resumeMfa(challengeId: string): Observable<LoginResponse> {
+        return this.http.post<LoginResponse>('/api/auth/mfa/resume', { challenge_id: challengeId });
+    }
+
     getSSOAvailability(): Observable<SSOAvailability> {
         return this.http.get<SSOAvailability>('/api/auth/sso');
     }
@@ -249,8 +253,8 @@ export class AuthService {
         });
     }
 
-    startPasskeyLogin(): Observable<PasskeyLoginStartResponse> {
-        return this.http.post<PasskeyLoginStartResponse>('/api/auth/passkey/login/start', {});
+    startPasskeyLogin(returnUrl?: string): Observable<PasskeyLoginStartResponse> {
+        return this.http.post<PasskeyLoginStartResponse>('/api/auth/passkey/login/start', returnUrl ? { return_url: returnUrl } : {});
     }
 
     finishPasskeyLogin(payload: PasskeyLoginFinishRequest): Observable<void> {

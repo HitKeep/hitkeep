@@ -166,13 +166,18 @@ func openAPIV1CorePaths() map[string]any {
 				map[string]any{"200": jsonRefResp("Login response", "#/components/schemas/LoginResponse"), "400": errResp("Invalid or expired link"), "401": errResp("Sign in to accept this invitation"), "403": errResp("Invite cannot be accepted")}),
 		},
 		"/api/auth/passkey/login/start": map[string]any{
-			"post": op([]string{"Auth"}, "Start passkey login", "Creates passkey login challenge.", nil, nil, nil,
+			"post": op([]string{"Auth"}, "Start passkey login", "Creates passkey login challenge. A deletion continuation must be frozen here before signing the assertion.", nil, nil, jsonBody(map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"return_url": map[string]any{"type": "string", "description": "Optional bounded server-owned native or account-deletion continuation."}}}),
 				map[string]any{"200": jsonSchemaResp("Passkey challenge", map[string]any{"type": "object", "properties": map[string]any{"challenge_token": map[string]any{"type": "string"}, "publicKey": map[string]any{"type": "object", "additionalProperties": true}}})}),
 		},
 		"/api/auth/passkey/login/finish": map[string]any{
 			"post": op([]string{"Auth"}, "Finish passkey login", "Verifies passkey assertion and issues session.", nil, nil,
 				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"challenge_token": map[string]any{"type": "string"}, "credential": map[string]any{"type": "object", "additionalProperties": true}, "remember_me": map[string]any{"type": "boolean"}, "return_url": map[string]any{"type": "string", "description": "Optional bounded native consent continuation; never grants approval."}}, "required": []string{"challenge_token", "credential"}}),
 				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status")}),
+		},
+		"/api/auth/mfa/resume": map[string]any{
+			"post": op([]string{"Auth"}, "Resume verified-primary MFA", "Retrieves only an existing deletion-purpose team OIDC MFA challenge and its configured factors. Requires strict same Origin, HttpOnly browser binding, no bearer/API/agent headers and bounded JSON. Never verifies a factor, creates proof, or issues session cookies. Expired, foreign-browser, wrong-subject or unrelated challenges fail closed.", nil, nil,
+				jsonBody(map[string]any{"type": "object", "additionalProperties": false, "required": []string{"challenge_id"}, "properties": map[string]any{"challenge_id": map[string]any{"type": "string", "format": "uuid"}}}),
+				map[string]any{"200": jsonRefResp("Existing MFA challenge", "#/components/schemas/LoginResponse"), "400": errResp("Unavailable challenge"), "403": errResp("Origin or browser binding rejected"), "503": errResp("Account store unavailable")}),
 		},
 		"/api/auth/mfa/totp/verify": map[string]any{
 			"post": op([]string{"Auth"}, "Verify MFA TOTP", "Verifies TOTP code for pending MFA challenge.", nil, nil,

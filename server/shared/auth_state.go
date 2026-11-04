@@ -507,13 +507,7 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 	}
 
 	s.InvalidateNativeAuth(userID)
-	s.nativeMu.Lock()
-	for key, entry := range s.accountDeletionAttempts {
-		if entry.UserID == userID {
-			delete(s.accountDeletionAttempts, key)
-		}
-	}
-	s.nativeMu.Unlock()
+
 	s.DeletePendingTOTPSetup(userID)
 	s.DeletePasskeyChallenge(userID)
 

@@ -30,6 +30,7 @@ import { readSessionEndState, SessionEndReason } from '@services/session-end-nav
 import { toAssertionResponseJson, toPublicKeyRequestOptions } from '@core/utils/webauthn';
 import { cloudBillingReviewUrl, cloudPurchaseIntent, cloudPurchaseQuery } from '@core/utils/cloud-purchase-intent';
 
+import { proofAuthReturnPath } from '@core/utils/account-deletion-auth';
 import { nativeAuthReturnPath, nativeAuthErrorKey } from '@core/utils/native-auth';
 
 type MfaFactor = 'totp' | 'passkey' | 'recovery_code' | 'email_link';
@@ -248,6 +249,16 @@ export class Login {
             this.infoMessage.set('social.confirmedSignIn');
         }
 
+        const mfaResume = this.deletionMfaResume();
+        if (mfaResume) {
+            this.auth
+                .resumeMfa(mfaResume)
+                .pipe(takeUntilDestroyed(this.destroyRef))
+                .subscribe({
+                    next: (response) => this.enterMfaState(response),
+                    error: () => this.errorMessage.set('nativeAuth.restart')
+                });
+        }
         const socialMfaHandoff = this.auth.consumeSocialMfaHandoff();
         const completionToken = this.socialCompletionToken();
         if (socialMfaHandoff?.status === 'mfa_required') {
@@ -262,9 +273,18 @@ export class Login {
             this.completeSocialLogin(completionToken);
         }
 
-        if (!completionToken && this.shouldAttemptConditionalPasskey()) {
+        if (!mfaResume && !completionToken && this.shouldAttemptConditionalPasskey()) {
             void this.startConditionalPasskeyLogin();
         }
+    }
+
+    private deletionMfaResume(): string | null {
+        const fragment = this.route.snapshot.fragment;
+        if (!fragment || fragment.length > 64 || !proofAuthReturnPath(this.resolveReturnUrl())) return null;
+        const match = /^mfa_challenge=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.exec(fragment);
+        if (!match) return null;
+        void this.router.navigate([], { relativeTo: this.route, fragment: null, replaceUrl: true });
+        return match[1];
     }
 
     protected onSSOLogin(): void {
@@ -472,7 +492,7 @@ export class Login {
         const rememberMe = this.loginForm.rememberMe().value();
 
         this.auth
-            .login({ email, password, remember_me: rememberMe, ...(nativeAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {}) })
+            .login({ email, password, remember_me: rememberMe, ...(proofAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {}) })
             .pipe(finalize(() => this.isLoading.set(false)))
             .subscribe({
                 next: (resp) => {
@@ -867,7 +887,7 @@ export class Login {
             challenge_token: challengeToken,
             credential: serialized,
             remember_me: rememberMe,
-            ...(nativeAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {})
+            ...(proofAuthReturnPath(this.resolveReturnUrl()) ? { return_url: this.resolveReturnUrl() } : {})
         };
     }
 
@@ -880,7 +900,7 @@ export class Login {
             return this.standalonePasskeyStartRequest;
         }
 
-        this.standalonePasskeyStartRequest = firstValueFrom(this.auth.startPasskeyLogin())
+        this.standalonePasskeyStartRequest = firstValueFrom(this.auth.startPasskeyLogin(proofAuthReturnPath(this.resolveReturnUrl()) ?? undefined))
             .then((start) => {
                 this.standalonePasskeyStartResponse = start;
                 return start;

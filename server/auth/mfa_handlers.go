@@ -60,6 +60,9 @@ func (h *handler) loadMFAChallenge(w http.ResponseWriter, r *http.Request, chall
 		return database.LoginChallenge{}, false
 	}
 
+	if !h.deletionAuthRequest(w, r, challenge.NativeReturnPath) {
+		return database.LoginChallenge{}, false
+	}
 	return challenge, true
 }
 
@@ -100,7 +103,7 @@ func (h *handler) handleMFATOTPVerify() http.HandlerFunc {
 		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
 			return
 		}
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after mfa totp verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -145,7 +148,7 @@ func (h *handler) handleMFARecoveryCodeVerify() http.HandlerFunc {
 		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
 			return
 		}
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after recovery code verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -242,7 +245,7 @@ func (h *handler) handleMFAEmailLinkVerify() http.HandlerFunc {
 		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
 			return
 		}
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after mfa email link verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

@@ -4093,6 +4093,7 @@
     "analyticsNavigation": "Statistiekpagina’s"
   },
   "nativeAuth": {
+      "accountDeletionPurpose": "Deze aanmelding bereidt het verwijderen van je account voor. Bekijk de gevolgen en bevestig de verwijdering daarna apart in de app.",
       "title": "Aanmelden bij de HitKeep-app",
       "authority": "De app krijgt volledige toegang tot je account, inclusief het wijzigen van gegevens en accountinstellingen. Je teamrechten en beveiligingscontroles blijven gelden.",
       "publicClient": "De openbare appnaam verifieert de geïnstalleerde app niet. Ga alleen verder als je deze aanmelding in de HitKeep-app hebt gestart.",

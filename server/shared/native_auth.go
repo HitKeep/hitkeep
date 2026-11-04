@@ -281,12 +281,18 @@ func (s *AuthStateStore) ConsumeNativeAuth(input api.NativeAuthExchange, issuer 
 	return entry, true
 }
 
+// Credential changes and logout invalidate both native handoffs and deletion proof.
 func (s *AuthStateStore) InvalidateNativeAuth(userID uuid.UUID) {
 	if s == nil || userID == uuid.Nil {
 		return
 	}
 	s.nativeMu.Lock()
 	defer s.nativeMu.Unlock()
+	for key, entry := range s.accountDeletionAttempts {
+		if entry.UserID == userID {
+			delete(s.accountDeletionAttempts, key)
+		}
+	}
 	for key, entry := range s.nativeRequests {
 		if entry.UserID == userID {
 			delete(s.nativeCodes, entry.CodeHash)

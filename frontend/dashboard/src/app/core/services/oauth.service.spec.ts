@@ -58,6 +58,14 @@ describe('OAuthService', () => {
         expect(navigate).toHaveBeenCalledWith(target);
     });
 
+    it('keeps deletion proof on its frozen return without consulting delegated continuation', () => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const target = `/settings?deletion_attempt=${'a'.repeat(43)}`;
+        service.continueAfterAuthentication(target);
+        http.expectNone('/api/oauth/continuation');
+        expect(navigate).toHaveBeenCalledWith(target);
+    });
+
     it('keeps continuation outages retryable without copying backend bodies into navigation', () => {
         const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
         service.continueAfterAuthentication('/dashboard');

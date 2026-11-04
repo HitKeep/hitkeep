@@ -17,7 +17,7 @@ import (
 // method. It issues a session only when no configured local factor requires a
 // challenge; callers remain responsible for method-specific audit details.
 func (h *handler) beginUserLogin(r *http.Request, w http.ResponseWriter, userID uuid.UUID, rememberMe bool, authProvider string) (loginResponse, error) {
-	if !h.ctx.AuthState.BindNativeReturnPath(nativeReturnPath(r), userID) {
+	if !h.validateDeletionSubject(nativeReturnPath(r), userID) || !h.ctx.AuthState.BindNativeReturnPath(nativeReturnPath(r), userID) {
 		return loginResponse{}, fmt.Errorf("native continuation unavailable")
 	}
 	totpEnabled, err := h.ctx.Store.HasEnabledTOTP(r.Context(), userID)
@@ -35,7 +35,7 @@ func (h *handler) beginUserLogin(r *http.Request, w http.ResponseWriter, userID 
 	}
 
 	if !totpEnabled && !hasPasskey {
-		if err := h.issueLoginSession(r.Context(), w, userID, rememberMe); err != nil {
+		if err := h.issueVerifiedLoginSession(r, w, userID, rememberMe, nativeReturnPath(r)); err != nil {
 			return loginResponse{}, err
 		}
 		return loginResponse{Status: "ok"}, nil
