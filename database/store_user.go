@@ -233,6 +233,12 @@ type userFKReference struct {
 }
 
 var userFKReferences = []userFKReference{
+	{table: "cloud_lifecycle_messages", column: "user_id", query: "UPDATE cloud_lifecycle_messages SET user_id = ? WHERE user_id = ?"},
+	{table: "instance_audit_log", column: "actor_id", query: "UPDATE instance_audit_log SET actor_id = ? WHERE actor_id = ?"},
+	{table: "qr_codes", column: "created_by", query: "UPDATE qr_codes SET created_by = ? WHERE created_by = ?"},
+	{table: "qr_code_share_links", column: "created_by", query: "UPDATE qr_code_share_links SET created_by = ? WHERE created_by = ?"},
+	{table: "site_imports", column: "created_by", query: "UPDATE site_imports SET created_by = ? WHERE created_by = ?"},
+	{table: "user_recovery_codes", column: "user_id", query: "UPDATE user_recovery_codes SET user_id = ? WHERE user_id = ?"},
 	{table: "api_clients", column: "user_id", query: "UPDATE api_clients SET user_id = ? WHERE user_id = ?"},
 	{table: "instance_roles", column: "granted_by", query: "UPDATE instance_roles SET granted_by = ? WHERE granted_by = ?"},
 	{table: "instance_roles", column: "user_id", query: "UPDATE instance_roles SET user_id = ? WHERE user_id = ?"},

@@ -240,3 +240,67 @@ func TestDeleteUserRemovesSSOIdentitiesAndPreservesOtherAccounts(t *testing.T) {
 		}
 	}
 }
+
+func TestUserProfileForeignKeyMetadataCoversLiveSchema(t *testing.T) {
+	store := setupTenantStore(t)
+	rows, err := store.DB().QueryContext(t.Context(), `SELECT table_name,unnest(constraint_column_names) FROM duckdb_constraints() WHERE constraint_type='FOREIGN KEY' AND referenced_table='users'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			t.Fatal(err)
+		}
+		covered := false
+		for _, reference := range userFKReferences {
+			if reference.table == table && reference.column == column {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("profile shadow metadata missing live user FK %s.%s", table, column)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUserProfileEmailPreservesRecoveryCodesAndAuditReferences(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "profile-recovery@example.test", "password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnableUserTOTP(ctx, userID, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceUserRecoveryCodes(ctx, userID, []string{"original-recovery-hash"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendInstanceAuditEntry(ctx, InstanceAuditParams{ActorID: userID, Action: "auth.login", Outcome: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateUserProfile(ctx, userID, "profile-recovery-updated@example.test", "Given", "Family"); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := store.GetRecoveryCodeStatus(ctx, userID); err != nil || status.Remaining != 1 {
+		t.Fatalf("recovery codes=%+v err=%v", status, err)
+	}
+	user, err := store.GetUserByID(ctx, userID)
+	if err != nil || user == nil || user.Email != "profile-recovery-updated@example.test" {
+		t.Fatalf("profile=%+v err=%v", user, err)
+	}
+	var audits int
+	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM instance_audit_log WHERE actor_id=? AND action='auth.login'`, userID).Scan(&audits); err != nil || audits != 1 {
+		t.Fatalf("audit actor lost: count=%d err=%v", audits, err)
+	}
+	var shadows int
+	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email LIKE '__shadow_%@hitkeep.invalid'`).Scan(&shadows); err != nil || shadows != 0 {
+		t.Fatalf("shadow users=%d err=%v", shadows, err)
+	}
+}
