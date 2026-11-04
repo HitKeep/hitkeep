@@ -130,6 +130,11 @@ func (s *Store) GetUserBySocialIdentity(ctx context.Context, provider, subject s
 }
 
 func (s *Store) LinkSocialIdentity(ctx context.Context, input LinkSocialIdentityInput) (*SocialIdentity, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, input.UserID); err != nil {
+		return nil, err
+	}
 	provider, err := normalizeSocialProvider(input.Provider)
 	if err != nil {
 		return nil, err
@@ -400,6 +405,11 @@ func (s *Store) CreateManagedSocialAccount(ctx context.Context, input CreateMana
 }
 
 func (s *Store) SetPasswordLoginEnabled(ctx context.Context, userID uuid.UUID, enabled bool) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	return s.Exec(ctx, "UPDATE users SET password_login_enabled = ? WHERE id = ?", enabled, userID)
 }
 

@@ -130,12 +130,34 @@ func (s *Store) ListTeamMembers(ctx context.Context, tenantID uuid.UUID) ([]api.
 }
 
 func (s *Store) AddTeamMember(ctx context.Context, tenantID, userID uuid.UUID, role string, addedBy uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
+	closed, err := s.IsClosedCloudAccount(ctx, tenantID, "", "")
+	if err != nil {
+		return err
+	}
+	if closed {
+		return ErrAccountDeletionBlocked
+	}
+	if role != TenantRoleOwner {
+		var last bool
+		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner') AND (SELECT COUNT(*) FROM tenant_members WHERE tenant_id=? AND role='owner')<=1`, tenantID, userID, tenantID).Scan(&last); err != nil {
+			return err
+		}
+		if last {
+			return ErrTeamLastOwner
+		}
+	}
+
 	role = strings.TrimSpace(strings.ToLower(role))
 	if !IsValidTenantRole(role) {
 		return fmt.Errorf("invalid tenant role")
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO tenant_members (tenant_id, user_id, role, added_by)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT (tenant_id, user_id) DO UPDATE SET
@@ -357,6 +379,8 @@ func (s *Store) RevokeTeamInvite(ctx context.Context, tenantID, inviteID uuid.UU
 }
 
 func (s *Store) AcceptTeamInvitesByEmail(ctx context.Context, email string, userID uuid.UUID) ([]api.TeamInvite, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return nil, fmt.Errorf("invite email is required")
@@ -377,6 +401,8 @@ func (s *Store) AcceptTeamInvitesByEmail(ctx context.Context, email string, user
 }
 
 func (s *Store) AcceptInviteWithPassword(ctx context.Context, token string, newHashedPassword string) (string, uuid.UUID, []api.TeamInvite, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	entry, found, err := s.lookupPasswordResetToken(token, true)
 	if err != nil {
 		return "", uuid.Nil, nil, err
@@ -683,6 +709,8 @@ func setActiveTenantTx(ctx context.Context, tx *sql.Tx, userID, tenantID uuid.UU
 }
 
 func (s *Store) RemoveTeamMember(ctx context.Context, tenantID, userID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, "DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ?", tenantID, userID)
 		if err != nil {
@@ -710,6 +738,8 @@ func (s *Store) RemoveTeamMember(ctx context.Context, tenantID, userID uuid.UUID
 }
 
 func (s *Store) LeaveTeam(ctx context.Context, tenantID, userID uuid.UUID) (uuid.UUID, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	nextActiveTenantID := uuid.Nil
 
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
@@ -797,6 +827,8 @@ func (s *Store) LeaveTeam(ctx context.Context, tenantID, userID uuid.UUID) (uuid
 }
 
 func (s *Store) TransferTeamOwnership(ctx context.Context, tenantID, actorID, targetUserID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if actorID == targetUserID {
 		return ErrTeamTransferSelf
 	}

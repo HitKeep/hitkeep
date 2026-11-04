@@ -206,6 +206,8 @@ func (s *Store) DeleteTeamSSOConfig(ctx context.Context, teamID uuid.UUID) error
 }
 
 func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (ResolveSSOUserResult, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	input.IssuerURL = strings.TrimSpace(input.IssuerURL)
 	input.Subject = strings.TrimSpace(input.Subject)
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
@@ -232,6 +234,9 @@ func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (
 				return ErrSSOIdentityUserMismatch
 			}
 			result.UserID = linkedUserID
+			if err := s.requireAccountNotRemoving(ctx, linkedUserID); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE sso_identities
 				SET email = ?, updated_at = ?
@@ -243,6 +248,11 @@ func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (
 			err = tx.QueryRowContext(ctx, "SELECT id FROM users WHERE lower(email) = lower(?)", input.Email).Scan(&result.UserID)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("could not resolve SSO user by email: %w", err)
+			}
+			if err == nil {
+				if err := s.requireAccountNotRemoving(ctx, result.UserID); err != nil {
+					return err
+				}
 			}
 			if errors.Is(err, sql.ErrNoRows) && input.ExpectedUserID != uuid.Nil {
 				return ErrSSOIdentityUserMismatch

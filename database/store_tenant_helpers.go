@@ -85,6 +85,14 @@ func archivedTenantMemberIDs(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID
 }
 
 func ensureTenantMemberTx(ctx context.Context, tx *sql.Tx, tenantID, userID uuid.UUID, role string, addedBy uuid.UUID) error {
+	var blocked bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM closed_cloud_accounts WHERE original_team_id=?) OR EXISTS (SELECT 1 FROM account_deletion_intents WHERE user_id=? AND phase IN ('removing','complete'))`, tenantID, userID).Scan(&blocked); err != nil {
+		return err
+	}
+	if blocked {
+		return ErrAccountDeletionBlocked
+	}
+
 	role = strings.TrimSpace(role)
 	if role == "" {
 		role = TenantRoleMember

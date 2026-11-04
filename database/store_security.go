@@ -79,6 +79,11 @@ func (s *Store) HasEnabledTOTP(ctx context.Context, userID uuid.UUID) (bool, err
 }
 
 func (s *Store) EnableUserTOTP(ctx context.Context, userID uuid.UUID, secret string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM user_totp_factors WHERE user_id = ?", userID); err != nil {
@@ -159,6 +164,11 @@ func (s *Store) DisableUserMFA(ctx context.Context, userID uuid.UUID) (DisableUs
 }
 
 func (s *Store) ReplaceUserRecoveryCodes(ctx context.Context, userID uuid.UUID, codeHashes []string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM user_recovery_codes WHERE user_id = ?", userID); err != nil {
@@ -277,6 +287,11 @@ func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID uuid.UUID, code 
 }
 
 func (s *Store) CreateUserPasskey(ctx context.Context, userID uuid.UUID, name string, credentialID string, publicKey string, transports []string) (uuid.UUID, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return uuid.Nil, err
+	}
 	passkeyID := uuid.New()
 	now := time.Now().UTC()
 
@@ -311,6 +326,11 @@ func (s *Store) CreateUserPasskey(ctx context.Context, userID uuid.UUID, name st
 }
 
 func (s *Store) CreateUserPasskeyCredential(ctx context.Context, userID uuid.UUID, name string, credential webauthnlib.Credential) (uuid.UUID, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return uuid.Nil, err
+	}
 	passkeyID := uuid.New()
 	now := time.Now().UTC()
 

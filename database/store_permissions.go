@@ -60,6 +60,8 @@ func (s *Store) IsTeamOwnedByOperator(ctx context.Context, teamID uuid.UUID) (bo
 
 // UpdateInstanceRole updates a user's instance-level role
 func (s *Store) UpdateInstanceRole(ctx context.Context, targetUserID uuid.UUID, role auth.InstanceRole, actorID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	var oldRole string
 	err := s.db.QueryRowContext(ctx, "SELECT role FROM instance_roles WHERE user_id = ?", targetUserID).Scan(&oldRole)
 	if err != nil && err != sql.ErrNoRows {

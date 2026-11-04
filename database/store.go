@@ -55,6 +55,7 @@ type Store struct {
 	aiBudgetMu                      sync.Mutex
 	siteQuotaMu                     sync.Mutex
 	primaryAuthMu                   sync.Mutex
+	lifecycleMu                     sync.Mutex
 	reportClaimMu                   sync.Mutex
 	analyticsStatements             *analyticsStatements
 	runtime                         *runtimeCache
