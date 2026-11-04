@@ -1,9 +1,12 @@
 package server
 
 import (
+	"io"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"hitkeep/server/shared"
 )
@@ -27,6 +30,23 @@ func TestNativeConsentCSPAllowsOnlyRegisteredCallbacks(t *testing.T) {
 		}
 		if strings.Contains(policy, "form-action *") || strings.Contains(policy, "form-action https:") {
 			t.Error("broad form-action")
+		}
+	}
+}
+
+func TestAuthCSPAllowsBundledAngularBootstrapHashes(t *testing.T) {
+	const hash = "'sha256-9csbfYiTiLlYfccT+QDMUV43Kb7i94TLRQWwclf07o8='"
+	server := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), publicBasePath: "/prefix/"}
+	server.loadStaticAssets(fstest.MapFS{"index.html": {Data: []byte(`<meta http-equiv="Content-Security-Policy" content="script-src 'strict-dynamic' ` + hash + ` https: 'unsafe-inline';"><base href="/">`)}, "scalar/index.html": {Data: []byte("docs")}})
+	for _, path := range []string{"/login", "/signup", "/auth/native/consent"} {
+		rr := httptest.NewRecorder()
+		server.serveIndex(rr, httptest.NewRequest("GET", path, nil))
+		policy := rr.Header().Get("Content-Security-Policy")
+		if !strings.Contains(policy, "script-src 'self' "+hash+";") {
+			t.Errorf("bundled bootstrap blocked on %s: %s", path, policy)
+		}
+		if strings.Contains(policy, "script-src 'self' 'unsafe-inline'") || strings.Contains(policy, "script-src 'self' https:") {
+			t.Error("script trust broadened beyond bundled hashes")
 		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -61,6 +62,9 @@ const (
 	cacheControlNoCache   = "no-cache, no-store, must-revalidate"
 )
 
+// Angular autoCsp emits these hashes for its bundled inline bootstrap scripts.
+var dashboardScriptHashes = regexp.MustCompile(`'sha256-[A-Za-z0-9+/]{43}='`)
+
 type Server struct {
 	httpServer       *http.Server
 	logger           *slog.Logger
@@ -82,8 +86,9 @@ type Server struct {
 	realtime         *realtime.Broker
 	ctx              *shared.Context
 
-	indexHTML   []byte
-	scalarIndex []byte
+	indexHTML              []byte
+	indexScriptHashSources string
+	scalarIndex            []byte
 
 	publicBasePath string
 }
@@ -325,6 +330,9 @@ func (s *Server) loadStaticAssets(publicFS fs.FS) {
 		s.logger.Warn("Frontend index.html not found. Dashboard will not be available.")
 	} else {
 		s.indexHTML = injectDashboardBasePath(indexData, s.publicBasePath)
+		if hashes := dashboardScriptHashes.FindAllString(string(s.indexHTML), -1); len(hashes) != 0 {
+			s.indexScriptHashSources = " " + strings.Join(hashes, " ")
+		}
 	}
 
 	// 2. Load Scalar Index (API Docs)
@@ -630,7 +638,7 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/native/consent" {
 			formAction += " " + shared.NativeIOSCallback + " " + shared.NativeAndroidCallback
 		}
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action "+formAction+"; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'"+s.indexScriptHashSources+"; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action "+formAction+"; frame-ancestors 'none'")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if !strings.HasPrefix(r.URL.Path, "/share/") && !strings.HasPrefix(r.URL.Path, "/qr-share/") {
