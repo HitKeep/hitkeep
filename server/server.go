@@ -626,7 +626,11 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/auth/native/") || strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/signup") || strings.HasPrefix(r.URL.Path, "/reset-password") || strings.HasPrefix(r.URL.Path, "/forgot-password") || strings.HasPrefix(r.URL.Path, "/accept-invite") {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+		formAction := "'self'"
+		if r.URL.Path == "/auth/native/consent" {
+			formAction += " " + shared.NativeIOSCallback + " " + shared.NativeAndroidCallback
+		}
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action "+formAction+"; frame-ancestors 'none'")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if !strings.HasPrefix(r.URL.Path, "/share/") && !strings.HasPrefix(r.URL.Path, "/qr-share/") {

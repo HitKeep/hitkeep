@@ -14,6 +14,7 @@ import (
 
 	"hitkeep/api"
 	"hitkeep/appurl"
+	authcore "hitkeep/auth"
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
 	"hitkeep/localization"
@@ -245,7 +246,7 @@ func (h *handler) setSocialStateCookie(w http.ResponseWriter, rawState string) {
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the configured public URL; local HTTP development intentionally uses an insecure cookie.
 		Name: name, Value: canonical, Path: h.socialStateCookiePath(),
 		Expires: time.Now().UTC().Add(socialFlowTTL), MaxAge: int(socialFlowTTL / time.Second),
-		HttpOnly: true, Secure: strings.HasPrefix(strings.ToLower(strings.TrimSpace(h.ctx.Config.PublicURL)), "https://"),
+		HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -266,7 +267,7 @@ func (h *handler) clearSocialStateCookie(w http.ResponseWriter, rawState string)
 	}
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the configured public URL; local HTTP development intentionally uses an insecure cookie.
 		Name: name, Value: "", Path: h.socialStateCookiePath(), Expires: time.Unix(0, 0), MaxAge: -1,
-		HttpOnly: true, Secure: strings.HasPrefix(strings.ToLower(strings.TrimSpace(h.ctx.Config.PublicURL)), "https://"),
+		HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -755,7 +756,7 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 		if continueOAuth && destination == "/dashboard" {
 			destination = "/oauth/consent"
 		}
-		http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, destination), http.StatusSeeOther)
+		http.Redirect(w, r, h.publicRedirectURL(destination), http.StatusSeeOther)
 	}
 }
 

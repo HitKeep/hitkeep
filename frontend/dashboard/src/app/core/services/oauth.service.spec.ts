@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
+import { of, throwError } from 'rxjs';
 import { APPLICATION_ERROR_STATE_KEY } from '@services/application-error-navigation.service';
 
 import { OAuthService } from './oauth.service';
@@ -74,6 +75,23 @@ describe('OAuthService', () => {
         expect(TestBed.inject(Router).serializeUrl(url as never)).toBe('/error');
         expect(extras?.state?.[APPLICATION_ERROR_STATE_KEY]).toEqual({ version: 1, kind: 'server', context: 'dashboard-bootstrap', returnUrl: '/oauth/consent', status: 503 });
         expect(service.resuming()).toBe(false);
+    });
+
+    it.each(['pending', 'unavailable'])('preserves the validated native return despite %s delegated continuation', (mode) => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const continuation = vi.spyOn(service, 'continuation').mockReturnValue(mode === 'pending' ? of({ pending: true }) : throwError(() => ({ status: 503 })));
+        const target = `/auth/native/consent?request=${'a'.repeat(43)}`;
+        service.continueAfterAuthentication(target);
+        expect(navigate).toHaveBeenCalledWith(target);
+        expect(continuation).not.toHaveBeenCalled();
+        expect(service.resuming()).toBe(false);
+    });
+
+    it('keeps delegated continuation checks for a forged native-looking return', () => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        service.continueAfterAuthentication(`/auth/native/consent?request=${'a'.repeat(43)}&other=1`);
+        http.expectOne('/api/oauth/continuation').flush({ pending: true });
+        expect(navigate).toHaveBeenCalledWith('/oauth/consent');
     });
 
     it('reads the current users grants and encodes the revoked grant ID', () => {

@@ -78,7 +78,7 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		var apiClientAuth *database.APIClientAuth
 		var sessionCtx *AuthSessionContext
 		var restoreSession bool
-		isSecure := c.Config != nil && strings.HasPrefix(c.Config.PublicURL, "https://")
+		isSecure := c.Config != nil && auth.CookieSecure(c.Config.PublicURL)
 
 		// 1. Try to validate the short-lived JWT.
 		cookie, err := r.Cookie(auth.CookieName)

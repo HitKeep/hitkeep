@@ -311,7 +311,7 @@ func (h *handler) handleCreateInitialUser() http.HandlerFunc {
 			return
 		}
 
-		isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+		isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 		authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 
 		shared.LoggerFromContext(r.Context()).Info("Initial admin user created", "user_id", userID)
@@ -423,7 +423,7 @@ func (h *handler) issueLoginSessionWithID(ctx context.Context, w http.ResponseWr
 		return "", fmt.Errorf("could not generate auth token: %w", err)
 	}
 
-	isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+	isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 
 	if rememberMe {
 		rememberDuration := h.ctx.Config.AuthRememberMeDuration()
@@ -472,7 +472,7 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			return
 		}
 		if !available {
-			authcore.ClearCookies(w, strings.HasPrefix(h.ctx.Config.PublicURL, "https://"))
+			authcore.ClearCookies(w, authcore.CookieSecure(h.ctx.Config.PublicURL))
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -484,7 +484,7 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			return
 		}
 
-		isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+		isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 		authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 		resp := h.ctx.AuthSessionResponse(shared.AuthSessionContext{
 			ExpiresAt: expiresAt.UTC(),

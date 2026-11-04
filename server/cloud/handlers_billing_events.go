@@ -351,7 +351,7 @@ func issueLoginSession(ctx context.Context, w http.ResponseWriter, c *shared.Con
 		return fmt.Errorf("generate auth token: %w", err)
 	}
 
-	isSecure := strings.HasPrefix(conf.PublicURL, "https://")
+	isSecure := authcore.CookieSecure(conf.PublicURL)
 	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 	return nil
 }

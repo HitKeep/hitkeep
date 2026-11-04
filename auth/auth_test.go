@@ -75,3 +75,16 @@ func TestFreshOrdinarySessionsHaveDistinctIDs(t *testing.T) {
 		t.Fatalf("claims=%+v err=%v", claims, err)
 	}
 }
+
+func TestCookieSecure(t *testing.T) {
+	for _, tc := range []struct {
+		url    string
+		secure bool
+	}{
+		{"https://example.test/prefix", true}, {"HTTPS://EXAMPLE.test:443/prefix", true}, {" HtTpS://example.test/prefix ", true}, {"http://localhost:8080", false}, {"", false},
+	} {
+		if got := CookieSecure(tc.url); got != tc.secure {
+			t.Errorf("CookieSecure(%q)=%v, want %v", tc.url, got, tc.secure)
+		}
+	}
+}

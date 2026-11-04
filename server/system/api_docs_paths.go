@@ -157,7 +157,7 @@ func openAPIV1CorePaths() map[string]any {
 		},
 		"/api/auth/reset-password": map[string]any{
 			"post": op([]string{"Auth"}, "Complete password reset", "Resets password using reset token.", nil, nil,
-				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}, "return_url": map[string]any{"type": "string"}}, "required": []string{"token", "password"}}),
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"token": map[string]any{"type": "string"}, "password": map[string]any{"type": "string", "minLength": 8}}, "required": []string{"token", "password"}}),
 				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status"), "400": errResp("Invalid or expired link")}),
 		},
 		"/api/auth/accept-invite": map[string]any{

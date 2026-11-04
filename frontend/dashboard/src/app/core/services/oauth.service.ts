@@ -1,4 +1,4 @@
-import { accountDeletionReturnPath } from '@core/utils/account-deletion-auth';
+import { proofAuthReturnPath } from '@core/utils/account-deletion-auth';
 import { inject, Service, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -15,8 +15,9 @@ export class OAuthService {
     readonly resuming = signal(false);
 
     continueAfterAuthentication(fallback: string): void {
-        if (accountDeletionReturnPath(fallback)) {
-            void this.router.navigateByUrl(fallback);
+        const proofReturn = proofAuthReturnPath(fallback);
+        if (proofReturn) {
+            void this.router.navigateByUrl(proofReturn);
             return;
         }
         if (this.resuming()) return;

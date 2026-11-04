@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -82,6 +83,11 @@ func ValidateTokenClaims(tokenString string, secret string, issuer string) (*Cla
 	}
 
 	return nil, fmt.Errorf("invalid token")
+}
+
+// CookieSecure follows the configured transport without changing the JWT issuer.
+func CookieSecure(publicURL string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(publicURL)), "https://")
 }
 
 // SetTokenCookie attaches the JWT to the response as an HTTP-only cookie.

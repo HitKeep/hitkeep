@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -576,5 +577,59 @@ func TestNativeRememberIssuanceFailureConsumesCode(t *testing.T) {
 		if rr.Code != want || len(rr.Result().Cookies()) != 0 {
 			t.Fatalf("failure/replay status=%d cookies=%d want=%d", rr.Code, len(rr.Result().Cookies()), want)
 		}
+	}
+}
+
+func TestNativeCanonicalHTTPSIssuesOnlySecureCookies(t *testing.T) {
+	for _, remember := range []bool{false, true} {
+		t.Run(fmt.Sprint(remember), func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			id, err := store.CreateUserWithoutDefaultTenant(t.Context(), "native-secure-cookie@example.test", "unused")
+			if err != nil {
+				t.Fatal(err)
+			}
+			handle, mux := nativeStartFixture(t, h)
+			h.ctx.Config.PublicURL = "HTTPS://EXAMPLE.test:443/prefix"
+			if !h.ctx.NativeAuthReady() {
+				t.Fatal("canonical HTTPS must be supported")
+			}
+			_, fingerprint, err := h.nativeAccountSecurity(httptest.NewRequest("GET", "/", nil), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			csrf, _, _ := h.ctx.AuthState.RenderNativeAuth(handle, "browser", id, fingerprint)
+			code, _ := h.ctx.AuthState.DecideNativeAuth(handle, "browser", csrf, id, fingerprint, true, remember)
+			body, _ := json.Marshal(api.NativeAuthExchange{ClientID: "hitkeep-ios", RedirectURI: shared.NativeIOSCallback, Code: code, CodeVerifier: nativeVerifier})
+			request := httptest.NewRequest("POST", "/api/auth/native/exchange", strings.NewReader(string(body)))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != 200 {
+				t.Fatalf("exchange %d %s", response.Code, response.Body.String())
+			}
+			issued := 0
+			for _, cookie := range response.Result().Cookies() {
+				if cookie.Value != "" {
+					issued++
+					if !cookie.Secure {
+						t.Errorf("canonical HTTPS produced insecure %s", cookie.Name)
+					}
+					if cookie.Name == authcore.CookieName {
+						claims, err := authcore.ValidateTokenClaims(cookie.Value, h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL)
+						if err != nil || claims.Issuer != h.ctx.Config.PublicURL {
+							t.Fatal("raw JWT issuer changed")
+						}
+					}
+				}
+			}
+			want := 1
+			if remember {
+				want = 2
+			}
+			if issued != want {
+				t.Fatalf("issued %d want %d", issued, want)
+			}
+		})
 	}
 }

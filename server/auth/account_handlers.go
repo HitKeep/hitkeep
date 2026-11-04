@@ -453,7 +453,7 @@ func (h *handler) userIDFromLogoutRequest(r *http.Request) uuid.UUID {
 
 func (h *handler) handleLogout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+		isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 		userID := h.userIDFromLogoutRequest(r)
 
 		if cookie, err := r.Cookie(authcore.RememberMeCookieName); err == nil {

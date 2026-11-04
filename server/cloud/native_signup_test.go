@@ -3,6 +3,8 @@
 package cloud
 
 import (
+	"github.com/google/uuid"
+	"hitkeep/config"
 	"net/http/httptest"
 	"testing"
 
@@ -52,5 +54,21 @@ func TestNativeSignupVerificationAcrossBrowsers(t *testing.T) {
 				t.Fatal("new email browser lacks ordinary cookie")
 			}
 		})
+	}
+}
+
+func TestNativeCloudCanonicalHTTPSCookie(t *testing.T) {
+	conf := &config.Config{PublicURL: "HTTPS://CLOUD.example.test:443/prefix", JWTSecret: "test-secret"}
+	rr := httptest.NewRecorder()
+	if err := issueLoginSession(rr, conf, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	cookies := rr.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].Secure {
+		t.Fatalf("insecure Cloud cookies: %v", cookies)
+	}
+	claims, err := authcore.ValidateTokenClaims(cookies[0].Value, conf.JWTSecret, conf.PublicURL)
+	if err != nil || claims.Issuer != conf.PublicURL {
+		t.Fatalf("raw issuer changed: %v, %v", claims, err)
 	}
 }
