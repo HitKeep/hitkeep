@@ -457,7 +457,7 @@ func (h *handler) handleVerifySignup() http.HandlerFunc {
 			shared.LoggerFromContext(r.Context()).Warn("Failed to record verified signup conversion", "error", err, "team_id", account.TenantID)
 		}
 
-		if err := issueLoginSession(w, h.ctx.Config, account.UserID); err != nil {
+		if err := issueLoginSession(r.Context(), w, h.ctx, account.UserID); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue cloud signup login session", "error", err, "user_id", account.UserID)
 			http.Redirect(w, r, signupURL("expired"), http.StatusFound)
 			return
