@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 
+	authcore "hitkeep/auth"
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
 	"hitkeep/mailer"
@@ -152,6 +153,15 @@ func TestAccountDeletionSocialVerifiesLinkedProviderAndLocalMFA(t *testing.T) {
 
 func completeDeletionSocialProvider(t *testing.T, h *handler, fixture *deletionSocialProvider, target string) *httptest.ResponseRecorder {
 	t.Helper()
+	token := verifiedSocialCompletion(t, h, fixture, target)
+	body, _ := json.Marshal(map[string]string{"completion_token": token})
+	out := httptest.NewRecorder()
+	h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
+	return out
+}
+
+func verifiedSocialCompletion(t *testing.T, h *handler, fixture *deletionSocialProvider, target string) string {
+	t.Helper()
 	provider := fixture.name
 	body, _ := json.Marshal(map[string]string{"flow": "login", "return_url": target})
 	req := deletionJSONRequest("/api/auth/social/"+provider+"/start", body)
@@ -186,10 +196,7 @@ func completeDeletionSocialProvider(t *testing.T, h *handler, fixture *deletionS
 	if token == "" {
 		t.Fatalf("provider verification failed: %s", u.Query().Get("error"))
 	}
-	body, _ = json.Marshal(map[string]string{"completion_token": token})
-	out := httptest.NewRecorder()
-	h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
-	return out
+	return token
 }
 
 func freshSocialMutationProof(t *testing.T, h *handler, id uuid.UUID, email string) (string, string, string) {
@@ -289,5 +296,61 @@ func TestAutomaticSocialLinkInvalidatesExistingDeletionProof(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestPendingSocialCompletionCannotChangeAccountAfterDeletion(t *testing.T) {
+	for _, clear := range []bool{false, true} {
+		t.Run(map[bool]string{false: "old_subject_after_account_replacement", true: "clear_pending_completion"}[clear], func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			const email = "pending-social@example.test"
+			id, err := store.CreateUserWithoutDefaultTenant(t.Context(), email, "unused-hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = store.LinkSocialIdentity(t.Context(), database.LinkSocialIdentityInput{UserID: id, Provider: "google", Subject: "pending-subject", ObservedEmail: email})
+			if err != nil {
+				t.Fatal(err)
+			}
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &deletionSocialProvider{name: "google", subject: "pending-subject", email: email, key: key}
+			h.ctx.SocialAuth = socialauth.NewClient(sso.NewClient(&http.Client{Transport: fixture}))
+			h.ctx.Config.SocialGoogleClientID = "deletion-client"
+			h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+			token := verifiedSocialCompletion(t, h, fixture, "/dashboard")
+			completion, ok := h.ctx.AuthState.GetSocialCompletion(token)
+			if !ok || completion.UserID != id {
+				t.Fatal("verified provider completion lost its existing account")
+			}
+			h.ctx.Config.CloudHosted = true
+			h.ctx.Config.CloudSignupEnabled = true
+			h.ctx.Config.SocialSignupEnabled = true
+			signupBody, _ := json.Marshal(map[string]any{"completion_token": token, "team_name": "New Team", "plan_code": "free", "billing": "monthly", "jurisdiction": "EU", "locale": "en", "accepted_tos": true})
+			signup := httptest.NewRecorder()
+			h.handleSocialCloudSignupComplete()(signup, deletionJSONRequest("/api/cloud/signup/social/complete", signupBody))
+			if signup.Code != 409 || !strings.Contains(signup.Body.String(), "social_completion_invalid") {
+				t.Fatal("existing-account completion was accepted as a signup grant")
+			}
+			if clear {
+				h.ctx.AuthState.ClearUser(id)
+			} else {
+				if err := store.DeleteUser(t.Context(), id); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := store.CreateUserWithoutDefaultTenant(t.Context(), email, "different-user-hash"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body, _ := json.Marshal(map[string]string{"completion_token": token})
+			out := httptest.NewRecorder()
+			h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
+			if out.Code != 409 || hasCookie(out.Result().Cookies(), authcore.CookieName) {
+				t.Fatalf("old verified receipt continued with %d", out.Code)
+			}
+		})
 	}
 }

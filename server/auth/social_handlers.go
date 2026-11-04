@@ -142,6 +142,14 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
 			return
 		}
+		if h.deletionReauthentication(req.ReturnURL) {
+			var ok bool
+			userID, ok = h.ctx.AuthState.AccountDeletionSubject(req.ReturnURL, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
+			if !ok {
+				writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+				return
+			}
+		}
 		authorization, err := h.ctx.SocialAuth.Begin(r.Context(), providerConfig)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider authorization could not be prepared", "provider", providerName, "category", socialErrorCategory(err))
@@ -193,6 +201,10 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.loginErrorRedirectURL("social_state_invalid")+oauthQuery, http.StatusSeeOther)
 			return
 		}
+		if !h.socialUserAvailable(r, state.UserID) {
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_state_invalid", continueOAuth), http.StatusSeeOther)
+			return
+		}
 		if strings.TrimSpace(r.URL.Query().Get("error")) != "" {
 			h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", providerName, "provider="+providerName+";reason=cancelled")
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_provider_cancelled", continueOAuth), http.StatusSeeOther)
@@ -235,7 +247,20 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			return
 		}
 
+		user, _, err := h.ctx.Store.GetUserBySocialIdentity(r.Context(), identity.Provider, identity.Subject)
+		if err == nil && user == nil && identity.EmailVerified && identity.Provider != socialauth.ProviderMicrosoft {
+			user, err = h.ctx.Store.GetUserByEmail(r.Context(), identity.Email)
+		}
+		if err != nil || (state.UserID != uuid.Nil && user != nil && user.ID != state.UserID) {
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
+			return
+		}
+		userID := state.UserID
+		if user != nil {
+			userID = user.ID
+		}
 		completionToken := h.ctx.AuthState.CreateSocialCompletion(shared.SocialCompletion{
+			UserID:   userID,
 			Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 			EmailVerified: identity.EmailVerified, Flow: state.Flow,
 			AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
@@ -312,6 +337,14 @@ func (h *handler) linkPrimarySocialIdentity(r *http.Request, input database.Link
 	return identity, err
 }
 
+func (h *handler) socialUserAvailable(r *http.Request, userID uuid.UUID) bool {
+	if userID == uuid.Nil {
+		return true
+	}
+	available, err := h.ctx.HumanSessionUserAvailable(r.Context(), userID)
+	return err == nil && available
+}
+
 func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.UUID, identity socialauth.Identity) error {
 	if userID == uuid.Nil {
 		return errors.New("authenticated user is required")
@@ -350,7 +383,7 @@ func (h *handler) handleSocialPreview() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.GetSocialCompletion(req.CompletionToken)
-		if !ok {
+		if !ok || !h.socialUserAvailable(r, completion.UserID) {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
@@ -386,7 +419,7 @@ func (h *handler) handleSocialComplete() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.ConsumeSocialCompletion(req.CompletionToken)
-		if !ok {
+		if !ok || !h.socialUserAvailable(r, completion.UserID) {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
@@ -425,6 +458,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 			return
 		}
 		if user != nil {
+			if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+				writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+				return
+			}
 			identity, err = h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 				ObservedEmail: completion.ObservedEmail, MarkUsed: true,
@@ -439,6 +476,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		}
 	}
 	if identity != nil && user != nil {
+		if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+			return
+		}
 		_, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
 			UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 			ObservedEmail: completion.ObservedEmail, MarkUsed: true,
@@ -515,6 +556,10 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 		writeSocialError(r.Context(), w, http.StatusBadRequest, "invite_invalid")
 		return
 	}
+	if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+		writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+		return
+	}
 	pendingInvites, err := h.ctx.Store.ListPendingTeamInvitesByEmail(r.Context(), email)
 	if err != nil || len(pendingInvites) == 0 {
 		writeSocialError(r.Context(), w, http.StatusBadRequest, "invite_invalid")
@@ -579,7 +624,7 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.GetSocialCompletion(req.CompletionToken)
-		if !ok || (completion.Flow != "signup" && completion.Flow != "login") {
+		if !ok || completion.UserID != uuid.Nil || (completion.Flow != "signup" && completion.Flow != "login") {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
@@ -759,6 +804,7 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 			}
 			h.appendAuthAuditForUserTeams(r, user.ID, "auth.social_identity_linked", "success", "provider="+entry.Provider+";reason=hitkeep_email_confirmed", true)
 			completionToken := h.ctx.AuthState.CreateSocialCompletion(shared.SocialCompletion{
+				UserID:   user.ID,
 				Provider: entry.Provider, Subject: entry.Subject, ObservedEmail: entry.ObservedEmail,
 				Flow: "login", ReturnPath: sanitizeAuthReturnPath(entry.ReturnPath), RememberMe: entry.RememberMe,
 				ExpiresAt: time.Now().UTC().Add(socialCompletionTTL),

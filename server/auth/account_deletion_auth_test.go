@@ -703,3 +703,47 @@ func TestOrdinarySSONewIdentityInvalidatesExistingDeletionProof(t *testing.T) {
 		t.Fatal("ordinary SSO usage invalidated proof")
 	}
 }
+
+func TestPendingSSOLoginCannotRecreateDeletedAccount(t *testing.T) {
+	for _, clear := range []bool{false, true} {
+		t.Run(map[bool]string{false: "frozen_subject_without_cache_clear", true: "pending_state_cleared"}[clear], func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			const email = "pending-sso@example.com"
+			provider := newFakeOIDCProvider(t, email, true)
+			h.ctx.SSO = sso.NewClient(provider.server.Client())
+			team := configureTestSSO(t, h, store, provider.issuerURL())
+			enableTestSSOAutoProvision(t, store, team)
+			id := addTestSSOMember(t, store, team, email)
+			authorization := startTestSSOLogin(t, h, email, "/dashboard", false)
+			if err := store.DeleteUser(t.Context(), id); err != nil {
+				t.Fatal(err)
+			}
+			if clear {
+				h.ctx.AuthState.ClearUser(id)
+			}
+			callback := func(authorization string) *httptest.ResponseRecorder {
+				u, _ := url.Parse(authorization)
+				provider.setNonce(u.Query().Get("nonce"))
+				out := httptest.NewRecorder()
+				h.handleSSOCallback()(out, httptest.NewRequest("GET", "/api/auth/sso/callback?state="+url.QueryEscape(u.Query().Get("state"))+"&code=test-code", nil))
+				return out
+			}
+			out := callback(authorization)
+			if hasCookie(out.Result().Cookies(), authcore.CookieName) {
+				t.Fatal("old provider state issued a session after account deletion")
+			}
+			user, err := store.GetUserByEmail(t.Context(), email)
+			if err != nil || user != nil {
+				t.Fatal("old provider state recreated deleted account")
+			}
+			// A newly started ordinary login still follows current auto-provision policy.
+			out = callback(startTestSSOLogin(t, h, email, "/dashboard", false))
+			responseSessionID(t, h, out)
+			user, err = store.GetUserByEmail(t.Context(), email)
+			if err != nil || user == nil || user.ID == id {
+				t.Fatal("newly started legitimate SSO login changed")
+			}
+		})
+	}
+}

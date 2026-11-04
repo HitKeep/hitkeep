@@ -146,3 +146,53 @@ func TestSocialOAuthStateAndCompletionAreBoundExpiringAndOneTime(t *testing.T) {
 		t.Fatalf("expected exactly one concurrent completion consumer, got %d", consumedCount)
 	}
 }
+
+func TestClearUserRemovesBoundProviderStateOnly(t *testing.T) {
+	state := NewAuthStateStore()
+	target, other := uuid.New(), uuid.New()
+	expiry := time.Now().Add(time.Minute)
+	type handles struct{ sso, oauth, completion, console string }
+	entries := make(map[uuid.UUID]handles)
+	for _, id := range []uuid.UUID{target, other, uuid.Nil} {
+		entries[id] = handles{
+			sso:        state.CreateSSOOAuthState(SSOOAuthState{UserID: id, ExpiresAt: expiry}),
+			oauth:      state.CreateSocialOAuthState(SocialOAuthState{UserID: id, ExpiresAt: expiry}),
+			completion: state.CreateSocialCompletion(SocialCompletion{UserID: id, ExpiresAt: expiry}),
+			console:    state.CreateGoogleSearchConsoleOAuthState(id, uuid.New(), "/settings", expiry),
+		}
+	}
+	state.ClearUser(target)
+	for id, h := range entries {
+		want := id != target
+		if _, ok := state.ConsumeSSOOAuthState(h.sso); ok != want {
+			t.Fatal("SSO cleanup crossed account boundary")
+		}
+		if _, ok := state.ConsumeSocialOAuthState(h.oauth); ok != want {
+			t.Fatal("social OAuth cleanup crossed account boundary")
+		}
+		if _, ok := state.ConsumeSocialCompletion(h.completion); ok != want {
+			t.Fatal("social completion cleanup crossed account boundary")
+		}
+		if _, ok := state.ConsumeGoogleSearchConsoleOAuthState(h.console); ok != want {
+			t.Fatal("Search Console cleanup crossed account boundary")
+		}
+	}
+}
+
+func TestSSOOAuthStateHasOneConcurrentConsumer(t *testing.T) {
+	state := NewAuthStateStore()
+	handle := state.CreateSSOOAuthState(SSOOAuthState{ExpiresAt: time.Now().Add(time.Minute)})
+	results := make(chan bool, 2)
+	for range 2 {
+		go func() { _, ok := state.ConsumeSSOOAuthState(handle); results <- ok }()
+	}
+	winners := 0
+	for range 2 {
+		if <-results {
+			winners++
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("SSO state consumers=%d", winners)
+	}
+}

@@ -122,6 +122,7 @@ func (h *handler) handleSSOStart() http.HandlerFunc {
 			return
 		}
 		state := h.ctx.AuthState.CreateSSOOAuthState(shared.SSOOAuthState{
+			UserID:       decision.UserID,
 			TeamID:       config.TeamID,
 			IssuerURL:    config.IssuerURL,
 			ClientID:     config.ClientID,
@@ -291,6 +292,13 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.loginErrorRedirectURL("sso_failed"), http.StatusSeeOther)
 			return
 		}
+		if state.UserID != uuid.Nil {
+			available, err := h.ctx.HumanSessionUserAvailable(r.Context(), state.UserID)
+			if err != nil || !available {
+				http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+				return
+			}
+		}
 		if !h.ctx.Limits().AllowsSSO(r.Context(), uuid.Nil, state.TeamID) {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", state.TeamID, uuid.Nil, state.Email, ssoAuditFlowCallback, ssoReasonEntitlementDenied, 0, "SSO entitlement changed during login")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_unavailable"), http.StatusSeeOther)
@@ -340,6 +348,10 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 				shared.LoggerFromContext(r.Context()).Error("Failed to re-authorize SSO login", "error_kind", ssoErrorKind(err, "access_reauthorization_failed"), "team_id", config.TeamID)
 			}
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, decision.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonAccessDenied, decision.Mode, "SSO team access was removed during login")
+			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+			return
+		}
+		if state.UserID != uuid.Nil && decision.UserID != state.UserID {
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
 			return
 		}

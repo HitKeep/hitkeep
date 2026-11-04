@@ -49,6 +49,7 @@ type GoogleSearchConsoleOAuthState struct {
 }
 
 type SSOOAuthState struct {
+	UserID       uuid.UUID
 	TeamID       uuid.UUID
 	IssuerURL    string
 	ClientID     string
@@ -75,6 +76,7 @@ type SocialOAuthState struct {
 }
 
 type SocialCompletion struct {
+	UserID uuid.UUID
 	AppleClientID               string `json:"-"`
 	AppleRefreshTokenCiphertext string `json:"-"`
 	Provider                    string
@@ -103,6 +105,7 @@ type AuthStateStore struct {
 	socialCompletions       *lru.LRU[uuid.UUID, SocialCompletion]
 	socialPOSTReceipts      *lru.LRU[uuid.UUID, SocialPOSTReceipt]
 	socialPOSTMu            sync.Mutex
+	ssoOAuthMu              sync.Mutex
 	socialOAuthMu           sync.Mutex
 	socialCompletionMu      sync.Mutex
 
@@ -225,6 +228,8 @@ func (s *AuthStateStore) CreateSSOOAuthState(state SSOOAuthState) string {
 	if s == nil {
 		return stateID.String()
 	}
+	s.ssoOAuthMu.Lock()
+	defer s.ssoOAuthMu.Unlock()
 	state.ExpiresAt = state.ExpiresAt.UTC()
 	s.ssoOAuth.Add(stateID, state)
 	return stateID.String()
@@ -234,6 +239,8 @@ func (s *AuthStateStore) ConsumeSSOOAuthState(rawState string) (SSOOAuthState, b
 	if s == nil {
 		return SSOOAuthState{}, false
 	}
+	s.ssoOAuthMu.Lock()
+	defer s.ssoOAuthMu.Unlock()
 	stateID, err := uuid.Parse(strings.TrimSpace(rawState))
 	if err != nil || stateID == uuid.Nil {
 		return SSOOAuthState{}, false
@@ -516,6 +523,32 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 
 	s.DeletePendingTOTPSetup(userID)
 	s.DeletePasskeyChallenge(userID)
+	s.ssoOAuthMu.Lock()
+	for _, key := range s.ssoOAuth.Keys() {
+		if entry, ok := s.ssoOAuth.Peek(key); ok && entry.UserID == userID {
+			s.ssoOAuth.Remove(key)
+		}
+	}
+	s.ssoOAuthMu.Unlock()
+	s.socialOAuthMu.Lock()
+	for _, key := range s.socialOAuth.Keys() {
+		if entry, ok := s.socialOAuth.Peek(key); ok && entry.UserID == userID {
+			s.socialOAuth.Remove(key)
+		}
+	}
+	s.socialOAuthMu.Unlock()
+	s.socialCompletionMu.Lock()
+	for _, key := range s.socialCompletions.Keys() {
+		if entry, ok := s.socialCompletions.Peek(key); ok && entry.UserID == userID {
+			s.socialCompletions.Remove(key)
+		}
+	}
+	s.socialCompletionMu.Unlock()
+	for _, key := range s.googleSearchConsole.Keys() {
+		if entry, ok := s.googleSearchConsole.Peek(key); ok && entry.UserID == userID {
+			s.googleSearchConsole.Remove(key)
+		}
+	}
 
 	s.loginChallengesMu.Lock()
 	defer s.loginChallengesMu.Unlock()
