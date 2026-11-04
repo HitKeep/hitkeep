@@ -28,6 +28,7 @@ const pendingCookieName = "hk_oauth_pending"
 const browserCookieName = "hk_oauth_browser"
 
 type pendingAuthorization struct {
+	AgentClaim      *agentClaimRef `json:"agent_claim,omitzero"`
 	SuggestedDomain string         `json:"suggested_domain,omitempty"`
 	Client          ClientMetadata `json:"client"`
 	RedirectURI     string         `json:"redirect_uri"`
@@ -223,6 +224,9 @@ func (p *Provider) pending(ctx context.Context, r *http.Request) (*pendingAuthor
 	if err := json.Unmarshal(record.Payload, &pending); err != nil || pending.ExpiresAt.Unix() != seconds || !time.Now().UTC().Before(pending.ExpiresAt) || !redirectAllowed(pending.Client, pending.RedirectURI) {
 		return nil, "", "", ErrInvalidConsent
 	}
+	if pending.AgentClaim != nil && !p.agentRegistrationEnabled() {
+		return nil, "", "", ErrInvalidConsent
+	}
 	allowed := scopesForResource(p, pending.Resource)
 	if len(allowed) == 0 || len(pending.Scopes) == 0 {
 		return nil, "", "", ErrInvalidConsent
@@ -266,11 +270,22 @@ func (p *Provider) Consent(ctx context.Context, r *http.Request, userID uuid.UUI
 	if err != nil {
 		return nil, err
 	}
+	if pending.AgentClaim != nil {
+		tx, err := p.store.BeginOAuth(ctx)
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+		_, _, err = p.agentClaimForUser(ctx, tx, pending, userID)
+		_ = tx.Rollback()
+		if err != nil {
+			return nil, err
+		}
+	}
 	redirect, err := url.Parse(pending.RedirectURI)
 	if err != nil {
 		return nil, ErrInvalidConsent
 	}
-	return &api.OAuthConsent{SuggestedDomain: pending.SuggestedDomain, RegistrationTeamID: pending.Client.RegistrationTeamID, Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
+	return &api.OAuthConsent{AgentClaim: pending.AgentClaim != nil, SuggestedDomain: pending.SuggestedDomain, RegistrationTeamID: pending.Client.RegistrationTeamID, Client: api.OAuthClientSummary{ID: pending.Client.ID, Name: pending.Client.Name, CallbackOrigin: redirect.Scheme + "://" + redirect.Host}, Resource: pending.Resource, Scopes: slices.Clone(pending.Scopes), ExpiresAt: pending.ExpiresAt, CSRFToken: p.csrfToken(signature, browser, userID), Teams: []api.OAuthTeam{}}, nil
 }
 func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userID, teamID uuid.UUID, sites []uuid.UUID, decision, csrf string, authorize func(context.Context, *auth.OAuthGrant, uuid.UUID) error) error {
 	if !p.Ready() {
@@ -298,6 +313,10 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 		return ErrInvalidConsent
 	}
 	grant := database.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), ClientRevision: pending.Client.RegistrationVersion, ClientID: pending.Client.ID, ClientName: pending.Client.Name, ClientURI: pending.Client.URI, Audience: pending.Resource, Scopes: slices.Clone(pending.Scopes), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(grantLifetime)}
+	if pending.AgentClaim != nil {
+		grant.ID = pending.AgentClaim.ID
+		grant.ExpiresAt = time.Now().UTC().Add(agentAssertionLifetime)
+	}
 	principal := &auth.OAuthGrant{ID: grant.ID, UserID: userID, TeamID: teamID, SiteIDs: slices.Clone(sites), Scopes: slices.Clone(pending.Scopes), Audience: pending.Resource}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -308,10 +327,59 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	var claim *agentRegistration
+	var claimRecord *database.OAuthPending
+	if pending.AgentClaim != nil {
+		claim, claimRecord, err = p.agentClaimForUser(ctx, tx, pending, userID)
+		if err != nil {
+			return err
+		}
+		if decision == "approve" {
+			code := r.PostForm.Get("claim_code")
+			validCode := len(code) == 6
+			for _, digit := range code {
+				validCode = validCode && digit >= '0' && digit <= '9'
+			}
+			if !validCode || subtle.ConstantTimeCompare([]byte(claim.CodeSignature), []byte(tokenSignature(claim.ID.String()+"\x00"+code))) != 1 {
+				claim.Attempts++
+				if claim.Attempts >= agentCodeAttempts {
+					err = tx.ConsumePending(ctx, claimRecord.Signature, claimRecord.BrowserSignature)
+				} else {
+					claimRecord.Payload, err = json.Marshal(claim)
+					if err == nil {
+						err = tx.UpdateAgentPending(ctx, *claimRecord)
+					}
+				}
+				if err == nil {
+					err = tx.AppendAudit(ctx, userID, uuid.Nil(), claim.ID, "oauth.agent_code_rejected")
+				}
+				if err == nil && (!p.Ready() || !p.agentRegistrationEnabled()) {
+					err = ErrUnavailable
+				}
+				if err == nil {
+					err = tx.Commit()
+				}
+				if err != nil {
+					return err
+				}
+				return ErrAgentClaimCode
+			}
+		}
+	}
 	if err := tx.ConsumePending(ctx, signature, browser); err != nil {
 		return ErrInvalidConsent
 	}
 	if decision == "deny" {
+		if claim != nil {
+			claim.Denied, claim.CodeSignature = true, ""
+			claimRecord.Payload, err = json.Marshal(claim)
+			if err == nil {
+				err = tx.UpdateAgentPending(ctx, *claimRecord)
+			}
+			if err != nil {
+				return err
+			}
+		}
 		if err := tx.AppendAudit(ctx, userID, uuid.Nil(), uuid.Nil(), "oauth.consent_denied"); err != nil {
 			return err
 		}
@@ -322,6 +390,10 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 			return err
 		}
 		p.setBrowserCookie(w, pendingCookieName, "", -1)
+		if claim != nil {
+			http.Redirect(w, r, pending.RedirectURI, http.StatusSeeOther)
+			return nil
+		}
 		p.callback(w, r, pending.RedirectURI, pending.State, "", "access_denied")
 		return nil
 	}
@@ -348,6 +420,28 @@ func (p *Provider) CompleteConsent(w http.ResponseWriter, r *http.Request, userI
 	}
 	if err := tx.CreateGrant(ctx, grant); err != nil {
 		return err
+	}
+	if claim != nil {
+		claim.GrantID, claim.CodeSignature = grant.ID, ""
+		claimRecord.Payload, err = json.Marshal(claim)
+		if err == nil {
+			err = tx.UpdateAgentPending(ctx, *claimRecord)
+		}
+		if err == nil {
+			err = tx.AppendAudit(ctx, userID, teamID, grant.ID, "oauth.agent_claim_approved")
+		}
+		if err == nil && (!p.Ready() || !p.agentRegistrationEnabled()) {
+			err = ErrUnavailable
+		}
+		if err == nil {
+			err = tx.Commit()
+		}
+		if err != nil {
+			return err
+		}
+		p.setBrowserCookie(w, pendingCookieName, "", -1)
+		http.Redirect(w, r, pending.RedirectURI, http.StatusSeeOther)
+		return nil
 	}
 	op := &providerOperation{tx: tx, client: pending.Client, resource: pending.Resource}
 	ctx = context.WithValue(ctx, operationKey{}, op)
@@ -428,7 +522,9 @@ func (p *Provider) callback(w http.ResponseWriter, r *http.Request, redirect, st
 }
 func (p *Provider) RedirectConsentError(w http.ResponseWriter, r *http.Request, err error) {
 	code := "failed"
-	if errors.Is(err, ErrUnavailable) || errors.Is(err, database.ErrOAuthConflict) {
+	if errors.Is(err, ErrAgentClaimCode) {
+		code = "invalid_code"
+	} else if errors.Is(err, ErrUnavailable) || errors.Is(err, database.ErrOAuthConflict) {
 		code = "unavailable"
 	} else if errors.Is(err, ErrInvalidConsent) || errors.Is(err, database.ErrOAuthNotFound) {
 		code = "expired"

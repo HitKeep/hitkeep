@@ -331,31 +331,38 @@ func (s *Store) ListOAuthGrants(ctx context.Context, userID uuid.UUID) ([]OAuthG
 }
 
 func (s *Store) CreateOAuthPending(ctx context.Context, p OAuthPending) error {
-	if len(p.Signature) != 64 || len(p.BrowserSignature) != 64 || len(p.Payload) > 64<<10 || !p.ExpiresAt.After(time.Now()) || p.ExpiresAt.After(time.Now().Add(16*time.Minute)) {
-		return errors.New("invalid OAuth pending request")
-	}
 	op, err := s.BeginOAuth(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = op.Rollback() }()
-	if _, err := op.tx.ExecContext(ctx, "DELETE FROM oauth_pending WHERE expires_at<=?", time.Now().UTC()); err != nil {
+	if err := op.CreatePending(ctx, p); err != nil {
+		return err
+	}
+	return op.Commit()
+}
+
+func (o *OAuthTransaction) CreatePending(ctx context.Context, p OAuthPending) error {
+	if len(p.Signature) != 64 || len(p.BrowserSignature) != 64 || len(p.Payload) > 64<<10 || !p.ExpiresAt.After(time.Now()) || p.ExpiresAt.After(time.Now().Add(16*time.Minute)) {
+		return errors.New("invalid OAuth pending request")
+	}
+	if _, err := o.tx.ExecContext(ctx, "DELETE FROM oauth_pending WHERE expires_at<=?", time.Now().UTC()); err != nil {
 		return oauthStoreError(err)
 	}
 	var count int
-	if err := op.tx.QueryRowContext(ctx, "SELECT count(*) FROM oauth_pending").Scan(&count); err != nil {
+	if err := o.tx.QueryRowContext(ctx, "SELECT count(*) FROM oauth_pending").Scan(&count); err != nil {
 		return oauthStoreError(err)
 	}
 	if count >= 4096 {
 		return ErrOAuthCapacity
 	}
-	if _, err := op.tx.ExecContext(ctx, "DELETE FROM oauth_pending WHERE browser_signature=?", p.BrowserSignature); err != nil {
+	if _, err := o.tx.ExecContext(ctx, "DELETE FROM oauth_pending WHERE browser_signature=?", p.BrowserSignature); err != nil {
 		return oauthStoreError(err)
 	}
-	if _, err := op.tx.ExecContext(ctx, `INSERT INTO oauth_pending(signature,browser_signature,payload,expires_at) VALUES(?,?,?,?)`, p.Signature, p.BrowserSignature, string(p.Payload), p.ExpiresAt); err != nil {
+	if _, err := o.tx.ExecContext(ctx, `INSERT INTO oauth_pending(signature,browser_signature,payload,expires_at) VALUES(?,?,?,?)`, p.Signature, p.BrowserSignature, string(p.Payload), p.ExpiresAt); err != nil {
 		return oauthStoreError(err)
 	}
-	return op.Commit()
+	return nil
 }
 func (s *Store) GetOAuthPending(ctx context.Context, signature, browserSignature string) (*OAuthPending, error) {
 	var p OAuthPending
@@ -465,12 +472,15 @@ func cleanupOAuthUserRows(ctx context.Context, tx *sql.Tx, userID string) error 
 
 func oauthAuditParams(actorID, teamID, grantID uuid.UUID, action string) (AuditEntryParams, error) {
 	switch action {
-	case "oauth.consent_approved", "oauth.consent_denied", "oauth.grant_revoked", "oauth.refresh_reused", "oauth.code_reused":
+	case "oauth.consent_approved", "oauth.consent_denied", "oauth.grant_revoked", "oauth.refresh_reused", "oauth.code_reused", "oauth.agent_claim_approved", "oauth.agent_token_issued", "oauth.agent_token_revoked", "oauth.agent_registration_created", "oauth.agent_claim_started", "oauth.agent_code_rejected":
 	default:
 		return AuditEntryParams{}, errors.New("invalid OAuth audit action")
 	}
 	params := AuditEntryParams{ActorID: googleuuid.UUID(actorID), TeamID: googleuuid.UUID(teamID), Action: action, TargetType: "oauth_grant", Outcome: "success"}
-	if grantID == uuid.Nil() {
+	if action == "oauth.agent_registration_created" || action == "oauth.agent_claim_started" || action == "oauth.agent_code_rejected" {
+		params.TargetType = "oauth_agent_registration"
+		params.TargetID = grantID.String()
+	} else if grantID == uuid.Nil() {
 		params.TargetType = "oauth_consent"
 	} else {
 		params.TargetID = grantID.String()

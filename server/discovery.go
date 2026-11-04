@@ -2,7 +2,9 @@ package server
 
 import (
 	"crypto/sha256"
+	"encoding/xml"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -62,6 +64,14 @@ func (s *Server) registerDiscoveryRoutes(mux *http.ServeMux) {
 		}
 	}
 	register("/robots.txt", s.discoveryRobots)
+	register("/sitemap.xml", s.agentDiscovery(s.discoverySitemap))
+	register("/.well-known/oauth-protected-resource", s.agentDiscovery(func(w http.ResponseWriter, r *http.Request) {
+		if s.ctx.OAuthProvider == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.ctx.OAuthProvider.ProtectedResourceMetadata("api")(w, r)
+	}))
 	for _, route := range []string{"/.well-known/agent-skills/index.json", "/.well-known/skills/index.json"} {
 		register(route, s.agentDiscovery(s.discoveryResponse("application/json", func(base *url.URL) any {
 			index, err := skills.PublicIndex(base.String())
@@ -362,7 +372,7 @@ func (s *Server) ardEntries(base *url.URL) []discoveryEntry {
 // Discovery well-known locations remain reachable at the origin for prefixed instances.
 func (s *Server) isDiscoveryRoot(requestPath string) bool {
 	switch requestPath {
-	case "/.well-known/acp.json", "/.well-known/ucp", "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
+	case "/.well-known/acp.json", "/.well-known/ucp", "/.well-known/agent-card.json", "/auth.md", "/llms.txt", "/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/.well-known/poppy.json", "/robots.txt", "/sitemap.xml", "/.well-known/oauth-protected-resource", "/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json", "/.well-known/mcp/server-card.json":
 		return true
 	default:
 		return false
@@ -406,6 +416,15 @@ func (s *Server) discoveryRobots(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if s.agentAvailable() {
+			text.WriteString("Content-Signal: search=yes, ai-input=yes, ai-train=no\n")
+			text.WriteString("Sitemap: " + appurl.Path(base.String(), "/sitemap.xml") + "\n")
+			allow("/sitemap.xml")
+			if s.ctx.OAuthProvider != nil {
+				allow("/.well-known/oauth-protected-resource")
+				if base.Path != "" {
+					text.WriteString("Allow: /.well-known/oauth-protected-resource$\n")
+				}
+			}
 			for _, route := range []string{"/.well-known/agent-skills/index.json", "/.well-known/skills/index.json", "/auth.md", "/llms.txt"} {
 				allow(route)
 				if base.Path != "" {
@@ -450,6 +469,72 @@ func (s *Server) discoveryRobots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) agentAvailable() bool { return s.conf != nil && s.conf.AIEnabled }
+
+func (s *Server) discoverySitemap(w http.ResponseWriter, r *http.Request) {
+	base := s.discoveryBase()
+	if base == nil {
+		http.NotFound(w, r)
+		return
+	}
+	type entry struct {
+		Location string `xml:"loc"`
+	}
+	document := struct {
+		XMLName xml.Name `xml:"urlset"`
+		XMLNS   string   `xml:"xmlns,attr"`
+		URLs    []entry  `xml:"url"`
+	}{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+	// Only public integration documents belong here, never dashboard or shared analytics URLs.
+	for _, route := range []string{"/openapi.json", "/auth.md", "/llms.txt", "/.well-known/api-catalog", "/.well-known/agent-skills/index.json"} {
+		document.URLs = append(document.URLs, entry{Location: appurl.Path(base.String(), route)})
+	}
+	data, err := xml.Marshal(document)
+	if err != nil {
+		http.Error(w, "Unable to encode sitemap", http.StatusInternalServerError)
+		return
+	}
+	s.writeDiscovery(w, r, "application/xml; charset=utf-8", append([]byte(xml.Header), data...))
+}
+
+func prefersPublicMarkdown(accept string) bool {
+	var markdown, html float64
+	htmlSpecificity := -1
+	for item := range strings.SplitSeq(accept, ",") {
+		media, parameters, err := mime.ParseMediaType(strings.TrimSpace(item))
+		if err != nil {
+			continue
+		}
+		quality := 1.0
+		if raw, ok := parameters["q"]; ok {
+			quality, err = strconv.ParseFloat(raw, 64)
+			if err != nil || !(quality >= 0 && quality <= 1) {
+				continue
+			}
+		}
+		if media == "text/markdown" {
+			markdown = max(markdown, quality)
+			continue
+		}
+		specificity := -1
+		switch media {
+		case "text/html":
+			specificity = 2
+		case "text/*":
+			specificity = 1
+		case "*/*":
+			specificity = 0
+		}
+		if specificity < 0 {
+			continue
+		}
+		if specificity > htmlSpecificity {
+			html, htmlSpecificity = quality, specificity
+		} else if specificity == htmlSpecificity {
+			html = max(html, quality)
+		}
+	}
+	return markdown > 0 && markdown >= html
+}
 
 func (s *Server) agentDiscovery(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -498,6 +583,9 @@ func (s *Server) authMarkdown(base *url.URL) string {
 	text := "# Auth.md: HitKeep authentication\n\nUse a scoped API-client bearer token created by the account owner at " + appurl.Path(base.String(), "/integration/api-clients") + ". Send it in the Authorization: Bearer header. Never send dashboard cookies to MCP or ask for passwords.\n\n"
 	if s.ctx.OAuthProvider != nil {
 		text += "For OAuth, discover authorization server metadata at " + base.Scheme + "://" + base.Host + s.ctx.OAuthProvider.DiscoveryPaths()[0] + ". Use the existing authorization code flow with PKCE S256, a registered client ID or HTTPS client metadata document, the exact resource and least required scopes. The user signs in and explicitly consents to sites. Do not reuse tokens across resources. API resource metadata: " + s.ctx.OAuthProvider.ResourceMetadataURL("api") + ".\n\n"
+		if s.conf.AIEnabled && s.ctx.OAuthProvider.Ready() {
+			text += s.agentAuthMarkdown()
+		}
 		text += "External assistants can use user-delegated OAuth at ordinary REST operations marked x-hitkeep-oauth-scope in OpenAPI while AI is enabled. Request only the operation's scope: sites:read or analytics:read for approved reads; goals:write for goals/funnels; annotations:write for timeline notes; sites:write for domain, retention and exclusions; opportunities:write for generation/status; billing:write for configured team Checkout. Each request intersects the grant with current user, team and site permissions. Billing-only consent selects a team without requiring sites; payment still needs human approval. No scopes grant credential issuance, impersonation, raw export or instance administration. Review and revoke grants in Settings → Connected applications.\n\n"
 	}
 	if s.mcpAvailable() {
@@ -507,6 +595,40 @@ func (s *Server) authMarkdown(base *url.URL) string {
 		text += "A2A 1.0 synchronous analytics: " + appurl.Path(base.String(), "/api/a2a/message:send") + ". Use the API OAuth resource with sites:read and analytics:read. Discover tool inputs at " + appurl.Path(base.String(), "/.well-known/agent-card.json") + ".\n\n"
 	}
 	return text + "API contract: " + appurl.Path(base.String(), "/openapi.json") + ". Skill installation and discovery grant no account or site access. No anonymous agent registration or Poppy session authentication is provided.\n"
+}
+
+// This walkthrough describes only the implemented human-claimed service_auth method.
+func (s *Server) agentAuthMarkdown() string {
+	issuer := s.ctx.OAuthProvider.Issuer()
+	resource := s.ctx.OAuthProvider.Resource("api")
+	return fmt.Sprintf(`## Human-approved agent registration
+
+HitKeep supports Auth.md user-claimed service_auth while AI is enabled. An assistant cannot create an account or access data before a human approves. Anonymous and provider identity-assertion registration are unsupported. Discover the actual endpoints and supported methods in authorization server metadata; identity_endpoint/register_uri and claim_endpoint/claim_uri are compatibility aliases for the same implemented routes.
+
+1. Ask the user for their existing HitKeep account email and the access they want. Register using the discovered identity_endpoint:
+
+~~~http
+POST %s/agent/identity
+Content-Type: application/json
+~~~
+~~~json
+{"type":"service_auth","login_hint":"user@example.com","resource":"%s","scope":"sites:read analytics:read"}
+~~~
+
+   For Auth.md v0.5 clients, the same endpoint also accepts {"type":"identity_assertion","assertion_type":"verified_email","assertion":"user@example.com"} and returns registration_type=email-verification with the same claim ceremony. This compatibility name is only an email hint: it accepts no provider JWT or proof and grants no access. The current service_auth form is preferred. Both forms require the identical native human approval below.
+
+   The response contains registration_id, claim_token, claim_token_expires, post_claim_scopes, and claim with user_code, verification_uri, expires_in, interval. It contains no access_token or identity_assertion. Save claim_token privately; never put it in a URL or log.
+2. Show the user the six-digit claim.user_code and claim.verification_uri together. The user opens that link, signs in through HitKeep's normal sign-in/MFA/SSO, types the code on HitKeep, selects the team and sites, reviews every scope, and approves or denies. Their signed-in account email must match login_hint. Never ask the user to send their password, session cookie, or confirmation code back to the assistant. The link alone cannot approve access.
+3. Poll %s/oauth/token with Content-Type: application/x-www-form-urlencoded and grant_type=urn:workos:agent-auth:grant-type:claim plus claim_token. Wait at least claim.interval seconds between polls. authorization_pending means keep waiting; slow_down means add five seconds to the interval. Stop on access_denied. Codes expire within ten minutes; the outer claim window is fifteen minutes, with at most five incorrect code submissions. Before the outer window expires, POST JSON {"claim_token":"<saved handle>","email":"user@example.com"} to %s/agent/identity/claim to replace a code and invalidate the old link; use claim_attempt from that response. After outer expiry or lockout, start a new registration.
+4. After approval, one successful poll returns access_token, token_type=Bearer, expires_in, resource, scope, identity_assertion and assertion_expires. The claim handle is consumed once. Send the access token only to its resource in the Authorization: Bearer header. Access tokens last at most five minutes.
+5. Until assertion_expires, refresh by POSTing form fields grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer, assertion=<identity_assertion>, and resource=%s to %s/oauth/token. No refresh_token is issued. The same service-signed assertion is intentionally reusable for this registration; it expires no later than one hour after approval. Every exchange rechecks current user, team, site and scope authority. The assertion cannot switch resources or expand scopes. Start a new human-approved registration after expiry.
+6. To revoke one agent access token, POST token=<access_token>&token_type_hint=access_token to %s/oauth/revoke. That assertion remains usable until expiry. To disconnect the registration and revoke all its tokens and assertion refreshes, the human revokes its entry in Settings → Connected applications. While AI is disabled, agent registration and its credentials are disabled. Ordinary OAuth code clients keep their existing refresh rotation and credential-family revocation.
+
+Use least privilege. For MCP, request its distinct configured resource with sites:read and analytics:read; MCP remains read-only. API scopes and operations are listed below and in OpenAPI. Billing requires explicit billing:write team consent and a separate human payment handoff; registration never performs a payment.
+
+Public service information: [pricing](https://hitkeep.com/pricing), [terms](https://hitkeep.com/terms), [privacy](https://hitkeep.com/privacy). Integration support: https://github.com/HitKeep/hitkeep/issues. Self-hosted operators may set their own terms and pricing.
+
+`, issuer, resource, issuer, issuer, resource, issuer, issuer)
 }
 
 func (s *Server) llmsMarkdown(base *url.URL) string {

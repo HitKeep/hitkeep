@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/ory/fosite"
 	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
@@ -158,7 +159,12 @@ func (p *Provider) fositeClient(m ClientMetadata) fosite.Client {
 }
 func (p *Provider) Metadata(w http.ResponseWriter, r *http.Request) {
 	publicOAuthCORS(w)
-	writeJSON(w, http.StatusOK, map[string]any{"issuer": p.urls.Issuer, "authorization_endpoint": p.urls.Issuer + "/oauth/authorize", "token_endpoint": p.urls.Issuer + "/oauth/token", "revocation_endpoint": p.urls.Issuer + "/oauth/revoke", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "revocation_endpoint_auth_methods_supported": []string{"none"}, "client_id_metadata_document_supported": true, "authorization_response_iss_parameter_supported": true, "scopes_supported": scopesForResource(p, p.urls.APIResource)})
+	metadata := map[string]any{"issuer": p.urls.Issuer, "authorization_endpoint": p.urls.Issuer + "/oauth/authorize", "token_endpoint": p.urls.Issuer + "/oauth/token", "revocation_endpoint": p.urls.Issuer + "/oauth/revoke", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "revocation_endpoint_auth_methods_supported": []string{"none"}, "client_id_metadata_document_supported": true, "authorization_response_iss_parameter_supported": true, "scopes_supported": scopesForResource(p, p.urls.APIResource)}
+	if p.agentRegistrationEnabled() {
+		metadata["agent_auth"] = p.agentAuthMetadata()
+		metadata["grant_types_supported"] = []string{"authorization_code", "refresh_token", agentClaimGrant, agentJWTGrant}
+	}
+	writeJSON(w, http.StatusOK, metadata)
 }
 func (p *Provider) ProtectedResourceMetadata(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +208,15 @@ func parseTokenForm(w http.ResponseWriter, r *http.Request) (url.Values, error) 
 	return r.PostForm.Clone(), nil
 }
 func (p *Provider) Token(w http.ResponseWriter, r *http.Request) {
+	p.token(w, r, nil)
+}
+
+// TokenWithAuthority keeps current team/site policy with the HTTP authorization owner.
+func (p *Provider) TokenWithAuthority(w http.ResponseWriter, r *http.Request, authorize func(context.Context, *auth.OAuthGrant, uuid.UUID) error) {
+	p.token(w, r, authorize)
+}
+
+func (p *Provider) token(w http.ResponseWriter, r *http.Request, authorize func(context.Context, *auth.OAuthGrant, uuid.UUID) error) {
 	publicOAuthCORS(w)
 	if !p.Ready() {
 		oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
@@ -210,6 +225,10 @@ func (p *Provider) Token(w http.ResponseWriter, r *http.Request) {
 	form, err := parseTokenForm(w, r)
 	if err != nil {
 		p.core.WriteAccessError(r.Context(), w, nil, err)
+		return
+	}
+	if form.Get("grant_type") == agentClaimGrant || form.Get("grant_type") == agentJWTGrant {
+		p.agentToken(w, r, form, authorize)
 		return
 	}
 	kind, raw := "code", form.Get("code")
@@ -354,6 +373,10 @@ func (p *Provider) Authenticate(ctx context.Context, token, audience string) (*a
 	if c.Consumed || c.Revoked || !time.Now().UTC().Before(c.ExpiresAt) {
 		return nil, ErrInvalidToken
 	}
+	var snapshot storedRequest
+	if err := json.Unmarshal(c.Payload, &snapshot); err != nil || (snapshot.AgentRegistration && !p.agentRegistrationEnabled()) {
+		return nil, ErrInvalidToken
+	}
 	grant, err := tx.GetGrant(ctx, c.GrantID)
 	if err != nil {
 		if errors.Is(err, database.ErrOAuthNotFound) {
@@ -387,7 +410,7 @@ func (p *Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 		kind = "refresh"
 		prefix = refreshTokenPrefix
 	}
-	if !validOpaqueToken(raw, prefix) || form.Get("client_id") == "" {
+	if !validOpaqueToken(raw, prefix) {
 		p.core.WriteRevocationResponse(r.Context(), w, nil)
 		return
 	}
@@ -415,13 +438,25 @@ func (p *Provider) Revoke(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
 		return
 	}
-	if grant.ClientID != form.Get("client_id") || (form.Get("resource") != "" && grant.Audience != form.Get("resource")) {
-		p.core.WriteRevocationResponse(ctx, w, nil)
-		return
-	}
 	var snapshot storedRequest
 	if err := json.Unmarshal(c.Payload, &snapshot); err != nil {
 		oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+		return
+	}
+	if snapshot.AgentRegistration && kind == "access" {
+		if (form.Has("client_id") && form.Get("client_id") != grant.ClientID) || (form.Has("resource") && form.Get("resource") != grant.Audience) {
+			p.core.WriteRevocationResponse(ctx, w, nil)
+			return
+		}
+		if err := p.revokeAgentAccess(ctx, tx, c, grant); err != nil {
+			oauthError(w, 503, "temporarily_unavailable")
+			return
+		}
+		p.core.WriteRevocationResponse(ctx, w, nil)
+		return
+	}
+	if form.Get("client_id") == "" || grant.ClientID != form.Get("client_id") || (form.Get("resource") != "" && grant.Audience != form.Get("resource")) {
+		p.core.WriteRevocationResponse(ctx, w, nil)
 		return
 	}
 	op := &providerOperation{tx: tx, client: snapshot.Client, resource: grant.Audience, revoking: true}

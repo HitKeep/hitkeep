@@ -4,8 +4,8 @@
         <app-auth-card>
             <div class="oauth-content">
                 <header class="oauth-header">
-                    <h1 id="oauth-title" class="hk-auth-title">{{ 'oauth.consentTitle' | transloco }}</h1>
-                    <p class="oauth-subtitle">{{ 'oauth.consentDescription' | transloco }}</p>
+                    <h1 id="oauth-title" class="hk-auth-title">{{ (claimReturned ? 'oauth.agentReturnTitle' : 'oauth.consentTitle') | transloco }}</h1>
+                    <p class="oauth-subtitle">{{ (claimReturned ? 'oauth.agentReturnHelp' : 'oauth.consentDescription') | transloco }}</p>
                 </header>
                 @if (consent(); as request) {
                 <div class="oauth-application">
@@ -46,7 +46,14 @@
                     <input type="hidden" name="decision" value="" />
                     <input type="hidden" name="csrf_token" [value]="request.csrf_token" />
                     <input type="hidden" name="team_id" [value]="form.team_id().value()" />
-                    @for (id of selectedSiteIds(); track id) {
+                    @if (request.agent_claim) {
+                    <input type="hidden" name="claim_code" [value]="form.claim_code().value()" />
+                    <div class="flex flex-col gap-2">
+                        <label for="oauth-agent-code" class="hk-auth-field-label">{{ 'oauth.agentCodeLabel' | transloco }}</label>
+                        <input pInputText id="oauth-agent-code" [formControl]="form.claim_code().control()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="oauth-agent-code-help" />
+                        <p id="oauth-agent-code-help" class="oauth-help">{{ 'oauth.agentCodeHelp' | transloco }}</p>
+                    </div>
+                    } @for (id of selectedSiteIds(); track id) {
                     <input type="hidden" name="site_ids" [value]="id" />
                     }
                     <div class="flex flex-col gap-2">
