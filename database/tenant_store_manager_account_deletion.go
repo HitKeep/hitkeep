@@ -177,7 +177,11 @@ func (m *TenantStoreManager) DeleteCurrentAccount(ctx context.Context, userID uu
 			if err != nil {
 				return err
 			}
-			if current == nil || (current.UserID != userID && current.UserID != team.SuccessorID) {
+			// A coowner may delete the site after an earlier partial cleanup.
+			if current == nil {
+				continue
+			}
+			if current.UserID != userID && current.UserID != team.SuccessorID {
 				return ErrAccountDeletionChanged
 			}
 			if current.UserID == userID {

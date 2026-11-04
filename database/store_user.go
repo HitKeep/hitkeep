@@ -486,6 +486,18 @@ func cleanupUserRows(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
 	if err := execIfTableExists("share_links", "UPDATE share_links SET created_by = NULL WHERE created_by = ?", userID); err != nil {
 		return fmt.Errorf("could not null share link owner: %w", err)
 	}
+	if err := execIfTableExists("qr_codes", "UPDATE qr_codes SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null QR code creator: %w", err)
+	}
+	if err := execIfTableExists("qr_code_share_links", "UPDATE qr_code_share_links SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null QR share creator: %w", err)
+	}
+	if err := execIfTableExists("site_imports", "UPDATE site_imports SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null site import creator: %w", err)
+	}
+	if err := execIfTableExists("cloud_lifecycle_messages", "DELETE FROM cloud_lifecycle_messages WHERE user_id = ?", userID); err != nil {
+		return fmt.Errorf("could not delete personal cloud lifecycle messages: %w", err)
+	}
 	if err := execIfTableExists("traffic_exclusions", "UPDATE traffic_exclusions SET created_by = NULL WHERE created_by = ?", userID); err != nil {
 		return fmt.Errorf("could not null traffic exclusion created_by: %w", err)
 	}
