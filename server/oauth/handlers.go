@@ -43,7 +43,19 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	}
 	public := shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}
 	mux.HandleFunc("GET /oauth/authorize", ctx.Handler(public, p.Authorize))
-	mux.HandleFunc("POST /oauth/token", ctx.Handler(public, p.Token))
+	mux.HandleFunc("POST /oauth/token", ctx.Handler(public, func(w http.ResponseWriter, r *http.Request) { p.TokenWithAuthority(w, r, h.authorizeSite) }))
+	mux.HandleFunc("POST /agent/identity", ctx.Handler(public, p.AgentIdentity))
+	mux.HandleFunc("POST /agent/identity/claim", ctx.Handler(public, p.AgentClaim))
+	mux.HandleFunc("GET /oauth/agent-claim", ctx.Handler(public, p.StartAgentClaim))
+	for _, route := range []string{"/agent/identity", "/agent/identity/claim"} {
+		mux.HandleFunc("OPTIONS "+route, ctx.Handler(public, func(w http.ResponseWriter, r *http.Request) {
+			if ctx.Config == nil || !ctx.Config.AIEnabled {
+				http.NotFound(w, r)
+				return
+			}
+			p.Preflight(w, r)
+		}))
+	}
 	mux.HandleFunc("POST /oauth/revoke", ctx.Handler(public, p.Revoke))
 	mux.HandleFunc("OPTIONS /oauth/token", ctx.Handler(public, p.Preflight))
 	mux.HandleFunc("OPTIONS /oauth/revoke", ctx.Handler(public, p.Preflight))
@@ -136,6 +148,8 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 		if errors.Is(err, provider.ErrUnavailable) {
 			status = http.StatusServiceUnavailable
 			code = "unavailable"
+		} else if errors.Is(err, provider.ErrConsentForbidden) {
+			status, code = http.StatusForbidden, "forbidden"
 		}
 		response(w, status, map[string]string{"error": code})
 		return
@@ -204,7 +218,7 @@ func (h *handler) completeConsent(w http.ResponseWriter, r *http.Request, userID
 		fail(provider.ErrInvalidConsent)
 		return
 	}
-	for _, key := range []string{"decision", "team_id", "csrf_token"} {
+	for _, key := range []string{"decision", "team_id", "csrf_token", "claim_code"} {
 		if len(r.PostForm[key]) > 1 {
 			fail(provider.ErrInvalidConsent)
 			return

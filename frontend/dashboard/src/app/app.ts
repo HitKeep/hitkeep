@@ -5,6 +5,7 @@ import { NavigationCancel, NavigationCancellationCode, NavigationEnd, Navigation
 import { TranslocoPipe } from '@jsverse/transloco';
 import { RouteProgressBar } from '@layout/route-progress-bar';
 import { isApplicationErrorUrl } from '@services/application-error-navigation.service';
+import { PublicWebMCPService } from '@services/public-webmcp.service';
 
 @Component({
     selector: 'app-root',
@@ -20,6 +21,7 @@ export class App {
     protected readonly routeUnavailable = signal(false);
 
     constructor() {
+        inject(PublicWebMCPService);
         this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
             if (event instanceof NavigationStart && !this.initialNavigationCompleted()) {
                 this.routeUnavailable.set(false);

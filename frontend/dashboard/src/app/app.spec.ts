@@ -5,6 +5,7 @@ import { TranslocoTestingModule } from '@jsverse/transloco';
 import { EMPTY } from 'rxjs';
 
 import { App, isTerminalInitialNavigationCancellation } from './app';
+import { PublicWebMCPService } from '@services/public-webmcp.service';
 
 @Component({ standalone: true, template: 'stable' })
 class StableRoute {}
@@ -30,7 +31,7 @@ describe('App', () => {
                     preloadLangs: true
                 })
             ],
-            providers: [provideZonelessChangeDetection(), provideRouter([])]
+            providers: [provideZonelessChangeDetection(), provideRouter([]), { provide: PublicWebMCPService, useValue: {} }]
         }).compileComponents();
     });
 

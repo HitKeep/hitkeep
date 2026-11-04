@@ -5,12 +5,14 @@ package system
 func agentDiscoveryPaths() map[string]any {
 	paths := map[string]any{}
 	for route, media := range map[string]string{
-		"/.well-known/agent-skills/index.json": "application/json",
-		"/.well-known/skills/index.json":       "application/json",
-		"/.well-known/poppy.json":              "application/json",
-		"/.well-known/agent-card.json":         "application/json",
-		"/auth.md":                             "text/markdown",
-		"/llms.txt":                            "text/markdown",
+		"/.well-known/agent-skills/index.json":  "application/json",
+		"/.well-known/skills/index.json":        "application/json",
+		"/.well-known/poppy.json":               "application/json",
+		"/.well-known/agent-card.json":          "application/json",
+		"/auth.md":                              "text/markdown",
+		"/llms.txt":                             "text/markdown",
+		"/sitemap.xml":                          "application/xml",
+		"/.well-known/oauth-protected-resource": "application/json",
 	} {
 		kind := "string"
 		if media == "application/json" {
