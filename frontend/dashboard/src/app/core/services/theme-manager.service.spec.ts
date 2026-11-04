@@ -56,6 +56,15 @@ describe('ThemeManagerService', () => {
         expect(service.activeTheme().builtin).toBe(true);
     });
 
+    it('starts with the default theme when browser storage is unavailable in a frame', () => {
+        vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+            throw new DOMException('Storage denied', 'SecurityError');
+        });
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({ providers: [ThemeManagerService] });
+        expect(TestBed.inject(ThemeManagerService).activeThemeId()).toBe(DEFAULT_THEME_ID);
+    });
+
     it('saves a custom theme, persists it and selects it', () => {
         service.saveTheme(customTheme);
 

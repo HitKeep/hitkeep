@@ -559,6 +559,7 @@ type ServerPageviewIngestRequest struct {
 }
 
 type ServerEventIngestRequest struct {
+	EventID    string         `json:"event_id,omitempty"`
 	URL        string         `json:"url"`
 	Timestamp  string         `json:"timestamp"`
 	VisitorIP  string         `json:"visitor_ip"`

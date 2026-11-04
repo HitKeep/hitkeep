@@ -34,6 +34,7 @@ import { REALTIME_GOAL_KINDS } from '@services/realtime.service';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
 
 @Component({
@@ -46,6 +47,7 @@ import { injectActiveLang } from '@core/i18n/active-lang';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class Goals {
+    protected readonly embed = inject(EmbedService);
     protected siteService = inject(SiteService);
     private analytics = inject(AnalyticsService);
     private statsService = inject(StatsService);

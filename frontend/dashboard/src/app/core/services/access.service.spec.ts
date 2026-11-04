@@ -6,6 +6,7 @@ import { SiteService } from '@features/sites/services/site.service';
 import { PermissionService } from '@services/permission.service';
 import { TeamService } from '@services/team.service';
 import { AccessService } from './access.service';
+import { EmbedService } from '@services/embed.service';
 
 describe('AccessService', () => {
     let access: AccessService;
@@ -44,6 +45,16 @@ describe('AccessService', () => {
         expect(access.canSite('site-1', SITE_CAPABILITIES.manageData)).toBe(false);
         expect(access.canActiveTeam(TEAM_CAPABILITIES.manageSettings)).toBe(true);
         expect(access.canActiveTeam(TEAM_CAPABILITIES.archive)).toBe(false);
+    });
+
+    it('never inherits private account write permissions inside an embed', () => {
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: EmbedService, useValue: { isEmbedMode: () => true } }] });
+        const embedded = TestBed.inject(AccessService);
+        TestBed.inject(PermissionService).applyPermissions({ instance_role: 'owner', permissions: { 'site-1': 'owner' }, active_team_role: 'owner' });
+        expect(embedded.hasInstance(INSTANCE_CAPABILITIES.viewSystem)).toBe(false);
+        expect(embedded.canSite('site-1', SITE_CAPABILITIES.manageGoals)).toBe(false);
+        expect(embedded.canActiveTeam(TEAM_CAPABILITIES.manageSettings)).toBe(false);
     });
 
     it('checks the active site through the shared site state', () => {

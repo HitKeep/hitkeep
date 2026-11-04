@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import { DOCUMENT, NgOptimizedImage } from '@angular/common';
-import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { NgOptimizedImage } from '@angular/common';
+import { injectFaviconUrl } from '@core/analytics/favicon';
 
 export interface SiteFaviconSource {
     domain: string;
@@ -63,18 +63,15 @@ export interface SiteFaviconSource {
     ]
 })
 export class SiteFavicon {
-    private document = inject(DOCUMENT);
+    private readonly faviconUrlForDomain = injectFaviconUrl();
     site = input.required<SiteFaviconSource | null>();
     private readonly failedDomain = signal<string | null>(null);
     protected domain = computed(() => this.site()?.domain ?? '');
     protected showImage = computed(() => {
         const domain = this.domain();
-        return domain.length > 0 && this.failedDomain() !== domain;
+        return !!this.faviconUrl() && this.failedDomain() !== domain;
     });
-    protected faviconUrl = computed(() => {
-        const domain = this.domain();
-        return domain ? browserAppUrl(this.document, `/api/favicon/${encodeURIComponent(domain)}`) : '';
-    });
+    protected faviconUrl = computed(() => this.faviconUrlForDomain(this.domain()) ?? '');
 
     protected showFallback(): void {
         const domain = this.domain();

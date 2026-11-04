@@ -808,6 +808,7 @@ func serverEventIngestSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"event_id":   map[string]any{"type": "string", "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$", "description": "Optional stable retry identifier, namespaced by the resolved site. Keep the same identifier and payload across retries; do not reuse it for different events. Omit to preserve independent-event behavior."},
 			"site_id":    map[string]any{"type": "string", "format": "uuid", "description": "Required for OAuth tokens; must match the granted site resolved from url. Legacy API clients do not require this field."},
 			"url":        map[string]any{"type": "string", "format": "uri", "description": "Absolute page or event context URL. The hostname resolves the configured HitKeep site."},
 			"timestamp":  map[string]any{"type": "string", "format": "date-time", "description": "Canonical analytics time in RFC3339 format."},
@@ -819,6 +820,7 @@ func serverEventIngestSchema() map[string]any {
 			"dnt":        map[string]any{"type": "boolean", "description": "When true, HitKeep drops the record consistently with browser tracker privacy behavior."},
 			"session_id": map[string]any{"type": "string", "format": "uuid", "description": "Optional visitor grouping key. If omitted, this event gets its own standalone session."},
 		},
-		"required": []string{"url", "timestamp", "visitor_ip", "user_agent", "name"},
+		"required":          []string{"url", "timestamp", "name"},
+		"dependentRequired": map[string]any{"visitor_ip": []string{"user_agent"}, "user_agent": []string{"visitor_ip"}},
 	}
 }

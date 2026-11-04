@@ -24,6 +24,13 @@
     "connections": "Revisar o acesso dos assistentes"
   },
   "oauth": {
+    "createSiteTitle": "Criar um site",
+    "createSiteHelp": "Adicione seu site a esta equipe e aprove a conexão abaixo.",
+    "siteDomain": "Domínio do site",
+    "createSiteAction": "Criar site",
+    "siteCreateInvalid": "Insira um domínio de site válido.",
+    "siteCreateExists": "Este site já existe. Selecione-o acima.",
+    "siteCreateFailed": "Não foi possível criar o site. Tente novamente.",
     "connectionDetails": "Detalhes da conexão",
     "consentTitle": "Autorizar um aplicativo",
     "consentDescription": "Revise o aplicativo, as permissões solicitadas e a equipe que ele poderá acessar.",
@@ -2894,6 +2901,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "Sua região foi selecionada na integração. Para alterá-la, reinicie a conexão no WordPress.",
     "pageTitle": "Crie sua conta HitKeep",
     "paidTitle": "Comece com o HitKeep {{plan}}",
     "paidSubtitle": "Crie sua conta, confirme seu e-mail e depois revise o pagamento.",
@@ -3484,6 +3492,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Este relatório contém mais de uma moeda. Use uma única moeda de relatório por site; o HitKeep não converte moedas.",
     "setup": {
       "title": "Configurar o rastreio de e-commerce",
       "description": "A análise de receita precisa de eventos de compra e de checkout da sua loja. Assim que chegarem eventos, esta página é preenchida automaticamente.",
@@ -4030,5 +4039,10 @@
     "confirmPending": "Outra ação do agente está à espera de confirmação.",
     "requestFailed": "O pedido falhou (HTTP {{status}}).",
     "outcomeUnknown": "O pedido foi interrompido e poderá ter sido concluído. Verifique o estado atual antes de tentar novamente."
+  },
+  "embed": {
+    "readOnly": "Estatísticas somente para leitura",
+    "connectionError": "Não foi possível conectar ao HitKeep. Tente novamente ou reconecte o HitKeep no WordPress.",
+    "analyticsNavigation": "Páginas de estatísticas"
   }
 }

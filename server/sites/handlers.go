@@ -45,7 +45,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/sites", ctx.Handler(shared.HandlerConfig{
 		RequireAuth: true,
 		RateLimiter: ctx.ApiLimiter,
-	}, h.handleCreateSite()))
+	}, h.handleCreateSite(uuid.Nil)))
 	mux.HandleFunc("DELETE /api/sites/{id}", ctx.Handler(shared.HandlerConfig{
 		SitePerm:    authcore.PermSiteDelete,
 		RateLimiter: ctx.ApiLimiter,
@@ -264,7 +264,12 @@ func apiClientAuthTenantID(authz *database.APIClientAuth) uuid.UUID {
 	return authz.TenantID
 }
 
-func (h *handler) handleCreateSite() http.HandlerFunc {
+// CreateSite reuses the normal creation policies for authenticated onboarding flows.
+func CreateSite(ctx *shared.Context, expectedTeamID uuid.UUID) http.HandlerFunc {
+	return (&handler{ctx: ctx}).handleCreateSite(expectedTeamID)
+}
+
+func (h *handler) handleCreateSite(expectedTeamID uuid.UUID) http.HandlerFunc {
 	type request struct {
 		Domain string `json:"domain"`
 	}
@@ -297,6 +302,10 @@ func (h *handler) handleCreateSite() http.HandlerFunc {
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to resolve active team for site creation", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if expectedTeamID != uuid.Nil && teamID != expectedTeamID {
+			writeCreateSiteError(w, database.ErrActiveTenantChanged)
 			return
 		}
 		if !shared.CheckAgentTeam(w, r, teamID) {

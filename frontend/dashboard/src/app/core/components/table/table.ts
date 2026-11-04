@@ -19,6 +19,7 @@ import { FilterChipItem, FilterChipRow } from '@components/filter-chip-row/filte
 import { RelativeDateTime } from '@components/relative-date-time/relative-date-time';
 import { TableRowActionItem, TableRowActions } from '@components/table-row-actions/table-row-actions';
 import { localeForLanguage } from '@core/i18n/duration-format';
+import { EmbedService } from '@services/embed.service';
 
 import { AppTableColumn, AppTableOption } from './table.types';
 
@@ -79,6 +80,7 @@ type Row = Record<string, unknown>;
 })
 export class AppTable<T = Row> implements OnInit {
     private readonly transloco = inject(TranslocoService);
+    private readonly embed = inject(EmbedService);
 
     readonly value = input.required<readonly T[]>();
     readonly columns = input.required<readonly AppTableColumn<T>[]>();
@@ -99,6 +101,7 @@ export class AppTable<T = Row> implements OnInit {
     /** Row fields searched in addition to searchable columns. */
     readonly searchFields = input<readonly string[]>([]);
     readonly exportable = input(true);
+    protected readonly canExport = computed(() => this.exportable() && !this.embed.isEmbedMode());
     readonly exportFilename = input<string>();
     readonly emptyTextKey = input('table.empty');
     readonly mobile = input<'scroll' | 'cards'>('scroll');
@@ -341,6 +344,7 @@ export class AppTable<T = Row> implements OnInit {
     }
 
     protected exportCsv(): void {
+        if (!this.canExport()) return;
         const table = this.table();
         const rows = ((this.lazy() ? this.tableValue() : (table.filteredValue ?? table.value)) ?? []) as T[];
         const columns = this.visibleColumns();

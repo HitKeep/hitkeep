@@ -5,6 +5,7 @@ import { SITE_CAPABILITIES } from '@core/access/capabilities';
 import type { Annotation, AnnotationInput } from '@models/analytics.types';
 import { AccessService } from '@services/access.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 import { SiteService } from '@features/sites/services/site.service';
 
 /** Day charts pin notes to UTC bucket starts; hour charts keep the local clock time. */
@@ -32,9 +33,10 @@ export class SiteAnnotationsService {
     private readonly http = inject(HttpClient);
     private readonly sites = inject(SiteService);
     private readonly share = inject(ShareService);
+    private readonly embed = inject(EmbedService);
     private readonly access = inject(AccessService);
 
-    readonly siteId = computed(() => (this.share.isShareMode() ? null : (this.sites.activeSite()?.id ?? null)));
+    readonly siteId = computed(() => (this.share.isShareMode() || this.embed.isEmbedMode() ? null : (this.sites.activeSite()?.id ?? null)));
 
     /** Set by the first chart, so pages without charts never ask for notes. */
     private readonly wanted = signal(false);

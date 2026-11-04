@@ -51,6 +51,7 @@ export class Signup {
     private readonly router = inject(Router);
     protected readonly oauth = inject(OAuthService);
     private readonly route = inject(ActivatedRoute);
+    protected readonly isOAuthSignup = this.route.snapshot.queryParamMap.get('oauth') === '1';
     private readonly analytics = inject(AnalyticsService);
     private readonly auth = inject(AuthService);
     private readonly cloud = inject(CloudService);
@@ -73,7 +74,7 @@ export class Signup {
     protected readonly selectedBilling = signal<BillingInterval>('monthly');
     protected readonly loginQueryParams = computed(() => {
         const intent = { plan: this.selectedPlan(), billing: this.selectedBilling() };
-        return { ...cloudPurchaseQuery(intent), returnUrl: intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent) };
+        return { ...cloudPurchaseQuery(intent), ...(this.isOAuthSignup ? { oauth: '1' } : {}), returnUrl: intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent) };
     });
     private readonly activeLanguage = injectActiveLang();
     protected readonly currentYear = new Date().getFullYear();
@@ -158,6 +159,7 @@ export class Signup {
     }
 
     protected selectJurisdiction(jurisdiction: Jurisdiction): void {
+        if (this.isOAuthSignup) return;
         if (jurisdiction === this.currentJurisdiction()) {
             return;
         }
@@ -279,6 +281,7 @@ export class Signup {
             billing: this.selectedBilling(),
             region: this.currentJurisdiction()
         });
+        if (this.isOAuthSignup) query.set('oauth', '1');
         this.auth
             .startSocial(provider, {
                 flow: 'signup',
@@ -348,6 +351,7 @@ export class Signup {
     }
 
     private redirectToRequestedJurisdiction(): void {
+        if (this.isOAuthSignup) return;
         const requested = this.normalizeJurisdiction(this.route.snapshot.queryParamMap.get('region'));
         if (!requested || requested === this.inferJurisdictionFromHost()) {
             return;

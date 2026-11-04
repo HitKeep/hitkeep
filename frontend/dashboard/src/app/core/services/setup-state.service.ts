@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, signal, Service } from '@angular/core';
+import { EmbedService } from '@services/embed.service';
 
 /** Which analytics features a site has ever produced data for. */
 export interface SiteSetupState {
@@ -32,6 +33,7 @@ const CONFIGURED: SiteSetupState = {
 @Service()
 export class SetupStateService {
     private readonly http = inject(HttpClient);
+    private readonly embed = inject(EmbedService);
     private readonly states = signal<Record<string, SiteSetupState>>({});
     private readonly inFlight = new Set<string>();
 
@@ -41,6 +43,7 @@ export class SetupStateService {
      * requests on the answer instead of firing them speculatively.
      */
     state(siteId: string | null | undefined): SiteSetupState | null {
+        if (this.embed.isEmbedMode()) return CONFIGURED;
         if (!siteId) return null;
         const known = this.states()[siteId];
         if (known) return known;

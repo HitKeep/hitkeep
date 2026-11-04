@@ -47,4 +47,9 @@ describe('SessionEndNavigationService', () => {
         expect(navigate.mock.calls[0]?.[1]?.replaceUrl).toBe(true);
         expect(navigate.mock.calls[0]?.[1]?.queryParams).toEqual({ returnUrl: '/dashboard' });
     });
+
+    it('keeps the OAuth signup region binding when consent requires signing in', () => {
+        const command = TestBed.inject(SessionEndNavigationService).redirectToLogin('session-ended', '/oauth/consent');
+        expect(command.redirectTo.queryParams).toEqual({ returnUrl: '/oauth/consent', oauth: '1' });
+    });
 });

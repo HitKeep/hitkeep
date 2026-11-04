@@ -24,6 +24,13 @@
     "connections": "Review assistant access"
   },
   "oauth": {
+    "createSiteTitle": "Create a site",
+    "createSiteHelp": "Add your website to this team, then approve the connection below.",
+    "siteDomain": "Website domain",
+    "createSiteAction": "Create site",
+    "siteCreateInvalid": "Enter a valid website domain.",
+    "siteCreateExists": "This site already exists. Select it above.",
+    "siteCreateFailed": "Unable to create the site. Try again.",
     "connectionDetails": "Connection details",
     "consentTitle": "Authorize an application",
     "consentDescription": "Review the application, requested permissions and the team it may access.",
@@ -3023,6 +3030,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "Your region was selected in the integration. To change it, restart the connection from WordPress.",
     "pageTitle": "Create your HitKeep account",
     "paidTitle": "Get started with HitKeep {{plan}}",
     "paidSubtitle": "Create your account, verify your email, then review payment.",
@@ -3613,6 +3621,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "This report contains more than one currency. Use one reporting currency per site; HitKeep does not convert currencies.",
     "setup": {
       "title": "Set up ecommerce tracking",
       "description": "Revenue analytics needs purchase and checkout events from your shop. Once events arrive, this page fills automatically.",
@@ -4164,5 +4173,10 @@
     "confirmPending": "Another agent action is waiting for confirmation.",
     "requestFailed": "The request failed (HTTP {{status}}).",
     "outcomeUnknown": "The request was interrupted and may have completed. Check the current state before retrying."
+  },
+  "embed": {
+    "readOnly": "Read-only analytics",
+    "connectionError": "Unable to connect to HitKeep. Retry or reconnect HitKeep in WordPress.",
+    "analyticsNavigation": "Analytics pages"
   }
 }

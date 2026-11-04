@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
-import { DOCUMENT, NgOptimizedImage } from '@angular/common';
+import { NgOptimizedImage } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ReactiveFormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -8,6 +9,7 @@ import { injectActiveLang } from '@core/i18n/active-lang';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { CardModule } from '@openng/optimus-ui/card';
+import { MessageModule } from '@openng/optimus-ui/message';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TabsModule } from '@openng/optimus-ui/tabs';
 import { SiteService } from '@features/sites/services/site.service';
@@ -19,7 +21,7 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { EcommerceProductStat, EcommerceSeriesPoint, EcommerceSourceStat, EcommerceSummary, MetricStat, SiteStats } from '@models/analytics.types';
-import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
+import { injectFaviconUrl } from '@core/analytics/favicon';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_EVENT_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
@@ -41,7 +43,7 @@ type DataLoadMode = 'blocking' | 'background';
 
 @Component({
     selector: 'app-ecommerce',
-    imports: [NgOptimizedImage, ReactiveFormsModule, TranslocoPipe, ButtonModule, CardModule, AppTable, AppTableCell, TabsModule, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart, NoSiteSelected, SetupCallout],
+    imports: [NgOptimizedImage, ReactiveFormsModule, TranslocoPipe, ButtonModule, CardModule, MessageModule, AppTable, AppTableCell, TabsModule, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart, NoSiteSelected, SetupCallout],
     templateUrl: './ecommerce.html',
     styleUrl: './ecommerce.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -52,7 +54,7 @@ export class EcommercePage {
     private analyticsService = inject(AnalyticsService);
     private localeService = inject(TranslocoLocaleService);
     private transloco = inject(TranslocoService);
-    private document = inject(DOCUMENT);
+    protected readonly faviconUrlForDomain = injectFaviconUrl();
     private destroyRef = inject(DestroyRef);
     private realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
@@ -80,7 +82,9 @@ export class EcommercePage {
     protected readonly sourceRowActive = (source: EcommerceSourceStat) => this.isSourceFilterActive(source);
     protected readonly filterStats = signal<SiteStats | null>(null);
     protected readonly isLoading = signal(false);
+    protected readonly mixedCurrency = signal(false);
     protected readonly kpiUpdateKey = signal(0);
+    private requestSequence = 0;
 
     protected readonly isShortRange = this.reportRange.isShortRange;
 
@@ -310,6 +314,8 @@ export class EcommercePage {
             const filters = this.activeFilters();
             const product = this.selectedProduct();
             if (!site || !dates) {
+                this.requestSequence++;
+                this.mixedCurrency.set(false);
                 this.summary.set(null);
                 this.series.set([]);
                 this.products.set([]);
@@ -406,10 +412,6 @@ export class EcommercePage {
         return value.replace(/^https?:\/\//, '').replace(/^www\./, '');
     }
 
-    protected faviconUrlForDomain(domain: string | null | undefined): string | null {
-        return domain ? browserAppUrl(this.document, `/api/favicon/${encodeURIComponent(domain)}`) : null;
-    }
-
     protected formatCurrency(value: number, currency: string): string {
         return new Intl.NumberFormat(this.activeLanguage(), {
             style: 'currency',
@@ -449,6 +451,7 @@ export class EcommercePage {
     }
 
     private loadData(siteId: string, from: string, to: string, filters: MetricFilter[], product: ProductFilter | null, mode: DataLoadMode = 'blocking') {
+        const sequence = ++this.requestSequence;
         const blocking = mode === 'blocking' || this.isLoading() || !this.summary();
         if (blocking) this.isLoading.set(true);
         forkJoin({
@@ -460,11 +463,13 @@ export class EcommercePage {
         })
             .pipe(
                 finalize(() => {
-                    if (blocking) this.isLoading.set(false);
+                    if (sequence === this.requestSequence && blocking) this.isLoading.set(false);
                 })
             )
             .subscribe({
                 next: ({ summary, series, products, sources, stats }) => {
+                    if (sequence !== this.requestSequence) return;
+                    this.mixedCurrency.set(false);
                     this.summary.set(summary);
                     this.series.set(series);
                     this.products.set(products);
@@ -472,7 +477,19 @@ export class EcommercePage {
                     this.filterStats.set(stats);
                     if (!blocking) this.kpiUpdateKey.update((key) => key + 1);
                 },
-                error: (error) => console.error(error)
+                error: (error: unknown) => {
+                    if (sequence !== this.requestSequence) return;
+                    if (error instanceof HttpErrorResponse && error.status === 422) {
+                        this.mixedCurrency.set(true);
+                        this.summary.set(null);
+                        this.series.set([]);
+                        this.products.set([]);
+                        this.sources.set([]);
+                        this.filterStats.set(null);
+                        return;
+                    }
+                    console.error(error);
+                }
             });
     }
 
