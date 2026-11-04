@@ -74,6 +74,7 @@ func openAPISpecV1(publicURL string) map[string]any {
 	components := openAPIV1Components()
 	components["securitySchemes"].(map[string]any)["oauth2"] = oauthSecurityScheme(publicURL)
 	paths := mergeOpenAPIPathMaps(openAPIV1Paths(), openAPIV1OAuthPaths(publicURL))
+	addAccountDeletionOpenAPI(components, paths)
 	addWordPressOpenAPI(components, paths)
 	return map[string]any{
 		"openapi":           "3.1.0",

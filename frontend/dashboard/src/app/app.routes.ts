@@ -14,6 +14,11 @@ const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') =
 
 export const routes: Routes = [
     {
+        path: 'account-deleted',
+        loadComponent: () => import('@pages/account-deleted/account-deleted').then((m) => m.AccountDeleted),
+        data: titleData('settings.user.deletion.completedTitle')
+    },
+    {
         path: 'embed/:siteId',
         loadComponent: () => import('@pages/embed/embed').then((m) => m.EmbedDashboard),
         children: [

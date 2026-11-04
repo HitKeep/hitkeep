@@ -29,6 +29,7 @@ type handler struct {
 
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
+	h.registerAccountDeletion(mux)
 	mux.HandleFunc("GET /api/user/bootstrap", ctx.Handler(shared.HandlerConfig{
 		RequireAuth: true,
 		RateLimiter: ctx.ApiLimiter,
