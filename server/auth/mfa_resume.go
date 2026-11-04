@@ -24,7 +24,7 @@ func (h *handler) redirectDeletionMFA(w http.ResponseWriter, r *http.Request, re
 	}
 	issuer, _ := url.Parse(shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the configured browser issuer; HTTP browser reauthentication is intentionally supported.
-		Name: mfaResumeCookie, Value: browser, Path: issuer.Path + "/api/auth/mfa", HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL), SameSite: http.SameSiteStrictMode, MaxAge: 300})
+		Name: mfaResumeCookie, Value: browser, Path: issuer.EscapedPath() + "/api/auth/mfa", HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL), SameSite: http.SameSiteStrictMode, MaxAge: 300})
 	destination := "/login?" + url.Values{"returnUrl": {returnPath}}.Encode() + "#mfa_challenge=" + url.QueryEscape(response.ChallengeToken)
 	http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, destination), http.StatusSeeOther)
 	return true

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/api"
+	"hitkeep/appurl"
 )
 
 const (
@@ -62,7 +62,7 @@ func NativeAuthIssuer(raw string) string { return canonicalAuthIssuer(raw, false
 
 func canonicalAuthIssuer(raw string, allowHTTP bool) string {
 	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "https" && (!allowHTTP || u.Scheme != "http")) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.EscapedPath() != u.Path || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) {
+	if err != nil || (u.Scheme != "https" && (!allowHTTP || u.Scheme != "http")) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || strings.ContainsAny(raw, "#\\\r\n\t") || strings.ContainsFunc(raw, unicode.IsSpace) {
 		return ""
 	}
 	if port := u.Port(); port != "" {
@@ -71,8 +71,8 @@ func canonicalAuthIssuer(raw string, allowHTTP bool) string {
 			return ""
 		}
 	}
-	prefix := strings.TrimSuffix(u.Path, "/")
-	if strings.Contains(u.Path, "//") || (prefix != "" && path.Clean(prefix) != prefix) {
+	prefix, escaped, ok := appurl.Prefix(u.EscapedPath())
+	if !ok {
 		return ""
 	}
 	u.Host = strings.ToLower(u.Host)
@@ -83,8 +83,7 @@ func canonicalAuthIssuer(raw string, allowHTTP bool) string {
 		}
 	}
 	u.Path = prefix
-	// Preserve valid raw pchars, including after removing a trailing slash.
-	u.RawPath = prefix
+	u.RawPath = escaped
 	return u.String()
 }
 

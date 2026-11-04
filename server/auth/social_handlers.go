@@ -359,7 +359,10 @@ func (h *handler) socialStateCookiePath() string {
 	if err != nil {
 		return socialStateCookieRoute
 	}
-	prefix := strings.TrimRight(publicURL.EscapedPath(), "/")
+	_, prefix, ok := appurl.Prefix(publicURL.EscapedPath())
+	if !ok {
+		return socialStateCookieRoute
+	}
 	if prefix == "" {
 		return socialStateCookieRoute
 	}

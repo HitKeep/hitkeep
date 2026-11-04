@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"html"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"golang.org/x/time/rate"
 
 	hitai "hitkeep/ai"
+	"hitkeep/appurl"
 	"hitkeep/auth"
 	"hitkeep/blocking"
 	"hitkeep/cluster"
@@ -349,45 +351,62 @@ func normalizePublicBasePath(publicURL string) string {
 	if raw == "" {
 		return "/"
 	}
-
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		return "/"
+		return ""
 	}
 	if !parsed.IsAbs() || parsed.Host == "" {
 		return "/"
 	}
-
-	cleaned := path.Clean("/" + parsed.EscapedPath())
-	if cleaned == "." || cleaned == "/" {
-		return "/"
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || strings.ContainsAny(raw, "#\\") {
+		return ""
 	}
-	return cleaned + "/"
+	_, escaped, ok := appurl.Prefix(parsed.EscapedPath())
+	if !ok {
+		return ""
+	}
+	return escaped + "/"
 }
 
 func injectDashboardBasePath(indexHTML []byte, basePath string) []byte {
 	baseTag := []byte(`<base href="/" />`)
-	nextTag := []byte(`<base href="` + basePath + `" />`)
+	nextTag := []byte(`<base href="` + html.EscapeString(basePath) + `" />`)
 	if bytes.Contains(indexHTML, baseTag) {
 		return bytes.Replace(indexHTML, baseTag, nextTag, 1)
 	}
 
 	compactBaseTag := []byte(`<base href="/">`)
-	compactNextTag := []byte(`<base href="` + basePath + `">`)
+	compactNextTag := []byte(`<base href="` + html.EscapeString(basePath) + `">`)
 	return bytes.Replace(indexHTML, compactBaseTag, compactNextTag, 1)
 }
 
 func (s *Server) stripPublicBasePath(next http.Handler) http.Handler {
-	basePath := strings.TrimSuffix(s.publicBasePath, "/")
+	basePath, _, valid := appurl.Prefix(strings.TrimSuffix(s.publicBasePath, "/"))
+	valid = valid && s.publicBasePath != ""
+	if valid && basePath == "" {
+		return next
+	}
+	depth := strings.Count(basePath, "/")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == basePath {
-			r = cloneRequestWithPath(r, "/")
-		} else if strings.HasPrefix(r.URL.Path, basePath+"/") {
+		if valid && (r.URL.Path == basePath || strings.HasPrefix(r.URL.Path, basePath+"/")) {
+			parts := strings.SplitN(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/", depth+1)
+			if len(parts) < depth {
+				http.NotFound(w, r)
+				return
+			}
+			rawPrefix := "/" + strings.Join(parts[:depth], "/")
+			decoded, _, ok := appurl.Prefix(rawPrefix)
+			if !ok || decoded != basePath {
+				http.NotFound(w, r)
+				return
+			}
 			strippedPath := strings.TrimPrefix(r.URL.Path, basePath)
+			strippedRaw := strings.TrimPrefix(r.URL.EscapedPath(), rawPrefix)
 			if strippedPath == "" {
 				strippedPath = "/"
+				strippedRaw = "/"
 			}
-			r = cloneRequestWithPath(r, strippedPath)
+			r = cloneRequestWithPath(r, strippedPath, strippedRaw)
 		} else if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && !isCaddyTLSAskPath(r.URL.Path) && !s.isOAuthDiscoveryPath(r.URL.Path) && !s.isDiscoveryRoot(r.URL.Path) {
 			http.NotFound(w, r)
 			return
@@ -400,12 +419,12 @@ func (s *Server) isOAuthDiscoveryPath(requestPath string) bool {
 	return s.ctx != nil && s.ctx.OAuthProvider != nil && slices.Contains(s.ctx.OAuthProvider.DiscoveryPaths(), requestPath)
 }
 
-func cloneRequestWithPath(r *http.Request, nextPath string) *http.Request {
+func cloneRequestWithPath(r *http.Request, nextPath, nextRawPath string) *http.Request {
 	clone := r.Clone(r.Context())
-	nextURL := *r.URL
+	nextURL := r.URL.Clone()
 	nextURL.Path = nextPath
-	nextURL.RawPath = ""
-	clone.URL = &nextURL
+	nextURL.RawPath = nextRawPath
+	clone.URL = nextURL
 	return clone
 }
 

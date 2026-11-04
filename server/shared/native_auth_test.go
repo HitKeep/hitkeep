@@ -3,6 +3,7 @@ package shared
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/api"
+	json "hitkeep/jsonapi"
 )
 
 func TestNativeAuthBindingConsumptionAndClearUser(t *testing.T) {
@@ -98,40 +100,24 @@ func TestNativeAuthExpiryDenialRestartAndCurrentAccount(t *testing.T) {
 }
 
 func TestNativeCanonicalIssuer(t *testing.T) {
-	for _, tc := range []struct{ input, want string }{
-		{"HTTPS://EXAMPLE.test:443/prefix/", "https://example.test/prefix"},
-		{"https://EXAMPLE.test:8443/prefix", "https://example.test:8443/prefix"},
-		{"https://[::1]:443/prefix/", "https://[::1]/prefix"},
-		{"https://cloud.hitkeep.eu/", "https://cloud.hitkeep.eu"},
-		{"https://cloud.hitkeep.com", "https://cloud.hitkeep.com"},
-		{"https://example.test:80/prefix", "https://example.test:80/prefix"},
-		{"HTTPS://EXAMPLE.test:443/team!stats/", "https://example.test/team!stats"},
-		{"https://example.test/team!stats", "https://example.test/team!stats"},
-		{"https://example.test/a'b(c)*d", "https://example.test/a'b(c)*d"},
-		{"https://example.test/café", ""},
-		{"https://example.test/caf%C3%A9", ""},
-		{"https://example.test/%70refix", ""},
-		{"https://example.test/team%21stats", ""},
-		{"https://example.test/a%2fb", ""},
-		{"https://example.test/a%2Fb", ""},
-		{"https://example.test/a%5cb", ""},
-		{"https://example.test/%2e%2e/prefix", ""},
-		{"https://example.test/%252e%252e/prefix", ""},
-		{"https://example.test/prefix%00", ""},
-		{"https://example.test/prefix%0A", ""},
-		{"https://example.test//prefix", ""},
-		{"https://example.test/a/./prefix", ""},
-		{"https://example.test/prefix#fragment", ""},
-		{"https://example.test/prefix?", ""},
-		{"https://example.test:65536/prefix", ""},
-		{"https://example.test/a/../prefix", ""},
-		{"https://example.test/%2fother", ""},
-		{"https://user@example.test/prefix", ""},
-		{"https://example.test/prefix?x=1", ""},
-		{"http://example.test/prefix", ""},
-	} {
-		if got := NativeAuthIssuer(tc.input); got != tc.want {
-			t.Errorf("%q = %q want %q", tc.input, got, tc.want)
+	data, err := os.ReadFile("testdata/native_issuer_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors []struct {
+		Input    string  `json:"input"`
+		Expected *string `json:"expected"`
+	}
+	if err := json.Unmarshal(data, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range vectors {
+		want := ""
+		if tc.Expected != nil {
+			want = *tc.Expected
+		}
+		if got := NativeAuthIssuer(tc.Input); got != want {
+			t.Errorf("%q = %q want %q", tc.Input, got, want)
 		} else if got != "" && NativeAuthIssuer(got) != got {
 			t.Errorf("canonical issuer is not stable: %q", got)
 		}

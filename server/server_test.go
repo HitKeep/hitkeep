@@ -221,7 +221,7 @@ func TestNormalizePublicBasePath(t *testing.T) {
 		{name: "relative value", publicURL: "hitkeep", want: "/"},
 		{name: "single segment", publicURL: "https://www.example.net/hitkeep", want: "/hitkeep/"},
 		{name: "single segment slash", publicURL: "https://www.example.net/hitkeep/", want: "/hitkeep/"},
-		{name: "cleans repeated slashes and dots", publicURL: "https://www.example.net//tools/./hitkeep//", want: "/tools/hitkeep/"},
+		{name: "rejects repeated slashes and dots", publicURL: "https://www.example.net//tools/./hitkeep//", want: ""},
 	}
 
 	for _, tt := range tests {

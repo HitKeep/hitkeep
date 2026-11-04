@@ -4,6 +4,8 @@ import (
 	"maps"
 	"net/url"
 	"strings"
+
+	"hitkeep/appurl"
 )
 
 func oauthSecurityScheme(publicURL string) map[string]any {
@@ -12,7 +14,7 @@ func oauthSecurityScheme(publicURL string) map[string]any {
 		"type":        "oauth2",
 		"description": "Authorization Code with mandatory PKCE S256. Access is bound to one API or MCP resource, one team, explicitly consented sites, scopes, and the user's current permissions. AI-enabled ordinary REST actions accept only their documented scopes. Billing-only consent may select a team without sites and still requires human payment approval. Credentials, impersonation, raw exports and instance administration are excluded. Existing API-client credentials remain supported separately; MCP remains read-only.",
 		"flows": map[string]any{"authorizationCode": map[string]any{
-			"authorizationUrl": issuer + "/oauth/authorize", "tokenUrl": issuer + "/oauth/token",
+			"authorizationUrl": appurl.Path(issuer, "/oauth/authorize"), "tokenUrl": appurl.Path(issuer, "/oauth/token"),
 			"scopes": map[string]string{
 				"sites:read": "Discover granted sites.", "analytics:read": "Read approved aggregate analytics.",
 				"tracking_domains:read": "Discover eligible active tracking domains.", "ingest:write": "Submit server-side analytics for granted sites.",
@@ -60,7 +62,11 @@ func openAPIV1OAuthPaths(publicURL string) map[string]any {
 		"/api/integrations/sites/{id}/preview":          map[string]any{"get": op([]string{"Integrations"}, "Read an aggregate analytics preview", "API-resource OAuth token, explicit site consent, and current site.view authority required. Fixed trailing seven days in UTC; query parameters are rejected. Uses the existing tenant analytics store and aggregate overview.", []any{map[string]any{"oauth2": []string{"analytics:read"}}}, siteID, nil, map[string]any{"200": jsonRefResp("Aggregate preview", "#/components/schemas/IntegrationPreview"), "400": errResp("Invalid ID or query"), "401": errResp("Invalid token"), "403": errResp("Insufficient scope or authority"), "503": errResp("Unavailable")})},
 	}
 	if issuer, err := url.Parse(publicURL); err == nil && issuer.Host != "" {
-		prefix := strings.TrimRight(issuer.Path, "/")
+		_, prefix, valid := appurl.Prefix(issuer.EscapedPath())
+		if !valid {
+			maps.Copy(paths, openAPIV1OAuthClientPaths())
+			return paths
+		}
 		origin := issuer.Scheme + "://" + issuer.Host
 		for _, path := range []string{"/.well-known/oauth-authorization-server" + prefix, "/.well-known/oauth-protected-resource" + prefix + "/api"} {
 			paths[path] = map[string]any{"servers": []map[string]string{{"url": origin}}, "get": op([]string{"OAuth"}, "Read OAuth discovery metadata", "Canonical issuer and API protected-resource metadata, including path-prefixed deployments. MCP protected-resource metadata follows the configured enabled MCP resource. OAuth requires a compatible public HTTPS issuer.", nil, nil, nil, map[string]any{"200": jsonSchemaResp("Discovery metadata", map[string]any{"type": "object"})})}

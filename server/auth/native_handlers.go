@@ -250,7 +250,7 @@ func (h *handler) handleNativeConsent() http.HandlerFunc {
 			browser = shared.NativeAuthToken()
 			issuer, _ := url.Parse(shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
 			http.SetCookie(w, &http.Cookie{ //nolint:gosec // Always Secure/HttpOnly; SameSite is exactly Strict for login or Lax for the browser-owned provider return.
-				Name: cookieName, Value: browser, Path: issuer.Path + cookiePath, HttpOnly: true, Secure: true, SameSite: sameSite, MaxAge: 600})
+				Name: cookieName, Value: browser, Path: issuer.EscapedPath() + cookiePath, HttpOnly: true, Secure: true, SameSite: sameSite, MaxAge: 600})
 		}
 		csrf, entry, ok := h.ctx.AuthState.RenderNativeAuth(handle, browser, id, security)
 		if !ok || entry.Issuer != shared.NativeAuthIssuer(h.ctx.Config.PublicURL) {

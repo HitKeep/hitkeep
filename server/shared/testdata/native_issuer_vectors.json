@@ -1,0 +1,186 @@
+[
+  {
+    "input": "HTTPS://EXAMPLE.test:443/prefix/",
+    "expected": "https://example.test/prefix"
+  },
+  {
+    "input": "https://EXAMPLE.test:8443/prefix",
+    "expected": "https://example.test:8443/prefix"
+  },
+  {
+    "input": "https://[::1]:443/prefix/",
+    "expected": "https://[::1]/prefix"
+  },
+  {
+    "input": "https://cloud.hitkeep.eu/",
+    "expected": "https://cloud.hitkeep.eu"
+  },
+  {
+    "input": "https://cloud.hitkeep.com",
+    "expected": "https://cloud.hitkeep.com"
+  },
+  {
+    "input": "https://example.test:80/prefix",
+    "expected": "https://example.test:80/prefix"
+  },
+  {
+    "input": "HTTPS://EXAMPLE.test:443/team!stats/",
+    "expected": "https://example.test/team!stats"
+  },
+  {
+    "input": "https://example.test/team!stats",
+    "expected": "https://example.test/team!stats"
+  },
+  {
+    "input": "https://example.test/a'b(c)*d",
+    "expected": "https://example.test/a'b(c)*d"
+  },
+  {
+    "input": "https://example.test/café",
+    "expected": "https://example.test/caf%C3%A9"
+  },
+  {
+    "input": "https://example.test/caf%C3%A9",
+    "expected": "https://example.test/caf%C3%A9"
+  },
+  {
+    "input": "https://example.test/%70refix",
+    "expected": "https://example.test/prefix"
+  },
+  {
+    "input": "https://example.test/team%21stats",
+    "expected": "https://example.test/team!stats"
+  },
+  {
+    "input": "HTTPS://EXAMPLE.test:443/caf%c3%a9/",
+    "expected": "https://example.test/caf%C3%A9"
+  },
+  {
+    "input": "https://example.test/café",
+    "expected": "https://example.test/cafe%CC%81"
+  },
+  {
+    "input": "https://example.test/%E6%97%A5%E6%9C%AC",
+    "expected": "https://example.test/%E6%97%A5%E6%9C%AC"
+  },
+  {
+    "input": "https://example.test/team;stats",
+    "expected": "https://example.test/team%3Bstats"
+  },
+  {
+    "input": "https://example.test/discount%25",
+    "expected": "https://example.test/discount%25"
+  },
+  {
+    "input": "https://example.test/%FF",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a%2fb",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a%2Fb",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a%5cb",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/%2e%2e/prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/%252e%252e/prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/prefix%00",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/prefix%0A",
+    "expected": null
+  },
+  {
+    "input": "https://example.test//prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a/./prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/prefix#fragment",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/prefix?",
+    "expected": null
+  },
+  {
+    "input": "https://example.test:65536/prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a/../prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/%2fother",
+    "expected": null
+  },
+  {
+    "input": "https://user@example.test/prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/prefix?x=1",
+    "expected": null
+  },
+  {
+    "input": "http://example.test/prefix",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/📊",
+    "expected": "https://example.test/%F0%9F%93%8A"
+  },
+  {
+    "input": "https://example.test/%f0%9f%93%8a",
+    "expected": "https://example.test/%F0%9F%93%8A"
+  },
+  {
+    "input": "HTTPS://EXAMPLE.test:443/Prefix",
+    "expected": "https://example.test/Prefix"
+  },
+  {
+    "input": "https://example.test/team%20stats",
+    "expected": "https://example.test/team%20stats"
+  },
+  {
+    "input": "https://example.test/%C2%85",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/a\\b",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/bad%zz",
+    "expected": null
+  },
+  {
+    "input": "https://example.test//",
+    "expected": null
+  },
+  {
+    "input": "https://example.test/%25name",
+    "expected": "https://example.test/%25name"
+  },
+  {
+    "input": "https://example.test/bad%252g%2541",
+    "expected": null
+  }
+]

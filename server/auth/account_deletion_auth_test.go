@@ -212,7 +212,7 @@ func deletionJSONRequest(path string, body []byte) *http.Request {
 }
 
 func TestAccountDeletionSSOAppliesLocalMFAAndResumeNeverMints(t *testing.T) {
-	for _, publicURL := range []string{"https://example.test/prefix", "http://localhost:8080/prefix"} {
+	for _, publicURL := range []string{"https://example.test/prefix", "http://localhost:8080/prefix", "https://example.test/café", "http://localhost:8080/caf%c3%a9"} {
 		t.Run(publicURL, func(t *testing.T) {
 			h, store := setupAuthTestEnv(t)
 			defer store.Close()
@@ -266,7 +266,8 @@ func TestAccountDeletionSSOAppliesLocalMFAAndResumeNeverMints(t *testing.T) {
 					browser = c
 				}
 			}
-			if browser == nil || !browser.HttpOnly || browser.Secure != (parsedIssuer.Scheme == "https") {
+			canonical, _ := url.Parse(shared.AccountDeletionIssuer(publicURL))
+			if browser == nil || browser.Path != canonical.EscapedPath()+"/api/auth/mfa" || !browser.HttpOnly || browser.Secure != (parsedIssuer.Scheme == "https") {
 				t.Fatal("missing browser binding")
 			}
 			body, _ := json.Marshal(map[string]string{"challenge_id": challenge})
