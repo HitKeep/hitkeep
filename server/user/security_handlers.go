@@ -225,7 +225,7 @@ func (h *handler) handleStartPasskeyRegistration() http.HandlerFunc {
 			return
 		}
 
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey registration", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -304,7 +304,7 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			return
 		}
 
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey registration validation", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

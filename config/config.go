@@ -54,6 +54,9 @@ type Config struct {
 	AuthSessionMinutes        int `env:"HITKEEP_AUTH_SESSION_MINUTES"       default:"15"    desc:"Authenticated dashboard session lifetime in minutes"`
 	AuthSessionWarningSeconds int `env:"HITKEEP_AUTH_SESSION_WARNING_SECONDS" default:"120" desc:"Seconds before session expiry to warn users"`
 
+	PasskeyAndroidPackageName        string `env:"HITKEEP_PASSKEY_ANDROID_PACKAGE_NAME" default:"" desc:"Android release application ID associated with this instance for native passkeys; requires explicit certificate fingerprints and Digital Asset Links"`
+	PasskeyAndroidSHA256Fingerprints string `env:"HITKEEP_PASSKEY_ANDROID_SHA256_FINGERPRINTS" default:"" desc:"Comma-separated Android release app-signing certificate SHA-256 fingerprints (32 colon-separated hexadecimal bytes); empty disables native Android passkeys"`
+
 	SocialGoogleClientID          string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_ID"       default:""       desc:"Google social sign-in OAuth client ID"`
 	SocialGoogleClientSecret      string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_SECRET"   default:""       desc:"Google social sign-in OAuth client secret" sensitive:"redact"`
 	SocialGitHubClientID          string `env:"HITKEEP_SOCIAL_GITHUB_CLIENT_ID"       default:""       desc:"GitHub social sign-in OAuth client ID"`

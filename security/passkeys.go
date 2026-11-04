@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/api"
+	"hitkeep/config"
 )
 
 const (
@@ -28,8 +29,15 @@ type WebAuthnUser struct {
 	Credentials []webauthnlib.Credential
 }
 
-func NewWebAuthn(publicURL string, r *http.Request) (*webauthnlib.WebAuthn, error) {
-	rpID, origin := passkeyRelyingParty(publicURL, r)
+func NewWebAuthn(conf *config.Config, r *http.Request) (*webauthnlib.WebAuthn, error) {
+	if conf == nil {
+		return nil, fmt.Errorf("passkey configuration is required")
+	}
+	androidOrigins, err := conf.AndroidPasskeyOrigins()
+	if err != nil {
+		return nil, err
+	}
+	rpID, origin := passkeyRelyingParty(conf.PublicURL, r)
 	if rpID == "" || origin == "" {
 		return nil, fmt.Errorf("could not determine passkey relying party")
 	}
@@ -38,6 +46,7 @@ func NewWebAuthn(publicURL string, r *http.Request) (*webauthnlib.WebAuthn, erro
 		RPID:                  rpID,
 		RPDisplayName:         passkeyRPDisplayName,
 		RPOrigins:             []string{origin},
+		RPOpaqueOrigins:       androidOrigins,
 		AttestationPreference: protocol.PreferNoAttestation,
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			ResidentKey:      protocol.ResidentKeyRequirementRequired,

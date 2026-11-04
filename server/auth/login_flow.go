@@ -54,7 +54,7 @@ func (h *handler) beginUserLogin(r *http.Request, w http.ResponseWriter, userID 
 		if err != nil {
 			return loginResponse{}, err
 		}
-		webAuthn, err := security.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := security.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			return loginResponse{}, err
 		}

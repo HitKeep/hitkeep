@@ -178,6 +178,8 @@ func configurationPublication(field reflect.StructField) ConfigurationPublicatio
 		return ConfigurationPublicationPersistent
 	case "Healthcheck":
 		return ConfigurationPublicationCommand
+	case "PasskeyAndroidPackageName", "PasskeyAndroidSHA256Fingerprints":
+		return ConfigurationPublicationOperator
 	case "HTTPAddr", "DBPath", "BindAddr", "JoinAddr", "IngestRateLimit", "ApiRateLimit", "AuthRateLimit", "WebhookRateLimit", "DataRetentionDays", "NodeName", "DuckDBMemoryLimit", "DuckDBThreads", "DBCompactOnStart", "DBAutoRecover", "DBAutoRecoverWAL", "DBCheckpointIntervalMinutes", "DBRecoveryPath", "ArchivePath", "PublicURL", "LogLevel", "JWTSecret", "TrustedProxies", "NSQTCPAddress", "NSQHTTPAddress", "ApiBurst", "AuthBurst", "IngestBurst", "WebhookBurst", "AuthRememberMeDays", "AuthSessionMinutes", "AuthSessionWarningSeconds", "SocialAppleClientID", "SocialAppleClientSecret", "SocialAppleTokenEncryptionKey", "SocialGoogleClientID", "SocialGoogleClientSecret", "SocialGitHubClientID", "SocialGitHubClientSecret", "SocialMicrosoftClientID", "SocialMicrosoftClientSecret", "SocialMicrosoftTenant", "SocialSignupEnabled", "MailDriver", "MailEncryption", "MailInsecureSkipVerify", "MailHost", "MailPort", "MailUsername", "MailPassword", "MailFromAddress", "MailFromName", "SpamFilterAutoUpdate", "SpamFilterPath", "SpamFilterUpdateIntervalMin", "ImportMaxStageBytes", "ImportStageRetentionDays", "ImportAPIURL", "ImportAPIToken", "WebhookAllowDevelopmentTargets", "WebhookDeliveryTimeoutSeconds", "WebhookDeliveryConcurrency", "WebhookPerEndpointConcurrency", "WebhookMaxAttempts", "WebhookRetryBaseSeconds", "WebhookRetryMaxSeconds", "WebhookRetentionDays", "WebhookSweepSeconds", "GoogleSearchConsoleClientID", "GoogleSearchConsoleClientSecret", "GoogleSearchConsoleRedirectURL", "BackupPath", "BackupIntervalMinutes", "BackupRetentionCount", "S3AccessKeyID", "S3SecretAccessKey", "S3SessionToken", "S3Region", "S3Endpoint", "S3URLStyle", "S3UseSSL", "OAuthClients", "MCPEnabled", "MCPPath", "MCPMaxRangeDays", "MCPDocsEnabled", "MCPDocsURL", "MCPDocsCacheMinutes", "CustomTrackingDNSTarget", "CustomTrackingTLSMode", "CaddyTLSAskToken", "AIEnabled", "AskAIEnabled", "AIProvider", "AIModel", "AIBaseURL", "AIRegion", "AIAPIKey", "AITimeoutSeconds", "AIRequestLimit", "AITokenLimit", "AIBudgetWindowMinutes":
 		return ConfigurationPublicationOperator
 	default:
@@ -214,6 +216,8 @@ func configurationCategory(field reflect.StructField) string {
 	}
 	name := field.Name
 	switch {
+	case strings.HasPrefix(name, "Passkey"):
+		return "general"
 	case name == "HTTPAddr" || name == "PublicURL" || name == "LogLevel" || name == "JWTSecret" || name == "Healthcheck" || strings.HasPrefix(name, "AuthRemember") || strings.HasPrefix(name, "AuthSession"):
 		return "general"
 	case name == "DBPath" || name == "DataPath" || name == "ArchivePath" || name == "DataRetentionDays" || strings.HasPrefix(name, "DuckDB") || strings.HasPrefix(name, "DB") || strings.HasPrefix(name, "Import"):

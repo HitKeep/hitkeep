@@ -58,7 +58,7 @@ func (h *handler) handlePasskeyLoginStart() http.HandlerFunc {
 				return
 			}
 		}
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey login", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -135,7 +135,7 @@ func (h *handler) handlePasskeyLoginFinish() http.HandlerFunc {
 			return
 		}
 
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey login validation", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
