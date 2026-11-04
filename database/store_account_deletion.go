@@ -49,6 +49,7 @@ func (s *Store) PlanAccountDeletion(ctx context.Context, userID uuid.UUID, choic
 	if err != nil {
 		return plan, err
 	}
+	defer rows.Close()
 	type teamRole struct {
 		id         uuid.UUID
 		name, role string

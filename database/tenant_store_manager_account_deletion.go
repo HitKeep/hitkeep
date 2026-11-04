@@ -20,6 +20,7 @@ func (m *TenantStoreManager) ResumeAccountRemovals(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	var intents []AccountDeletionIntent
 	for rows.Next() {
 		var intent AccountDeletionIntent
