@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { DOCUMENT } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -18,7 +19,10 @@ describe('OAuthService', () => {
         http = TestBed.inject(HttpTestingController);
     });
 
-    afterEach(() => http.verify());
+    afterEach(() => {
+        http.verify();
+        vi.restoreAllMocks();
+    });
 
     it('reads cookie-bound consent without OAuth parameters or credentials', () => {
         service.consent().subscribe();
@@ -77,12 +81,20 @@ describe('OAuthService', () => {
         expect(service.resuming()).toBe(false);
     });
 
-    it.each(['pending', 'unavailable'])('preserves the validated native return despite %s delegated continuation', (mode) => {
+    it.each([
+        ['consent', '/', 'pending'],
+        ['manage', '/prefix/', 'unavailable']
+    ])('loads the native %s document under %s despite %s delegated continuation', (page, base, mode) => {
         const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const assign = vi.fn();
+        const document = TestBed.inject(DOCUMENT);
+        vi.spyOn(document, 'defaultView', 'get').mockReturnValue({ location: { assign } } as unknown as Document['defaultView']);
+        vi.spyOn(document, 'querySelector').mockReturnValue({ getAttribute: () => base } as unknown as Element);
         const continuation = vi.spyOn(service, 'continuation').mockReturnValue(mode === 'pending' ? of({ pending: true }) : throwError(() => ({ status: 503 })));
-        const target = `/auth/native/consent?request=${'a'.repeat(43)}`;
+        const target = `/auth/native/${page}?request=${'a'.repeat(43)}`;
         service.continueAfterAuthentication(target);
-        expect(navigate).toHaveBeenCalledWith(target);
+        expect(assign).toHaveBeenCalledWith(`${base}${target.slice(1)}`);
+        expect(navigate).not.toHaveBeenCalled();
         expect(continuation).not.toHaveBeenCalled();
         expect(service.resuming()).toBe(false);
     });

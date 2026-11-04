@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -52,9 +53,12 @@ describe('Login verified-primary MFA continuation with the real router', () => {
         }).compileComponents();
     });
 
-    afterEach(() => TestBed.inject(HttpTestingController).verify());
+    afterEach(() => {
+        TestBed.inject(HttpTestingController).verify();
+        vi.restoreAllMocks();
+    });
 
-    it.each([`/settings?deletion_attempt=${'a'.repeat(43)}`, `/auth/native/consent?request=${'b'.repeat(43)}`])('keeps %s after fragment cleanup and successful MFA', async (target) => {
+    it.each([`/settings?deletion_attempt=${'a'.repeat(43)}`, `/auth/native/consent?request=${'b'.repeat(43)}`, `/auth/native/manage?request=${'c'.repeat(43)}`])('keeps %s after fragment cleanup and successful MFA', async (target) => {
         const harness = await RouterTestingHarness.create(`/login?returnUrl=${encodeURIComponent(target)}#mfa_challenge=${challenge}`);
         await harness.fixture.whenStable();
         const router = TestBed.inject(Router);
@@ -63,12 +67,20 @@ describe('Login verified-primary MFA continuation with the real router', () => {
         expect(auth.resumeMfa).toHaveBeenCalledWith(challenge);
 
         const login = harness.routeDebugElement!.componentInstance as Login;
+        const assign = vi.fn();
+        vi.spyOn(TestBed.inject(DOCUMENT), 'defaultView', 'get').mockReturnValue({ location: { assign } } as unknown as Document['defaultView']);
         login['loginForm'].mfaCode().control().setValue('123456');
         login['verifyTotpMfa']();
         await harness.fixture.whenStable();
 
         expect(auth.verifyMfaTotp).toHaveBeenCalledWith(challenge, '123456');
-        expect(router.url).toBe(target);
+        if (target.startsWith('/auth/native/')) {
+            expect(assign).toHaveBeenCalledWith(target);
+            expect(router.parseUrl(router.url).queryParams['returnUrl']).toBe(target);
+        } else {
+            expect(router.url).toBe(target);
+            expect(assign).not.toHaveBeenCalled();
+        }
         TestBed.inject(HttpTestingController).expectNone('/api/oauth/continuation');
     });
 });
