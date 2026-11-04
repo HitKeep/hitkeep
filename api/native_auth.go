@@ -4,6 +4,8 @@ import "time"
 
 // NativeAuthStart is a first-party human-session continuation, not an OAuth grant.
 type NativeAuthStart struct {
+	Purpose             string `json:"purpose,omitempty"`
+	ReauthAttempt       string `json:"reauth_attempt,omitempty"`
 	ClientID            string `json:"client_id"`
 	RedirectURI         string `json:"redirect_uri"`
 	CodeChallenge       string `json:"code_challenge"`
@@ -39,6 +41,7 @@ type NativeAuthStatus struct {
 }
 
 type NativeAuthConsent struct {
+	Purpose    string    `json:"purpose,omitempty"`
 	Request    string    `json:"request"`
 	ClientID   string    `json:"client_id"`
 	Issuer     string    `json:"issuer"`

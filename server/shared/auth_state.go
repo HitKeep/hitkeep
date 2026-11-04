@@ -86,20 +86,22 @@ type SocialCompletion struct {
 }
 
 type AuthStateStore struct {
-	nativeMu             sync.Mutex
-	nativeEmailReturns   map[[32]byte]nativeEmailReturn
-	nativeRequests       map[[32]byte]NativeAuthRequest
-	nativeCodes          map[[32]byte][32]byte
-	pendingTOTP          *lru.LRU[uuid.UUID, PendingTOTPSetup]
-	passkeyRegistrations *lru.LRU[uuid.UUID, PasskeyRegistrationChallenge]
-	mfaEmailLinks        *lru.LRU[uuid.UUID, MFAEmailLink]
-	googleSearchConsole  *lru.LRU[uuid.UUID, GoogleSearchConsoleOAuthState]
-	ssoOAuth             *lru.LRU[uuid.UUID, SSOOAuthState]
-	socialOAuth          *lru.LRU[uuid.UUID, SocialOAuthState]
-	socialCompletions    *lru.LRU[uuid.UUID, SocialCompletion]
-	socialOAuthMu        sync.Mutex
-	socialCompletionMu   sync.Mutex
+	nativeMu                sync.Mutex
+	accountDeletionAttempts map[[32]byte]accountDeletionAttempt
+	nativeEmailReturns      map[[32]byte]nativeEmailReturn
+	nativeRequests          map[[32]byte]NativeAuthRequest
+	nativeCodes             map[[32]byte][32]byte
+	pendingTOTP             *lru.LRU[uuid.UUID, PendingTOTPSetup]
+	passkeyRegistrations    *lru.LRU[uuid.UUID, PasskeyRegistrationChallenge]
+	mfaEmailLinks           *lru.LRU[uuid.UUID, MFAEmailLink]
+	googleSearchConsole     *lru.LRU[uuid.UUID, GoogleSearchConsoleOAuthState]
+	ssoOAuth                *lru.LRU[uuid.UUID, SSOOAuthState]
+	socialOAuth             *lru.LRU[uuid.UUID, SocialOAuthState]
+	socialCompletions       *lru.LRU[uuid.UUID, SocialCompletion]
+	socialOAuthMu           sync.Mutex
+	socialCompletionMu      sync.Mutex
 
+	mfaResumes              map[uuid.UUID]mfaResume
 	loginChallengesMu       sync.Mutex
 	loginChallenges         *lru.LRU[uuid.UUID, database.LoginChallenge]
 	loginChallengeIDsByUser *lru.LRU[uuid.UUID, map[uuid.UUID]struct{}]
@@ -107,17 +109,19 @@ type AuthStateStore struct {
 
 func NewAuthStateStore() *AuthStateStore {
 	return &AuthStateStore{
-		nativeEmailReturns:   make(map[[32]byte]nativeEmailReturn),
-		nativeRequests:       make(map[[32]byte]NativeAuthRequest),
-		nativeCodes:          make(map[[32]byte][32]byte),
-		pendingTOTP:          lru.NewLRU[uuid.UUID, PendingTOTPSetup](authStateCacheSize, nil, pendingTOTPSetupTTL),
-		passkeyRegistrations: lru.NewLRU[uuid.UUID, PasskeyRegistrationChallenge](authStateCacheSize, nil, passkeyRegistrationTTL),
-		mfaEmailLinks:        lru.NewLRU[uuid.UUID, MFAEmailLink](authStateCacheSize, nil, passkeyLoginChallengeTTL),
-		googleSearchConsole:  lru.NewLRU[uuid.UUID, GoogleSearchConsoleOAuthState](authStateCacheSize, nil, googleSearchConsoleOAuthStateTTL),
-		ssoOAuth:             lru.NewLRU[uuid.UUID, SSOOAuthState](authStateCacheSize, nil, ssoOAuthStateTTL),
-		socialOAuth:          lru.NewLRU[uuid.UUID, SocialOAuthState](authStateCacheSize, nil, socialOAuthStateTTL),
-		socialCompletions:    lru.NewLRU[uuid.UUID, SocialCompletion](authStateCacheSize, nil, socialCompletionTTL),
-		loginChallenges:      lru.NewLRU[uuid.UUID, database.LoginChallenge](authStateCacheSize, nil, passkeyLoginChallengeTTL),
+		mfaResumes:              make(map[uuid.UUID]mfaResume),
+		accountDeletionAttempts: make(map[[32]byte]accountDeletionAttempt),
+		nativeEmailReturns:      make(map[[32]byte]nativeEmailReturn),
+		nativeRequests:          make(map[[32]byte]NativeAuthRequest),
+		nativeCodes:             make(map[[32]byte][32]byte),
+		pendingTOTP:             lru.NewLRU[uuid.UUID, PendingTOTPSetup](authStateCacheSize, nil, pendingTOTPSetupTTL),
+		passkeyRegistrations:    lru.NewLRU[uuid.UUID, PasskeyRegistrationChallenge](authStateCacheSize, nil, passkeyRegistrationTTL),
+		mfaEmailLinks:           lru.NewLRU[uuid.UUID, MFAEmailLink](authStateCacheSize, nil, passkeyLoginChallengeTTL),
+		googleSearchConsole:     lru.NewLRU[uuid.UUID, GoogleSearchConsoleOAuthState](authStateCacheSize, nil, googleSearchConsoleOAuthStateTTL),
+		ssoOAuth:                lru.NewLRU[uuid.UUID, SSOOAuthState](authStateCacheSize, nil, ssoOAuthStateTTL),
+		socialOAuth:             lru.NewLRU[uuid.UUID, SocialOAuthState](authStateCacheSize, nil, socialOAuthStateTTL),
+		socialCompletions:       lru.NewLRU[uuid.UUID, SocialCompletion](authStateCacheSize, nil, socialCompletionTTL),
+		loginChallenges:         lru.NewLRU[uuid.UUID, database.LoginChallenge](authStateCacheSize, nil, passkeyLoginChallengeTTL),
 		loginChallengeIDsByUser: lru.NewLRU[uuid.UUID, map[uuid.UUID]struct{}](
 			authStateCacheSize,
 			nil,
@@ -471,6 +475,7 @@ func (s *AuthStateStore) GetPasskeyLoginChallenge(challengeID uuid.UUID) (databa
 	}
 	if isExpired(entry.ExpiresAt) {
 		s.loginChallenges.Remove(challengeID)
+		delete(s.mfaResumes, challengeID)
 		if entry.HasUserID {
 			s.removeLoginChallengeUserIndex(entry.UserID, challengeID)
 		}
@@ -490,6 +495,7 @@ func (s *AuthStateStore) DeletePasskeyLoginChallenge(challengeID uuid.UUID) {
 
 	entry, ok := s.loginChallenges.Peek(challengeID)
 	s.loginChallenges.Remove(challengeID)
+	delete(s.mfaResumes, challengeID)
 	if ok && entry.HasUserID {
 		s.removeLoginChallengeUserIndex(entry.UserID, challengeID)
 	}
@@ -501,6 +507,13 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 	}
 
 	s.InvalidateNativeAuth(userID)
+	s.nativeMu.Lock()
+	for key, entry := range s.accountDeletionAttempts {
+		if entry.UserID == userID {
+			delete(s.accountDeletionAttempts, key)
+		}
+	}
+	s.nativeMu.Unlock()
 	s.DeletePendingTOTPSetup(userID)
 	s.DeletePasskeyChallenge(userID)
 
@@ -513,6 +526,7 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 	}
 	for challengeID := range challengeIDs {
 		s.loginChallenges.Remove(challengeID)
+		delete(s.mfaResumes, challengeID)
 	}
 	s.loginChallengeIDsByUser.Remove(userID)
 }

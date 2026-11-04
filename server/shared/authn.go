@@ -16,6 +16,7 @@ import (
 // AuthSessionContext carries the authenticated session's lifetime, set by
 // RequireAuth for handlers that report session state.
 type AuthSessionContext struct {
+	ID        string
 	ExpiresAt time.Time
 	IssuedAt  time.Time
 }
@@ -131,13 +132,13 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 				http.Error(w, "Service not available", http.StatusServiceUnavailable)
 				return
 			}
-			user, err := c.Store.GetUserByID(r.Context(), userID)
+			available, err := c.HumanSessionUserAvailable(r.Context(), userID)
 			if err != nil {
 				LoggerFromContext(r.Context()).Error("Failed to validate session user", "error", err)
 				http.Error(w, "Service not available", http.StatusServiceUnavailable)
 				return
 			}
-			if user == nil {
+			if !available {
 				auth.ClearCookies(w, isSecure)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -147,7 +148,11 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 				newToken, expiresAt, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
 				if err == nil {
 					auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
-					sessionCtx = &AuthSessionContext{ExpiresAt: expiresAt.UTC(), IssuedAt: time.Now().UTC()}
+					claims, validationErr := auth.ValidateTokenClaims(newToken, c.Config.JWTSecret, c.Config.PublicURL)
+					if validationErr == nil {
+						sessionCtx = authSessionContextFromClaims(claims)
+					}
+					_ = expiresAt
 				}
 			}
 		}
@@ -179,7 +184,7 @@ func authSessionContextFromClaims(claims *auth.Claims) *AuthSessionContext {
 		return nil
 	}
 
-	session := &AuthSessionContext{ExpiresAt: claims.ExpiresAt.UTC()}
+	session := &AuthSessionContext{ID: claims.ID, ExpiresAt: claims.ExpiresAt.UTC()}
 	if claims.IssuedAt != nil {
 		session.IssuedAt = claims.IssuedAt.UTC()
 	}

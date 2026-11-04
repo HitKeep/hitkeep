@@ -28,16 +28,20 @@ const (
 // NativeAuthRequest freezes all client bindings; only explicit consent can approve it.
 // Lookup handles, browser nonces, CSRF tokens and exchange codes are stored as hashes.
 type NativeAuthRequest struct {
-	Start       api.NativeAuthStart
-	Issuer      string
-	ExpiresAt   time.Time
-	UserID      uuid.UUID
-	Security    string
-	BrowserHash [32]byte
-	CSRFHash    [32]byte
-	CodeHash    [32]byte
-	Approved    bool
-	RememberMe  bool
+	PrimaryJTIHash   [32]byte
+	PrimaryComplete  bool
+	ExchangeConsumed bool
+	RequestHash      [32]byte
+	Start            api.NativeAuthStart
+	Issuer           string
+	ExpiresAt        time.Time
+	UserID           uuid.UUID
+	Security         string
+	BrowserHash      [32]byte
+	CSRFHash         [32]byte
+	CodeHash         [32]byte
+	Approved         bool
+	RememberMe       bool
 }
 
 func nativeHashMatches(expected [32]byte, value string) bool {
@@ -146,7 +150,23 @@ func (s *AuthStateStore) CreateNativeAuth(start api.NativeAuthStart, issuer stri
 		return "", errors.New("native auth capacity reached")
 	}
 	handle := NativeAuthToken()
-	s.nativeRequests[nativeHash(handle)] = NativeAuthRequest{Start: start, Issuer: issuer, ExpiresAt: time.Now().UTC().Add(NativeAuthTTL)}
+	entry := NativeAuthRequest{Start: start, Issuer: issuer, ExpiresAt: time.Now().UTC().Add(NativeAuthTTL), RequestHash: nativeHash(handle)}
+	if start.Purpose != "" || start.ReauthAttempt != "" {
+		attempt, ok := s.deletionLocked(start.ReauthAttempt)
+		if start.Purpose != "account_delete" || start.Intent != "login" || !ok || attempt.Issuer != issuer || attempt.Verified {
+			return "", errors.New("invalid deletion attempt")
+		}
+		// A new native ceremony replaces only the delivery binding, never the consequences.
+		if prior, ok := s.nativeRequests[attempt.NativeRequestHash]; ok {
+			delete(s.nativeCodes, prior.CodeHash)
+			delete(s.nativeRequests, attempt.NativeRequestHash)
+		}
+		attempt.NativeRequestHash = nativeHash(handle)
+		s.accountDeletionAttempts[nativeHash(start.ReauthAttempt)] = attempt
+		entry.UserID = attempt.UserID
+		entry.ExpiresAt = minTime(entry.ExpiresAt, attempt.ExpiresAt)
+	}
+	s.nativeRequests[nativeHash(handle)] = entry
 	return handle, nil
 }
 
@@ -214,6 +234,9 @@ func (s *AuthStateStore) DecideNativeAuth(handle, browser, csrf string, userID u
 	if !ok || entry.UserID != userID || entry.Security != security || !nativeHashMatches(entry.BrowserHash, browser) || !nativeHashMatches(entry.CSRFHash, csrf) {
 		return "", false
 	}
+	if approve && entry.Start.Purpose == "account_delete" && !entry.PrimaryComplete {
+		return "", false
+	}
 	if !approve {
 		delete(s.nativeRequests, nativeHash(handle))
 		return "", true
@@ -254,6 +277,7 @@ func (s *AuthStateStore) ConsumeNativeAuth(input api.NativeAuthExchange, issuer 
 	}
 	delete(s.nativeCodes, entry.CodeHash)
 	delete(s.nativeRequests, key)
+	entry.ExchangeConsumed = true
 	return entry, true
 }
 
