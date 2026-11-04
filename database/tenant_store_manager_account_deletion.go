@@ -71,6 +71,13 @@ func (m *TenantStoreManager) DeleteCurrentAccount(ctx context.Context, userID uu
 		if !time.Now().Before(intent.ExpiresAt) {
 			return ErrAccountDeletionProof
 		}
+		fingerprint, err := s.AccountDeletionSecurityFingerprint(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if intent.SecurityFingerprint == "" || fingerprint != intent.SecurityFingerprint {
+			return ErrAccountDeletionProof
+		}
 		current, err := s.PlanAccountDeletion(ctx, userID, intent.Choices, intent.Cloud)
 		if err != nil {
 			return err

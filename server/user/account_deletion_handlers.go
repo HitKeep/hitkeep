@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,13 +17,6 @@ import (
 	"hitkeep/server/shared"
 )
 
-// Auth owns creation and completion of fresh proof at actual login/MFA sites.
-type accountDeletionProofState interface {
-	CreateAccountDeletionAttempt(uuid.UUID, string, string, string, time.Time) string
-	ConsumeAccountDeletionProof(string, uuid.UUID, string, string) bool
-	AccountDeletionProofVerified(string, uuid.UUID, string, string) bool
-}
-
 func (h *handler) registerAccountDeletion(mux *http.ServeMux) {
 	config := shared.HandlerConfig{RequireAuth: true, HumanOnly: true, RateLimiter: h.ctx.AuthLimiter}
 	mux.HandleFunc("POST /api/user/account/deletion/prepare", h.ctx.Handler(config, h.handlePrepareAccountDeletion()))
@@ -32,7 +24,7 @@ func (h *handler) registerAccountDeletion(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/user/account", h.ctx.Handler(config, h.handleDeleteCurrentAccount()))
 }
 
-func (h *handler) accountDeletionSession(w http.ResponseWriter, r *http.Request, mutation bool) (uuid.UUID, string, accountDeletionProofState, bool) {
+func (h *handler) accountDeletionSession(w http.ResponseWriter, r *http.Request, mutation bool) (uuid.UUID, string, *shared.AuthStateStore, bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Header.Get("Authorization") != "" || r.Header.Get("X-Hitkeep-Embed-Parent") != "" || r.Context().Value(shared.APIClientAuthKey) != nil {
 		accountDeletionError(w, r, http.StatusUnauthorized, "human_session_required")
@@ -67,8 +59,8 @@ func (h *handler) accountDeletionSession(w http.ResponseWriter, r *http.Request,
 		accountDeletionError(w, r, http.StatusUnauthorized, "human_session_required")
 		return uuid.Nil, "", nil, false
 	}
-	proof, ok := any(h.ctx.AuthState).(accountDeletionProofState)
-	if !ok || h.ctx.AuthState == nil {
+	proof := h.ctx.AuthState
+	if proof == nil {
 		accountDeletionError(w, r, http.StatusServiceUnavailable, "reauth_unavailable")
 		return uuid.Nil, "", nil, false
 	}
@@ -103,7 +95,7 @@ func (h *handler) handlePrepareAccountDeletion() http.HandlerFunc {
 			accountDeletionError(w, r, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
-		expiry := time.Now().UTC().Add(10 * time.Minute)
+		expiry := time.Now().UTC().Add(10 * time.Minute).Truncate(time.Microsecond)
 		attempt := proof.CreateAccountDeletionAttempt(userID, h.ctx.Config.PublicURL, hash, "/settings", expiry)
 		if attempt == "" {
 			accountDeletionError(w, r, http.StatusServiceUnavailable, "reauth_unavailable")
@@ -163,7 +155,12 @@ func (h *handler) handleAccountDeletionStatus() http.HandlerFunc {
 		response := api.AccountDeletionPreparation{AccountDeletionPlan: intent.Plan, AttemptID: intent.AttemptID, ConsequenceHash: intent.ConsequenceHash, ExpiresAt: intent.ExpiresAt, Purpose: "delete-current-account", Phase: intent.Phase}
 		response.Reauth.ReturnPath = accountDeletionReauthPath(intent.AttemptID)
 		response.Reauth.Methods = h.accountDeletionMethods(r.Context(), userID)
-		response.Reauth.Verified = proof.AccountDeletionProofVerified(intent.AttemptID, userID, sessionID, intent.ConsequenceHash) || (intent.Phase == "authorized" && intent.SessionID == sessionID && time.Now().Before(intent.ExpiresAt))
+		fingerprint, err := h.ctx.Store.AccountDeletionSecurityFingerprint(r.Context(), userID)
+		if err != nil {
+			accountDeletionError(w, r, http.StatusServiceUnavailable, "unavailable")
+			return
+		}
+		response.Reauth.Verified = fingerprint == intent.SecurityFingerprint && (proof.AccountDeletionProofVerified(intent.AttemptID, userID, sessionID, intent.ConsequenceHash) || (intent.Phase == "authorized" && intent.SessionID == sessionID && time.Now().Before(intent.ExpiresAt)))
 		response.Retention.BillingRecords = true
 		response.Retention.Cancellation = "period_end"
 		shared.WriteJSON(r.Context(), w, http.StatusOK, response)
@@ -198,7 +195,7 @@ func (h *handler) handleDeleteCurrentAccount() http.HandlerFunc {
 			return
 		}
 		h.ctx.AuthState.ClearUser(userID)
-		auth.ClearCookies(w, strings.HasPrefix(h.ctx.Config.PublicURL, "https://"))
+		auth.ClearCookies(w, auth.CookieSecure(h.ctx.Config.PublicURL))
 		result, err := h.ctx.Store.GetAccountDeletionResult(r.Context(), confirmation.AttemptID, userID)
 		if err != nil {
 			accountDeletionError(w, r, http.StatusServiceUnavailable, "closure_retry_required")

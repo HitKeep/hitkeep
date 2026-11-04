@@ -222,3 +222,47 @@ func TestSoloCloudClosureProviderFailureLeavesDataAndSafeRetryPurgesTenant(t *te
 		t.Fatalf("completed retry consumed proof again: %d", proofs)
 	}
 }
+
+func TestSoloCloudClosureCredentialChangeInvalidatesAuthorizedRetry(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	account, err := s.CreateManagedCloudAccount(ctx, CreateManagedCloudAccountInput{Email: "credential-retry@example.test", HashedPassword: "before", TeamName: "Solo", Locale: "en"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	choices := api.AccountDeletionChoices{CloseTeamIDs: []uuid.UUID{account.TenantID}}
+	plan, err := s.PlanAccountDeletion(ctx, account.UserID, choices, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := AccountDeletionConsequenceHash(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := uuid.NewString()
+	if err := s.SaveAccountDeletionIntent(ctx, AccountDeletionIntent{AttemptID: attempt, UserID: account.UserID, ConsequenceHash: hash, Choices: choices, Plan: plan, Cloud: true, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	m := NewTenantStoreManager(s, t.TempDir())
+	t.Cleanup(func() { _ = m.Close() })
+	calls := 0
+	stop := func(context.Context, api.AccountDeletionTeam, string) error {
+		calls++
+		return ErrAccountDeletionUnavailable
+	}
+	if err := m.DeleteCurrentAccount(ctx, account.UserID, attempt, "fresh-jti", hash, func() bool { return true }, stop); !errors.Is(err, ErrAccountDeletionUnavailable) {
+		t.Fatalf("initial provider failure=%v", err)
+	}
+	if err := s.UpdatePasswordByID(ctx, account.UserID.String(), "after"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.DeleteCurrentAccount(ctx, account.UserID, attempt, "fresh-jti", hash, nil, stop); !errors.Is(err, ErrAccountDeletionProof) {
+		t.Fatalf("credential-changed retry=%v", err)
+	}
+	if calls != 1 {
+		t.Fatal("invalidated authorization reached provider again")
+	}
+	if user, err := s.GetUserByID(ctx, account.UserID); err != nil || user == nil {
+		t.Fatalf("invalid retry removed account: %v %v", user, err)
+	}
+}

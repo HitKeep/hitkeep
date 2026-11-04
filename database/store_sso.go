@@ -142,6 +142,8 @@ func (s *Store) ListEnabledTeamSSOTeamIDs(ctx context.Context) ([]uuid.UUID, err
 }
 
 func (s *Store) UpsertTeamSSOConfig(ctx context.Context, config TeamSSOConfig) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if config.TeamID == uuid.Nil {
 		return errors.New("team ID is required")
 	}
@@ -187,6 +189,8 @@ func (s *Store) UpsertTeamSSOConfig(ctx context.Context, config TeamSSOConfig) e
 }
 
 func (s *Store) DeleteTeamSSOConfig(ctx context.Context, teamID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	// DuckDB checks the child reference against the transaction's original
 	// snapshot, so the child and parent deletes must be committed separately.
 	domains, err := s.listTeamSSODomains(ctx, teamID)

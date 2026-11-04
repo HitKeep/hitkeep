@@ -262,6 +262,11 @@ func (s *Store) DeleteSocialIdentityWithGuard(ctx context.Context, userID uuid.U
 
 // DeleteSocialIdentityWithGuardAndHook runs credential revocation only after the serialized last-method guard.
 func (s *Store) DeleteSocialIdentityWithGuardAndHook(ctx context.Context, userID uuid.UUID, provider string, passwordConfirmed bool, beforeDelete func(*SocialIdentity)) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	provider, err := normalizeSocialProvider(provider)
 	if err != nil {
 		return err

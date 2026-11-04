@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -142,6 +143,9 @@ func TestPersonalRemovalResumesAfterCommittedCleanupParentFailure(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: u, Provider: "apple", Subject: "retained-until-revoked"}); err != nil {
+		t.Fatal(err)
+	}
 	choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: team, UserID: v}}}
 	plan, err := s.PlanAccountDeletion(ctx, u, choices, false)
 	if err != nil {
@@ -161,7 +165,19 @@ func TestPersonalRemovalResumesAfterCommittedCleanupParentFailure(t *testing.T) 
 	if err := s.Exec(ctx, `INSERT INTO deletion_failure_probe VALUES (?)`, u); err != nil {
 		t.Fatal(err)
 	}
-	m := NewTenantStoreManager(s, t.TempDir())
+	providerCalls := 0
+	m := NewTenantStoreManager(s, t.TempDir(), WithAccountDeletionProviderRevoker(func(ctx context.Context, userID uuid.UUID) []api.AccountDeletionProviderRevocation {
+		providerCalls++
+		identity, err := s.GetUserAppleIdentity(ctx, userID)
+		if err != nil || identity == nil || identity.Subject != "retained-until-revoked" {
+			t.Fatalf("provider called after identity cleanup: %v %v", identity, err)
+		}
+		started, err := s.AccountRemovalStarted(ctx, userID)
+		if err != nil || !started {
+			t.Fatalf("provider called before removal authorized: %v %v", started, err)
+		}
+		return []api.AccountDeletionProviderRevocation{{Provider: "apple", Status: "manual_revocation_required"}}
+	}))
 	t.Cleanup(func() { _ = m.Close() })
 	proofs := 0
 	err = m.DeleteCurrentAccount(ctx, u, id, "fresh-jti", hash, func() bool { proofs++; return true }, nil)
@@ -179,6 +195,13 @@ func TestPersonalRemovalResumesAfterCommittedCleanupParentFailure(t *testing.T) 
 	}
 	if err := m.ResumeAccountRemovals(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if providerCalls != 1 {
+		t.Fatalf("provider revocation repeated after persisted result: %d", providerCalls)
+	}
+	result, err := s.GetAccountDeletionResult(ctx, id, u)
+	if err != nil || len(result.ProviderRevocations) != 1 || result.ProviderRevocations[0].Status != "manual_revocation_required" {
+		t.Fatalf("recovered provider result=%+v err=%v", result, err)
 	}
 	if proofs != 1 {
 		t.Fatalf("proof consumed %d times", proofs)
@@ -335,5 +358,56 @@ func TestPersonalRemovalBlocksLastOperatorAndSharedSoleOwner(t *testing.T) {
 	}
 	if user, err := s.GetUserByID(ctx, u); user == nil || err != nil {
 		t.Fatalf("blocked user=%v err=%v", user, err)
+	}
+}
+
+func TestAccountDeletionSecurityFingerprintExcludesUsage(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	u, err := s.CreateUser(ctx, "credential-snapshot@example.test", "password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := s.CreateUserPasskey(ctx, u, "Key", "fingerprint-credential", "public-key", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: u, Provider: "google", Subject: "linked-subject"}); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint, err := s.AccountDeletionSecurityFingerprint(ctx, u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdatePasskeySignCount(ctx, key, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: u, Provider: "google", Subject: "linked-subject", MarkUsed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := s.AccountDeletionSecurityFingerprint(ctx, u); err != nil || current != fingerprint {
+		t.Fatalf("ordinary factor use changed fingerprint: %v", err)
+	}
+	for _, change := range []struct {
+		name  string
+		apply func() error
+	}{
+		{"email", func() error { return s.UpdateUserProfile(ctx, u, "changed-credential@example.test", "", "") }},
+		{"password", func() error { return s.UpdatePasswordByID(ctx, u.String(), "changed") }},
+		{"totp", func() error { return s.EnableUserTOTP(ctx, u, "secret") }},
+		{"recovery set", func() error { return s.ReplaceUserRecoveryCodes(ctx, u, []string{"hash"}) }},
+		{"passkey removal", func() error { return s.DeleteUserPasskey(ctx, u, key) }},
+		{"social removal", func() error { return s.DeleteSocialIdentityWithGuard(ctx, u, "google", true) }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			if err := change.apply(); err != nil {
+				t.Fatal(err)
+			}
+			current, err := s.AccountDeletionSecurityFingerprint(ctx, u)
+			if err != nil || current == fingerprint {
+				t.Fatalf("credential change preserved fingerprint: %v", err)
+			}
+			fingerprint = current
+		})
 	}
 }

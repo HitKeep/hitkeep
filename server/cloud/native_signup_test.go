@@ -3,8 +3,6 @@
 package cloud
 
 import (
-	"github.com/google/uuid"
-	"hitkeep/config"
 	"net/http/httptest"
 	"testing"
 
@@ -58,9 +56,16 @@ func TestNativeSignupVerificationAcrossBrowsers(t *testing.T) {
 }
 
 func TestNativeCloudCanonicalHTTPSCookie(t *testing.T) {
-	conf := &config.Config{PublicURL: "HTTPS://CLOUD.example.test:443/prefix", JWTSecret: "test-secret"}
+	h, store := setupCloudTestHandler(t)
+	defer store.Close()
+	h.ctx.Config.PublicURL = "HTTPS://CLOUD.example.test:443/prefix"
+	conf := h.ctx.Config
+	id, err := store.CreateUser(t.Context(), "native-cookie@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
 	rr := httptest.NewRecorder()
-	if err := issueLoginSession(rr, conf, uuid.New()); err != nil {
+	if err := issueLoginSession(t.Context(), rr, h.ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	cookies := rr.Result().Cookies()

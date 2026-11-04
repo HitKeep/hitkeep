@@ -118,6 +118,11 @@ func (s *Store) GetUserTOTPSecret(ctx context.Context, userID uuid.UUID) (secret
 }
 
 func (s *Store) DisableUserTOTP(ctx context.Context, userID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	if err := s.Exec(ctx, "DELETE FROM user_totp_factors WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("could not remove enabled totp factor: %w", err)
 	}
@@ -125,6 +130,11 @@ func (s *Store) DisableUserTOTP(ctx context.Context, userID uuid.UUID) error {
 }
 
 func (s *Store) DisableUserMFA(ctx context.Context, userID uuid.UUID) (DisableUserMFAResult, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return DisableUserMFAResult{}, err
+	}
 	var result DisableUserMFAResult
 
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
@@ -397,6 +407,11 @@ func (s *Store) ListUserPasskeys(ctx context.Context, userID uuid.UUID) ([]api.U
 }
 
 func (s *Store) DeleteUserPasskey(ctx context.Context, userID uuid.UUID, passkeyID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	s.primaryAuthMu.Lock()
 	defer s.primaryAuthMu.Unlock()
 

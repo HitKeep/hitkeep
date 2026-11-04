@@ -22,6 +22,7 @@ var (
 
 type AccountDeletionIntent struct {
 	AttemptID, SessionID, ConsequenceHash, Phase string
+	SecurityFingerprint                          string
 	UserID                                       uuid.UUID
 	Choices                                      api.AccountDeletionChoices
 	Plan                                         api.AccountDeletionPlan
@@ -50,6 +51,10 @@ func (s *Store) SaveAccountDeletionIntent(ctx context.Context, intent AccountDel
 	if hash != intent.ConsequenceHash {
 		return ErrAccountDeletionChanged
 	}
+	fingerprint, err := s.AccountDeletionSecurityFingerprint(ctx, intent.UserID)
+	if err != nil {
+		return err
+	}
 	choices, err := json.Marshal(intent.Choices)
 	if err != nil {
 		return err
@@ -61,13 +66,13 @@ func (s *Store) SaveAccountDeletionIntent(ctx context.Context, intent AccountDel
 	if err := s.Exec(ctx, `DELETE FROM account_deletion_intents WHERE phase IN ('prepared','authorized') AND expires_at<=NOW()`); err != nil {
 		return err
 	}
-	return s.Exec(ctx, `INSERT INTO account_deletion_intents (attempt_id,user_id,consequence_hash,choices,consequences,cloud,expires_at) VALUES (?,?,?,?,?,?,?)`, intent.AttemptID, intent.UserID, hash, string(choices), string(plan), intent.Cloud, intent.ExpiresAt)
+	return s.Exec(ctx, `INSERT INTO account_deletion_intents (attempt_id,user_id,consequence_hash,choices,consequences,cloud,expires_at,security_fingerprint) VALUES (?,?,?,?,?,?,?,?)`, intent.AttemptID, intent.UserID, hash, string(choices), string(plan), intent.Cloud, intent.ExpiresAt, fingerprint)
 }
 
 func (s *Store) GetAccountDeletionIntent(ctx context.Context, attemptID string, userID uuid.UUID) (*AccountDeletionIntent, error) {
 	intent := &AccountDeletionIntent{AttemptID: attemptID, UserID: userID}
 	var choices, plan, outcomes string
-	err := s.db.QueryRowContext(ctx, `SELECT session_id,consequence_hash,choices,consequences,cloud,phase,expires_at,providers_checked,provider_outcomes FROM account_deletion_intents WHERE attempt_id=? AND user_id=?`, attemptID, userID).Scan(&intent.SessionID, &intent.ConsequenceHash, &choices, &plan, &intent.Cloud, &intent.Phase, &intent.ExpiresAt, &intent.ProvidersChecked, &outcomes)
+	err := s.db.QueryRowContext(ctx, `SELECT session_id,consequence_hash,choices,consequences,cloud,phase,expires_at,providers_checked,provider_outcomes,security_fingerprint FROM account_deletion_intents WHERE attempt_id=? AND user_id=?`, attemptID, userID).Scan(&intent.SessionID, &intent.ConsequenceHash, &choices, &plan, &intent.Cloud, &intent.Phase, &intent.ExpiresAt, &intent.ProvidersChecked, &outcomes, &intent.SecurityFingerprint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrAccountDeletionProof
 	}
@@ -98,7 +103,7 @@ func (s *Store) AccountRemovalStarted(ctx context.Context, userID uuid.UUID) (bo
 
 func (s *Store) setAccountDeletionPhase(ctx context.Context, attemptID, sessionID, phase string) error {
 	if phase == "complete" {
-		return s.Exec(ctx, `UPDATE account_deletion_intents SET phase='complete',choices='',consequences='',updated_at=NOW() WHERE user_id=(SELECT user_id FROM account_deletion_intents WHERE attempt_id=?)`, attemptID)
+		return s.Exec(ctx, `UPDATE account_deletion_intents SET phase='complete',choices='',consequences='',security_fingerprint='',updated_at=NOW() WHERE user_id=(SELECT user_id FROM account_deletion_intents WHERE attempt_id=?)`, attemptID)
 	}
 
 	return s.Exec(ctx, `UPDATE account_deletion_intents SET session_id=?,phase=?,updated_at=NOW(),choices=CASE WHEN ?='complete' THEN '' ELSE choices END,consequences=CASE WHEN ?='complete' THEN '' ELSE consequences END WHERE attempt_id=?`, sessionID, phase, phase, phase, attemptID)
@@ -162,4 +167,25 @@ func (s *Store) GetAccountDeletionResult(ctx context.Context, attemptID string, 
 		outcomes = []api.AccountDeletionProviderRevocation{}
 	}
 	return &api.AccountDeletionResult{Status: "deleted", ProviderRevocations: outcomes}, nil
+}
+
+// AccountDeletionSecurityFingerprint excludes factor usage so a fresh MFA login
+// preserves review, while credential changes also invalidate durable retries.
+func (s *Store) AccountDeletionSecurityFingerprint(ctx context.Context, userID uuid.UUID) (string, error) {
+	var material string
+	err := s.db.QueryRowContext(ctx, `SELECT CAST(to_json(struct_pack(
+		identity := struct_pack(email := u.email, password := u.password, password_enabled := COALESCE(u.password_login_enabled, TRUE)),
+		totp := (SELECT list(secret ORDER BY secret) FROM user_totp_factors WHERE user_id=u.id),
+		passkeys := (SELECT list(struct_pack(id := id, credential_id := credential_id, public_key := public_key) ORDER BY id) FROM user_passkeys WHERE user_id=u.id),
+		social := (SELECT list(struct_pack(provider := provider, subject := subject, linked_at := linked_at) ORDER BY provider) FROM social_identities WHERE user_id=u.id),
+		sso := (SELECT list(struct_pack(tenant_id := si.tenant_id, issuer := si.issuer_url, subject := si.subject, configured_issuer := cfg.issuer_url, client_id := cfg.client_id, enabled := cfg.enabled) ORDER BY si.tenant_id,si.issuer_url,si.subject) FROM sso_identities si LEFT JOIN team_sso_configs cfg ON cfg.tenant_id=si.tenant_id WHERE si.user_id=u.id),
+		recovery := (SELECT list(code_hash ORDER BY code_hash) FROM user_recovery_codes WHERE user_id=u.id)
+	)) AS VARCHAR) FROM users u WHERE u.id=?`, userID).Scan(&material)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrUserNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(material))), nil
 }
