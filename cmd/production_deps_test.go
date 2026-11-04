@@ -141,10 +141,10 @@ func TestDataRefreshWorkflowContracts(t *testing.T) {
 		t.Fatal("no generation or test step may run between token minting and publication")
 	}
 	for _, command := range []string{
-		"go test ./aianalytics ./database",
+		"go test -timeout=25m ./aianalytics ./database",
 		"go test ./blocking",
 		"go test ./cmd/ipmeta-generate ./ipmeta/refresh ./ipmeta ./ipmeta/ipmetagen",
-		"go test ./duckdbextensions ./database ./takeout",
+		"go test -timeout=25m ./duckdbextensions ./database ./takeout",
 	} {
 		if !strings.Contains(beforeMint, command) {
 			t.Fatalf("token must be minted after %q", command)
