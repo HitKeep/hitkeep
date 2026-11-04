@@ -29,22 +29,26 @@ var (
 )
 
 type SocialIdentity struct {
-	ID            uuid.UUID
-	UserID        uuid.UUID
-	Provider      string
-	Subject       string
-	ObservedEmail string
-	LinkedAt      time.Time
-	UpdatedAt     time.Time
-	LastUsedAt    *time.Time
+	AppleClientID               string `json:"-"`
+	AppleRefreshTokenCiphertext string `json:"-"`
+	ID                          uuid.UUID
+	UserID                      uuid.UUID
+	Provider                    string
+	Subject                     string
+	ObservedEmail               string
+	LinkedAt                    time.Time
+	UpdatedAt                   time.Time
+	LastUsedAt                  *time.Time
 }
 
 type LinkSocialIdentityInput struct {
-	UserID        uuid.UUID
-	Provider      string
-	Subject       string
-	ObservedEmail string
-	MarkUsed      bool
+	AppleClientID               string `json:"-"`
+	AppleRefreshTokenCiphertext string `json:"-"`
+	UserID                      uuid.UUID
+	Provider                    string
+	Subject                     string
+	ObservedEmail               string
+	MarkUsed                    bool
 }
 
 type PendingSocialConfirmation struct {
@@ -65,16 +69,18 @@ type PendingSocialConfirmation struct {
 }
 
 type CreateManagedSocialAccountInput struct {
-	Email           string
-	HashedPassword  string
-	TeamName        string
-	Locale          string
-	Provider        string
-	Subject         string
-	ObservedEmail   string
-	PlanCode        string
-	PlanName        string
-	BillingInterval string
+	AppleClientID               string `json:"-"`
+	AppleRefreshTokenCiphertext string `json:"-"`
+	Email                       string
+	HashedPassword              string
+	TeamName                    string
+	Locale                      string
+	Provider                    string
+	Subject                     string
+	ObservedEmail               string
+	PlanCode                    string
+	PlanName                    string
+	BillingInterval             string
 }
 
 type ManagedSocialAccount struct {
@@ -85,7 +91,7 @@ type ManagedSocialAccount struct {
 func normalizeSocialProvider(provider string) (string, error) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	switch provider {
-	case "google", "github", "microsoft":
+	case "google", "github", "microsoft", "apple":
 		return provider, nil
 	default:
 		return "", fmt.Errorf("unsupported social provider %q", provider)
@@ -100,12 +106,12 @@ func (s *Store) GetSocialIdentity(ctx context.Context, provider, subject string)
 	var identity SocialIdentity
 	var lastUsed sql.NullTime
 	err = s.db.QueryRowContext(ctx, `
-		SELECT id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
+		SELECT id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at, apple_client_id, apple_refresh_token_ciphertext
 		FROM social_identities
 		WHERE provider = ? AND subject = ?
 	`, provider, strings.TrimSpace(subject)).Scan(
 		&identity.ID, &identity.UserID, &identity.Provider, &identity.Subject, &identity.ObservedEmail,
-		&identity.LinkedAt, &identity.UpdatedAt, &lastUsed,
+		&identity.LinkedAt, &identity.UpdatedAt, &lastUsed, &identity.AppleClientID, &identity.AppleRefreshTokenCiphertext,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -171,6 +177,9 @@ func (s *Store) LinkSocialIdentity(ctx context.Context, input LinkSocialIdentity
 			return ErrSocialProviderAlreadyLinked
 		}
 
+		if err := validateSocialCredential(provider, input.AppleClientID, input.AppleRefreshTokenCiphertext); err != nil {
+			return err
+		}
 		if subjectUserID == input.UserID {
 			if input.MarkUsed {
 				_, err = tx.ExecContext(ctx, `
@@ -188,6 +197,12 @@ func (s *Store) LinkSocialIdentity(ctx context.Context, input LinkSocialIdentity
 			if err != nil {
 				return fmt.Errorf("update social identity: %w", err)
 			}
+			if input.AppleRefreshTokenCiphertext != "" {
+				_, err = tx.ExecContext(ctx, "UPDATE social_identities SET apple_client_id = ?, apple_refresh_token_ciphertext = ? WHERE user_id = ? AND provider = ? AND subject = ?", input.AppleClientID, input.AppleRefreshTokenCiphertext, input.UserID, provider, subject)
+				if err != nil {
+					return fmt.Errorf("update Apple credential: %w", err)
+				}
+			}
 			return nil
 		}
 
@@ -197,9 +212,9 @@ func (s *Store) LinkSocialIdentity(ctx context.Context, input LinkSocialIdentity
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO social_identities (
-				id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, uuid.New(), input.UserID, provider, subject, observedEmail, now, now, lastUsed); err != nil {
+				id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at, apple_client_id, apple_refresh_token_ciphertext
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, uuid.New(), input.UserID, provider, subject, observedEmail, now, now, lastUsed, input.AppleClientID, input.AppleRefreshTokenCiphertext); err != nil {
 			return fmt.Errorf("insert social identity: %w", err)
 		}
 		return nil
@@ -242,6 +257,11 @@ func (s *Store) ListUserSocialIdentities(ctx context.Context, userID uuid.UUID) 
 }
 
 func (s *Store) DeleteSocialIdentityWithGuard(ctx context.Context, userID uuid.UUID, provider string, passwordConfirmed bool) error {
+	return s.DeleteSocialIdentityWithGuardAndHook(ctx, userID, provider, passwordConfirmed, nil)
+}
+
+// DeleteSocialIdentityWithGuardAndHook runs credential revocation only after the serialized last-method guard.
+func (s *Store) DeleteSocialIdentityWithGuardAndHook(ctx context.Context, userID uuid.UUID, provider string, passwordConfirmed bool, beforeDelete func(*SocialIdentity)) error {
 	provider, err := normalizeSocialProvider(provider)
 	if err != nil {
 		return err
@@ -288,6 +308,13 @@ func (s *Store) DeleteSocialIdentityWithGuard(ctx context.Context, userID uuid.U
 			return ErrSocialLastLoginMethod
 		}
 
+		if beforeDelete != nil && provider == "apple" {
+			identity := &SocialIdentity{UserID: userID, Provider: provider}
+			if err := tx.QueryRowContext(ctx, "SELECT subject, apple_client_id, apple_refresh_token_ciphertext FROM social_identities WHERE user_id = ? AND provider = ?", userID, provider).Scan(&identity.Subject, &identity.AppleClientID, &identity.AppleRefreshTokenCiphertext); err != nil {
+				return fmt.Errorf("load credential before unlink: %w", err)
+			}
+			beforeDelete(identity)
+		}
 		if _, err := tx.ExecContext(ctx,
 			"DELETE FROM social_identities WHERE user_id = ? AND provider = ?",
 			userID, provider,
@@ -325,6 +352,9 @@ func (s *Store) CountSoleSocialProviderUsers(ctx context.Context, provider strin
 func (s *Store) CreateManagedSocialAccount(ctx context.Context, input CreateManagedSocialAccountInput) (*ManagedSocialAccount, error) {
 	provider, err := normalizeSocialProvider(input.Provider)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateSocialCredential(provider, input.AppleClientID, input.AppleRefreshTokenCiphertext); err != nil {
 		return nil, err
 	}
 	email := strings.ToLower(strings.TrimSpace(input.Email))
@@ -384,9 +414,9 @@ func (s *Store) CreateManagedSocialAccount(ctx context.Context, input CreateMana
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO social_identities (
-				id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, uuid.New(), result.UserID, provider, subject, strings.ToLower(strings.TrimSpace(input.ObservedEmail)), now, now, now); err != nil {
+				id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at, apple_client_id, apple_refresh_token_ciphertext
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, uuid.New(), result.UserID, provider, subject, strings.ToLower(strings.TrimSpace(input.ObservedEmail)), now, now, now, input.AppleClientID, input.AppleRefreshTokenCiphertext); err != nil {
 			return fmt.Errorf("link managed social identity: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
@@ -520,4 +550,27 @@ func (s *Store) ConsumePendingSocialConfirmation(ctx context.Context, token stri
 func socialConfirmationTokenHash(token string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(token)))
 	return hex.EncodeToString(digest[:])
+}
+
+// GetUserAppleIdentity is an internal credential read; public identity DTOs exclude tokens.
+func (s *Store) GetUserAppleIdentity(ctx context.Context, userID uuid.UUID) (*SocialIdentity, error) {
+	var subject string
+	err := s.db.QueryRowContext(ctx, "SELECT subject FROM social_identities WHERE user_id = ? AND provider = 'apple'", userID).Scan(&subject)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load Apple identity: %w", err)
+	}
+	return s.GetSocialIdentity(ctx, "apple", subject)
+}
+
+func validateSocialCredential(provider, clientID, ciphertext string) error {
+	if provider != "apple" && (clientID != "" || ciphertext != "") {
+		return errors.New("provider token retention is Apple-only")
+	}
+	if (clientID == "") != (ciphertext == "") || (ciphertext != "" && !strings.HasPrefix(ciphertext, "v1.")) {
+		return errors.New("incomplete encrypted Apple credential")
+	}
+	return nil
 }

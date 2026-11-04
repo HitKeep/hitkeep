@@ -25,10 +25,12 @@ import (
 )
 
 const (
+	ProviderApple     = "apple"
 	ProviderGoogle    = "google"
 	ProviderGitHub    = "github"
 	ProviderMicrosoft = "microsoft"
 
+	appleIssuer         = "https://appleid.apple.com"
 	googleIssuer        = "https://accounts.google.com"
 	githubAuthURL       = "https://github.com/login/oauth/authorize"
 	githubTokenURL      = "https://github.com/login/oauth/access_token" //nolint:gosec // Public OAuth endpoint, not a credential.
@@ -61,6 +63,7 @@ type ProviderConfig struct {
 	IssuerURL  string
 	AuthURL    string
 	TokenURL   string
+	RevokeURL  string
 	APIBaseURL string
 }
 
@@ -77,10 +80,12 @@ type FlowState struct {
 }
 
 type Identity struct {
-	Provider      string
-	Subject       string
-	Email         string
-	EmailVerified bool
+	Provider          string
+	Subject           string
+	Email             string
+	EmailVerified     bool
+	AppleClientID     string `json:"-"`
+	AppleRefreshToken string `json:"-"`
 }
 
 type AuthorizationRequest struct {
@@ -93,7 +98,12 @@ func (r AuthorizationRequest) URL(state string) string {
 	if r.config == nil {
 		return ""
 	}
-	options := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(r.FlowState.CodeVerifier)}
+	options := []oauth2.AuthCodeOption{}
+	if r.provider == ProviderApple {
+		options = append(options, oauth2.SetAuthURLParam("response_mode", "form_post"))
+	} else {
+		options = append(options, oauth2.S256ChallengeOption(r.FlowState.CodeVerifier))
+	}
 	if r.provider != ProviderGitHub {
 		options = append(options, oidc.Nonce(r.FlowState.Nonce))
 	}
@@ -122,6 +132,7 @@ func ProviderStatuses(conf *config.Config) []ProviderStatus {
 		{ProviderGoogle, "Google", conf.SocialGoogleClientID, conf.SocialGoogleClientSecret},
 		{ProviderGitHub, "GitHub", conf.SocialGitHubClientID, conf.SocialGitHubClientSecret},
 		{ProviderMicrosoft, "Microsoft", conf.SocialMicrosoftClientID, conf.SocialMicrosoftClientSecret},
+		{ProviderApple, "Apple", conf.SocialAppleClientID, conf.SocialAppleClientSecret},
 	}
 	statuses := make([]ProviderStatus, 0, len(inputs))
 	for _, input := range inputs {
@@ -130,6 +141,12 @@ func ProviderStatuses(conf *config.Config) []ProviderStatus {
 		validTenant := true
 		if input.provider == ProviderMicrosoft {
 			_, validTenant = parseMicrosoftTenant(conf.SocialMicrosoftTenant)
+		}
+		if input.provider == ProviderApple {
+			hasKey := len(strings.TrimSpace(conf.SocialAppleTokenEncryptionKey)) >= 32
+			configured := hasID && hasSecret && hasKey
+			statuses = append(statuses, ProviderStatus{Provider: input.provider, DisplayName: input.name, Configured: configured, Partial: (hasID || hasSecret || strings.TrimSpace(conf.SocialAppleTokenEncryptionKey) != "") && !configured})
+			continue
 		}
 		statuses = append(statuses, ProviderStatus{
 			Provider: input.provider, DisplayName: input.name,
@@ -148,6 +165,15 @@ func ConfigForProvider(conf *config.Config, provider string) (ProviderConfig, er
 	callback := appurl.Path(conf.PublicURL, "/api/auth/social/"+provider+"/callback")
 	result := ProviderConfig{Provider: provider, RedirectURL: callback}
 	switch provider {
+	case ProviderApple:
+		if len(strings.TrimSpace(conf.SocialAppleTokenEncryptionKey)) < 32 {
+			return ProviderConfig{}, ErrNotConfigured
+		}
+		result.DisplayName = "Apple"
+		result.ClientID = conf.SocialAppleClientID
+		result.ClientSecret = conf.SocialAppleClientSecret
+		result.IssuerURL = appleIssuer
+		result.RevokeURL = appleIssuer + "/auth/revoke"
 	case ProviderGoogle:
 		result.DisplayName = "Google"
 		result.ClientID = conf.SocialGoogleClientID
@@ -198,14 +224,18 @@ func (c *Client) Begin(ctx context.Context, providerConfig ProviderConfig) (Auth
 			Endpoint:    oauth2.Endpoint{AuthURL: providerConfig.AuthURL, TokenURL: providerConfig.TokenURL},
 			Scopes:      []string{"read:user", "user:email"},
 		}
-	case ProviderGoogle, ProviderMicrosoft:
+	case ProviderGoogle, ProviderMicrosoft, ProviderApple:
 		provider, err := c.discover(ctx, providerConfig)
 		if err != nil {
 			return AuthorizationRequest{}, fmt.Errorf("%w: discovery failed", ErrProviderUnavailable)
 		}
+		endpoint := provider.Endpoint()
+		if providerConfig.Provider == ProviderApple {
+			endpoint.AuthStyle = oauth2.AuthStyleInParams
+		}
 		oauthConfig = &oauth2.Config{
 			ClientID: providerConfig.ClientID, ClientSecret: providerConfig.ClientSecret,
-			RedirectURL: providerConfig.RedirectURL, Endpoint: provider.Endpoint(),
+			RedirectURL: providerConfig.RedirectURL, Endpoint: endpoint,
 			Scopes: oidcScopes(providerConfig.Provider),
 		}
 	}
@@ -232,7 +262,7 @@ func (c *Client) Complete(ctx context.Context, providerConfig ProviderConfig, st
 	switch providerConfig.Provider {
 	case ProviderGitHub:
 		return c.completeGitHub(requestCtx, providerConfig, state, code)
-	case ProviderGoogle, ProviderMicrosoft:
+	case ProviderGoogle, ProviderMicrosoft, ProviderApple:
 		return c.completeOIDC(requestCtx, providerConfig, state, code)
 	default:
 		return Identity{}, ErrNotConfigured
@@ -244,10 +274,16 @@ func (c *Client) completeOIDC(ctx context.Context, cfg ProviderConfig, state Flo
 	if err != nil {
 		return Identity{}, fmt.Errorf("%w: discovery failed", ErrProviderUnavailable)
 	}
+	endpoint := provider.Endpoint()
+	options := []oauth2.AuthCodeOption{oauth2.VerifierOption(state.CodeVerifier)}
+	if cfg.Provider == ProviderApple {
+		endpoint.AuthStyle = oauth2.AuthStyleInParams
+		options = nil
+	}
 	token, err := (&oauth2.Config{
 		ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURL,
-		Endpoint: provider.Endpoint(), Scopes: oidcScopes(cfg.Provider),
-	}).Exchange(ctx, strings.TrimSpace(code), oauth2.VerifierOption(state.CodeVerifier))
+		Endpoint: endpoint, Scopes: oidcScopes(cfg.Provider),
+	}).Exchange(ctx, strings.TrimSpace(code), options...)
 	if err != nil {
 		return Identity{}, ErrTokenExchange
 	}
@@ -256,6 +292,9 @@ func (c *Client) completeOIDC(ctx context.Context, cfg ProviderConfig, state Flo
 		return Identity{}, ErrTokenValidation
 	}
 	verifierConfig := &oidc.Config{ClientID: cfg.ClientID}
+	if cfg.Provider == ProviderApple {
+		verifierConfig.SupportedSigningAlgs = []string{oidc.RS256}
+	}
 	if cfg.Provider == ProviderGoogle || cfg.Provider == ProviderMicrosoft {
 		verifierConfig.SkipIssuerCheck = true
 	}
@@ -268,6 +307,14 @@ func (c *Client) completeOIDC(ctx context.Context, cfg ProviderConfig, state Flo
 	if err := idToken.Claims(&claims); err != nil {
 		return Identity{}, ErrIdentityClaims
 	}
+	if cfg.Provider == ProviderApple {
+		identity, err := appleIdentity(idToken, claims)
+		if err != nil {
+			return Identity{}, err
+		}
+		identity.AppleClientID, identity.AppleRefreshToken = cfg.ClientID, token.RefreshToken
+		return identity, nil
+	}
 	if cfg.Provider == ProviderMicrosoft {
 		if err := c.validateMicrosoftSigningKeyIssuer(ctx, provider, rawIDToken, idToken.Issuer, stringClaim(claims, "tid")); err != nil {
 			return Identity{}, ErrTokenValidation
@@ -278,6 +325,9 @@ func (c *Client) completeOIDC(ctx context.Context, cfg ProviderConfig, state Flo
 }
 
 func oidcScopes(provider string) []string {
+	if provider == ProviderApple {
+		return []string{"email"}
+	}
 	scopes := []string{oidc.ScopeOpenID, "email"}
 	if provider == ProviderMicrosoft {
 		// Microsoft requires profile consent before it emits the immutable oid
@@ -540,7 +590,7 @@ func validateProviderConfig(cfg ProviderConfig) error {
 		return ErrNotConfigured
 	}
 	switch cfg.Provider {
-	case ProviderGoogle, ProviderMicrosoft:
+	case ProviderGoogle, ProviderMicrosoft, ProviderApple:
 		if strings.TrimSpace(cfg.IssuerURL) == "" {
 			return ErrNotConfigured
 		}

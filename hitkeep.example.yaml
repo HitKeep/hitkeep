@@ -170,6 +170,12 @@ google-search-console-client-id: ""
 # google-search-console-redirect-url:
 
 # social-sign-in settings
+# Apple Sign in Services ID (type: string; default: "")
+social-apple-client-id: ""
+# Externally signed rotating Apple client-secret JWT (type: string; default: "unset"; sensitive)
+# social-apple-client-secret:
+# Stable Apple refresh-token encryption secret of at least 32 bytes; retain across client-secret rotation (type: string; default: "unset"; sensitive)
+# social-apple-token-encryption-key:
 # GitHub social sign-in OAuth client ID (type: string; default: "")
 social-github-client-id: ""
 # GitHub social sign-in OAuth client secret (type: string; default: "unset"; sensitive)

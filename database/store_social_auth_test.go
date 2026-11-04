@@ -335,3 +335,32 @@ func TestDeleteUserRemovesSocialIdentityAndPendingConfirmation(t *testing.T) {
 		}
 	}
 }
+
+func TestAppleIdentityTokenRetentionAndPublicDTO(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "apple@private.icloud.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := LinkSocialIdentityInput{UserID: userID, Provider: "apple", Subject: "immutable", ObservedEmail: "apple@private.icloud.com", AppleClientID: "service", AppleRefreshTokenCiphertext: "v1.encrypted"}
+	if _, err := store.LinkSocialIdentity(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	input.AppleClientID = ""
+	input.AppleRefreshTokenCiphertext = ""
+	if _, err := store.LinkSocialIdentity(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := store.GetUserAppleIdentity(ctx, userID)
+	if err != nil || identity.AppleRefreshTokenCiphertext != "v1.encrypted" {
+		t.Fatalf("current credential lost: %v", err)
+	}
+	identities, err := store.ListUserSocialIdentities(ctx, userID)
+	if err != nil || len(identities) != 1 || identities[0].Provider != "apple" {
+		t.Fatalf("public identities: %v", err)
+	}
+	if _, err := store.CreatePendingSocialConfirmation(ctx, PendingSocialConfirmation{Provider: "apple", Subject: "subject", TargetEmail: "apple@private.icloud.com"}); err != nil {
+		t.Fatalf("second CHECK rejects Apple: %v", err)
+	}
+}

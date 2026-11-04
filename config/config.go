@@ -54,14 +54,17 @@ type Config struct {
 	AuthSessionMinutes        int `env:"HITKEEP_AUTH_SESSION_MINUTES"       default:"15"    desc:"Authenticated dashboard session lifetime in minutes"`
 	AuthSessionWarningSeconds int `env:"HITKEEP_AUTH_SESSION_WARNING_SECONDS" default:"120" desc:"Seconds before session expiry to warn users"`
 
-	SocialGoogleClientID        string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_ID"       default:""       desc:"Google social sign-in OAuth client ID"`
-	SocialGoogleClientSecret    string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_SECRET"   default:""       desc:"Google social sign-in OAuth client secret" sensitive:"redact"`
-	SocialGitHubClientID        string `env:"HITKEEP_SOCIAL_GITHUB_CLIENT_ID"       default:""       desc:"GitHub social sign-in OAuth client ID"`
-	SocialGitHubClientSecret    string `env:"HITKEEP_SOCIAL_GITHUB_CLIENT_SECRET"   default:""       desc:"GitHub social sign-in OAuth client secret" sensitive:"redact"`
-	SocialMicrosoftClientID     string `env:"HITKEEP_SOCIAL_MICROSOFT_CLIENT_ID"    default:""       desc:"Microsoft social sign-in OAuth client ID"`
-	SocialMicrosoftClientSecret string `env:"HITKEEP_SOCIAL_MICROSOFT_CLIENT_SECRET" default:""     desc:"Microsoft social sign-in OAuth client secret" sensitive:"redact"`
-	SocialMicrosoftTenant       string `env:"HITKEEP_SOCIAL_MICROSOFT_TENANT"       default:"common" desc:"Microsoft tenant selector: common, organizations, consumers, or tenant UUID"`
-	SocialSignupEnabled         bool   `env:"HITKEEP_SOCIAL_SIGNUP_ENABLED"         default:"false"  desc:"Enable managed-cloud account creation through configured social providers"`
+	SocialGoogleClientID          string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_ID"       default:""       desc:"Google social sign-in OAuth client ID"`
+	SocialGoogleClientSecret      string `env:"HITKEEP_SOCIAL_GOOGLE_CLIENT_SECRET"   default:""       desc:"Google social sign-in OAuth client secret" sensitive:"redact"`
+	SocialGitHubClientID          string `env:"HITKEEP_SOCIAL_GITHUB_CLIENT_ID"       default:""       desc:"GitHub social sign-in OAuth client ID"`
+	SocialGitHubClientSecret      string `env:"HITKEEP_SOCIAL_GITHUB_CLIENT_SECRET"   default:""       desc:"GitHub social sign-in OAuth client secret" sensitive:"redact"`
+	SocialMicrosoftClientID       string `env:"HITKEEP_SOCIAL_MICROSOFT_CLIENT_ID"    default:""       desc:"Microsoft social sign-in OAuth client ID"`
+	SocialMicrosoftClientSecret   string `env:"HITKEEP_SOCIAL_MICROSOFT_CLIENT_SECRET" default:""     desc:"Microsoft social sign-in OAuth client secret" sensitive:"redact"`
+	SocialMicrosoftTenant         string `env:"HITKEEP_SOCIAL_MICROSOFT_TENANT"       default:"common" desc:"Microsoft tenant selector: common, organizations, consumers, or tenant UUID"`
+	SocialAppleClientID           string `env:"HITKEEP_SOCIAL_APPLE_CLIENT_ID" default:"" desc:"Apple Sign in Services ID"`
+	SocialAppleClientSecret       string `env:"HITKEEP_SOCIAL_APPLE_CLIENT_SECRET" default:"" desc:"Externally signed rotating Apple client-secret JWT" sensitive:"redact"`
+	SocialAppleTokenEncryptionKey string `env:"HITKEEP_SOCIAL_APPLE_TOKEN_ENCRYPTION_KEY" default:"" desc:"Stable Apple refresh-token encryption secret of at least 32 bytes; retain across client-secret rotation" sensitive:"redact"`
+	SocialSignupEnabled           bool   `env:"HITKEEP_SOCIAL_SIGNUP_ENABLED"         default:"false"  desc:"Enable managed-cloud account creation through configured social providers"`
 
 	MailDriver             string `env:"HITKEEP_MAIL_DRIVER"              default:"smtp"     desc:"Mail driver"`
 	MailEncryption         string `env:"HITKEEP_MAIL_ENCRYPTION"          default:"tls"      desc:"Mail encryption"`
