@@ -20,6 +20,7 @@ import (
 	"hitkeep/mailer"
 	"hitkeep/security"
 	"hitkeep/server/shared"
+	"hitkeep/socialauth"
 	"hitkeep/sso"
 	"hitkeep/testutil"
 )
@@ -569,6 +570,45 @@ func TestAccountDeletionNativeStartPurposeIsPairedAndLoginOnly(t *testing.T) {
 		mux.ServeHTTP(out, deletionJSONRequest("/api/auth/native/start", body))
 		if out.Code != 400 || strings.TrimSpace(out.Body.String()) != `{"error":"invalid_request"}` {
 			t.Fatalf("purpose accepted %d %s", out.Code, out.Body.String())
+		}
+	}
+}
+
+func TestAccountDeletionPrimaryStartsRejectForeignOriginAndDelegatedHeaders(t *testing.T) {
+	h, store := setupAuthTestEnv(t)
+	defer store.Close()
+	id, err := store.CreateUser(t.Context(), "delete-origin@example.test", "unused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, _ := deletionAttemptFixture(t, h, id)
+	h.ctx.Config.SocialGoogleClientID = "fixture-client"
+	h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+	h.ctx.SocialAuth = socialauth.NewClient(nil)
+	for _, method := range []string{"password", "sso", "social", "passkey"} {
+		for _, header := range []string{"Origin", "Authorization", "X-Api-Key", "X-Hitkeep-Agent"} {
+			input := map[string]any{"return_url": shared.AccountDeletionReturnPath(attempt)}
+			if method == "social" {
+				input["flow"] = "login"
+			}
+			body, _ := json.Marshal(input)
+			req := deletionJSONRequest("/api/login", body)
+			req.Header.Set(header, "https://evil.test")
+			out := httptest.NewRecorder()
+			switch method {
+			case "password":
+				h.handleLogin()(out, req)
+			case "sso":
+				h.handleSSOStart()(out, req)
+			case "social":
+				req.SetPathValue("provider", "google")
+				h.handleSocialStart(false)(out, req)
+			case "passkey":
+				h.handlePasskeyLoginStart()(out, req)
+			}
+			if out.Code != 403 || len(out.Result().Cookies()) != 0 {
+				t.Fatalf("%s %s status=%d", method, header, out.Code)
+			}
 		}
 	}
 }

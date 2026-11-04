@@ -57,6 +57,13 @@ func (h *handler) handleSSOStart() http.HandlerFunc {
 			writeSSOStartError(r.Context(), w, http.StatusBadRequest, "invalid_email")
 			return
 		}
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
+		if h.deletionReauthentication(req.ReturnURL) && req.InviteToken != "" {
+			writeSSOStartError(r.Context(), w, http.StatusForbidden, "sso_access_denied")
+			return
+		}
 		email, err := h.resolveSSORequestEmail(r.Context(), req.Email, req.InviteToken)
 		if err != nil {
 			if strings.TrimSpace(req.InviteToken) != "" {

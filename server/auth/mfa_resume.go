@@ -30,7 +30,7 @@ func (h *handler) redirectDeletionMFA(w http.ResponseWriter, r *http.Request, re
 func (h *handler) handleMFAResume() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nativeHeaders(w)
-		if h.ctx.AuthState == nil || h.ctx.Store == nil {
+		if !h.ctx.NativeAuthReady() {
 			nativeError(w, r, 503, "temporarily_unavailable")
 			return
 		}

@@ -135,6 +135,9 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			}
 		}
 
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
 		if h.deletionReauthentication(req.ReturnURL) && flow != "login" {
 			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
 			return

@@ -22,6 +22,9 @@ func (h *handler) validateDeletionSubject(returnPath string, id uuid.UUID) bool 
 	if !h.deletionReauthentication(returnPath) {
 		return true
 	}
+	if !h.ctx.NativeAuthReady() {
+		return false
+	}
 	expected, ok := h.ctx.AuthState.AccountDeletionSubject(returnPath, shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
 	return ok && expected == id
 }
