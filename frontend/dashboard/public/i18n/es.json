@@ -24,6 +24,13 @@
     "connections": "Revisar el acceso de los asistentes"
   },
   "oauth": {
+    "createSiteTitle": "Crear un sitio",
+    "createSiteHelp": "Añade tu sitio web a este equipo y después aprueba la conexión más abajo.",
+    "siteDomain": "Dominio del sitio web",
+    "createSiteAction": "Crear sitio",
+    "siteCreateInvalid": "Introduce un dominio de sitio web válido.",
+    "siteCreateExists": "Este sitio ya existe. Selecciónalo arriba.",
+    "siteCreateFailed": "No se ha podido crear el sitio. Inténtalo de nuevo.",
     "connectionDetails": "Detalles de la conexión",
     "consentTitle": "Autorizar una aplicación",
     "consentDescription": "Revisa la aplicación, los permisos solicitados y el equipo al que podrá acceder.",
@@ -3155,6 +3162,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "La región se seleccionó en la integración. Para cambiarla, reinicia la conexión desde WordPress.",
     "pageTitle": "Crea tu cuenta de HitKeep",
     "paidTitle": "Empieza con HitKeep {{plan}}",
     "paidSubtitle": "Crea tu cuenta, verifica tu correo y después revisa el pago.",
@@ -3748,6 +3756,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Este informe contiene más de una moneda. Usa una sola moneda de informes por sitio; HitKeep no convierte monedas.",
     "setup": {
       "title": "Configura el seguimiento de comercio electrónico",
       "description": "La analítica de ingresos necesita eventos de compra y de checkout de tu tienda. En cuanto lleguen eventos, esta página se rellenará automáticamente.",
@@ -4308,5 +4317,10 @@
     "confirmPending": "Otra acción del agente está esperando confirmación.",
     "requestFailed": "La solicitud ha fallado (HTTP {{status}}).",
     "outcomeUnknown": "La solicitud se ha interrumpido y podría haberse completado. Comprueba el estado actual antes de volver a intentarlo."
+  },
+  "embed": {
+    "readOnly": "Analíticas de solo lectura",
+    "connectionError": "No se ha podido conectar con HitKeep. Reinténtalo o vuelve a conectar HitKeep en WordPress.",
+    "analyticsNavigation": "Páginas de analíticas"
   }
 }

@@ -528,4 +528,16 @@ describe('Signup', () => {
 
         expect(locationAssignMock).not.toHaveBeenCalled();
     });
+
+    it('keeps OAuth signup on the integration-selected region despite query parameters or region selection', () => {
+        queryParams = { oauth: '1', region: 'US' };
+        locationAssignMock.mockClear();
+        fixture = TestBed.createComponent(Signup);
+        component = fixture.componentInstance;
+        component['selectJurisdiction']('US');
+        expect(component['isOAuthSignup']).toBe(true);
+        expect(component['currentJurisdiction']()).toBe('EU');
+        expect(locationAssignMock).not.toHaveBeenCalled();
+        expect(component['loginQueryParams']()).toEqual(expect.objectContaining({ oauth: '1' }));
+    });
 });

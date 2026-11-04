@@ -14,6 +14,22 @@ const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') =
 
 export const routes: Routes = [
     {
+        path: 'embed/:siteId',
+        loadComponent: () => import('@pages/embed/embed').then((m) => m.EmbedDashboard),
+        children: [
+            { path: 'dashboard', loadComponent: () => import('@pages/dashboard/dashboard').then((m) => m.Dashboard), data: titleData('nav.dashboard', 'site') },
+            { path: 'events', loadComponent: () => import('@pages/events/events').then((m) => m.Events), data: titleData('nav.events', 'site') },
+            { path: 'goals', loadComponent: () => import('@pages/goals/goals').then((m) => m.Goals), data: titleData('nav.goals', 'site') },
+            { path: 'funnels', loadComponent: () => import('@pages/funnels/funnels').then((m) => m.Funnels), data: titleData('nav.funnels', 'site') },
+            { path: 'ecommerce', loadComponent: () => import('@pages/ecommerce/ecommerce').then((m) => m.EcommercePage), data: titleData('nav.ecommerce', 'site') },
+            { path: 'web-vitals', loadComponent: () => import('@pages/web-vitals/web-vitals').then((m) => m.WebVitalsPage), data: titleData('nav.webVitals', 'site') },
+            { path: 'ai-agents', loadComponent: () => import('@pages/ai-agents/ai-agents-page').then((m) => m.AIAgentsPage), data: titleData('nav.aiAgents', 'site') },
+            { path: 'ai-chatbots', loadComponent: () => import('@pages/ai-chatbots/ai-chatbots').then((m) => m.AIChatbots), data: titleData('nav.aiChatbots', 'site') },
+            { path: 'utm', loadComponent: () => import('@pages/utm/utm-analytics').then((m) => m.UtmAnalytics), data: titleData('nav.utm', 'site') },
+            { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
+        ]
+    },
+    {
         path: 'oauth/consent',
         loadComponent: () => import('@pages/oauth/oauth-consent').then((m) => m.OAuthConsentPage),
         canActivate: [setupGuard, authGuard],

@@ -24,6 +24,13 @@
     "connections": "Assistentenzugriff prüfen"
   },
   "oauth": {
+    "createSiteTitle": "Website erstellen",
+    "createSiteHelp": "Füge deine Website diesem Team hinzu und genehmige anschließend unten die Verbindung.",
+    "siteDomain": "Domain der Website",
+    "createSiteAction": "Website erstellen",
+    "siteCreateInvalid": "Gib eine gültige Website-Domain ein.",
+    "siteCreateExists": "Diese Website existiert bereits. Wähle sie oben aus.",
+    "siteCreateFailed": "Die Website konnte nicht erstellt werden. Versuche es erneut.",
     "connectionDetails": "Verbindungsdetails",
     "consentTitle": "Anwendung autorisieren",
     "consentDescription": "Prüfen Sie die Anwendung, die angeforderten Berechtigungen und das Team, auf das sie zugreifen darf.",
@@ -2960,6 +2967,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "Deine Region wurde in der Integration ausgewählt. Um sie zu ändern, starte die Verbindung in WordPress neu.",
     "pageTitle": "Erstelle dein HitKeep-Konto",
     "paidTitle": "Starte mit HitKeep {{plan}}",
     "paidSubtitle": "Erstelle dein Konto, bestätige deine E-Mail-Adresse und prüfe dann die Zahlung.",
@@ -3550,6 +3558,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Dieser Bericht enthält mehrere Währungen. Verwende pro Website nur eine Berichtswährung; HitKeep rechnet Währungen nicht um.",
     "setup": {
       "title": "E-Commerce-Tracking einrichten",
       "description": "Die Umsatzanalyse benötigt Kauf- und Checkout-Events aus deinem Shop. Sobald Events eintreffen, füllt sich diese Seite automatisch.",
@@ -4101,5 +4110,10 @@
     "confirmPending": "Eine andere Agentenaktion wartet auf Bestätigung.",
     "requestFailed": "Die Anfrage ist fehlgeschlagen (HTTP {{status}}).",
     "outcomeUnknown": "Die Anfrage wurde unterbrochen und könnte bereits abgeschlossen sein. Prüfen Sie den aktuellen Zustand, bevor Sie sie erneut senden."
+  },
+  "embed": {
+    "readOnly": "Schreibgeschützte Statistiken",
+    "connectionError": "Die Verbindung zu HitKeep ist fehlgeschlagen. Versuche es erneut oder verbinde HitKeep in WordPress neu.",
+    "analyticsNavigation": "Statistikseiten"
   }
 }

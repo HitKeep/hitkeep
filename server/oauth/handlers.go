@@ -33,6 +33,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("GET /api/oauth/continuation", human(h.continuation))
 	mux.HandleFunc("GET /api/oauth/consent", human(h.consent))
 	mux.HandleFunc("POST /api/oauth/consent", human(h.completeConsent))
+	mux.HandleFunc("POST /api/oauth/sites", human(h.createSite))
 	mux.HandleFunc("GET /api/user/oauth-grants", human(h.grants))
 	mux.HandleFunc("DELETE /api/user/oauth-grants/{id}", human(h.revoke))
 	h.registerClients(mux)
@@ -144,6 +145,11 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 		response(w, http.StatusServiceUnavailable, map[string]string{"error": "unavailable"})
 		return
 	}
+	activeTeam, err := h.ctx.Store.GetActiveTenantID(r.Context(), googleuuid.UUID(userID))
+	if err != nil {
+		response(w, http.StatusServiceUnavailable, map[string]string{"error": "unavailable"})
+		return
+	}
 	for _, team := range teams {
 		if info.RegistrationTeamID != uuid.Nil() && info.RegistrationTeamID != uuid.UUID(team.ID) {
 			continue
@@ -162,6 +168,8 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 			return
 		}
 		display := api.OAuthTeam{ID: uuid.UUID(team.ID), Name: team.Name, Sites: []api.OAuthSite{}}
+		role, roleErr := h.ctx.Store.GetTenantRole(r.Context(), team.ID, googleuuid.UUID(userID))
+		display.CanCreateSite = roleErr == nil && team.ID == activeTeam && (role == database.TenantRoleOwner || role == database.TenantRoleAdmin)
 		for _, site := range sites {
 			candidate := &auth.OAuthGrant{ID: uuid.NewV7(), UserID: userID, TeamID: display.ID, SiteIDs: []uuid.UUID{uuid.UUID(site.ID)}, Scopes: info.Scopes, Audience: info.Resource}
 			if h.authorizeSite(r.Context(), candidate, uuid.UUID(site.ID)) != nil {
@@ -169,7 +177,7 @@ func (h *handler) consent(w http.ResponseWriter, r *http.Request, userID uuid.UU
 			}
 			display.Sites = append(display.Sites, api.OAuthSite{ID: uuid.UUID(site.ID), Domain: site.Domain})
 		}
-		if len(display.Sites) > 0 {
+		if len(display.Sites) > 0 || display.CanCreateSite {
 			info.Teams = append(info.Teams, display)
 		}
 	}

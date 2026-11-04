@@ -47,7 +47,7 @@
                 styleClass="app-table__columns-select"
                 data-testid="table-columns"
             />
-            } @if (exportable()) {
+            } @if (canExport()) {
             <p-button
                 icon="pi pi-download"
                 [text]="true"

@@ -15,7 +15,8 @@ export interface OAuthConsent {
     scopes: string[];
     expires_at: string;
     csrf_token: string;
-    teams: { id: string; name: string; sites: OAuthSite[] }[];
+    suggested_domain?: string;
+    teams: { id: string; name: string; sites: OAuthSite[]; can_create_site?: boolean }[];
 }
 
 export interface OAuthGrant {

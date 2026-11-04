@@ -6,6 +6,7 @@ import { vi } from 'vitest';
 import { SiteService } from '@features/sites/services/site.service';
 import { ShareService } from '@services/share.service';
 import { RealtimeService } from '@services/realtime.service';
+import { EmbedService } from '@services/embed.service';
 
 class MockEventSource {
     static instances: MockEventSource[] = [];
@@ -98,6 +99,15 @@ describe('RealtimeService', () => {
 
         expect(MockEventSource.instances.length).toBe(1);
         expect(MockEventSource.instances[0].url).toContain('/api/share/share-token/sites/site-1/realtime');
+    });
+
+    it('uses the existing polling fallback without opening a cookie-authenticated stream in an embed', () => {
+        TestBed.overrideProvider(EmbedService, { useValue: { isEmbedMode: () => true } });
+        const service = TestBed.inject(RealtimeService);
+        TestBed.inject(SiteService).activeSite.set({ id: 'site-1', user_id: '', domain: 'example.com', created_at: '' });
+        flushEffects();
+        expect(MockEventSource.instances).toHaveLength(0);
+        expect(service.status()).toBe('idle');
     });
 
     it('emits parsed analytics events and tracks stream status', () => {

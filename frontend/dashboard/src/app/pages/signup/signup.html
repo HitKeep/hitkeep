@@ -75,12 +75,16 @@
                         [ngModelOptions]="{ standalone: true }"
                         [allowEmpty]="false"
                         [fluid]="true"
+                        [disabled]="isOAuthSignup"
                         [dt]="jurisdictionDesignTokens"
                         ariaLabelledBy="signup-jurisdiction-label"
                         (onChange)="selectJurisdiction($event.value)"
                     >
                         <ng-template #item let-jurisdiction> {{ ("signup.jurisdictions." + jurisdiction.toLowerCase()) | transloco }} </ng-template>
                     </p-selectbutton>
+                    @if (isOAuthSignup) {
+                    <p class="mt-3 text-sm text-muted-color">{{ 'signup.oauthRegionNotice' | transloco }}</p>
+                    }
                 </p-fieldset>
 
                 @if (socialMethods().length > 0) {

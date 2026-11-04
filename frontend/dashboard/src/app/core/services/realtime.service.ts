@@ -3,6 +3,7 @@ import { DestroyRef, computed, effect, inject, signal, Service } from '@angular/
 import { Subject } from 'rxjs';
 import { SiteService } from '@features/sites/services/site.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 import { browserAbsoluteAppUrl } from '@core/interceptors/base-path.interceptor';
 
 export const REALTIME_KINDS = {
@@ -50,6 +51,7 @@ export interface RealtimeEvent {
 export class RealtimeService {
     private readonly siteService = inject(SiteService);
     private readonly shareService = inject(ShareService);
+    private readonly embed = inject(EmbedService);
     private readonly document = inject(DOCUMENT);
     private readonly destroyRef = inject(DestroyRef);
     private readonly eventsSubject = new Subject<RealtimeEvent>();
@@ -64,6 +66,12 @@ export class RealtimeService {
 
     constructor() {
         effect(() => {
+            if (this.embed.isEmbedMode()) {
+                this.closeSource();
+                this.activeSiteId.set(null);
+                this.status.set('idle');
+                return;
+            }
             const shareToken = this.shareService.token();
             const shareSite = this.shareService.site();
             const activeSite = this.siteService.activeSite();

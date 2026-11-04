@@ -27,7 +27,11 @@ export class PreferencesService {
                 } else {
                     document.documentElement.classList.remove('p-dark');
                 }
-                localStorage.setItem(COLOR_MODE_STORAGE_KEY, this.colorMode());
+                try {
+                    localStorage.setItem(COLOR_MODE_STORAGE_KEY, this.colorMode());
+                } catch {
+                    // Embedded browsers may deny storage; keep the in-memory choice.
+                }
             });
         }
     }
@@ -44,12 +48,16 @@ export class PreferencesService {
         if (typeof window === 'undefined') {
             return 'light';
         }
-        const saved = localStorage.getItem(COLOR_MODE_STORAGE_KEY);
-        if (saved === 'light' || saved === 'dark' || saved === 'auto') {
-            return saved;
+        try {
+            const saved = localStorage.getItem(COLOR_MODE_STORAGE_KEY);
+            if (saved === 'light' || saved === 'dark' || saved === 'auto') {
+                return saved;
+            }
+            // Migrate the pre-mode storage value.
+            return localStorage.getItem(LEGACY_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+        } catch {
+            return 'light';
         }
-        // Migrate the pre-mode storage value.
-        return localStorage.getItem(LEGACY_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
     }
 
     private mediaQuery(): MediaQueryList | null {

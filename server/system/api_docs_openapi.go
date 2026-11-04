@@ -61,6 +61,8 @@ func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]a
 func openAPISpecV1(publicURL string) map[string]any {
 	components := openAPIV1Components()
 	components["securitySchemes"].(map[string]any)["oauth2"] = oauthSecurityScheme(publicURL)
+	paths := mergeOpenAPIPathMaps(openAPIV1Paths(), openAPIV1OAuthPaths(publicURL))
+	addWordPressOpenAPI(components, paths)
 	return map[string]any{
 		"openapi":           "3.1.0",
 		"jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
@@ -93,6 +95,6 @@ func openAPISpecV1(publicURL string) map[string]any {
 			{"name": "Webhooks", "description": "Human-administered instance and site operational webhook endpoints."},
 		},
 		"components": components,
-		"paths":      mergeOpenAPIPathMaps(openAPIV1Paths(), openAPIV1OAuthPaths(publicURL)),
+		"paths":      paths,
 	}
 }

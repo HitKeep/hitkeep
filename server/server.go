@@ -17,6 +17,7 @@ import (
 	"golang.org/x/time/rate"
 
 	hitai "hitkeep/ai"
+	"hitkeep/auth"
 	"hitkeep/blocking"
 	"hitkeep/cluster"
 	"hitkeep/config"
@@ -594,6 +595,25 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(r.URL.Path, "/embed/") {
+		if s.ctx == nil || s.ctx.Config == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		claims, err := auth.ValidateEmbedLaunch(r.URL.Query().Get("launch"), s.ctx.Config.JWTSecret, s.ctx.Config.PublicURL)
+		if err != nil || !strings.HasPrefix(r.URL.Path, "/embed/"+claims.SiteID.String()) || (r.URL.Path != "/embed/"+claims.SiteID.String() && !strings.HasPrefix(r.URL.Path, "/embed/"+claims.SiteID.String()+"/")) {
+			w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+			w.Header().Set("X-Frame-Options", "DENY")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", "frame-ancestors "+claims.ParentOrigin)
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		_, _ = w.Write(s.indexHTML)
+		return
+	}
 	w.Header().Set("Cache-Control", cacheControlNoCache)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if !strings.HasPrefix(r.URL.Path, "/share/") && !strings.HasPrefix(r.URL.Path, "/qr-share/") {
