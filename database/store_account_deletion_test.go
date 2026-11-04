@@ -11,6 +11,65 @@ import (
 	"hitkeep/auth"
 )
 
+func TestPersonalRemovalPreparationOmitsUnassignedSharedSitesAndOwners(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateUser(ctx, "private-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := s.CreateUser(ctx, "limited-member@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateSite(ctx, owner, "unassigned-private.example.test"); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := s.PlanAccountDeletion(ctx, member, api.AccountDeletionChoices{}, false)
+	if err != nil || len(plan.Blockers) != 0 || len(plan.Teams) != 1 {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	if len(plan.Teams[0].Sites) != 0 || len(plan.Teams[0].EligibleSuccessors) != 0 {
+		t.Fatalf("unaffected private team metadata exposed: %+v", plan.Teams[0])
+	}
+}
+
+func TestPersonalRemovalCanLeaveArchivedEmptyTeam(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	u, err := s.CreateUser(ctx, "archived-departing@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.CreateUser(ctx, "archived-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultID, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTeamMember(ctx, defaultID, v, TenantRoleOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateInstanceRole(ctx, v, auth.InstanceOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTenant(ctx, u, "Already archived", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveTenant(ctx, team.ID, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemovePersonalAccount(ctx, u, api.AccountDeletionChoices{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if user, err := s.GetUserByID(ctx, u); err != nil || user != nil {
+		t.Fatalf("archived owner retained: %v %v", user, err)
+	}
+}
+
 func TestPersonalRemovalRejectsOwnerFromDifferentTeam(t *testing.T) {
 	s := setupTenantStore(t)
 	ctx := t.Context()

@@ -45,7 +45,7 @@ func (s *Store) PlanAccountDeletion(ctx context.Context, userID uuid.UUID, choic
 		}
 		closing[id] = true
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.name,COALESCE(tm.role,'') FROM tenants t LEFT JOIN tenant_members tm ON tm.tenant_id=t.id AND tm.user_id=? WHERE tm.user_id IS NOT NULL OR EXISTS (SELECT 1 FROM sites s JOIN site_tenants st ON st.site_id=s.id WHERE st.tenant_id=t.id AND s.user_id=?) ORDER BY t.id`, userID, userID)
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.name,CASE WHEN ta.tenant_id IS NULL THEN COALESCE(tm.role,'') ELSE '' END FROM tenants t LEFT JOIN tenant_archives ta ON ta.tenant_id=t.id LEFT JOIN tenant_members tm ON tm.tenant_id=t.id AND tm.user_id=? WHERE tm.user_id IS NOT NULL OR EXISTS (SELECT 1 FROM sites s JOIN site_tenants st ON st.site_id=s.id WHERE st.tenant_id=t.id AND s.user_id=?) ORDER BY t.id`, userID, userID)
 	if err != nil {
 		return plan, err
 	}
@@ -114,7 +114,19 @@ func (s *Store) PlanAccountDeletion(ctx context.Context, userID uuid.UUID, choic
 		if team.SuccessorID != uuid.Nil && !validSuccessor {
 			plan.Blockers = append(plan.Blockers, api.AccountDeletionBlocker{Code: "invalid_successor", TeamID: t.id})
 		}
-		if cloud {
+		if team.Action != "close" {
+			affected := make([]api.AccountDeletionSite, 0, len(team.Sites))
+			for _, site := range team.Sites {
+				if site.Owned {
+					affected = append(affected, site)
+				}
+			}
+			team.Sites = affected
+		}
+		if !ownsSites {
+			team.EligibleSuccessors = []api.AccountDeletionOwner{}
+		}
+		if cloud && team.Action == "close" {
 			team.BillingFingerprint, team.CancellationRequired, err = s.accountDeletionBilling(ctx, t.id)
 			if err != nil {
 				return plan, err
