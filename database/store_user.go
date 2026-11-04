@@ -546,6 +546,9 @@ func cleanupUserRows(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
 	if err := execIfTableExists("social_identities", "DELETE FROM social_identities WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("could not delete user social identities: %w", err)
 	}
+	if err := execIfTableExists("sso_identities", "DELETE FROM sso_identities WHERE user_id = ?", userID); err != nil {
+		return fmt.Errorf("could not delete user SSO identities: %w", err)
+	}
 	if err := execIfTableExists("pending_social_confirmations", "DELETE FROM pending_social_confirmations WHERE target_user_id = ? OR lower(target_email) = lower((SELECT email FROM users WHERE id = ?))", userID, userID); err != nil {
 		return fmt.Errorf("could not delete pending social confirmations: %w", err)
 	}

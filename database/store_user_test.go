@@ -171,3 +171,72 @@ func TestDeleteUserRemovesLegacyAuthStateRows(t *testing.T) {
 		t.Fatalf("expected user to be deleted, got %+v", user)
 	}
 }
+
+func TestDeleteUserRemovesSSOIdentitiesAndPreservesOtherAccounts(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	ownerID, err := store.CreateUser(ctx, "owner@sso-delete.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	teamID, err := store.GetActiveTenantID(ctx, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTeam, err := store.CreateTenant(ctx, ownerID, "Other SSO team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.ResolveSSOUser(ctx, ResolveSSOUserInput{
+		TeamID: teamID, IssuerURL: "https://id.example.test", Subject: "deleted",
+		Email: "deleted@sso-delete.test", PasswordHash: "hash",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.ResolveSSOUser(ctx, ResolveSSOUserInput{
+		TeamID: otherTeam.ID, IssuerURL: "https://id.example.test", Subject: "retained",
+		Email: "owner@sso-delete.test", PasswordHash: "unused",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.UserID != ownerID {
+		t.Fatal("expected existing owner identity")
+	}
+	rememberToken, err := store.CreateRememberMeToken(ctx, deleted.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteUser(ctx, deleted.UserID); err != nil {
+		t.Fatalf("delete SSO user without a partial foreign-key failure: %v", err)
+	}
+	if user, err := store.GetUserByID(ctx, deleted.UserID); err != nil || user != nil {
+		t.Fatalf("deleted user = %v, error = %v", user, err)
+	}
+	if user, err := store.GetUserByID(ctx, ownerID); err != nil || user == nil || user.Password != "hash" {
+		t.Fatalf("retained user = %v, error = %v", user, err)
+	}
+	if userID, err := store.ValidateRememberMeToken(ctx, rememberToken); err != nil || userID == deleted.UserID {
+		t.Fatalf("deleted remember credential still resolves: %v, %v", userID, err)
+	}
+	for _, check := range []struct {
+		query string
+		args  []any
+		want  int
+	}{
+		{"SELECT COUNT(*) FROM sso_identities WHERE user_id = ?", []any{deleted.UserID}, 0},
+		{"SELECT COUNT(*) FROM sso_identities WHERE user_id = ? AND tenant_id = ? AND subject = 'retained'", []any{ownerID, otherTeam.ID}, 1},
+		{"SELECT COUNT(*) FROM tenants WHERE id IN (?, ?)", []any{teamID, otherTeam.ID}, 2},
+		{"SELECT COUNT(*) FROM tenant_members WHERE user_id = ? AND tenant_id IN (?, ?) AND role = 'owner'", []any{ownerID, teamID, otherTeam.ID}, 2},
+	} {
+		var got int
+		if err := store.DB().QueryRowContext(ctx, check.query, check.args...).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != check.want {
+			t.Errorf("%s: got %d, want %d", check.query, got, check.want)
+		}
+	}
+}
