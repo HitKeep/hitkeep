@@ -202,3 +202,29 @@ func TestCrossOriginProtectionBypassesOnlyPublicBrowserIngestAndOAuthTokenEndpoi
 		})
 	}
 }
+
+func TestCrossOriginProtectionAllowsOnlyApplePOSTReceipt(t *testing.T) {
+	handler := crossOriginTestHandler()
+	for _, tc := range []struct {
+		method, path string
+		allowed      bool
+	}{
+		{http.MethodPost, "/api/auth/social/apple/callback", true},
+		{http.MethodPost, "/api/auth/social/apple/callback/extra", false},
+		{http.MethodPost, "/api/auth/social/google/callback", false},
+		{http.MethodPost, "/api/auth/social/apple/resume", false},
+		{http.MethodDelete, "/api/auth/social/apple/callback", false},
+		{http.MethodPost, "/api/auth/social/apple/start", false},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			request.Header.Set("Sec-Fetch-Site", "cross-site")
+			request.Header.Set("Origin", "https://appleid.apple.com")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if (response.Code == http.StatusNoContent) != tc.allowed {
+				t.Fatalf("cross-origin receipt boundary: status=%d allowed=%t", response.Code, tc.allowed)
+			}
+		})
+	}
+}

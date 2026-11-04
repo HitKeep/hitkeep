@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -173,52 +174,68 @@ func TestManagedSocialAccountStartsPasswordDisabledAndCountsSoleProvider(t *test
 }
 
 func TestConcurrentSocialUnlinksPreserveOnePrimaryMethod(t *testing.T) {
-	store := setupTenantStore(t)
-	ctx := context.Background()
-	userID, err := store.CreateUser(ctx, "concurrent-unlink@social.test", "inaccessible-placeholder")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	if err := store.SetPasswordLoginEnabled(ctx, userID, false); err != nil {
-		t.Fatalf("disable password login: %v", err)
-	}
-	for _, identity := range []LinkSocialIdentityInput{
-		{UserID: userID, Provider: "google", Subject: "google-subject"},
-		{UserID: userID, Provider: "github", Subject: "github-subject"},
-	} {
-		if _, err := store.LinkSocialIdentity(ctx, identity); err != nil {
-			t.Fatalf("link %s identity: %v", identity.Provider, err)
-		}
-	}
+	for _, pair := range [][2]string{{"google", "github"}, {"apple", "google"}} {
+		t.Run(pair[0]+"_"+pair[1], func(t *testing.T) {
+			store := setupTenantStore(t)
+			ctx := t.Context()
+			userID, err := store.CreateUser(ctx, "concurrent-unlink@social.test", "inaccessible-placeholder")
+			if err != nil {
+				t.Fatalf("create user: %v", err)
+			}
+			if err := store.SetPasswordLoginEnabled(ctx, userID, false); err != nil {
+				t.Fatalf("disable password login: %v", err)
+			}
+			for _, identity := range []LinkSocialIdentityInput{
+				{UserID: userID, Provider: pair[0], Subject: pair[0] + "-subject"},
+				{UserID: userID, Provider: pair[1], Subject: pair[1] + "-subject"},
+			} {
+				if _, err := store.LinkSocialIdentity(ctx, identity); err != nil {
+					t.Fatalf("link %s identity: %v", identity.Provider, err)
+				}
+			}
 
-	results := make(chan error, 2)
-	var wg sync.WaitGroup
-	for _, provider := range []string{"google", "github"} {
-		wg.Go(func() {
-			results <- store.DeleteSocialIdentityWithGuard(ctx, userID, provider, false)
+			results := make(chan error, 2)
+			var wg sync.WaitGroup
+			var revocations atomic.Int32
+			for _, provider := range pair {
+				wg.Go(func() {
+					results <- store.DeleteSocialIdentityWithGuardAndHook(ctx, userID, provider, false, func(*SocialIdentity) { revocations.Add(1) })
+				})
+			}
+			wg.Wait()
+			close(results)
+
+			successes := 0
+			guards := 0
+			for unlinkErr := range results {
+				switch {
+				case unlinkErr == nil:
+					successes++
+				case errors.Is(unlinkErr, ErrSocialLastLoginMethod):
+					guards++
+				default:
+					t.Fatalf("unexpected unlink error: %v", unlinkErr)
+				}
+			}
+			if successes != 1 || guards != 1 {
+				t.Fatalf("expected one unlink and one last-method guard, got success=%d guard=%d", successes, guards)
+			}
+			identities, err := store.ListUserSocialIdentities(ctx, userID)
+			if err != nil || len(identities) != 1 {
+				t.Fatalf("expected one usable social identity to remain, identities=%+v err=%v", identities, err)
+			}
+
+			if pair[0] == "apple" {
+				expected := int32(1)
+				if identities[0].Provider == "apple" {
+					expected = 0
+				}
+				if revocations.Load() != expected {
+					t.Fatal("Apple revocation ran before last-method guard")
+				}
+			}
+
 		})
-	}
-	wg.Wait()
-	close(results)
-
-	successes := 0
-	guards := 0
-	for unlinkErr := range results {
-		switch {
-		case unlinkErr == nil:
-			successes++
-		case errors.Is(unlinkErr, ErrSocialLastLoginMethod):
-			guards++
-		default:
-			t.Fatalf("unexpected unlink error: %v", unlinkErr)
-		}
-	}
-	if successes != 1 || guards != 1 {
-		t.Fatalf("expected one unlink and one last-method guard, got success=%d guard=%d", successes, guards)
-	}
-	identities, err := store.ListUserSocialIdentities(ctx, userID)
-	if err != nil || len(identities) != 1 {
-		t.Fatalf("expected one usable social identity to remain, identities=%+v err=%v", identities, err)
 	}
 }
 
