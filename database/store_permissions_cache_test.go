@@ -26,6 +26,13 @@ func TestGetInstanceRoleCacheInvalidatedOnUpdate(t *testing.T) {
 	if role != auth.InstanceOwner {
 		t.Fatalf("expected initial instance role %q, got %q", auth.InstanceOwner, role)
 	}
+	otherOwner, err := store.CreateUserWithoutDefaultTenant(ctx, "other-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateInstanceRole(ctx, otherOwner, auth.InstanceOwner, userID); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := store.UpdateInstanceRole(ctx, userID, auth.InstanceAdmin, userID); err != nil {
 		t.Fatalf("update instance role: %v", err)

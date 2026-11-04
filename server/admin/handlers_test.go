@@ -90,6 +90,9 @@ func withAdminTestUser(req *http.Request, userID uuid.UUID) *http.Request {
 
 func TestHandleUpdateUserRoleEmitsOperationalWebhookEvent(t *testing.T) {
 	h, store, _, _, actorUserID, targetUserID := setupAdminTestEnv(t)
+	if err := store.UpdateInstanceRole(t.Context(), actorUserID, auth.InstanceOwner, targetUserID); err != nil {
+		t.Fatal(err)
+	}
 	emitter := &adminRecordingWebhookEmitter{}
 	h.ctx.Webhooks = emitter
 	req := withAdminTestUser(httptest.NewRequest(http.MethodPost, "/api/admin/users/"+targetUserID.String()+"/role", strings.NewReader(`{"role":"admin"}`)), actorUserID)

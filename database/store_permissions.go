@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	stduuid "uuid"
@@ -12,6 +13,8 @@ import (
 	"hitkeep/api"
 	"hitkeep/auth"
 )
+
+var ErrLastInstanceOwner = errors.New("cannot remove the last instance owner")
 
 // GetInstanceRole returns the user's instance-level role
 func (s *Store) GetInstanceRole(ctx context.Context, userID uuid.UUID) (auth.InstanceRole, error) {
@@ -66,6 +69,15 @@ func (s *Store) UpdateInstanceRole(ctx context.Context, targetUserID uuid.UUID, 
 	err := s.db.QueryRowContext(ctx, "SELECT role FROM instance_roles WHERE user_id = ?", targetUserID).Scan(&oldRole)
 	if err != nil && err != sql.ErrNoRows {
 		return err
+	}
+	if auth.InstanceRole(oldRole) == auth.InstanceOwner && role != auth.InstanceOwner {
+		var anotherOwner bool
+		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM instance_roles ir JOIN users u ON u.id=ir.user_id WHERE ir.user_id<>? AND ir.role='owner')`, targetUserID).Scan(&anotherOwner); err != nil {
+			return fmt.Errorf("check remaining instance owner: %w", err)
+		}
+		if !anotherOwner {
+			return ErrLastInstanceOwner
+		}
 	}
 
 	_, err = s.db.ExecContext(ctx,

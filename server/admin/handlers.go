@@ -407,6 +407,10 @@ func (h *handler) handleUpdateUserRole() http.HandlerFunc {
 		}
 
 		actorID := shared.GetUserIDFromContext(r)
+		if actorID == targetUserID {
+			http.Error(w, "Cannot change your own role", http.StatusBadRequest)
+			return
+		}
 		oldRole, _ := h.ctx.Store.GetInstanceRole(r.Context(), targetUserID)
 		targetLabel := targetUserID.String()
 		if target, targetErr := h.ctx.Store.GetUserByID(r.Context(), targetUserID); targetErr == nil && target != nil {
@@ -415,6 +419,10 @@ func (h *handler) handleUpdateUserRole() http.HandlerFunc {
 
 		err = h.ctx.Store.UpdateInstanceRole(r.Context(), targetUserID, authcore.InstanceRole(req.Role), actorID)
 		if err != nil {
+			if errors.Is(err, database.ErrLastInstanceOwner) {
+				http.Error(w, "Cannot remove the last instance owner", http.StatusConflict)
+				return
+			}
 			shared.LoggerFromContext(r.Context()).Error("Failed to update role", "error", err)
 			http.Error(w, "Failed to update role", http.StatusInternalServerError)
 			return

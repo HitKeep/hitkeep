@@ -139,9 +139,9 @@ func openAPIV1AdminSitePaths() map[string]any {
 			"get": op([]string{"Admin"}, "List users", "Lists users for admin management.", secCookie(), nil, nil, map[string]any{"200": jsonSchemaResp("User list", map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}})}),
 		},
 		"/api/admin/users/{id}/role": map[string]any{
-			"post": op([]string{"Admin"}, "Update user role", "Updates instance role for target user.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")},
+			"post": op([]string{"Admin"}, "Update user role", "Instance-owner-only action for another user. Self-role changes are rejected and the last instance owner is preserved across concurrent updates.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")},
 				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"role": map[string]any{"type": "string"}}, "required": []string{"role"}}),
-				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status")}),
+				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status"), "400": desc("Plain-text error: invalid user ID, request, or self-role change"), "403": desc("Plain-text error: forbidden"), "409": desc("Plain-text error: last instance owner cannot be removed")}),
 		},
 		"/api/admin/users/{id}/disable-2fa": map[string]any{
 			"post": op([]string{"Admin"}, "Disable user MFA", "Owner-only recovery action that clears TOTP, passkeys, pending MFA challenges, and remember-me sessions for the target user.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")}, nil, map[string]any{
