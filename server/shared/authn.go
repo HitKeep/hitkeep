@@ -63,7 +63,11 @@ func (c *Context) RequireAPIClientAuth(next http.HandlerFunc) http.HandlerFunc {
 // It sets the UserIDKey in the context.
 func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Recognized OAuth credentials never fall back to dashboard cookies.
+		// Recognized delegated credentials never fall back to dashboard cookies.
+		if auth.IsEmbedToken(extractAPIClientToken(r)) {
+			c.RequireEmbedAuth(next)(w, r)
+			return
+		}
 		if oauth.IsOAuthToken(extractAPIClientToken(r)) {
 			c.writeOAuthAuthenticationError(w)
 			return

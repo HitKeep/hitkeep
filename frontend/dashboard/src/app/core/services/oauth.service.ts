@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { finalize, timeout } from 'rxjs';
 import { ApplicationErrorNavigationService, ROUTE_CRITICAL_REQUEST_TIMEOUT_MS } from '@services/application-error-navigation.service';
 
-import { OAuthConsent, OAuthGrant, OAuthClientRegistration, OAuthClientRegistrationRequest } from '@models/oauth.types';
+import { OAuthConsent, OAuthGrant, OAuthClientRegistration, OAuthClientRegistrationRequest, OAuthSite } from '@models/oauth.types';
 
 @Service()
 export class OAuthService {
@@ -35,6 +35,10 @@ export class OAuthService {
 
     consent() {
         return this.http.get<OAuthConsent>('/api/oauth/consent').pipe(timeout({ first: ROUTE_CRITICAL_REQUEST_TIMEOUT_MS }));
+    }
+
+    createSite(teamId: string, csrfToken: string, domain: string) {
+        return this.http.post<OAuthSite>('/api/oauth/sites', { team_id: teamId, csrf_token: csrfToken, domain }).pipe(timeout({ first: ROUTE_CRITICAL_REQUEST_TIMEOUT_MS }));
     }
 
     continuation() {

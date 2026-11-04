@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
@@ -168,6 +168,7 @@ describe('EcommercePage', () => {
                                 }
                             },
                             ecommerce: {
+                                mixedCurrency: 'This report contains more than one currency. Use one reporting currency per site; HitKeep does not convert currencies.',
                                 kpis: {
                                     revenue: 'Revenue',
                                     orders: 'Orders',
@@ -351,6 +352,52 @@ describe('EcommercePage', () => {
         expect(text).toContain('Top products');
         expect(text).toContain('Revenue sources');
         expect(text).toContain('Pro');
+    });
+
+    it.each(['getEcommerceSummary', 'getEcommerceTimeseries', 'getEcommerceProducts', 'getEcommerceSources'] as const)('clears stale revenue and warns when %s rejects a mixed-currency report', (method) => {
+        const component = fixture.componentInstance as unknown as {
+            summary: () => unknown;
+            series: () => unknown[];
+            products: () => unknown[];
+            sources: () => unknown[];
+            filterStats: () => unknown;
+        };
+        expect(fixture.nativeElement.querySelector('app-kpi-card')).not.toBeNull();
+        analyticsServiceMock[method].mockReturnValue(throwError(() => new HttpErrorResponse({ status: 422, error: { error: 'private backend details' } })));
+        realtimeRefresh?.();
+        fixture.detectChanges();
+
+        const warning = fixture.nativeElement.querySelector('[data-testid="ecommerce-mixed-currency"]');
+        expect(warning?.textContent).toContain('This report contains more than one currency.');
+        expect(warning?.textContent).toContain('HitKeep does not convert currencies.');
+        expect(fixture.nativeElement.textContent).not.toContain('private backend details');
+        expect(fixture.nativeElement.querySelector('app-kpi-card')).toBeNull();
+        expect(fixture.nativeElement.querySelector('app-series-chart')).toBeNull();
+        expect(fixture.nativeElement.querySelector('app-table')).toBeNull();
+        expect(component.summary()).toBeNull();
+        expect(component.series()).toEqual([]);
+        expect(component.products()).toEqual([]);
+        expect(component.sources()).toEqual([]);
+        expect(component.filterStats()).toBeNull();
+    });
+
+    it('keeps a newer mixed-currency warning when an older revenue request finishes, and recovers after a valid report', () => {
+        const older = new Subject<unknown>();
+        const valid = { revenue: 180, orders: 2, average_order_value: 90, checkout_starts: 3, checkout_conversion_rate: 66.7, currency: 'USD' };
+        analyticsServiceMock.getEcommerceSummary.mockReturnValueOnce(older).mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 422 })));
+        realtimeRefresh?.();
+        realtimeRefresh?.();
+        older.next(valid);
+        older.complete();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[data-testid="ecommerce-mixed-currency"]')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('app-kpi-card')).toBeNull();
+
+        analyticsServiceMock.getEcommerceSummary.mockReturnValue(of(valid));
+        realtimeRefresh?.();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[data-testid="ecommerce-mixed-currency"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('app-kpi-card')).not.toBeNull();
     });
 
     it('keeps currency and conversion KPIs numeric with locale-aware formatting metadata', () => {

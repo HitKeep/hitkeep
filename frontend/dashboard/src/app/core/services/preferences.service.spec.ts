@@ -61,4 +61,20 @@ describe('PreferencesService', () => {
         service.setColorMode('light');
         expect(service.isDarkMode()).toBe(false);
     });
+
+    it('keeps the dashboard usable when third-party frames cannot access browser storage', () => {
+        vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+            throw new DOMException('Storage denied', 'SecurityError');
+        });
+        vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+            throw new DOMException('Storage denied', 'SecurityError');
+        });
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({ providers: [PreferencesService] });
+        const embedded = TestBed.inject(PreferencesService);
+        expect(embedded.colorMode()).toBe('light');
+        embedded.setColorMode('dark');
+        expect(() => TestBed.tick()).not.toThrow();
+        expect(embedded.isDarkMode()).toBe(true);
+    });
 });

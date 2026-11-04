@@ -66,6 +66,7 @@ export type HitKeepWindow = Window &
     typeof globalThis & {
         hk?: {
             event?: EventSender;
+            getSessionId?: () => string | undefined;
             _bootstrapped?: boolean;
             _webVitals?: WebVitalsTrackerContext;
             _webVitalsLoaded?: boolean;
@@ -347,6 +348,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     if (isTrackerBlocked(location.hostname, navigator.userAgent, navigator.doNotTrack, config.collectDnt, config.captureOnLocalhost) || isTrackingOptedOut(win)) {
         if (config.bindToWindow) {
             win.hk.event = noop;
+            win.hk.getSessionId = () => undefined;
         }
         return null;
     }
@@ -694,8 +696,10 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     bindAutoTracking(document, () => new URL(location.href), config, emitEvent, on);
 
     const track: EventSender = (name, properties) => emitEvent(name, properties ?? {});
+    const currentSessionId = () => (active && !awaitingActivation && !isTrackingOptedOut(win) ? sessionId : undefined);
     if (config.bindToWindow) {
         win.hk.event = track;
+        win.hk.getSessionId = currentSessionId;
     }
 
     const cleanup = () => {
@@ -715,6 +719,9 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         if (win.hk) {
             if (win.hk.event === track) {
                 delete win.hk.event;
+            }
+            if (win.hk.getSessionId === currentSessionId) {
+                delete win.hk.getSessionId;
             }
             win.hk._bootstrapped = false;
         }

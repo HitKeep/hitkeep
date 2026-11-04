@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { vi } from 'vitest';
+import { EmbedService } from '@services/embed.service';
 
 import { AppTable, AppTableCell, AppTableColumn, csvCell } from './table';
 
@@ -56,9 +57,11 @@ class Host {
 
 describe('AppTable', () => {
     let fixture: ComponentFixture<Host>;
+    const embedded = signal(false);
 
     beforeEach(async () => {
         localStorage.clear();
+        embedded.set(false);
         await TestBed.configureTestingModule({
             imports: [
                 Host,
@@ -75,7 +78,7 @@ describe('AppTable', () => {
                     preloadLangs: true
                 })
             ],
-            providers: [provideTranslocoLocale({ langToLocaleMapping: { en: 'en-US' } })]
+            providers: [provideTranslocoLocale({ langToLocaleMapping: { en: 'en-US' } }), { provide: EmbedService, useValue: { isEmbedMode: embedded } }]
         }).compileComponents();
 
         fixture = TestBed.createComponent(Host);
@@ -185,6 +188,21 @@ describe('AppTable', () => {
         const text = await blob!.text();
 
         expect(text.replace('\uFEFF', '').split('\r\n')).toEqual(['"Name","Status","Attempts","Events"', `"'=Gamma","Active","7",""`, '"Alpha","Active","3","Hit"', '"Beta","Paused","1","goal.converted; Hit"']);
+    });
+
+    it('hides and blocks CSV exports in embedded analytics while retaining ordinary table export', async () => {
+        const download = vi.spyOn(URL, 'createObjectURL').mockClear();
+        embedded.set(true);
+        await settle();
+
+        expect(fixture.nativeElement.querySelector('[data-testid="table-export"]')).toBeNull();
+        component()['exportCsv']();
+        expect(download).not.toHaveBeenCalled();
+
+        embedded.set(false);
+        await settle();
+        expect(fixture.nativeElement.querySelector('[data-testid="table-export"]')).toBeTruthy();
+        download.mockRestore();
     });
 
     it('shows skeleton rows while the first load is in flight', async () => {

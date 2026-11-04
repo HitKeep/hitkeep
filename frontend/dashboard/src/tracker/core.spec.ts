@@ -693,6 +693,19 @@ describe('tracker core', () => {
         expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
     });
 
+    it('exposes the existing opaque session for server-side attribution and honors opt-out', async () => {
+        const harness = trackerHarness('/checkout');
+        const win = harness.win as HitKeepWindow;
+        const handle = createTracker(win, runtimeConfig());
+        const body = harness.sendBeacon.mock.calls[0]?.[1] as unknown as Blob;
+        const payload = JSON.parse(await body.text()) as { session_id: string };
+        expect(win.hk?.getSessionId?.()).toBe(payload.session_id);
+        setTrackingOptOut(win, true);
+        expect(win.hk?.getSessionId?.()).toBeUndefined();
+        handle?.cleanup();
+        expect(win.hk?.getSessionId).toBeUndefined();
+    });
+
     it('blocks localhost unless capture on localhost is enabled', () => {
         expect(isTrackerBlocked('localhost', 'Mozilla/5.0', '0', false)).toBe(true);
         expect(isTrackerBlocked('localhost', 'Mozilla/5.0', '0', false, true)).toBe(false);

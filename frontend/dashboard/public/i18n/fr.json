@@ -24,6 +24,13 @@
     "connections": "Vérifier l’accès des assistants"
   },
   "oauth": {
+    "createSiteTitle": "Créer un site",
+    "createSiteHelp": "Ajoutez votre site à cette équipe, puis autorisez la connexion ci-dessous.",
+    "siteDomain": "Domaine du site web",
+    "createSiteAction": "Créer le site",
+    "siteCreateInvalid": "Saisissez un domaine de site web valide.",
+    "siteCreateExists": "Ce site existe déjà. Sélectionnez-le ci-dessus.",
+    "siteCreateFailed": "Impossible de créer le site. Réessayez.",
     "connectionDetails": "Détails de la connexion",
     "consentTitle": "Autoriser une application",
     "consentDescription": "Vérifiez l’application, les autorisations demandées et l’équipe à laquelle elle pourra accéder.",
@@ -2921,6 +2928,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "Votre région a été choisie dans l’intégration. Pour la modifier, recommencez la connexion depuis WordPress.",
     "pageTitle": "Créez votre compte HitKeep",
     "paidTitle": "Commencer avec HitKeep {{plan}}",
     "paidSubtitle": "Créez votre compte, vérifiez votre adresse e-mail, puis examinez le paiement.",
@@ -3511,6 +3519,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Ce rapport contient plusieurs devises. Utilisez une seule devise de rapport par site ; HitKeep ne convertit pas les devises.",
     "setup": {
       "title": "Configurer le suivi e-commerce",
       "description": "L’analyse du chiffre d’affaires nécessite les événements d’achat et de commande de votre boutique. Dès que des événements arrivent, cette page se remplit automatiquement.",
@@ -4057,5 +4066,10 @@
     "confirmPending": "Une autre action de l’agent attend une confirmation.",
     "requestFailed": "La requête a échoué (HTTP {{status}}).",
     "outcomeUnknown": "La requête a été interrompue et a peut-être abouti. Vérifiez l’état actuel avant de réessayer."
+  },
+  "embed": {
+    "readOnly": "Statistiques en lecture seule",
+    "connectionError": "Impossible de se connecter à HitKeep. Réessayez ou reconnectez HitKeep dans WordPress.",
+    "analyticsNavigation": "Pages de statistiques"
   }
 }

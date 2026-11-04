@@ -62,6 +62,7 @@
                             filterBy="name"
                             [placeholder]="'oauth.selectTeam' | transloco"
                             class="w-full"
+                            [readonly]="creatingSite()"
                         />
                     </div>
                     @if (request.teams.length === 0) {
@@ -88,7 +89,28 @@
                             }
                         </div>
                     </fieldset>
-                    } }
+                    @if (team.can_create_site) {
+                    <section class="flex flex-col gap-3" aria-labelledby="oauth-create-site-title">
+                        <h2 id="oauth-create-site-title" class="oauth-section-title">{{ 'oauth.createSiteTitle' | transloco }}</h2>
+                        <p class="oauth-help">{{ 'oauth.createSiteHelp' | transloco }}</p>
+                        <label for="oauth-site-domain" class="hk-auth-field-label">{{ 'oauth.siteDomain' | transloco }}</label>
+                        <input
+                            pInputText
+                            id="oauth-site-domain"
+                            [formControl]="siteDomain"
+                            [readonly]="creatingSite() || submitting()"
+                            (keydown.enter)="$event.preventDefault(); createSite()"
+                            autocomplete="off"
+                            autocapitalize="none"
+                            spellcheck="false"
+                            maxlength="253"
+                        />
+                        @if (createSiteErrorKey(); as createError) {
+                        <p-message severity="error" role="alert">{{ createError | transloco }}</p-message>
+                        }
+                        <button pButton type="button" [loading]="creatingSite()" [disabled]="creatingSite() || submitting() || !siteDomain.value.trim()" (click)="createSite()">{{ 'oauth.createSiteAction' | transloco }}</button>
+                    </section>
+                    } } }
                     <details class="oauth-details">
                         <summary>{{ 'oauth.connectionDetails' | transloco }}</summary>
                         <dl>
@@ -106,7 +128,7 @@
                     </details>
                     <p class="oauth-help">{{ 'oauth.permissionNotice' | transloco }}</p>
                     <div class="oauth-actions">
-                        <button pButton type="submit" value="deny" severity="secondary" [outlined]="true" [disabled]="submitting()">{{ 'oauth.deny' | transloco }}</button>
+                        <button pButton type="submit" value="deny" severity="secondary" [outlined]="true" [disabled]="submitting() || creatingSite()">{{ 'oauth.deny' | transloco }}</button>
                         <button pButton type="submit" value="approve" [disabled]="!canApprove()">{{ 'oauth.approve' | transloco }}</button>
                     </div>
                     @if (submitting()) {

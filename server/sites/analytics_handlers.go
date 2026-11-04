@@ -2,6 +2,7 @@ package sites
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -288,6 +289,10 @@ func (h *handler) handleGetSiteEcommerce(load func(context.Context, *database.St
 
 		payload, err := load(r.Context(), analyticsStore, params)
 		if err != nil {
+			if errors.Is(err, database.ErrMixedEcommerceCurrencies) {
+				http.Error(w, "Ecommerce reporting requires one currency per site", http.StatusUnprocessableEntity)
+				return
+			}
 			shared.LoggerFromContext(r.Context()).Error("Failed to get ecommerce "+label, "error", err, "site_id", params.SiteID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

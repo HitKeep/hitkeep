@@ -3,9 +3,11 @@ import { SiteService } from '@features/sites/services/site.service';
 import { INSTANCE_ROLE_CAPABILITIES, InstanceCapability, SITE_ROLE_CAPABILITIES, SiteCapability, TEAM_ROLE_CAPABILITIES, TeamCapability } from '@core/access/capabilities';
 import { PermissionService } from '@services/permission.service';
 import { TeamService } from '@services/team.service';
+import { EmbedService } from '@services/embed.service';
 
 @Service()
 export class AccessService {
+    private readonly embed = inject(EmbedService);
     private readonly permissions = inject(PermissionService);
     private readonly sites = inject(SiteService);
     private readonly teams = inject(TeamService);
@@ -14,6 +16,7 @@ export class AccessService {
     readonly activeTeamRole = computed(() => this.context()?.active_team_role ?? '');
 
     hasInstance(capability: InstanceCapability | string): boolean {
+        if (this.embed.isEmbedMode()) return false;
         const context = this.context();
         if (!context) return false;
         if (context.instance_capabilities !== undefined) {
@@ -26,6 +29,7 @@ export class AccessService {
     }
 
     canSite(siteID: string, capability: SiteCapability | string): boolean {
+        if (this.embed.isEmbedMode()) return false;
         const context = this.context();
         if (!context) return false;
         if (this.hasInstance(capability)) return true;
@@ -41,6 +45,7 @@ export class AccessService {
     }
 
     canActiveTeam(capability: TeamCapability | string): boolean {
+        if (this.embed.isEmbedMode()) return false;
         const context = this.context();
         if (!context) return false;
         const activeTeamId = this.teams.activeTeamId();

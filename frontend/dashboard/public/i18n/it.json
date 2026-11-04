@@ -24,6 +24,13 @@
     "connections": "Verifica l’accesso degli assistenti"
   },
   "oauth": {
+    "createSiteTitle": "Crea un sito",
+    "createSiteHelp": "Aggiungi il tuo sito web a questo team, poi approva la connessione qui sotto.",
+    "siteDomain": "Dominio del sito web",
+    "createSiteAction": "Crea sito",
+    "siteCreateInvalid": "Inserisci un dominio valido per il sito web.",
+    "siteCreateExists": "Questo sito esiste già. Selezionalo qui sopra.",
+    "siteCreateFailed": "Impossibile creare il sito. Riprova.",
     "connectionDetails": "Dettagli della connessione",
     "consentTitle": "Autorizza un’applicazione",
     "consentDescription": "Controlla l’applicazione, le autorizzazioni richieste e il team a cui potrà accedere.",
@@ -2918,6 +2925,7 @@
     }
   },
   "signup": {
+    "oauthRegionNotice": "La regione è stata selezionata nell’integrazione. Per cambiarla, riavvia la connessione da WordPress.",
     "pageTitle": "Crea il tuo account HitKeep",
     "paidTitle": "Inizia con HitKeep {{plan}}",
     "paidSubtitle": "Crea un account, verifica l’email e poi controlla il pagamento.",
@@ -3508,6 +3516,7 @@
     }
   },
   "ecommerce": {
+    "mixedCurrency": "Questo report contiene più valute. Usa una sola valuta di report per sito; HitKeep non converte le valute.",
     "setup": {
       "title": "Configura il tracciamento e-commerce",
       "description": "L’analisi dei ricavi richiede gli eventi di acquisto e di checkout del tuo negozio. Appena arrivano eventi, questa pagina si popola automaticamente.",
@@ -4054,5 +4063,10 @@
     "confirmPending": "Un’altra azione dell’agente è in attesa di conferma.",
     "requestFailed": "La richiesta non è riuscita (HTTP {{status}}).",
     "outcomeUnknown": "La richiesta è stata interrotta e potrebbe essere stata completata. Verifica lo stato attuale prima di riprovare."
+  },
+  "embed": {
+    "readOnly": "Statistiche in sola lettura",
+    "connectionError": "Impossibile connettersi a HitKeep. Riprova o riconnetti HitKeep in WordPress.",
+    "analyticsNavigation": "Pagine delle statistiche"
   }
 }

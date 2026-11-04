@@ -165,7 +165,7 @@ func (h *handler) handleServerPageviewIngestLeader() http.HandlerFunc {
 			return
 		}
 
-		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID)
+		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID, false)
 		if !ok {
 			return
 		}
@@ -267,8 +267,14 @@ func (h *handler) handleServerEventIngestLeader() http.HandlerFunc {
 			return
 		}
 
-		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID)
+		ingestCtx, ok := h.resolveServerIngestContext(w, r, payload.URL, payload.Timestamp, payload.VisitorIP, payload.UserAgent, payload.SiteID, true)
 		if !ok {
+			return
+		}
+		eventID, err := serverEventID(ingestCtx.site.ID, payload.EventID)
+		if err != nil {
+			h.recordRejection()
+			http.Error(w, "event_id must be at most 128 ASCII letters, digits, dots, underscores, colons or hyphens", http.StatusBadRequest)
 			return
 		}
 
@@ -314,6 +320,7 @@ func (h *handler) handleServerEventIngestLeader() http.HandlerFunc {
 		}
 
 		event := api.Event{
+			ID:         eventID,
 			SiteID:     ingestCtx.site.ID,
 			SessionID:  sessionID,
 			Name:       name,
@@ -367,7 +374,7 @@ func parseServerIngestURL(rawURL string) (*url.URL, string, string, bool) {
 	return parsedURL, domain, path, true
 }
 
-func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Request, rawURL, rawTimestamp, rawVisitorIP, rawUserAgent string, rawSiteID json.RawMessage) (serverIngestContext, bool) {
+func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Request, rawURL, rawTimestamp, rawVisitorIP, rawUserAgent string, rawSiteID json.RawMessage, allowAnonymous bool) (serverIngestContext, bool) {
 	apiClientAuth, _ := r.Context().Value(shared.APIClientAuthKey).(*database.APIClientAuth)
 	oauthGrant, _ := r.Context().Value(shared.OAuthGrantKey).(*authcore.OAuthGrant)
 	if apiClientAuth == nil && oauthGrant == nil {
@@ -410,14 +417,15 @@ func (h *handler) resolveServerIngestContext(w http.ResponseWriter, r *http.Requ
 	}
 
 	visitorIP := strings.TrimSpace(rawVisitorIP)
-	if parsedIP, err := netip.ParseAddr(visitorIP); err != nil || !parsedIP.IsValid() {
+	userAgent := strings.TrimSpace(rawUserAgent)
+	anonymous := allowAnonymous && visitorIP == "" && userAgent == ""
+	if parsedIP, err := netip.ParseAddr(visitorIP); !anonymous && (err != nil || !parsedIP.IsValid()) {
 		h.recordRejection()
 		http.Error(w, "visitor_ip must be a valid IP address", http.StatusBadRequest)
 		return serverIngestContext{}, false
 	}
 
-	userAgent := strings.TrimSpace(rawUserAgent)
-	if userAgent == "" {
+	if !anonymous && userAgent == "" {
 		h.recordRejection()
 		http.Error(w, "user_agent is required", http.StatusBadRequest)
 		return serverIngestContext{}, false

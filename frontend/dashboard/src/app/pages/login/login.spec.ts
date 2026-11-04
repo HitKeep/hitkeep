@@ -157,6 +157,13 @@ describe('Login', () => {
         expect(component).toBeTruthy();
     });
 
+    it('keeps signup in the selected OAuth region when sign-in started from consent', () => {
+        returnUrl = '/oauth/consent';
+        fixture.destroy();
+        fixture = TestBed.createComponent(Login);
+        expect(fixture.componentInstance['signupQueryParams']).toEqual(expect.objectContaining({ oauth: '1' }));
+    });
+
     it('does not show a session notice from retained browser history on a direct login visit', async () => {
         TestBed.inject(Location).replaceState('/login', 'returnUrl=%2F', {
             [SESSION_END_STATE_KEY]: createSessionEndState('session-ended')

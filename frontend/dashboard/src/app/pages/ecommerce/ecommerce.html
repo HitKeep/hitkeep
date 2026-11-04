@@ -20,6 +20,8 @@
         <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
         <span>{{ "common.loadingSiteData" | transloco }}</span>
     </div>
+    } @else if (mixedCurrency()) {
+    <p-message severity="warn" role="alert" data-testid="ecommerce-mixed-currency">{{ 'ecommerce.mixedCurrency' | transloco }}</p-message>
     } @else if (needsSetup()) {
     <app-setup-callout testId="ecommerce-setup-callout" icon="pi pi-shopping-bag" titleKey="ecommerce.setup.title" descriptionKey="ecommerce.setup.description" docsActionKey="ecommerce.setup.docsAction" [docsUrl]="ecommerceDocsUrl" />
     } @else if (siteService.activeSite()) {

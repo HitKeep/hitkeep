@@ -108,8 +108,9 @@ function hasOnlyKeys(value: unknown, expectedKeys: readonly string[]): value is 
 }
 
 function sessionEndNavigationExtras(reason: SessionEndReason, returnUrl?: string): NavigationExtras {
+    const target = sanitizeSessionEndReturnUrl(returnUrl ?? '/dashboard');
     return {
-        ...(reason === 'session-ended' && { queryParams: { returnUrl: sanitizeSessionEndReturnUrl(returnUrl ?? '/dashboard') } }),
+        ...(reason === 'session-ended' && { queryParams: { returnUrl: target, ...(target.split(/[?#]/, 1)[0] === '/oauth/consent' ? { oauth: '1' } : {}) } }),
         replaceUrl: true,
         state: { [SESSION_END_STATE_KEY]: createSessionEndState(reason) }
     };

@@ -34,6 +34,7 @@ import { REALTIME_FUNNEL_KINDS } from '@services/realtime.service';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 
 @Component({
     selector: 'app-funnels',
@@ -45,6 +46,7 @@ import { ShareService } from '@services/share.service';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class Funnels {
+    protected readonly embed = inject(EmbedService);
     protected siteService = inject(SiteService);
     private analytics = inject(AnalyticsService);
     private access = inject(AccessService);

@@ -24,6 +24,15 @@ type PermissionContext struct {
 func (c *Context) RequirePermission(perm auth.Permission) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if claims, ok := r.Context().Value(embedClaimsKey).(*auth.EmbedClaims); ok {
+				if perm != auth.PermSiteView || claims.SiteID.String() != r.PathValue("id") {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				ctx := context.WithValue(r.Context(), PermissionKey, PermissionContext{UserID: GetUserIDFromContext(r), SiteRole: auth.SiteViewer})
+				next(w, r.WithContext(ctx))
+				return
+			}
 			if isSitePermission(perm) && !c.checkAgentSiteTeam(w, r) {
 				return
 			}

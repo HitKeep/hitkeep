@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
-import { DOCUMENT, NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
+import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink, UrlTree } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoDecimalPipe } from '@jsverse/transloco-locale';
@@ -7,7 +7,7 @@ import { CardModule } from '@openng/optimus-ui/card';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
 import { browserIconUrl } from '@core/i18n/browser-utils';
 import { countryFlagUrl, languageFlagUrl } from '@core/i18n/flag-utils';
-import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
+import { injectFaviconUrl } from '@core/analytics/favicon';
 import { aiCategoryLabel } from '@features/analytics/ai-category-labels';
 import { AIAgentIconsService } from '@services/ai-agent-icons.service';
 import { injectSkeletonGate } from '@services/report-subject.service';
@@ -36,7 +36,7 @@ function hasProvenanceCounters(item: MetricStat): item is AIActivityStat {
 })
 export class MetricList {
     private readonly transloco = inject(TranslocoService);
-    private readonly document = inject(DOCUMENT);
+    private readonly buildFaviconUrl = injectFaviconUrl();
     private readonly router = inject(Router);
     private readonly aiAgentIcons = inject(AIAgentIconsService);
     private readonly scrollFrame = viewChild<ElementRef<HTMLElement>>('scrollFrame');
@@ -234,10 +234,6 @@ export class MetricList {
         const clickable = this.isRowClickable() ? ' cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800' : '';
         const active = this.isActive(item) ? ' metric-list__row--active' : '';
         return base + clickable + active;
-    }
-
-    private buildFaviconUrl(domain: string): string {
-        return browserAppUrl(this.document, `/api/favicon/${encodeURIComponent(domain)}`);
     }
 
     private updateScrollFrameState(): void {

@@ -34,6 +34,7 @@ import { injectReportRange } from '@services/report-range-preferences.service';
 import { injectSkeletonGate } from '@services/report-subject.service';
 import { SetupStateService } from '@services/setup-state.service';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
 
 type AIAgentKpiID = 'ai_requests' | 'referral_visits' | 'paths_crawled' | 'share_of_pageviews';
@@ -84,7 +85,8 @@ export class AIAgentsPage {
 
     protected readonly site = this.siteService.activeSite;
     protected readonly noSite = computed(() => !this.site());
-    protected readonly shareMode = this.share.isShareMode;
+    private readonly embed = inject(EmbedService);
+    protected readonly shareMode = computed(() => this.share.isShareMode() || this.embed.isEmbedMode());
     protected readonly report = this.activityQuery.report;
     protected readonly isLoading = this.activityQuery.isLoading;
     protected readonly isShortRange = this.reportRange.isShortRange;

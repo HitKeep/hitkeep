@@ -1,8 +1,10 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { ShareService } from '@services/share.service';
+import { EmbedService } from '@services/embed.service';
 
 export const shareInterceptor: HttpInterceptorFn = (req, next) => {
+    if (inject(EmbedService).isEmbedMode()) return next(req);
     const share = inject(ShareService);
     const token = share.token();
 

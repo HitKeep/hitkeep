@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -36,6 +38,7 @@ type ecommerceItem struct {
 }
 
 type ecommercePurchase struct {
+	refund      bool
 	timestamp   time.Time
 	transaction string
 	value       float64
@@ -80,7 +83,9 @@ type ecommerceSourceAccumulator struct {
 
 // ecommerceSignalEventNames lists every raw event name the ecommerce reports
 // consume, including the aliases normalizeEcommerceEventName folds in.
-var ecommerceSignalEventNames = []string{"purchase", "order_completed", "begin_checkout", "checkout_started"}
+var ecommerceSignalEventNames = []string{"purchase", "order_completed", "refund", "begin_checkout", "checkout_started"}
+
+var ErrMixedEcommerceCurrencies = errors.New("ecommerce report contains more than one currency")
 
 func normalizeEcommerceEventName(name string) string {
 	switch strings.TrimSpace(strings.ToLower(name)) {
@@ -110,7 +115,9 @@ func (s *Store) GetEcommerceSummary(ctx context.Context, params api.EcommercePar
 	providerCounts := map[string]int{}
 	asnCounts := map[string]int{}
 	for _, purchase := range dataset.purchases {
-		summary.Orders++
+		if !purchase.refund {
+			summary.Orders++
+		}
 		summary.Revenue += purchase.value
 		if purchase.currency != "" {
 			currencyCounts[purchase.currency]++
@@ -158,7 +165,9 @@ func (s *Store) GetEcommerceTimeSeries(ctx context.Context, params api.Ecommerce
 	for _, purchase := range dataset.purchases {
 		bucket := truncToUnit(purchase.timestamp, truncUnit)
 		revenueByBucket[bucket] += purchase.value
-		ordersByBucket[bucket]++
+		if !purchase.refund {
+			ordersByBucket[bucket]++
+		}
 	}
 
 	buckets := buildSeriesBuckets(params.Start, params.End, truncUnit)
@@ -196,7 +205,9 @@ func (s *Store) GetEcommerceTopProducts(ctx context.Context, params api.Ecommerc
 				accumulators[key] = acc
 			}
 			acc.quantity += item.quantity
-			acc.orders++
+			if !purchase.refund {
+				acc.orders++
+			}
 			acc.revenue += float64(item.quantity) * item.price
 		}
 	}
@@ -252,7 +263,9 @@ func (s *Store) GetEcommerceSources(ctx context.Context, params api.EcommercePar
 			}
 			accumulators[key] = acc
 		}
-		acc.orders++
+		if !purchase.refund {
+			acc.orders++
+		}
 		acc.revenue += purchase.value
 	}
 
@@ -303,6 +316,8 @@ func (s *Store) loadEcommerceDataset(ctx context.Context, params api.EcommercePa
 		checkouts: []ecommerceCheckout{},
 	}
 
+	refunds := make(map[string]bool)
+	currency := ""
 	for _, record := range records {
 		props := map[string]any{}
 		if len(record.properties) > 0 {
@@ -312,13 +327,36 @@ func (s *Store) loadEcommerceDataset(ctx context.Context, params api.EcommercePa
 		}
 
 		switch normalizeEcommerceEventName(record.name) {
-		case "purchase":
+		case "purchase", "refund":
 			purchase, ok := normalizeEcommercePurchase(record.timestamp, record, props)
 			if !ok {
 				continue
 			}
+			if normalizeEcommerceEventName(record.name) == "refund" {
+				refundID, _ := firstString(props["refund_id"])
+				if purchase.transaction == "" || refundID == "" || purchase.currency == "" || purchase.value <= 0 || math.IsNaN(purchase.value) || math.IsInf(purchase.value, 0) {
+					continue
+				}
+				key := purchase.transaction + "\x00" + refundID + "\x00" + purchase.currency
+				if refunds[key] {
+					continue
+				}
+				refunds[key] = true
+				purchase.refund = true
+				purchase.value = -purchase.value
+				purchase.items = normalizeEcommerceRefundItems(props)
+				for index := range purchase.items {
+					purchase.items[index].quantity = -purchase.items[index].quantity
+				}
+			}
 			if !matchesEcommerceItemFilter(purchase.items, params.ItemID, params.ItemName) {
 				continue
+			}
+			if purchase.currency != "" {
+				if currency != "" && currency != purchase.currency {
+					return nil, ErrMixedEcommerceCurrencies
+				}
+				currency = purchase.currency
 			}
 			dataset.purchases = append(dataset.purchases, purchase)
 		case "begin_checkout":
@@ -339,18 +377,21 @@ func (s *Store) loadEcommerceDataset(ctx context.Context, params api.EcommercePa
 func (s *Store) listEcommerceEvents(ctx context.Context, params api.EcommerceParams) ([]ecommerceEventRecord, error) {
 	filterSQL, filterArgs := buildHitFilters(params.Filters, "h")
 
-	withParts := []string{}
-	args := make([]any, 0, 16)
+	withParts := []string{`event_scope AS (
+		SELECT DISTINCT session_id FROM events WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+	)`}
+	args := []any{params.SiteID, params.Start, params.End}
 
 	if len(params.Filters) > 0 {
 		withParts = append(withParts, fmt.Sprintf(`
 		session_scope AS (
 			SELECT DISTINCT h.session_id
 			FROM hits h
-			WHERE h.site_id = ? AND h.timestamp >= ? AND h.timestamp <= ?%s
+			INNER JOIN event_scope es ON es.session_id = h.session_id
+			WHERE h.site_id = ? AND h.timestamp <= ?%s
 		)
 	`, filterSQL))
-		args = append(args, params.SiteID, params.Start, params.End)
+		args = append(args, params.SiteID, params.End)
 		args = append(args, filterArgs...)
 	}
 
@@ -368,11 +409,12 @@ func (s *Store) listEcommerceEvents(ctx context.Context, params api.EcommercePar
 				arg_min(COALESCE(NULLIF(TRIM(h.provider), ''), '(Unknown)'), h.timestamp) AS provider,
 				arg_min(hk_asn(h.asn, h.asn_org), h.timestamp) AS asn
 			FROM hits h
-			WHERE h.site_id = ? AND h.timestamp >= ? AND h.timestamp <= ?
+			INNER JOIN event_scope es ON es.session_id = h.session_id
+			WHERE h.site_id = ? AND h.timestamp <= ?
 			GROUP BY h.session_id
 		)
 	`)
-	args = append(args, params.SiteID, params.Start, params.End)
+	args = append(args, params.SiteID, params.End)
 
 	joinScope := ""
 	if len(params.Filters) > 0 {
@@ -400,7 +442,7 @@ func (s *Store) listEcommerceEvents(ctx context.Context, params api.EcommercePar
 		%s
 		LEFT JOIN session_attrs sa ON sa.session_id = e.session_id
 		WHERE e.site_id = ? AND e.timestamp >= ? AND e.timestamp <= ?
-			AND e.name IN ('purchase', 'begin_checkout', 'view_item', 'add_to_cart', 'product_viewed', 'checkout_started', 'order_completed')
+			AND e.name IN ('purchase', 'refund', 'begin_checkout', 'view_item', 'add_to_cart', 'product_viewed', 'checkout_started', 'order_completed')
 		ORDER BY e.timestamp
 	`, strings.Join(withParts, ","), joinScope)
 
@@ -491,7 +533,7 @@ func normalizeEcommercePurchase(timestamp time.Time, record ecommerceEventRecord
 		timestamp:   timestamp,
 		transaction: transaction,
 		value:       value,
-		currency:    currency,
+		currency:    strings.ToUpper(currency),
 		coupon:      coupon,
 		items:       items,
 		utmSource:   record.utmSource,
@@ -525,6 +567,26 @@ func normalizeEcommerceItems(props map[string]any) []ecommerceItem {
 		return []ecommerceItem{}
 	}
 	return []ecommerceItem{item}
+}
+
+func normalizeEcommerceRefundItems(props map[string]any) []ecommerceItem {
+	items := []ecommerceItem{}
+	rawItems, _ := props["items"].([]any)
+	for _, raw := range rawItems {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		quantity, ok := firstInt(item["quantity"])
+		if !ok || quantity <= 0 {
+			continue
+		}
+		normalized := normalizeEcommerceItem(item)
+		if normalized.itemID != "" || normalized.itemName != "" {
+			items = append(items, normalized)
+		}
+	}
+	return items
 }
 
 func normalizeEcommerceItem(props map[string]any) ecommerceItem {
