@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Continua con Google", "github": "Continua con GitHub", "microsoft": "Continua con Microsoft" },
+    "continueWith": { "google": "Continua con Google", "github": "Continua con GitHub", "microsoft": "Continua con Microsoft",
+      "apple": "Continua con Apple" },
     "signupMethods": "Metodi di registrazione social",
     "confirmEmailSubtitle": "Conferma a quale account HitKeep deve accedere questa identità Microsoft.",
     "confirmEmailPrompt": "Gli indirizzi Microsoft possono cambiare. Controlla l’e-mail HitKeep prima dell’invio del link di conferma.",
@@ -1270,6 +1271,8 @@
         "title": "Accesso social", "description": "Collega gli account dei provider utilizzabili per accedere a HitKeep.", "empty": "Nessun provider di accesso social collegato.",
         "linkedDate": "Collegato", "lastUsed": "Ultimo utilizzo", "connectAction": "Collega {{provider}}", "unlinkAction": "Scollega",
         "passwordConfirmationHint": "Inserisci la password attuale nella sezione password prima di scollegare il tuo unico provider social.", "linked": "Provider collegato.", "unlinked": "Provider scollegato.",
+        "appleManualRevocation": "Apple è stato scollegato. Revoca l’accesso di HitKeep nel tuo Apple Account per rimuovere completamente il collegamento.",
+        "appleManageAccess": "Gestisci l’accesso Apple",
         "errors": { "linkFailed": "Impossibile collegare questo provider.", "unlinkFailed": "Impossibile scollegare questo provider.", "lastMethod": "Aggiungi un altro provider social o una passkey, oppure conferma una password abilitata." }
       },
       "twoFactor": {
@@ -2429,6 +2432,7 @@
         "social_google": { "label": "Accesso con Google" },
         "social_github": { "label": "Accesso con GitHub" },
         "social_microsoft": { "label": "Accesso con Microsoft" },
+        "social_apple": { "label": "Accesso con Apple" },
         "social_signup": { "label": "Registrazione social" },
         "ai": {
           "label": "Gateway IA"

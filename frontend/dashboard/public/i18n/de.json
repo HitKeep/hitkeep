@@ -1249,7 +1249,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Mit Google fortfahren", "github": "Mit GitHub fortfahren", "microsoft": "Mit Microsoft fortfahren" },
+    "continueWith": { "google": "Mit Google fortfahren", "github": "Mit GitHub fortfahren", "microsoft": "Mit Microsoft fortfahren",
+      "apple": "Mit Apple fortfahren" },
     "signupMethods": "Soziale Registrierungsmethoden",
     "confirmEmailSubtitle": "Bestätige, auf welches HitKeep-Konto diese Microsoft-Identität zugreifen soll.",
     "confirmEmailPrompt": "Microsoft-E-Mail-Angaben können sich ändern. Prüfe die HitKeep-E-Mail-Adresse, bevor wir einen Bestätigungslink senden.",
@@ -1304,6 +1305,8 @@
         "passwordConfirmationHint": "Gib im Passwortbereich dein aktuelles Passwort ein, bevor du deinen einzigen sozialen Anbieter entfernst.",
         "linked": "Anbieter erfolgreich verknüpft.",
         "unlinked": "Anbieter erfolgreich getrennt.",
+        "appleManualRevocation": "Apple wurde getrennt. Widerrufe den Zugriff von HitKeep in deinem Apple Account, um die Verbindung vollständig zu entfernen.",
+        "appleManageAccess": "Apple-Zugriff verwalten",
         "errors": { "linkFailed": "Dieser Anbieter konnte nicht verknüpft werden.", "unlinkFailed": "Dieser Anbieter konnte nicht getrennt werden.", "lastMethod": "Füge einen weiteren Anbieter oder Passkey hinzu oder bestätige ein aktiviertes Passwort." }
       },
       "twoFactor": {
@@ -2471,6 +2474,7 @@
         "social_google": { "label": "Google-Anmeldung" },
         "social_github": { "label": "GitHub-Anmeldung" },
         "social_microsoft": { "label": "Microsoft-Anmeldung" },
+        "social_apple": { "label": "Apple-Anmeldung" },
         "social_signup": { "label": "Soziale Registrierung" },
         "ai": {
           "label": "KI-Gateway"

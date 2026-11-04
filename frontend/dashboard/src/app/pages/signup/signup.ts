@@ -283,7 +283,7 @@ export class Signup {
         const provider = method as SocialProviderID;
         this.socialLoading.set(provider);
         this.errorMessage.set(null);
-        this.trackSignupEvent('signup_started', { auth_method: 'social', provider });
+        if (provider !== 'apple') this.trackSignupEvent('signup_started', { auth_method: 'social', provider });
         const query = new URLSearchParams({
             plan: this.selectedPlan(),
             billing: this.selectedBilling(),
@@ -301,11 +301,12 @@ export class Signup {
                 next: (response) => this.document.defaultView?.location.assign(response.auth_url),
                 error: (err) => {
                     this.errorMessage.set(this.socialErrorKey(err?.error?.code));
-                    this.trackSignupEvent('signup_error_view', {
-                        auth_method: 'social',
-                        provider,
-                        error_code: err?.error?.code ?? 'social_start_failed'
-                    });
+                    if (provider !== 'apple')
+                        this.trackSignupEvent('signup_error_view', {
+                            auth_method: 'social',
+                            provider,
+                            error_code: err?.error?.code ?? 'social_start_failed'
+                        });
                 }
             });
     }

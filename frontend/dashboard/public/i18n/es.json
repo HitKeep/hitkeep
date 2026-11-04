@@ -1316,7 +1316,8 @@
     "continueWith": {
       "google": "Continuar con Google",
       "github": "Continuar con GitHub",
-      "microsoft": "Continuar con Microsoft"
+      "microsoft": "Continuar con Microsoft",
+      "apple": "Continuar con Apple"
     },
     "signupMethods": "Métodos de registro social",
     "confirmEmailSubtitle": "Confirma a qué cuenta de HitKeep debe acceder esta identidad de Microsoft.",
@@ -1372,6 +1373,8 @@
         "passwordConfirmationHint": "Introduce tu contraseña actual en la sección de contraseña antes de desvincular tu único proveedor social.",
         "linked": "Proveedor vinculado correctamente.",
         "unlinked": "Proveedor desvinculado correctamente.",
+        "appleManualRevocation": "Se ha desvinculado Apple. Revoca el acceso de HitKeep en tu cuenta de Apple para eliminar la conexión por completo.",
+        "appleManageAccess": "Gestionar el acceso de Apple",
         "errors": {
           "linkFailed": "No se pudo vincular este proveedor.",
           "unlinkFailed": "No se pudo desvincular este proveedor.",
@@ -2664,6 +2667,7 @@
         "social_microsoft": {
           "label": "Inicio de sesión con Microsoft"
         },
+        "social_apple": { "label": "Inicio de sesión con Apple" },
         "social_signup": {
           "label": "Registro social"
         },

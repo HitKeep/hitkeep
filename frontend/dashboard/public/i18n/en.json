@@ -1266,7 +1266,8 @@
     "continueWith": {
       "google": "Continue with Google",
       "github": "Continue with GitHub",
-      "microsoft": "Continue with Microsoft"
+      "microsoft": "Continue with Microsoft",
+      "apple": "Continue with Apple"
     },
     "signupMethods": "Social signup methods",
     "confirmEmailSubtitle": "Confirm which HitKeep account this Microsoft identity should access.",
@@ -1322,6 +1323,8 @@
         "passwordConfirmationHint": "Enter your current password in the password section before unlinking your only social provider.",
         "linked": "Provider linked successfully.",
         "unlinked": "Provider unlinked successfully.",
+        "appleManualRevocation": "Apple was unlinked. Revoke HitKeep access in your Apple Account to finish removing the connection.",
+        "appleManageAccess": "Manage Apple access",
         "errors": {
           "linkFailed": "Unable to link this provider.",
           "unlinkFailed": "Unable to unlink this provider.",
@@ -2532,6 +2535,7 @@
         "social_microsoft": {
           "label": "Microsoft sign-in"
         },
+        "social_apple": { "label": "Apple sign-in" },
         "social_signup": {
           "label": "Social signup"
         },

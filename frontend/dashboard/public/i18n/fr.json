@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Continuer avec Google", "github": "Continuer avec GitHub", "microsoft": "Continuer avec Microsoft" },
+    "continueWith": { "google": "Continuer avec Google", "github": "Continuer avec GitHub", "microsoft": "Continuer avec Microsoft",
+      "apple": "Continuer avec Apple" },
     "signupMethods": "Méthodes d’inscription sociale",
     "confirmEmailSubtitle": "Confirmez le compte HitKeep auquel cette identité Microsoft doit accéder.",
     "confirmEmailPrompt": "Les adresses Microsoft peuvent changer. Vérifiez l’adresse HitKeep avant l’envoi du lien de confirmation.",
@@ -1273,6 +1274,8 @@
         "title": "Connexion sociale", "description": "Associez les comptes fournisseurs utilisables pour vous connecter à HitKeep.", "empty": "Aucun fournisseur de connexion sociale n’est associé.",
         "linkedDate": "Associé", "lastUsed": "Dernière utilisation", "connectAction": "Associer {{provider}}", "unlinkAction": "Dissocier",
         "passwordConfirmationHint": "Saisissez votre mot de passe actuel dans la section mot de passe avant de dissocier votre seul fournisseur social.", "linked": "Fournisseur associé.", "unlinked": "Fournisseur dissocié.",
+        "appleManualRevocation": "Apple a été dissocié. Révoquez l’accès de HitKeep dans votre compte Apple pour supprimer complètement la connexion.",
+        "appleManageAccess": "Gérer l’accès Apple",
         "errors": { "linkFailed": "Impossible d’associer ce fournisseur.", "unlinkFailed": "Impossible de dissocier ce fournisseur.", "lastMethod": "Ajoutez un autre fournisseur social ou une clé d’accès, ou confirmez un mot de passe activé." }
       },
       "twoFactor": {
@@ -2432,6 +2435,7 @@
         "social_google": { "label": "Connexion Google" },
         "social_github": { "label": "Connexion GitHub" },
         "social_microsoft": { "label": "Connexion Microsoft" },
+        "social_apple": { "label": "Connexion avec Apple" },
         "social_signup": { "label": "Inscription sociale" },
         "ai": {
           "label": "Passerelle IA"

@@ -34,7 +34,7 @@ export interface SSOStartResponse {
     auth_url: string;
 }
 
-export type SocialProviderID = 'google' | 'github' | 'microsoft';
+export type SocialProviderID = 'google' | 'github' | 'microsoft' | 'apple';
 
 export interface SocialProvider {
     id: SocialProviderID;

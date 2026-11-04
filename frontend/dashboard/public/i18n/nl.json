@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Doorgaan met Google", "github": "Doorgaan met GitHub", "microsoft": "Doorgaan met Microsoft" },
+    "continueWith": { "google": "Doorgaan met Google", "github": "Doorgaan met GitHub", "microsoft": "Doorgaan met Microsoft",
+      "apple": "Ga door met Apple" },
     "signupMethods": "Sociale registratiemethoden",
     "confirmEmailSubtitle": "Bevestig tot welk HitKeep-account deze Microsoft-identiteit toegang moet krijgen.",
     "confirmEmailPrompt": "Microsoft-e-mailadressen kunnen wijzigen. Controleer het HitKeep-adres voordat we een bevestigingslink sturen.",
@@ -1270,6 +1271,8 @@
         "title": "Sociale aanmelding", "description": "Koppel provideraccounts waarmee je je bij HitKeep kunt aanmelden.", "empty": "Er zijn geen sociale aanmeldproviders gekoppeld.",
         "linkedDate": "Gekoppeld", "lastUsed": "Laatst gebruikt", "connectAction": "{{provider}} koppelen", "unlinkAction": "Ontkoppelen",
         "passwordConfirmationHint": "Voer je huidige wachtwoord in het wachtwoordgedeelte in voordat je je enige sociale provider ontkoppelt.", "linked": "Provider gekoppeld.", "unlinked": "Provider ontkoppeld.",
+        "appleManualRevocation": "Apple is ontkoppeld. Trek de toegang van HitKeep in je Apple Account in om de verbinding volledig te verwijderen.",
+        "appleManageAccess": "Apple-toegang beheren",
         "errors": { "linkFailed": "Deze provider kon niet worden gekoppeld.", "unlinkFailed": "Deze provider kon niet worden ontkoppeld.", "lastMethod": "Voeg een andere sociale provider of passkey toe, of bevestig een ingeschakeld wachtwoord." }
       },
       "twoFactor": {
@@ -2415,6 +2418,7 @@
         "social_google": { "label": "Aanmelden met Google" },
         "social_github": { "label": "Aanmelden met GitHub" },
         "social_microsoft": { "label": "Aanmelden met Microsoft" },
+        "social_apple": { "label": "Inloggen met Apple" },
         "social_signup": { "label": "Sociale registratie" },
         "ai": {
           "label": "AI-gateway"

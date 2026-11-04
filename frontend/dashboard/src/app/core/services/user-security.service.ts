@@ -46,6 +46,11 @@ export interface UserRecoveryCodesResponse {
     remaining: number;
 }
 
+export interface SocialUnlinkResponse {
+    status: 'unlinked';
+    provider_revocations: { provider: 'apple'; status: 'revoked' | 'manual_revocation_required' }[];
+}
+
 @Service()
 export class UserSecurityService {
     private http = inject(HttpClient);
@@ -86,8 +91,8 @@ export class UserSecurityService {
         return this.http.post<SocialStartResponse>(`/api/user/security/social/${provider}/start`, {});
     }
 
-    unlinkSocial(provider: SocialProviderID, currentPassword?: string): Observable<void> {
-        return this.http.delete<void>(`/api/user/security/social/${provider}`, {
+    unlinkSocial(provider: SocialProviderID, currentPassword?: string): Observable<SocialUnlinkResponse | void> {
+        return this.http.delete<SocialUnlinkResponse | void>(`/api/user/security/social/${provider}`, {
             body: currentPassword ? { current_password: currentPassword } : {}
         });
     }
