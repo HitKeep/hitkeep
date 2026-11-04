@@ -4221,6 +4221,17 @@
     "analyticsNavigation": "Analytics pages"
   },
   "nativeAuth": {
+      "management": {
+          "title": "Manage your HitKeep account",
+          "authority": "Continue only if you requested this exact change in the HitKeep app. Sign-in alone does not apply it.",
+          "passkey_register": "Register a passkey",
+          "social_link": "Link social account",
+          "search_console_connect": "Connect Google Search Console",
+          "approve": "Approve this action",
+          "return": "Return to app",
+          "completed": "The change was saved. Return to the app to refresh your account.",
+          "restart": "This action could not be verified. Return to the app and refresh its status before starting again."
+      },
       "accountDeletionPurpose": "This sign-in prepares account deletion. You must review the consequences and confirm deletion separately in the app.",
       "title": "Sign in to the HitKeep app",
       "authority": "This gives the app your full account access, including changing data and account settings. Your current team permissions and security checks still apply.",

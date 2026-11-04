@@ -10,7 +10,7 @@ import (
 )
 
 func TestAccountDeletionBlockedWireNullability(t *testing.T) {
-	response := api.AccountDeletionPreparation{AccountDeletionPlan: api.AccountDeletionPlan{Teams: []api.AccountDeletionTeam{}, Blockers: []api.AccountDeletionBlocker{{Code: "last_operator"}}}, Purpose: "delete-current-account", Phase: "blocked"}
+	response := api.AccountDeletionPreparation{Teams: []api.AccountDeletionTeam{}, Blockers: []api.AccountDeletionBlocker{{Code: "last_operator"}}, Purpose: "delete-current-account", Phase: "blocked"}
 	response.Retention.BillingRecords = true
 	response.Retention.Cancellation = "period_end"
 	w := httptest.NewRecorder()

@@ -4365,6 +4365,17 @@
     "analyticsNavigation": "Páginas de analíticas"
   },
   "nativeAuth": {
+      "management": {
+          "title": "Gestionar tu cuenta de HitKeep",
+          "authority": "Continúa solo si has solicitado este cambio concreto en la aplicación de HitKeep. Iniciar sesión no lo aplica.",
+          "passkey_register": "Registrar una clave de acceso",
+          "social_link": "Vincular una cuenta social",
+          "search_console_connect": "Conectar Google Search Console",
+          "approve": "Autorizar esta acción",
+          "return": "Volver a la aplicación",
+          "completed": "Se ha guardado el cambio. Vuelve a la aplicación para actualizar tu cuenta.",
+          "restart": "No se ha podido verificar esta acción. Vuelve a la aplicación y actualiza su estado antes de empezar de nuevo."
+      },
       "accountDeletionPurpose": "Este inicio de sesión prepara la eliminación de la cuenta. Debes revisar las consecuencias y confirmar la eliminación por separado en la aplicación.",
       "title": "Iniciar sesión en la app de HitKeep",
       "authority": "La app tendrá acceso completo a tu cuenta, incluidos los cambios en datos y ajustes. Se mantienen tus permisos de equipo y las comprobaciones de seguridad.",

@@ -4158,6 +4158,17 @@
     "analyticsNavigation": "Statistikseiten"
   },
   "nativeAuth": {
+      "management": {
+          "title": "HitKeep-Konto verwalten",
+          "authority": "Fahre nur fort, wenn du genau diese Änderung in der HitKeep-App angefordert hast. Die Anmeldung allein führt sie nicht aus.",
+          "passkey_register": "Passkey registrieren",
+          "social_link": "Social-Media-Konto verknüpfen",
+          "search_console_connect": "Google Search Console verbinden",
+          "approve": "Diese Aktion genehmigen",
+          "return": "Zur App zurückkehren",
+          "completed": "Die Änderung wurde gespeichert. Kehre zur App zurück, um dein Konto zu aktualisieren.",
+          "restart": "Diese Aktion konnte nicht bestätigt werden. Kehre zur App zurück und aktualisiere den Status, bevor du erneut beginnst."
+      },
       "accountDeletionPurpose": "Diese Anmeldung bereitet die Kontolöschung vor. Du musst die Folgen prüfen und die Löschung anschließend separat in der App bestätigen.",
       "title": "In der HitKeep-App anmelden",
       "authority": "Die App erhält vollständigen Zugriff auf dein Konto, einschließlich Änderungen an Daten und Kontoeinstellungen. Deine Teamberechtigungen und Sicherheitsprüfungen gelten weiterhin.",

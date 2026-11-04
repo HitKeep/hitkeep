@@ -16,7 +16,7 @@ func (h *handler) deletionReauthentication(returnPath string) bool {
 		return true
 	}
 	entry, ok := h.ctx.AuthState.GetNativeAuth(shared.NativeAuthHandle(returnPath))
-	return ok && entry.Start.Purpose == "account_delete"
+	return ok && (entry.Start.Purpose == "account_delete" || entry.Start.Purpose == "management")
 }
 
 func (h *handler) validateDeletionSubject(returnPath string, id uuid.UUID) bool {

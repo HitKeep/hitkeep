@@ -2,10 +2,8 @@ package auth
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"mime"
 	"net/http"
 	"net/url"
@@ -45,6 +43,8 @@ func (h *handler) registerNativeAuth(mux *http.ServeMux) {
 		fn      http.HandlerFunc
 	}{
 		{"POST /api/auth/native/start", false, h.handleNativeStart()},
+		{"POST /api/auth/native/management/start", false, h.ctx.RequireCurrentHumanSession(h.handleNativeManagementStart())},
+		{"POST /api/auth/native/management/complete", false, h.ctx.RequireCurrentHumanSession(h.handleNativeManagementComplete())},
 		{"GET /api/auth/native/authorize", false, h.handleNativeAuthorize()},
 		{"GET /api/auth/native/consent", true, h.handleNativeConsent()},
 		{"POST /api/auth/native/authorize", true, h.handleNativeDecision()},
@@ -58,7 +58,7 @@ func (h *handler) registerNativeAuth(mux *http.ServeMux) {
 				nativeError(w, r, 503, "temporarily_unavailable")
 				return
 			}
-			if r.Header.Get("Authorization") != "" || r.Header.Get("X-Api-Key") != "" || len(r.Header.Values("X-Hitkeep-Agent")) > 0 {
+			if len(r.Header.Values("Authorization")) > 0 || len(r.Header.Values("X-Api-Key")) > 0 || len(r.Header.Values("X-Hitkeep-Agent")) > 0 {
 				nativeError(w, r, 403, "access_denied")
 				return
 			}
@@ -189,8 +189,8 @@ func (h *handler) handleNativeAuthorize() http.HandlerFunc {
 			nativeError(w, r, 400, "invalid_grant")
 			return
 		}
-		destination := shared.NativeAuthReturnPath(handle)
-		if entry.Start.Purpose == "account_delete" || h.userIDFromLogoutRequest(r) == uuid.Nil {
+		destination := nativeDestination(entry, handle)
+		if entry.Start.Purpose != "" || h.userIDFromLogoutRequest(r) == uuid.Nil {
 			page := "/login"
 			if entry.Start.Intent == "signup" {
 				page = "/signup"
@@ -201,47 +201,10 @@ func (h *handler) handleNativeAuthorize() http.HandlerFunc {
 	}
 }
 
-// nativeAccountSecurity excludes usage timestamps: using a factor must not revoke
-// consent, while changing credentials or the account identity must invalidate it.
-var errNativeAccountMissing = errors.New("account unavailable")
+var errNativeAccountMissing = shared.ErrNativeAccountMissing
 
 func (h *handler) nativeAccountSecurity(r *http.Request, id uuid.UUID) (string, string, error) {
-	available, err := h.ctx.HumanSessionUserAvailable(r.Context(), id)
-	if err != nil {
-		return "", "", err
-	}
-	if !available {
-		return "", "", errNativeAccountMissing
-	}
-	user, err := h.ctx.Store.GetUserByID(r.Context(), id)
-	if err != nil {
-		return "", "", err
-	}
-	if user == nil {
-		return "", "", errNativeAccountMissing
-	}
-	secret, enabled, err := h.ctx.Store.GetUserTOTPSecret(r.Context(), id)
-	if err != nil {
-		return "", "", err
-	}
-	keys, err := h.ctx.Store.ListUserPasskeys(r.Context(), id)
-	if err != nil {
-		return "", "", err
-	}
-	identities, err := h.ctx.Store.ListUserSocialIdentities(r.Context(), id)
-	if err != nil {
-		return "", "", err
-	}
-	var material strings.Builder
-	material.WriteString(fmt.Sprintf("%s\x00%s\x00%t\x00%s\x00%t", user.Email, user.Password, user.PasswordLoginEnabled, secret, enabled))
-	for _, key := range keys {
-		material.WriteString("\x00" + key.ID.String())
-	}
-	for _, identity := range identities {
-		material.WriteString("\x00" + identity.Provider + "\x00" + identity.LinkedAt.UTC().String())
-	}
-	sum := sha256.Sum256([]byte(material.String()))
-	return user.Email, base64.RawURLEncoding.EncodeToString(sum[:]), nil
+	return h.ctx.NativeAccountSecurity(r.Context(), id)
 }
 
 func (h *handler) handleNativeConsent() http.HandlerFunc {
@@ -262,21 +225,39 @@ func (h *handler) handleNativeConsent() http.HandlerFunc {
 			}
 			return
 		}
+		managementEntry, exists := h.ctx.AuthState.GetNativeAuth(handle)
+		if !exists {
+			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
+		management, allowed := h.nativeManagementConsent(w, r, managementEntry)
+		if !allowed {
+			return
+		}
+		cookieName := nativeBrowserCookie
+		cookiePath := "/api/auth/native"
+		sameSite := http.SameSiteStrictMode
+		if management != nil {
+			cookieName = shared.NativeManagementBrowserCookie
+			cookiePath = "/api"
+			sameSite = http.SameSiteLaxMode
+		}
 		browser := ""
-		if cookie, err := r.Cookie(nativeBrowserCookie); err == nil && len(cookie.Value) == 43 {
+		if cookie, err := r.Cookie(cookieName); err == nil && len(cookie.Value) == 43 {
 			browser = cookie.Value
 		}
 		if browser == "" {
 			browser = shared.NativeAuthToken()
 			issuer, _ := url.Parse(shared.NativeAuthIssuer(h.ctx.Config.PublicURL))
-			http.SetCookie(w, &http.Cookie{Name: nativeBrowserCookie, Value: browser, Path: issuer.Path + "/api/auth/native", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 600})
+			http.SetCookie(w, &http.Cookie{ //nolint:gosec // Always Secure/HttpOnly; SameSite is exactly Strict for login or Lax for the browser-owned provider return.
+				Name: cookieName, Value: browser, Path: issuer.Path + cookiePath, HttpOnly: true, Secure: true, SameSite: sameSite, MaxAge: 600})
 		}
 		csrf, entry, ok := h.ctx.AuthState.RenderNativeAuth(handle, browser, id, security)
 		if !ok || entry.Issuer != shared.NativeAuthIssuer(h.ctx.Config.PublicURL) {
 			nativeError(w, r, 400, "invalid_grant")
 			return
 		}
-		shared.WriteJSON(r.Context(), w, 200, api.NativeAuthConsent{Purpose: entry.Start.Purpose, Request: handle, ClientID: entry.Start.ClientID, Issuer: entry.Issuer, Email: email, CSRFToken: csrf, RememberMe: entry.Start.RememberMe, ExpiresAt: entry.ExpiresAt})
+		shared.WriteJSON(r.Context(), w, 200, api.NativeAuthConsent{Management: management, Purpose: entry.Start.Purpose, Request: handle, ClientID: entry.Start.ClientID, Issuer: entry.Issuer, Email: email, CSRFToken: csrf, RememberMe: entry.Start.RememberMe, ExpiresAt: entry.ExpiresAt})
 	}
 }
 
@@ -316,13 +297,20 @@ func (h *handler) handleNativeDecision() http.HandlerFunc {
 			return
 		}
 		_, security, err := h.nativeAccountSecurity(r, shared.GetUserIDFromContext(r))
-		cookie, cookieErr := r.Cookie(nativeBrowserCookie)
+		cookieName := nativeBrowserCookie
+		if entry.Start.Purpose == "management" {
+			cookieName = shared.NativeManagementBrowserCookie
+		}
+		cookie, cookieErr := r.Cookie(cookieName)
 		if err != nil && !errors.Is(err, errNativeAccountMissing) {
 			nativeError(w, r, 503, "temporarily_unavailable")
 			return
 		}
 		if err != nil || cookieErr != nil {
 			nativeError(w, r, 403, "access_denied")
+			return
+		}
+		if h.nativeManagementDecision(w, r, entry, handle, cookie.Value, security, decision) {
 			return
 		}
 		code, ok := h.ctx.AuthState.DecideNativeAuth(handle, cookie.Value, r.PostForm.Get("csrf_token"), shared.GetUserIDFromContext(r), security, decision == "approve", remember == "true")
@@ -440,6 +428,9 @@ func (h *handler) bindNativeLogin(r *http.Request, w http.ResponseWriter, return
 
 func nativeSignupDestination(returnPath, fallback string) string {
 	if handle := shared.NativeAuthHandle(nativeSignupReturnPath(returnPath)); handle != "" {
+		if nativeManagementReturnCandidate(returnPath) {
+			return shared.NativeManagementReturnPath(handle)
+		}
 		return shared.NativeAuthReturnPath(handle)
 	}
 	return fallback

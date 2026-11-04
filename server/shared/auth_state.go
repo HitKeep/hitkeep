@@ -29,6 +29,8 @@ type PendingTOTPSetup struct {
 }
 
 type PasskeyRegistrationChallenge struct {
+	NativeManagement string
+
 	Challenge     string
 	RequestedName string
 	ExpiresAt     time.Time
@@ -42,6 +44,8 @@ type MFAEmailLink struct {
 }
 
 type GoogleSearchConsoleOAuthState struct {
+	NativeManagement string
+
 	UserID     uuid.UUID
 	TeamID     uuid.UUID
 	ReturnPath string
@@ -63,6 +67,8 @@ type SSOOAuthState struct {
 }
 
 type SocialOAuthState struct {
+	NativeManagement string
+
 	Provider       string
 	Flow           string
 	InviteToken    string
@@ -76,7 +82,7 @@ type SocialOAuthState struct {
 }
 
 type SocialCompletion struct {
-	UserID uuid.UUID
+	UserID                      uuid.UUID
 	AppleClientID               string `json:"-"`
 	AppleRefreshTokenCiphertext string `json:"-"`
 	Provider                    string
@@ -107,6 +113,7 @@ type AuthStateStore struct {
 	socialPOSTMu            sync.Mutex
 	ssoOAuthMu              sync.Mutex
 	socialOAuthMu           sync.Mutex
+	googleSearchConsoleMu   sync.Mutex
 	socialCompletionMu      sync.Mutex
 
 	mfaResumes              map[uuid.UUID]mfaResume
@@ -427,6 +434,8 @@ func (s *AuthStateStore) ConsumeGoogleSearchConsoleOAuthState(rawState string) (
 	if err != nil || stateID == uuid.Nil {
 		return GoogleSearchConsoleOAuthState{}, false
 	}
+	s.googleSearchConsoleMu.Lock()
+	defer s.googleSearchConsoleMu.Unlock()
 	entry, ok := s.googleSearchConsole.Get(stateID)
 	if !ok {
 		return GoogleSearchConsoleOAuthState{}, false
@@ -550,11 +559,14 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 		}
 	}
 	s.socialCompletionMu.Unlock()
+	s.googleSearchConsoleMu.Lock()
 	for _, key := range s.googleSearchConsole.Keys() {
 		if entry, ok := s.googleSearchConsole.Peek(key); ok && entry.UserID == userID {
 			s.googleSearchConsole.Remove(key)
 		}
 	}
+
+	s.googleSearchConsoleMu.Unlock()
 
 	s.loginChallengesMu.Lock()
 	defer s.loginChallengesMu.Unlock()
@@ -572,4 +584,38 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 
 func isExpired(expiresAt time.Time) bool {
 	return !expiresAt.IsZero() && time.Now().UTC().After(expiresAt.UTC())
+}
+
+func (s *AuthStateStore) BindGoogleSearchConsoleManagement(state, handle string) {
+	id, err := uuid.Parse(state)
+	if s == nil || err != nil {
+		return
+	}
+	s.googleSearchConsoleMu.Lock()
+	defer s.googleSearchConsoleMu.Unlock()
+	entry, ok := s.googleSearchConsole.Get(id)
+	if ok {
+		entry.NativeManagement = handle
+		s.googleSearchConsole.Add(id, entry)
+	}
+}
+
+func (s *AuthStateStore) BindPasskeyManagement(userID uuid.UUID, challenge, handle string) bool {
+	if s == nil {
+		return false
+	}
+	entry, ok := s.passkeyRegistrations.Get(userID)
+	if !ok || entry.Challenge != challenge {
+		return false
+	}
+	entry.NativeManagement = handle
+	s.passkeyRegistrations.Add(userID, entry)
+	return true
+}
+func (s *AuthStateStore) PasskeyManagement(userID uuid.UUID) string {
+	if s == nil {
+		return ""
+	}
+	entry, _ := s.passkeyRegistrations.Get(userID)
+	return entry.NativeManagement
 }

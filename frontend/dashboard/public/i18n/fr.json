@@ -4114,6 +4114,17 @@
     "analyticsNavigation": "Pages de statistiques"
   },
   "nativeAuth": {
+      "management": {
+          "title": "Gérer votre compte HitKeep",
+          "authority": "Continuez uniquement si vous avez demandé cette modification précise dans l’application HitKeep. La connexion seule ne l’applique pas.",
+          "passkey_register": "Enregistrer une clé d’accès",
+          "social_link": "Associer un compte social",
+          "search_console_connect": "Connecter Google Search Console",
+          "approve": "Autoriser cette action",
+          "return": "Revenir à l’application",
+          "completed": "La modification a été enregistrée. Revenez à l’application pour actualiser votre compte.",
+          "restart": "Cette action n’a pas pu être vérifiée. Revenez à l’application et actualisez son état avant de recommencer."
+      },
       "accountDeletionPurpose": "Cette connexion prépare la suppression du compte. Vous devez vérifier les conséquences et confirmer séparément la suppression dans l’application.",
       "title": "Se connecter à l’application HitKeep",
       "authority": "L’application aura un accès complet à votre compte, y compris pour modifier les données et les paramètres. Vos autorisations d’équipe et les contrôles de sécurité restent applicables.",

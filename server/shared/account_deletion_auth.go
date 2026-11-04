@@ -88,8 +88,11 @@ func (s *AuthStateStore) AccountDeletionSubject(returnPath, issuer string) (uuid
 	defer s.nativeMu.Unlock()
 	if handle := NativeAuthHandle(returnPath); handle != "" {
 		native, ok := s.nativeLocked(handle)
-		if !ok || native.Start.Purpose != "account_delete" || native.Issuer != issuer {
+		if !ok || (native.Start.Purpose != "account_delete" && native.Start.Purpose != "management") || native.Issuer != issuer {
 			return uuid.Nil, false
+		}
+		if native.Start.Purpose == "management" {
+			return native.UserID, true
 		}
 		entry, ok := s.deletionLocked(native.Start.ReauthAttempt)
 		return entry.UserID, ok && entry.Issuer == issuer && entry.NativeRequestHash == nativeHash(handle)
@@ -113,6 +116,12 @@ func (s *AuthStateStore) CompleteAccountDeletionPrimary(returnPath string, userI
 			return false
 		}
 		if native.Start.Purpose == "" {
+			return true
+		}
+		if native.Start.Purpose == "management" {
+			native.PrimaryJTIHash = nativeHash(jti)
+			native.PrimaryComplete = true
+			s.nativeRequests[nativeHash(handle)] = native
 			return true
 		}
 		entry, ok := s.deletionLocked(native.Start.ReauthAttempt)
@@ -147,6 +156,9 @@ func (s *AuthStateStore) NativeDeletionPrimaryVerified(handle string, userID uui
 	}
 	if native.Start.Purpose == "" {
 		return true
+	}
+	if native.Start.Purpose == "management" {
+		return native.UserID == userID && native.PrimaryComplete && jti != "" && nativeHashMatches(native.PrimaryJTIHash, jti)
 	}
 	entry, ok := s.deletionLocked(native.Start.ReauthAttempt)
 	return ok && entry.NativeRequestHash == nativeHash(handle) && entry.UserID == userID && entry.Issuer == native.Issuer && native.UserID == userID && native.PrimaryComplete && jti != "" && nativeHashMatches(native.PrimaryJTIHash, jti)

@@ -204,3 +204,40 @@ func extractAPIClientToken(r *http.Request) string {
 
 	return strings.TrimSpace(r.Header.Get("X-Api-Key"))
 }
+
+// CurrentHumanSession validates only the current ordinary JWT, without cookie restoration or issuance.
+func (c *Context) CurrentHumanSession(r *http.Request) (uuid.UUID, *AuthSessionContext, error) {
+	if c == nil || c.Config == nil || len(r.Header.Values("Authorization")) > 0 || len(r.Header.Values("X-Api-Key")) > 0 || len(r.Header.Values("X-Hitkeep-Agent")) > 0 {
+		return uuid.Nil, nil, nil
+	}
+	cookie, err := r.Cookie(auth.CookieName)
+	if err != nil {
+		return uuid.Nil, nil, nil
+	}
+	claims, err := auth.ValidateTokenClaims(cookie.Value, c.Config.JWTSecret, c.Config.PublicURL)
+	if err != nil {
+		return uuid.Nil, nil, nil
+	}
+	available, err := c.HumanSessionUserAvailable(r.Context(), claims.UserID)
+	if err != nil || !available {
+		return uuid.Nil, nil, err
+	}
+	return claims.UserID, authSessionContextFromClaims(claims), nil
+}
+
+func (c *Context) RequireCurrentHumanSession(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, session, err := c.CurrentHumanSession(r)
+		if err != nil {
+			WriteJSON(r.Context(), w, http.StatusServiceUnavailable, map[string]string{"error": "temporarily_unavailable"})
+			return
+		}
+		if id == uuid.Nil || session == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), UserIDKey, id)
+		ctx = context.WithValue(ctx, AuthSessionKey, *session)
+		next(w, r.WithContext(ctx))
+	}
+}

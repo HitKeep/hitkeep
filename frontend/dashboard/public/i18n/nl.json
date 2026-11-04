@@ -4097,6 +4097,17 @@
     "analyticsNavigation": "Statistiekpagina’s"
   },
   "nativeAuth": {
+      "management": {
+          "title": "Je HitKeep-account beheren",
+          "authority": "Ga alleen verder als je precies deze wijziging in de HitKeep-app hebt aangevraagd. Alleen aanmelden voert de wijziging niet uit.",
+          "passkey_register": "Een passkey registreren",
+          "social_link": "Een sociaal account koppelen",
+          "search_console_connect": "Google Search Console verbinden",
+          "approve": "Deze actie goedkeuren",
+          "return": "Terug naar de app",
+          "completed": "De wijziging is opgeslagen. Ga terug naar de app om je account te vernieuwen.",
+          "restart": "Deze actie kon niet worden geverifieerd. Ga terug naar de app en vernieuw de status voordat je opnieuw begint."
+      },
       "accountDeletionPurpose": "Deze aanmelding bereidt het verwijderen van je account voor. Bekijk de gevolgen en bevestig de verwijdering daarna apart in de app.",
       "title": "Aanmelden bij de HitKeep-app",
       "authority": "De app krijgt volledige toegang tot je account, inclusief het wijzigen van gegevens en accountinstellingen. Je teamrechten en beveiligingscontroles blijven gelden.",

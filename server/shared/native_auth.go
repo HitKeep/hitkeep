@@ -27,6 +27,8 @@ const (
 // NativeAuthRequest freezes all client bindings; only explicit consent can approve it.
 // Lookup handles, browser nonces, CSRF tokens and exchange codes are stored as hashes.
 type NativeAuthRequest struct {
+	Management NativeManagement
+
 	PrimaryJTIHash   [32]byte
 	PrimaryComplete  bool
 	ExchangeConsumed bool
@@ -97,7 +99,7 @@ func NativeAuthHandle(returnPath string) string {
 		return ""
 	}
 	u, err := url.ParseRequestURI(returnPath)
-	if err != nil || u.Path != "/auth/native/consent" || u.IsAbs() || u.Host != "" || u.Fragment != "" {
+	if err != nil || (u.Path != "/auth/native/consent" && u.Path != "/auth/native/manage") || u.IsAbs() || u.Host != "" || u.Fragment != "" {
 		return ""
 	}
 	q, err := url.ParseQuery(u.RawQuery)
@@ -126,9 +128,11 @@ func (c *Context) NativeAuthStatus() *api.NativeAuthStatus {
 	if issuer == "" {
 		return nil
 	}
-	return &api.NativeAuthStatus{Enabled: true, Available: c.NativeAuthReady(), Issuer: issuer, StartURL: issuer + "/api/auth/native/start", AuthorizeURL: issuer + "/api/auth/native/authorize", ExchangeURL: issuer + "/api/auth/native/exchange", CodeChallengeMethodsSupported: []string{"S256"}, BrowserPasskeys: true,
+	available := c.NativeAuthReady()
+	androidOrigins, androidErr := c.Config.AndroidPasskeyOrigins()
+	return &api.NativeAuthStatus{Enabled: true, Available: available, Issuer: issuer, StartURL: issuer + "/api/auth/native/start", AuthorizeURL: issuer + "/api/auth/native/authorize", ExchangeURL: issuer + "/api/auth/native/exchange", CodeChallengeMethodsSupported: []string{"S256"}, BrowserPasskeys: true,
 		// Associated-domain delivery is a release prerequisite; arbitrary self-hosts use browser passkeys.
-		NativeIOSPasskeys: c.Config.CloudHosted && (issuer == "https://cloud.hitkeep.eu" || issuer == "https://cloud.hitkeep.com"), NativeAndroidPasskeys: false}
+		NativeIOSPasskeys: c.Config.CloudHosted && (issuer == "https://cloud.hitkeep.eu" || issuer == "https://cloud.hitkeep.com"), NativeAndroidPasskeys: available && androidErr == nil && len(androidOrigins) > 0, Management: &api.NativeManagementStatus{StartURL: issuer + "/api/auth/native/management/start", CompleteURL: issuer + "/api/auth/native/management/complete", ActionsSupported: []string{"passkey_register", "social_link", "search_console_connect"}}}
 }
 
 func (s *AuthStateStore) pruneNativeLocked() {
@@ -146,6 +150,10 @@ func (s *AuthStateStore) CreateNativeAuth(start api.NativeAuthStart, issuer stri
 	}
 	s.nativeMu.Lock()
 	defer s.nativeMu.Unlock()
+	return s.createNativeAuthLocked(start, issuer)
+}
+
+func (s *AuthStateStore) createNativeAuthLocked(start api.NativeAuthStart, issuer string) (string, error) {
 	s.pruneNativeLocked()
 	if len(s.nativeRequests) >= authStateCacheSize {
 		return "", errors.New("native auth capacity reached")
@@ -218,6 +226,9 @@ func (s *AuthStateStore) RenderNativeAuth(handle, browser string, userID uuid.UU
 	}
 	csrf := NativeAuthToken()
 	entry.UserID = userID
+	if entry.Start.Purpose == "management" && (entry.Security != security || entry.Management.Phase != "pending" && !nativeHashMatches(entry.BrowserHash, browser)) {
+		return "", NativeAuthRequest{}, false
+	}
 	entry.Security = security
 	entry.BrowserHash = nativeHash(browser)
 	entry.CSRFHash = nativeHash(csrf)
@@ -235,12 +246,27 @@ func (s *AuthStateStore) DecideNativeAuth(handle, browser, csrf string, userID u
 	if !ok || entry.UserID != userID || entry.Security != security || !nativeHashMatches(entry.BrowserHash, browser) || !nativeHashMatches(entry.CSRFHash, csrf) {
 		return "", false
 	}
-	if approve && entry.Start.Purpose == "account_delete" && !entry.PrimaryComplete {
+	if approve && entry.Start.Purpose != "" && !entry.PrimaryComplete {
 		return "", false
 	}
 	if !approve {
 		delete(s.nativeRequests, nativeHash(handle))
 		return "", true
+	}
+	if entry.Start.Purpose == "management" {
+		if remember {
+			return "", false
+		}
+		switch entry.Management.Phase {
+		case "pending":
+			entry.Management.Phase = "authorized"
+			entry.CSRFHash = [32]byte{}
+			s.nativeRequests[nativeHash(handle)] = entry
+			return "", true
+		case "succeeded":
+		default:
+			return "", false
+		}
 	}
 	code := NativeAuthToken()
 	entry.Approved = true
@@ -262,6 +288,14 @@ func minTime(a, b time.Time) time.Time {
 // ConsumeNativeAuth holds the transition lock through current-account validation;
 // only the winner may issue cookies. Issuance failure must never restore a code.
 func (s *AuthStateStore) ConsumeNativeAuth(input api.NativeAuthExchange, issuer string, current func(NativeAuthRequest) bool) (NativeAuthRequest, bool) {
+	return s.consumeNativeAuth(input, issuer, false, current)
+}
+
+func (s *AuthStateStore) ConsumeNativeManagement(input api.NativeAuthExchange, issuer string, current func(NativeAuthRequest) bool) (NativeAuthRequest, bool) {
+	return s.consumeNativeAuth(input, issuer, true, current)
+}
+
+func (s *AuthStateStore) consumeNativeAuth(input api.NativeAuthExchange, issuer string, management bool, current func(NativeAuthRequest) bool) (NativeAuthRequest, bool) {
 	if s == nil {
 		return NativeAuthRequest{}, false
 	}
@@ -273,7 +307,7 @@ func (s *AuthStateStore) ConsumeNativeAuth(input api.NativeAuthExchange, issuer 
 	}
 	entry, ok := s.nativeRequests[key]
 	digest := sha256.Sum256([]byte(input.CodeVerifier))
-	if !ok || !entry.Approved || isExpired(entry.ExpiresAt) || entry.Issuer != issuer || entry.Start.ClientID != input.ClientID || entry.Start.RedirectURI != input.RedirectURI || entry.Start.CodeChallenge != base64.RawURLEncoding.EncodeToString(digest[:]) || !current(entry) {
+	if !ok || (entry.Start.Purpose == "management") != management || !entry.Approved || isExpired(entry.ExpiresAt) || entry.Issuer != issuer || entry.Start.ClientID != input.ClientID || entry.Start.RedirectURI != input.RedirectURI || entry.Start.CodeChallenge != base64.RawURLEncoding.EncodeToString(digest[:]) || !current(entry) {
 		return NativeAuthRequest{}, false
 	}
 	delete(s.nativeCodes, entry.CodeHash)
@@ -289,13 +323,17 @@ func (s *AuthStateStore) InvalidateNativeAuth(userID uuid.UUID) {
 	}
 	s.nativeMu.Lock()
 	defer s.nativeMu.Unlock()
+	s.invalidateNativeAuthLocked(userID, [32]byte{})
+}
+
+func (s *AuthStateStore) invalidateNativeAuthLocked(userID uuid.UUID, except [32]byte) {
 	for key, entry := range s.accountDeletionAttempts {
 		if entry.UserID == userID {
 			delete(s.accountDeletionAttempts, key)
 		}
 	}
 	for key, entry := range s.nativeRequests {
-		if entry.UserID == userID {
+		if entry.UserID == userID && key != except {
 			delete(s.nativeCodes, entry.CodeHash)
 			delete(s.nativeRequests, key)
 		}

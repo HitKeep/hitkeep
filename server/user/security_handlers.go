@@ -209,6 +209,9 @@ func (h *handler) handleDisableTOTP() http.HandlerFunc {
 
 func (h *handler) handleStartPasskeyRegistration() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(shared.NativeManagementHeader)) > 0 {
+			shared.NativeManagementHeaders(w)
+		}
 		userID := shared.GetUserIDFromContext(r)
 		if userID == uuid.Nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -220,6 +223,13 @@ func (h *handler) handleStartPasskeyRegistration() http.HandlerFunc {
 			return
 		}
 
+		management, valid := shared.NativeManagementReference(r)
+		if !valid || management != "" && !h.ctx.NativeManagementOperation(w, r, management, shared.NativeManagement{Action: "passkey_register"}, "", true) {
+			if !valid {
+				http.Error(w, "Invalid management reference", 400)
+			}
+			return
+		}
 		passkeyUser, err := h.loadPasskeyUser(r.Context(), userID)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to load passkey user for registration", "error", err, "user_id", userID)
@@ -252,6 +262,10 @@ func (h *handler) handleStartPasskeyRegistration() http.HandlerFunc {
 		}
 		h.ctx.AuthState.CreatePasskeyChallenge(userID, session.Challenge, strings.TrimSpace(req.Name), expiresAt, session)
 
+		if management != "" && (!h.ctx.AuthState.BindPasskeyManagement(userID, session.Challenge, management) || !h.ctx.AuthState.BindNativeManagementOperation(management, session.Challenge)) {
+			http.Error(w, "Management authorization unavailable", http.StatusForbidden)
+			return
+		}
 		resp := passkeyRegistrationStartResponse{
 			PublicKey: creation.Response,
 		}
@@ -262,6 +276,9 @@ func (h *handler) handleStartPasskeyRegistration() http.HandlerFunc {
 
 func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(shared.NativeManagementHeader)) > 0 {
+			shared.NativeManagementHeaders(w)
+		}
 		userID := shared.GetUserIDFromContext(r)
 		if userID == uuid.Nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -284,7 +301,7 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		_, requestedName, expiresAt, session, found := h.ctx.AuthState.GetPasskeyChallenge(userID)
+		challenge, requestedName, expiresAt, session, found := h.ctx.AuthState.GetPasskeyChallenge(userID)
 		if !found {
 			http.Error(w, "No passkey registration is pending", http.StatusConflict)
 			return
@@ -325,14 +342,28 @@ func (h *handler) handleFinishPasskeyRegistration() http.HandlerFunc {
 			name = "Passkey " + time.Now().Format("2006-01-02")
 		}
 
+		management, valid := shared.NativeManagementReference(r)
+		bound := h.ctx.AuthState.PasskeyManagement(userID)
+		if !valid || management != bound {
+			http.Error(w, "Invalid management reference", http.StatusForbidden)
+			return
+		}
+		if management != "" && !h.ctx.NativeManagementOperation(w, r, management, shared.NativeManagement{Action: "passkey_register"}, challenge, false) {
+			return
+		}
 		_, err = h.ctx.Store.CreateUserPasskeyCredential(r.Context(), userID, name, *credential)
-		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		if err != nil {
+			h.ctx.AuthState.InvalidateNativeAuth(userID)
 			shared.LoggerFromContext(r.Context()).Error("Failed to create user passkey", "error", err, "user_id", userID)
 			http.Error(w, "Failed to save passkey", http.StatusBadRequest)
 			return
 		}
 
+		if management != "" {
+			h.ctx.FinishNativeManagementMutation(r, management, userID)
+		} else {
+			h.ctx.AuthState.InvalidateNativeAuth(userID)
+		}
 		h.ctx.AuthState.DeletePasskeyChallenge(userID)
 
 		status, err := h.getUserSecurityStatus(r.Context(), userID)

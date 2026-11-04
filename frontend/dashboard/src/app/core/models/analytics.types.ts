@@ -738,6 +738,7 @@ export interface AssistantConnection {
 }
 
 export interface NativeAuthStatus {
+    management?: { start_url: string; complete_url: string; actions_supported: ('passkey_register' | 'social_link' | 'search_console_connect')[] };
     enabled: boolean;
     available: boolean;
     issuer: string;

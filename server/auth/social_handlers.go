@@ -88,6 +88,9 @@ func (h *handler) handleSocialProviders() http.HandlerFunc {
 
 func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(shared.NativeManagementHeader)) > 0 {
+			shared.NativeManagementHeaders(w)
+		}
 		if h.ctx.Store == nil || h.ctx.AuthState == nil || h.ctx.SocialAuth == nil {
 			writeSocialError(r.Context(), w, http.StatusServiceUnavailable, "social_unavailable")
 			return
@@ -150,6 +153,14 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 				return
 			}
 		}
+		management, valid := shared.NativeManagementReference(r)
+		if !valid || management != "" && !linkFlow {
+			writeSocialError(r.Context(), w, 400, "social_request_invalid")
+			return
+		}
+		if management != "" && !h.ctx.NativeManagementOperation(w, r, management, shared.NativeManagement{Action: "social_link", Provider: providerName}, "", true) {
+			return
+		}
 		authorization, err := h.ctx.SocialAuth.Begin(r.Context(), providerConfig)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider authorization could not be prepared", "provider", providerName, "category", socialErrorCategory(err))
@@ -157,11 +168,15 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			return
 		}
 		state := h.ctx.AuthState.CreateSocialOAuthState(shared.SocialOAuthState{
-			Provider: providerName, Flow: flow, InviteToken: strings.TrimSpace(req.InviteToken),
+			NativeManagement: management, Provider: providerName, Flow: flow, InviteToken: strings.TrimSpace(req.InviteToken),
 			ReturnPath: sanitizeAuthReturnPath(req.ReturnURL), RememberMe: req.RememberMe, UserID: userID,
 			Nonce: authorization.FlowState.Nonce, CodeVerifier: authorization.FlowState.CodeVerifier,
 			ExpiresAt: time.Now().UTC().Add(socialFlowTTL),
 		})
+		if management != "" && !h.ctx.AuthState.BindNativeManagementOperation(management, state) {
+			writeSocialError(r.Context(), w, 403, "social_request_invalid")
+			return
+		}
 		h.setSocialStateCookie(w, state)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"auth_url": authorization.URL(state)})
 	}
@@ -202,16 +217,22 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			return
 		}
 		if !h.socialUserAvailable(r, state.UserID) {
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_state_invalid", continueOAuth), http.StatusSeeOther)
 			return
 		}
+		if state.NativeManagement != "" {
+			shared.NativeManagementHeaders(w)
+		}
 		if strings.TrimSpace(r.URL.Query().Get("error")) != "" {
 			h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", providerName, "provider="+providerName+";reason=cancelled")
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_provider_cancelled", continueOAuth), http.StatusSeeOther)
 			return
 		}
 		providerConfig, err := socialauth.ConfigForProvider(h.ctx.Config, providerName)
 		if err != nil {
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_provider_unavailable", continueOAuth), http.StatusSeeOther)
 			return
 		}
@@ -226,11 +247,22 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 		}
 
 		if state.Flow == "link" {
+			if state.NativeManagement != "" {
+				if continueOAuth || !h.ctx.NativeManagementOperation(w, r, state.NativeManagement, shared.NativeManagement{Action: "social_link", Provider: state.Provider}, rawState, false) {
+					return
+				}
+				r = r.WithContext(context.WithValue(r.Context(), nativeManagementMutationKey{}, state.NativeManagement))
+			}
 			if err := h.completeAuthenticatedSocialLink(r, state.UserID, identity); err != nil {
 				category := socialDatabaseErrorCategory(err)
 				shared.LoggerFromContext(r.Context()).Warn("Social identity link failed", "provider", providerName, "category", category, "user_id", state.UserID)
 				h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_link_failed", "failure", "provider="+providerName+";reason="+category, true)
 				http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_identity_conflict", continueOAuth), http.StatusSeeOther)
+				return
+			}
+			if state.NativeManagement != "" {
+				h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
+				http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, shared.NativeManagementReturnPath(state.NativeManagement)), http.StatusSeeOther)
 				return
 			}
 			h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
@@ -333,7 +365,11 @@ func (h *handler) socialStateCookiePath() string {
 // Linking can commit before the store's final read fails; invalidate either way.
 func (h *handler) linkPrimarySocialIdentity(r *http.Request, input database.LinkSocialIdentityInput) (*database.SocialIdentity, error) {
 	identity, err := h.ctx.Store.LinkSocialIdentity(r.Context(), input)
-	h.ctx.AuthState.InvalidateNativeAuth(input.UserID)
+	if handle, _ := r.Context().Value(nativeManagementMutationKey{}).(string); handle != "" && err == nil {
+		h.ctx.FinishNativeManagementMutation(r, handle, input.UserID)
+	} else {
+		h.ctx.AuthState.InvalidateNativeAuth(input.UserID)
+	}
 	return identity, err
 }
 
@@ -965,6 +1001,10 @@ func (h *handler) socialCompletionRedirectURL(state shared.SocialOAuthState, tok
 }
 
 func (h *handler) socialErrorRedirectURL(state shared.SocialOAuthState, code string, continueOAuth bool) string {
+	if state.NativeManagement != "" {
+		h.ctx.AuthState.FailNativeManagement(state.NativeManagement)
+		return appurl.Path(h.ctx.Config.PublicURL, shared.NativeManagementReturnPath(state.NativeManagement))
+	}
 	oauthQuery := ""
 	if continueOAuth {
 		oauthQuery = "&oauth=1"

@@ -635,7 +635,9 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		formAction := "'self'"
-		if r.URL.Path == "/auth/native/consent" {
+		if r.URL.Path == "/auth/native/consent" || r.URL.Path == "/auth/native/manage" {
+			// HTML form navigations need their real Origin; cross-origin callbacks still receive no Referer.
+			w.Header().Set("Referrer-Policy", "same-origin")
 			formAction += " " + shared.NativeIOSCallback + " " + shared.NativeAndroidCallback
 		}
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'"+s.indexScriptHashSources+"; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action "+formAction+"; frame-ancestors 'none'")
