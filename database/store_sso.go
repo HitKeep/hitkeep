@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"hitkeep/api"
 )
 
 var (
@@ -203,6 +205,24 @@ func (s *Store) DeleteTeamSSOConfig(ctx context.Context, teamID uuid.UUID) error
 		return ErrTeamSSONotFound
 	}
 	return nil
+}
+
+// GetUserBySSOIdentity resolves only an existing linked issuer/subject. Fresh
+// account-deletion proof must never create or auto-link an identity by email.
+func (s *Store) GetUserBySSOIdentity(ctx context.Context, teamID uuid.UUID, issuer, subject string) (*api.User, error) {
+	var user api.User
+	err := s.QueryRowOrNil(ctx, `SELECT u.id,u.email,u.password,COALESCE(u.given_name,''),COALESCE(u.last_name,''),COALESCE(u.password_login_enabled,TRUE),u.created_at
+		FROM sso_identities si JOIN users u ON u.id=si.user_id
+		WHERE si.tenant_id=? AND si.issuer_url=? AND si.subject=?
+		AND NOT EXISTS (SELECT 1 FROM account_deletion_intents adi WHERE adi.user_id=u.id AND adi.phase IN ('removing','complete'))`,
+		[]any{&user.ID, &user.Email, &user.Password, &user.GivenName, &user.LastName, &user.PasswordLoginEnabled, &user.CreatedAt}, teamID, strings.TrimSpace(issuer), strings.TrimSpace(subject))
+	if err != nil {
+		return nil, fmt.Errorf("resolve linked SSO identity: %w", err)
+	}
+	if user.ID == uuid.Nil {
+		return nil, nil
+	}
+	return &user, nil
 }
 
 func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (ResolveSSOUserResult, error) {
