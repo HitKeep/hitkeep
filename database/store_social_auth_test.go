@@ -442,4 +442,45 @@ func TestAppleForwardMigrationPreservesLegacyRowsAndConstraints(t *testing.T) {
 	if err := store.Exec(ctx, "INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'apple','orphan')", uuid.New()); err == nil {
 		t.Fatal("foreign key removed")
 	}
+	assertAppleTablesPermitParentDeletion(t, store)
+
+}
+
+func TestAppleMigratedTablesPermitRealParentDeletion(t *testing.T) {
+	assertAppleTablesPermitParentDeletion(t, setupTenantStore(t))
+}
+
+func assertAppleTablesPermitParentDeletion(t *testing.T, store *Store) {
+	t.Helper()
+	for _, table := range []string{"social_identities", "pending_social_confirmations"} {
+		t.Run(table, func(t *testing.T) {
+			ctx := t.Context()
+			userID := uuid.New()
+			if err := store.Exec(ctx, "INSERT INTO users(id,email,password,created_at) VALUES (?,?,?,now())", userID, userID.String()+"@parent.test", "hash"); err != nil {
+				t.Fatal(err)
+			}
+			if table == "social_identities" {
+				if err := store.Exec(ctx, "INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'apple',?)", userID, userID.String()); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := store.Exec(ctx, "INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,target_user_id,expires_at) VALUES (?,'apple',?,'parent@test',?,now()+INTERVAL '1 hour')", userID.String(), userID.String(), userID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := store.Exec(ctx, "DELETE FROM users WHERE id = ?", userID); err == nil || !strings.Contains(err.Error(), "Constraint Error") {
+				t.Fatalf("referenced parent must have a live FK constraint: %v", err)
+			}
+			cleanup := "DELETE FROM social_identities WHERE user_id = ?"
+			if table == "pending_social_confirmations" {
+				cleanup = "DELETE FROM pending_social_confirmations WHERE target_user_id = ?"
+			}
+			if err := store.Exec(ctx, cleanup, userID); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Exec(ctx, "DELETE FROM users WHERE id = ?", userID); err != nil {
+				t.Fatalf("parent deletion after child cleanup: %v", err)
+			}
+		})
+	}
 }

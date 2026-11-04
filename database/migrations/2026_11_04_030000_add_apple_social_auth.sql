@@ -1,4 +1,19 @@
-CREATE TABLE social_identities_apple (
+-- DuckDB does not update incoming parent FK metadata when an FK child is renamed.
+-- Keep staging tables free of constraints and create FK children under their final names.
+CREATE TEMP TABLE social_identities_apple_backup AS
+SELECT id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
+FROM social_identities;
+
+CREATE TEMP TABLE pending_social_confirmations_apple_backup AS
+SELECT id, token_hash, provider, subject, observed_email, target_email, target_user_id,
+    team_name, jurisdiction, locale, plan_code, billing_interval, accepted_tos_at,
+    return_path, remember_me, expires_at, created_at
+FROM pending_social_confirmations;
+
+DROP TABLE social_identities;
+DROP TABLE pending_social_confirmations;
+
+CREATE TABLE social_identities (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES users (id),
     provider VARCHAR NOT NULL CHECK (provider IN ('google', 'github', 'microsoft', 'apple')),
@@ -13,13 +28,9 @@ CREATE TABLE social_identities_apple (
     UNIQUE (user_id, provider)
 );
 
-INSERT INTO social_identities_apple (id,user_id,provider,subject,observed_email,linked_at,updated_at,last_used_at)
-SELECT id,user_id,provider,subject,observed_email,linked_at,updated_at,last_used_at FROM social_identities;
-DROP TABLE social_identities;
-ALTER TABLE social_identities_apple RENAME TO social_identities;
 CREATE INDEX social_identities_user_idx ON social_identities (user_id);
 
-CREATE TABLE pending_social_confirmations_apple (
+CREATE TABLE pending_social_confirmations (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     token_hash VARCHAR UNIQUE NOT NULL,
     provider VARCHAR NOT NULL CHECK (provider IN ('google', 'github', 'microsoft', 'apple')),
@@ -40,8 +51,24 @@ CREATE TABLE pending_social_confirmations_apple (
     UNIQUE (provider, subject)
 );
 
-INSERT INTO pending_social_confirmations_apple SELECT * FROM pending_social_confirmations;
-DROP TABLE pending_social_confirmations;
-ALTER TABLE pending_social_confirmations_apple RENAME TO pending_social_confirmations;
 CREATE INDEX pending_social_confirmations_expires_idx ON pending_social_confirmations (expires_at);
 CREATE INDEX pending_social_confirmations_user_idx ON pending_social_confirmations (target_user_id);
+
+INSERT INTO social_identities (
+    id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
+)
+SELECT id, user_id, provider, subject, observed_email, linked_at, updated_at, last_used_at
+FROM social_identities_apple_backup;
+
+INSERT INTO pending_social_confirmations (
+    id, token_hash, provider, subject, observed_email, target_email, target_user_id,
+    team_name, jurisdiction, locale, plan_code, billing_interval, accepted_tos_at,
+    return_path, remember_me, expires_at, created_at
+)
+SELECT id, token_hash, provider, subject, observed_email, target_email, target_user_id,
+    team_name, jurisdiction, locale, plan_code, billing_interval, accepted_tos_at,
+    return_path, remember_me, expires_at, created_at
+FROM pending_social_confirmations_apple_backup;
+
+DROP TABLE social_identities_apple_backup;
+DROP TABLE pending_social_confirmations_apple_backup;
