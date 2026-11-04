@@ -24,6 +24,12 @@
     "connections": "Vérifier l’accès des assistants"
   },
   "oauth": {
+        "agentCodeLabel": "Code de votre assistant",
+        "agentCodeHelp": "Saisissez le code à six chiffres affiché par votre assistant, puis vérifiez les accès demandés.",
+        "agentCodeInvalid": "Ce code ne correspond pas. Vérifiez le code de votre assistant et réessayez.",
+        "agentReturnTitle": "Continuer avec votre assistant",
+        "agentReturnHelp": "Votre assistant vous indiquera le résultat de l’inscription. Consultez ou révoquez les accès approuvés dans Applications connectées.",
+
     "createSiteTitle": "Créer un site",
     "createSiteHelp": "Ajoutez votre site à cette équipe, puis autorisez la connexion ci-dessous.",
     "siteDomain": "Domaine du site web",
@@ -4054,6 +4060,8 @@
     "revokeConfirm": "Révoquer {{application}} ? Cela empêche toute nouvelle autorisation et révoque toutes ses autorisations existantes."
   },
   "agentTools": {
+    "publicTitle": "Aide publique à la connexion HitKeep",
+    "publicDescription": "Consultez les liens publics de connexion, d’authentification et de documentation. Cet outil n’accède jamais aux données des comptes ou des sites.",
     "listTitle": "Actions HitKeep disponibles",
     "listDescription": "Découvrez les actions documentées de l’API HitKeep pour cette session. Les identifiants et les exports restent dans l’interface habituelle.",
     "runTitle": "Exécuter une action HitKeep",

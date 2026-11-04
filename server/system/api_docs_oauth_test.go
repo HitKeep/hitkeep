@@ -59,3 +59,35 @@ func TestOpenAPIOAuthIngestKeepsLegacyPayloadCompatible(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentOpenAPIKeepsCodeClientRequirementsAndNoPreclaimCredentials(t *testing.T) {
+	spec := OpenAPISpecV1("https://analytics.example/tenant")
+	paths := spec["paths"].(map[string]any)
+	token := paths["/oauth/token"].(map[string]any)["post"].(map[string]any)
+	body := token["requestBody"].(map[string]any)["content"].(map[string]any)["application/x-www-form-urlencoded"].(map[string]any)["schema"].(map[string]any)
+	alternatives := body["oneOf"].([]any)
+	if len(alternatives) != 4 {
+		t.Fatalf("missing grants: %#v", alternatives)
+	}
+	for _, value := range alternatives[:2] {
+		required := value.(map[string]any)["required"].([]string)
+		if !slices.Contains(required, "client_id") || !slices.Contains(required, "resource") {
+			t.Fatal("ordinary code client lost binding")
+		}
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	registration := schemas["AgentRegistration"].(map[string]any)["properties"].(map[string]any)
+	if registration["access_token"] != nil || registration["identity_assertion"] != nil {
+		t.Fatal("preclaim credentials advertised")
+	}
+	tokens := schemas["AgentTokenResponse"].(map[string]any)["properties"].(map[string]any)
+	if tokens["refresh_token"] != nil {
+		t.Fatal("agent refresh token advertised")
+	}
+	runtime := OpenAPISpecV1ForRuntime("https://analytics.example/tenant", nil)["paths"].(map[string]any)
+	for _, path := range []string{"/agent/identity", "/agent/identity/claim", "/oauth/agent-claim"} {
+		if runtime[path] != nil {
+			t.Fatalf("disabled agent route advertised: %s", path)
+		}
+	}
+}

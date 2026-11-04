@@ -148,6 +148,15 @@ jobs:
         run: |
           plan_id="$(./hk qa plan pr --output json | jq -r '.data.plan_id')"
           ./hk qa pr --plan-id "$plan_id" --gate "$GATE_ID"
+      - name: Preserve failed race shard diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qa-${{ matrix.gate }}
+          path: ~/.cache/hitkeep/hk/workspaces/*/runs/*.${{ matrix.gate }}.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Save race shard Go cache
         if: success() && steps.race-cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -24,6 +24,12 @@
     "connections": "Revisar o acesso dos assistentes"
   },
   "oauth": {
+        "agentCodeLabel": "Código do teu assistente",
+        "agentCodeHelp": "Introduz o código de seis dígitos apresentado pelo teu assistente e revê o acesso pedido.",
+        "agentCodeInvalid": "O código não corresponde. Confirma o código do teu assistente e tenta novamente.",
+        "agentReturnTitle": "Continuar com o teu assistente",
+        "agentReturnHelp": "O teu assistente comunicará o resultado do registo. Revê ou revoga o acesso aprovado em Aplicações ligadas.",
+
     "createSiteTitle": "Criar um site",
     "createSiteHelp": "Adicione seu site a esta equipe e aprove a conexão abaixo.",
     "siteDomain": "Domínio do site",
@@ -4027,6 +4033,8 @@
     "revokeConfirm": "Revogar {{application}}? Isso impede novas autorizações e revoga todas as existentes."
   },
   "agentTools": {
+    "publicTitle": "Ajuda pública para conectar ao HitKeep",
+    "publicDescription": "Consulte os links públicos de acesso, autenticação e documentação. Esta ferramenta nunca acessa dados de contas ou sites.",
     "listTitle": "Ações disponíveis do HitKeep",
     "listDescription": "Descubra as ações documentadas da API do HitKeep para esta sessão. As credenciais e exportações continuam na interface habitual.",
     "runTitle": "Executar uma ação do HitKeep",

@@ -10,6 +10,7 @@ export interface OAuthClientSummary {
 }
 
 export interface OAuthConsent {
+    agent_claim?: boolean;
     client: OAuthClientSummary & { callback_origin: string };
     resource: string;
     scopes: string[];

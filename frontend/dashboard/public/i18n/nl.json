@@ -24,6 +24,12 @@
     "connections": "Toegang van assistenten controleren"
   },
   "oauth": {
+        "agentCodeLabel": "Code van je assistent",
+        "agentCodeHelp": "Voer de zescijferige code van je assistent in en controleer de gevraagde toegang.",
+        "agentCodeInvalid": "De code komt niet overeen. Controleer de code van je assistent en probeer het opnieuw.",
+        "agentReturnTitle": "Verder met je assistent",
+        "agentReturnHelp": "Je assistent meldt het resultaat van de registratie. Bekijk of trek goedgekeurde toegang in bij Verbonden applicaties.",
+
     "createSiteTitle": "Site maken",
     "createSiteHelp": "Voeg je website toe aan dit team en keur daarna hieronder de verbinding goed.",
     "siteDomain": "Websitedomein",
@@ -4037,6 +4043,8 @@
     "revokeConfirm": "{{application}} intrekken? Dit blokkeert nieuwe autorisaties en trekt alle bestaande machtigingen in."
   },
   "agentTools": {
+    "publicTitle": "Openbare hulp bij verbinden met HitKeep",
+    "publicDescription": "Bekijk openbare links voor aanmelden, authenticatie en documentatie. Dit hulpmiddel heeft nooit toegang tot account- of websitegegevens.",
     "listTitle": "Beschikbare HitKeep-acties",
     "listDescription": "Ontdek de gedocumenteerde HitKeep-API-acties voor deze aangemelde sessie. Inloggegevens en exports blijven in de gewone interface.",
     "runTitle": "Een HitKeep-actie uitvoeren",

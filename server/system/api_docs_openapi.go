@@ -9,6 +9,12 @@ import (
 )
 
 func OpenAPISpecV1(publicURL string) map[string]any {
+	spec := openAPIDiscoverySpecV1(publicURL)
+	addAgentRegistrationOpenAPI(spec)
+	return spec
+}
+
+func openAPIDiscoverySpecV1(publicURL string) map[string]any {
 	spec := openAPISpecV1(publicURL)
 	paths := spec["paths"].(map[string]any)
 	addOAuthActionSecurity(paths)
@@ -19,7 +25,10 @@ func OpenAPISpecV1(publicURL string) map[string]any {
 
 // OpenAPISpecV1ForRuntime advertises optional handlers only when their runtime prerequisites hold.
 func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]any {
-	spec := OpenAPISpecV1(publicURL)
+	spec := openAPIDiscoverySpecV1(publicURL)
+	if ctx != nil && ctx.Config != nil && ctx.Config.AIEnabled && ctx.OAuthProvider != nil && ctx.OAuthProvider.Ready() {
+		addAgentRegistrationOpenAPI(spec)
+	}
 	paths := spec["paths"].(map[string]any)
 	if ctx == nil || ctx.Config == nil || !ctx.Config.AIEnabled || ctx.OAuthProvider == nil || !ctx.OAuthProvider.Ready() {
 		scopes := spec["components"].(map[string]any)["securitySchemes"].(map[string]any)["oauth2"].(map[string]any)["flows"].(map[string]any)["authorizationCode"].(map[string]any)["scopes"].(map[string]string)
@@ -42,6 +51,9 @@ func OpenAPISpecV1ForRuntime(publicURL string, ctx *shared.Context) map[string]a
 		for route := range agentDiscoveryPaths() {
 			delete(paths, route)
 		}
+	}
+	if ctx == nil || ctx.OAuthProvider == nil {
+		delete(paths, "/.well-known/oauth-protected-resource")
 	}
 	if !ctx.A2AAvailable() {
 		delete(paths, "/.well-known/agent-card.json")

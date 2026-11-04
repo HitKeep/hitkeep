@@ -113,3 +113,18 @@ func TestSafeRequestPathRedactsTokenSegments(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentClaimRequestLoggingOmitsBearerQueryAndBody(t *testing.T) {
+	var logs bytes.Buffer
+	server := &Server{logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+	request := httptest.NewRequest(http.MethodPost, "/oauth/agent-claim?claim_attempt_token=query-secret", strings.NewReader("claim_token=body-secret&claim_code=123456"))
+	server.requestLoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadRequest) })).ServeHTTP(httptest.NewRecorder(), request)
+	for _, secret := range []string{"query-secret", "body-secret", "123456"} {
+		if strings.Contains(logs.String(), secret) {
+			t.Fatal("agent claim material entered request logs")
+		}
+	}
+	if !strings.Contains(logs.String(), "/oauth/agent-claim") {
+		t.Fatal("request path was lost")
+	}
+}
