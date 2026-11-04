@@ -756,6 +756,7 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 		if continueOAuth && destination == "/dashboard" {
 			destination = "/oauth/consent"
 		}
+		//nolint:gosec // G710: destination is a bounded native reference or allowlisted plan path; publicRedirectURL pins the configured origin and prefix.
 		http.Redirect(w, r, h.publicRedirectURL(destination), http.StatusSeeOther)
 	}
 }
