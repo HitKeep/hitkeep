@@ -76,6 +76,8 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		var err error
 		var apiClientAuth *database.APIClientAuth
 		var sessionCtx *AuthSessionContext
+		var restoreSession bool
+		isSecure := c.Config != nil && strings.HasPrefix(c.Config.PublicURL, "https://")
 
 		// 1. Try to validate the short-lived JWT.
 		cookie, err := r.Cookie(auth.CookieName)
@@ -92,17 +94,17 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		if err != nil || userID == uuid.Nil {
 			rememberCookie, err := r.Cookie(auth.RememberMeCookieName)
 			if err == nil {
-				userID, err = c.Store.ValidateRememberMeToken(r.Context(), rememberCookie.Value)
-				if err == nil && userID != uuid.Nil {
-					// Valid remember me token! Issue a new JWT.
-					duration := c.Config.AuthSessionDuration()
-					newToken, expiresAt, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
-					if err == nil {
-						isSecure := strings.HasPrefix(c.Config.PublicURL, "https://")
-						auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
-						sessionCtx = &AuthSessionContext{ExpiresAt: expiresAt.UTC(), IssuedAt: time.Now().UTC()}
-					}
+				if c.Store == nil {
+					http.Error(w, "Service not available", http.StatusServiceUnavailable)
+					return
 				}
+				userID, err = c.Store.ValidateRememberMeToken(r.Context(), rememberCookie.Value)
+				if err != nil {
+					LoggerFromContext(r.Context()).Error("Failed to validate remember me token", "error", err)
+					http.Error(w, "Service not available", http.StatusServiceUnavailable)
+					return
+				}
+				restoreSession = userID != uuid.Nil
 			}
 		}
 
@@ -119,8 +121,35 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		}
 
 		if userID == uuid.Nil && apiClientAuth == nil {
+			auth.ClearCookies(w, isSecure)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
+		}
+
+		if apiClientAuth == nil {
+			if c.Store == nil {
+				http.Error(w, "Service not available", http.StatusServiceUnavailable)
+				return
+			}
+			user, err := c.Store.GetUserByID(r.Context(), userID)
+			if err != nil {
+				LoggerFromContext(r.Context()).Error("Failed to validate session user", "error", err)
+				http.Error(w, "Service not available", http.StatusServiceUnavailable)
+				return
+			}
+			if user == nil {
+				auth.ClearCookies(w, isSecure)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if restoreSession {
+				duration := c.Config.AuthSessionDuration()
+				newToken, expiresAt, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
+				if err == nil {
+					auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
+					sessionCtx = &AuthSessionContext{ExpiresAt: expiresAt.UTC(), IssuedAt: time.Now().UTC()}
+				}
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
