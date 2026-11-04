@@ -13,6 +13,7 @@ import (
 	authcore "hitkeep/auth"
 	"hitkeep/entitlements"
 	json "hitkeep/jsonapi"
+	"hitkeep/server/shared"
 )
 
 func TestServerUnicodePublicPrefix(t *testing.T) {
@@ -115,6 +116,40 @@ func TestServerUnicodePublicPrefix(t *testing.T) {
 				}
 				if !found {
 					t.Fatal("nonce cookie missing")
+				}
+				managementBody := strings.Replace(body, `"intent":"login","remember_me":false`, `"action":"passkey_register"`, 1)
+				management := request("POST", prefix+"/api/auth/native/management/start", managementBody, &http.Cookie{Name: authcore.CookieName, Value: token})
+				if management.Code != 200 {
+					t.Fatalf("management start %d %s", management.Code, management.Body.String())
+				}
+				if err := json.Unmarshal(management.Body.Bytes(), &started); err != nil {
+					t.Fatal(err)
+				}
+				managementURL, _ := url.Parse(started.AuthorizationURL)
+				handle := managementURL.Query().Get("request")
+				// Primary authentication is covered separately; this matrix checks its scoped browser cookie.
+				if !srv.ctx.AuthState.CompleteAccountDeletionPrimary(shared.NativeManagementReturnPath(handle), id, issuer, claims.ID) {
+					t.Fatal("management primary binding failed")
+				}
+				managementConsent := request("GET", tc.canonical+"/api/auth/native/consent?request="+handle, "", &http.Cookie{Name: authcore.CookieName, Value: token})
+				if managementConsent.Code != 200 {
+					t.Fatalf("management consent %d %s", managementConsent.Code, managementConsent.Body.String())
+				}
+				found = false
+				for _, cookie := range managementConsent.Result().Cookies() {
+					if cookie.Name == shared.NativeManagementBrowserCookie {
+						found = true
+						if cookie.Path != tc.canonical+"/api" || !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode {
+							t.Fatal("management browser cookie lost its escaped prefix or guards")
+						}
+					}
+				}
+				if !found {
+					t.Fatal("management browser cookie missing")
+				}
+				page := request("GET", tc.canonical+shared.NativeManagementReturnPath(handle), "")
+				if page.Code != 200 || page.Header().Get("Referrer-Policy") != "same-origin" {
+					t.Fatal("management document policy lost after prefix stripping")
 				}
 			}
 			for _, bad := range []string{"/%2e%2e/api/status", "/a%2fb/api/status", "/a%5cb/api/status", "/%252e%252e/api/status", "/%00/api/status"} {
