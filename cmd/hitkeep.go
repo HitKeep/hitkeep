@@ -339,6 +339,10 @@ func startLeaderServices(ctx context.Context, conf *config.Config, logger *slog.
 		}
 	}
 	tenantMgr.StartMaintenance(ctx)
+	if err := tenantMgr.ResumeAccountRemovals(ctx); err != nil {
+		closeStores()
+		return nil, nil, nil, nil, err
+	}
 	if err := tenantMgr.SyncAllTenants(ctx); err != nil {
 		closeStores()
 		return nil, nil, nil, nil, err

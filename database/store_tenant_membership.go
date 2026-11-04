@@ -142,6 +142,7 @@ func (s *Store) AddTeamMember(ctx context.Context, tenantID, userID uuid.UUID, r
 	if closed {
 		return ErrAccountDeletionBlocked
 	}
+	role = strings.TrimSpace(strings.ToLower(role))
 	if role != TenantRoleOwner {
 		var last bool
 		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner') AND (SELECT COUNT(*) FROM tenant_members WHERE tenant_id=? AND role='owner')<=1`, tenantID, userID, tenantID).Scan(&last); err != nil {
@@ -152,7 +153,6 @@ func (s *Store) AddTeamMember(ctx context.Context, tenantID, userID uuid.UUID, r
 		}
 	}
 
-	role = strings.TrimSpace(strings.ToLower(role))
 	if !IsValidTenantRole(role) {
 		return fmt.Errorf("invalid tenant role")
 	}
@@ -712,6 +712,14 @@ func (s *Store) RemoveTeamMember(ctx context.Context, tenantID, userID uuid.UUID
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
+		var lastOwner bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner') AND NOT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id<>? AND role='owner')`, tenantID, userID, tenantID, userID).Scan(&lastOwner); err != nil {
+			return err
+		}
+		if lastOwner {
+			return ErrTeamLastOwner
+		}
+
 		result, err := tx.ExecContext(ctx, "DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ?", tenantID, userID)
 		if err != nil {
 			return fmt.Errorf("could not remove tenant member: %w", err)

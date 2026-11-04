@@ -18,6 +18,18 @@ var ErrPasswordResetExpired = errors.New("token expired")
 
 // CreatePasswordResetToken generates a secure token, saves it, and returns it.
 func (s *Store) CreatePasswordResetToken(ctx context.Context, email string) (string, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	u, err := s.GetUserByEmail(ctx, email)
+	if err != nil {
+		return "", err
+	}
+	if u == nil {
+		return "", ErrUserNotFound
+	}
+	if err := s.requireAccountNotRemoving(ctx, u.ID); err != nil {
+		return "", err
+	}
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
@@ -30,6 +42,9 @@ func (s *Store) CreatePasswordResetToken(ctx context.Context, email string) (str
 
 // CompletePasswordReset verifies a token and updates the password in a single transaction.
 func (s *Store) CompletePasswordReset(ctx context.Context, token string, newHashedPassword string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+
 	entry, found, err := s.lookupPasswordResetToken(token, true)
 	if err != nil {
 		return err
@@ -72,6 +87,15 @@ func (s *Store) ResolvePasswordResetEmail(ctx context.Context, token string) (st
 }
 
 func (s *Store) UpdatePasswordByID(ctx context.Context, userID string, newHashedPassword string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.requireAccountNotRemoving(ctx, id); err != nil {
+		return err
+	}
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "UPDATE users SET password = ?, password_login_enabled = TRUE WHERE id = ?", newHashedPassword, userID); err != nil {
 			return err
@@ -99,6 +123,11 @@ func (s *Store) CreateRememberMeTokenWithDuration(ctx context.Context, userID uu
 }
 
 func (s *Store) CreateRememberMeSessionWithDuration(ctx context.Context, userID uuid.UUID, duration time.Duration) (string, time.Time, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return "", time.Time{}, err
+	}
 	if duration <= 0 {
 		duration = 30 * 24 * time.Hour
 	}

@@ -159,8 +159,15 @@ func (s *Store) removePersonalAccount(ctx context.Context, userID uuid.UUID, cho
 			}
 		}
 	}
+	user, err := s.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
 	if err := runStoreTx(ctx, s.db, func(tx *sql.Tx) error { return cleanupUserRows(ctx, tx, userID) }); err != nil {
 		return err
+	}
+	if user != nil {
+		s.deletePasswordResetTokenForEmail(user.Email)
 	}
 	// DuckDB checks referenced parents against committed child changes.
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id=?`, userID); err != nil {

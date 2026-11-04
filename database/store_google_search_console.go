@@ -453,6 +453,12 @@ func (s *Store) DeleteGoogleSearchConsoleSiteMappingWithAudit(ctx context.Contex
 }
 
 func (s *Store) TransferSiteTeamWithAudit(ctx context.Context, siteID, destinationTeamID uuid.UUID, clearSearchConsoleMapping bool, audits []AuditEntryParams) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.transferSiteTeamWithAudit(ctx, siteID, destinationTeamID, clearSearchConsoleMapping, audits)
+}
+
+func (s *Store) transferSiteTeamWithAudit(ctx context.Context, siteID, destinationTeamID uuid.UUID, clearSearchConsoleMapping bool, audits []AuditEntryParams) error {
 	defer s.invalidateSiteTenantID(siteID)
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if err := updateSiteTenant(ctx, tx, siteID, destinationTeamID); err != nil {

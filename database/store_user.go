@@ -280,6 +280,11 @@ func runStoreTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
 }
 
 func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email string, givenName string, lastName string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	email = strings.TrimSpace(email)
 	givenName = strings.TrimSpace(givenName)
 	lastName = strings.TrimSpace(lastName)
@@ -388,6 +393,8 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email s
 
 // DeleteUser removes a user by ID.
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	blockingTeams, err := s.ListSoleOwnerTeams(ctx, id)
 	if err != nil {
 		return fmt.Errorf("could not verify team ownership before deleting user: %w", err)

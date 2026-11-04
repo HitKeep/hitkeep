@@ -27,6 +27,8 @@ type AccountDeletionIntent struct {
 	Plan                                         api.AccountDeletionPlan
 	Cloud                                        bool
 	ExpiresAt                                    time.Time
+	ProvidersChecked                             bool
+	ProviderOutcomes                             []api.AccountDeletionProviderRevocation
 }
 
 func AccountDeletionConsequenceHash(plan api.AccountDeletionPlan) (string, error) {
@@ -56,17 +58,23 @@ func (s *Store) SaveAccountDeletionIntent(ctx context.Context, intent AccountDel
 	if err != nil {
 		return err
 	}
+	if err := s.Exec(ctx, `DELETE FROM account_deletion_intents WHERE phase IN ('prepared','authorized') AND expires_at<=NOW()`); err != nil {
+		return err
+	}
 	return s.Exec(ctx, `INSERT INTO account_deletion_intents (attempt_id,user_id,consequence_hash,choices,consequences,cloud,expires_at) VALUES (?,?,?,?,?,?,?)`, intent.AttemptID, intent.UserID, hash, string(choices), string(plan), intent.Cloud, intent.ExpiresAt)
 }
 
 func (s *Store) GetAccountDeletionIntent(ctx context.Context, attemptID string, userID uuid.UUID) (*AccountDeletionIntent, error) {
 	intent := &AccountDeletionIntent{AttemptID: attemptID, UserID: userID}
-	var choices, plan string
-	err := s.db.QueryRowContext(ctx, `SELECT session_id,consequence_hash,choices,consequences,cloud,phase,expires_at FROM account_deletion_intents WHERE attempt_id=? AND user_id=?`, attemptID, userID).Scan(&intent.SessionID, &intent.ConsequenceHash, &choices, &plan, &intent.Cloud, &intent.Phase, &intent.ExpiresAt)
+	var choices, plan, outcomes string
+	err := s.db.QueryRowContext(ctx, `SELECT session_id,consequence_hash,choices,consequences,cloud,phase,expires_at,providers_checked,provider_outcomes FROM account_deletion_intents WHERE attempt_id=? AND user_id=?`, attemptID, userID).Scan(&intent.SessionID, &intent.ConsequenceHash, &choices, &plan, &intent.Cloud, &intent.Phase, &intent.ExpiresAt, &intent.ProvidersChecked, &outcomes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrAccountDeletionProof
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(outcomes), &intent.ProviderOutcomes); err != nil {
 		return nil, err
 	}
 	if choices != "" {
@@ -89,6 +97,10 @@ func (s *Store) AccountRemovalStarted(ctx context.Context, userID uuid.UUID) (bo
 }
 
 func (s *Store) setAccountDeletionPhase(ctx context.Context, attemptID, sessionID, phase string) error {
+	if phase == "complete" {
+		return s.Exec(ctx, `UPDATE account_deletion_intents SET phase='complete',choices='',consequences='',updated_at=NOW() WHERE user_id=(SELECT user_id FROM account_deletion_intents WHERE attempt_id=?)`, attemptID)
+	}
+
 	return s.Exec(ctx, `UPDATE account_deletion_intents SET session_id=?,phase=?,updated_at=NOW(),choices=CASE WHEN ?='complete' THEN '' ELSE choices END,consequences=CASE WHEN ?='complete' THEN '' ELSE consequences END WHERE attempt_id=?`, sessionID, phase, phase, phase, attemptID)
 }
 
@@ -103,6 +115,13 @@ type ClosedCloudAccount struct {
 func (s *Store) RecordClosedCloudAccount(ctx context.Context, receipt ClosedCloudAccount) error {
 	if receipt.TeamID == uuid.Nil || !receipt.CancelAtPeriodEnd {
 		return ErrAccountDeletionBlocked
+	}
+	var different bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM closed_cloud_accounts WHERE original_team_id=? AND (stripe_customer_id<>? OR stripe_subscription_id<>?))`, receipt.TeamID, receipt.CustomerID, receipt.SubscriptionID).Scan(&different); err != nil {
+		return err
+	}
+	if different {
+		return ErrAccountDeletionChanged
 	}
 	return s.Exec(ctx, `INSERT INTO closed_cloud_accounts (original_team_id,stripe_customer_id,stripe_subscription_id,cancel_at_period_end,current_period_end) VALUES (?,?,?,?,?) ON CONFLICT (original_team_id) DO NOTHING`, receipt.TeamID, receipt.CustomerID, receipt.SubscriptionID, true, receipt.CurrentPeriodEnd)
 }
@@ -128,4 +147,19 @@ func (s *Store) requireAccountNotRemoving(ctx context.Context, userID uuid.UUID)
 		return ErrAccountDeletionBlocked
 	}
 	return nil
+}
+
+func (s *Store) GetAccountDeletionResult(ctx context.Context, attemptID string, userID uuid.UUID) (*api.AccountDeletionResult, error) {
+	intent, err := s.GetAccountDeletionIntent(ctx, attemptID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.Phase != "complete" || !intent.ProvidersChecked {
+		return nil, ErrAccountDeletionUnavailable
+	}
+	outcomes := intent.ProviderOutcomes
+	if outcomes == nil {
+		outcomes = []api.AccountDeletionProviderRevocation{}
+	}
+	return &api.AccountDeletionResult{Status: "deleted", ProviderRevocations: outcomes}, nil
 }

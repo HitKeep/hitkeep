@@ -21,3 +21,10 @@ func (s *Store) accountDeletionBilling(ctx context.Context, teamID uuid.UUID) (s
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(fmt.Appendf(nil, "%s\n%s\n%s\n%s\n%s", account.StripeCustomerID, account.StripeSubscriptionID, account.SubscriptionStatus, account.PlanCode, account.StripePriceID))), account.StripeCustomerID != "" || account.StripeSubscriptionID != "", nil
 }
+
+// SerializeCloudBillingMutation excludes a new provider checkout throughout
+// final account closure, including provider verification before local purge.
+func (s *Store) SerializeCloudBillingMutation() func() {
+	s.billingLifecycleMu.Lock()
+	return s.billingLifecycleMu.Unlock
+}

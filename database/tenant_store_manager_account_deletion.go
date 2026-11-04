@@ -10,7 +10,37 @@ import (
 	"github.com/google/uuid"
 
 	"hitkeep/api"
+	json "hitkeep/jsonapi"
 )
+
+// ResumeAccountRemovals runs at startup before publishing stores. Only an
+// intent past verified renewal cancellation can resume without another proof.
+func (m *TenantStoreManager) ResumeAccountRemovals(ctx context.Context) error {
+	rows, err := m.shared.db.QueryContext(ctx, `SELECT attempt_id,user_id,session_id,consequence_hash FROM account_deletion_intents WHERE phase='removing' ORDER BY created_at LIMIT 100`)
+	if err != nil {
+		return err
+	}
+	var intents []AccountDeletionIntent
+	for rows.Next() {
+		var intent AccountDeletionIntent
+		if err := rows.Scan(&intent.AttemptID, &intent.UserID, &intent.SessionID, &intent.ConsequenceHash); err != nil {
+			rows.Close()
+			return err
+		}
+		intents = append(intents, intent)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, intent := range intents {
+		if err := m.DeleteCurrentAccount(ctx, intent.UserID, intent.AttemptID, intent.SessionID, intent.ConsequenceHash, nil, nil); err != nil {
+			return fmt.Errorf("resume authorized account removal: %w", err)
+		}
+	}
+	return nil
+}
 
 // DeleteCurrentAccount resumes only the exact, explicitly approved intent.
 // authorize consumes auth-owned fresh proof; stopRenewals must verify provider
@@ -20,6 +50,8 @@ func (m *TenantStoreManager) DeleteCurrentAccount(ctx context.Context, userID uu
 		return ErrAccountDeletionUnavailable
 	}
 	s := m.shared
+	s.billingLifecycleMu.Lock()
+	defer s.billingLifecycleMu.Unlock()
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	s.primaryAuthMu.Lock()
@@ -86,6 +118,41 @@ func (m *TenantStoreManager) DeleteCurrentAccount(ctx context.Context, userID uu
 	}
 	if intent.Phase != "removing" || intent.SessionID != sessionID {
 		return ErrAccountDeletionProof
+	}
+	if !intent.ProvidersChecked {
+		identities, err := s.ListUserSocialIdentities(ctx, userID)
+		if err != nil {
+			return err
+		}
+		appleLinked := false
+		for _, identity := range identities {
+			if identity.Provider == "apple" {
+				appleLinked = true
+			}
+		}
+		outcomes := []api.AccountDeletionProviderRevocation{}
+		if appleLinked {
+			if m.accountDeletionProviderRevoker == nil {
+				return ErrAccountDeletionUnavailable
+			}
+			supplied := m.accountDeletionProviderRevoker(ctx, userID)
+			outcome := api.AccountDeletionProviderRevocation{Provider: "apple", Status: "manual_revocation_required"}
+			for _, value := range supplied {
+				if value.Provider == "apple" && (value.Status == "revoked" || value.Status == "manual_revocation_required") {
+					outcome = value
+				}
+			}
+			outcomes = append(outcomes, outcome)
+		}
+		encoded, err := json.Marshal(outcomes)
+		if err != nil {
+			return err
+		}
+		if err := s.Exec(ctx, `UPDATE account_deletion_intents SET providers_checked=TRUE,provider_outcomes=?,updated_at=NOW() WHERE attempt_id=?`, string(encoded), attemptID); err != nil {
+			return err
+		}
+		intent.ProvidersChecked = true
+		intent.ProviderOutcomes = outcomes
 	}
 	for _, team := range intent.Plan.Teams {
 		if team.Action == "close" {
@@ -166,7 +233,7 @@ func (m *TenantStoreManager) purgeAccountDeletionTeam(ctx context.Context, inten
 		return err
 	}
 	for _, site := range sites {
-		if err := m.DeleteSite(ctx, site.ID); err != nil {
+		if err := m.deleteSite(ctx, site.ID); err != nil {
 			return err
 		}
 	}
@@ -200,6 +267,9 @@ func (m *TenantStoreManager) purgeAccountDeletionTeam(ctx context.Context, inten
 		return err
 	}
 	if teamID == defaultID {
+		if err := m.shared.Exec(ctx, `UPDATE tenants SET name=?,logo_url=NULL WHERE id=?`, defaultTenantName, teamID); err != nil {
+			return err
+		}
 		return m.shared.Exec(ctx, `INSERT INTO tenant_archives (tenant_id,archived_at,archived_by) VALUES (?,NOW(),NULL) ON CONFLICT (tenant_id) DO NOTHING`, teamID)
 	}
 	return m.shared.Exec(ctx, `DELETE FROM tenants WHERE id=?`, teamID)

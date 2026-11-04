@@ -3,12 +3,134 @@ package database
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"hitkeep/api"
 	"hitkeep/auth"
 )
+
+func TestPersonalRemovalRejectsOwnerFromDifferentTeam(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	u, err := s.CreateUser(ctx, "departing-cross@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.CreateUser(ctx, "remaining-cross@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTeamMember(ctx, team, v, TenantRoleOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateInstanceRole(ctx, v, auth.InstanceOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	private, err := s.CreateTenant(ctx, u, "Private team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateSite(ctx, u, "same-tenant-only.example.test"); err != nil {
+		t.Fatal(err)
+	}
+	choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: private.ID, UserID: v}}}
+	plan, err := s.PlanAccountDeletion(ctx, u, choices, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range plan.Blockers {
+		if b.Code == "invalid_successor" && b.TeamID == private.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("cross-team owner was accepted: %+v", plan)
+	}
+	if err := s.RemovePersonalAccount(ctx, u, choices, false); !errors.Is(err, ErrAccountDeletionBlocked) {
+		t.Fatalf("remove=%v", err)
+	}
+}
+
+func TestPersonalRemovalResumesAfterCommittedCleanupParentFailure(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	u, err := s.CreateUser(ctx, "partial@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.CreateUser(ctx, "partial-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTeamMember(ctx, team, v, TenantRoleOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateInstanceRole(ctx, v, auth.InstanceOwner, u); err != nil {
+		t.Fatal(err)
+	}
+	site, err := s.CreateSite(ctx, u, "partial.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: team, UserID: v}}}
+	plan, err := s.PlanAccountDeletion(ctx, u, choices, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := AccountDeletionConsequenceHash(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.NewString()
+	if err := s.SaveAccountDeletionIntent(ctx, AccountDeletionIntent{AttemptID: id, UserID: u, Choices: choices, Plan: plan, ConsequenceHash: hash, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `CREATE TABLE deletion_failure_probe (user_id UUID REFERENCES users(id))`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO deletion_failure_probe VALUES (?)`, u); err != nil {
+		t.Fatal(err)
+	}
+	m := NewTenantStoreManager(s, t.TempDir())
+	t.Cleanup(func() { _ = m.Close() })
+	proofs := 0
+	err = m.DeleteCurrentAccount(ctx, u, id, "fresh-jti", hash, func() bool { proofs++; return true }, nil)
+	if err == nil {
+		t.Fatal("expected parent FK failure after committed child cleanup")
+	}
+	if started, err := s.AccountRemovalStarted(ctx, u); err != nil || !started {
+		t.Fatalf("phase=%v err=%v", started, err)
+	}
+	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: u, Provider: "google", Subject: "new-subject"}); err == nil {
+		t.Fatal("identity linked after removal began")
+	}
+	if err := s.Exec(ctx, `DROP TABLE deletion_failure_probe`); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ResumeAccountRemovals(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if proofs != 1 {
+		t.Fatalf("proof consumed %d times", proofs)
+	}
+	if user, err := s.GetUserByID(ctx, u); err != nil || user != nil {
+		t.Fatalf("user=%v err=%v", user, err)
+	}
+	if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil || current.UserID != v {
+		t.Fatalf("site=%v err=%v", current, err)
+	}
+}
 
 func TestPersonalRemovalPreservesSharedSitesAndRequiresSameTeamOwner(t *testing.T) {
 	s := setupTenantStore(t)
@@ -39,6 +161,41 @@ func TestPersonalRemovalPreservesSharedSitesAndRequiresSameTeamOwner(t *testing.
 		t.Fatal(err)
 	}
 
+	_, personalToken, err := s.CreateAPIClient(ctx, departing, "Personal", "", auth.InstanceUser, map[uuid.UUID]auth.SiteRole{site.ID: auth.SiteViewer}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, teamToken, err := s.CreateTeamAPIClient(ctx, teamID, "Team", "", map[uuid.UUID]auth.SiteRole{site.ID: auth.SiteViewer}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetAPIClientAuth(ctx, personalToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetAPIClientAuth(ctx, teamToken); err != nil {
+		t.Fatal(err)
+	}
+	remember, err := s.CreateRememberMeToken(ctx, departing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset, err := s.CreatePasswordResetToken(ctx, "departing@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUserPasskey(ctx, departing, "Key", "credential", "public-key", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnableUserTOTP(ctx, departing, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: departing, Provider: "google", Subject: "departing-linked-subject"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceUserRecoveryCodes(ctx, departing, []string{"hashed-code"}); err != nil {
+		t.Fatal(err)
+	}
+
 	choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: teamID, UserID: owner}}}
 	plan, err := s.PlanAccountDeletion(ctx, departing, choices, false)
 	if err != nil || len(plan.Blockers) != 0 {
@@ -58,6 +215,25 @@ func TestPersonalRemovalPreservesSharedSitesAndRequiresSameTeamOwner(t *testing.
 	if err := s.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM hits WHERE site_id=?`, site.ID).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("hits=%d err=%v", count, err)
 	}
+	if credential, err := s.GetAPIClientAuth(ctx, personalToken); err != nil || credential != nil {
+		t.Fatalf("personal credential retained: %v %v", credential, err)
+	}
+	if credential, err := s.GetAPIClientAuth(ctx, teamToken); err != nil || credential == nil {
+		t.Fatalf("team credential removed: %v %v", credential, err)
+	}
+	if id, err := s.ValidateRememberMeToken(ctx, remember); err == nil && id != uuid.Nil {
+		t.Fatal("remember credential survived")
+	}
+	if _, err := s.ResolvePasswordResetEmail(ctx, reset); err == nil {
+		t.Fatal("reset credential survived")
+	}
+	if keys, err := s.ListUserPasskeys(ctx, departing); err != nil || len(keys) != 0 {
+		t.Fatalf("passkeys survived: %v %v", keys, err)
+	}
+	if identities, err := s.ListUserSocialIdentities(ctx, departing); err != nil || len(identities) != 0 {
+		t.Fatalf("social identities survived: %v %v", identities, err)
+	}
+
 	if err := s.RemovePersonalAccount(ctx, departing, choices, false); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("retry: %v", err)
 	}

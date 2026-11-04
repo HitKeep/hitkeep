@@ -73,3 +73,13 @@ type AccountDeletionConfirmation struct {
 	ConsequenceHash string `json:"consequence_hash"`
 	Confirm         bool   `json:"confirm"`
 }
+
+type AccountDeletionProviderRevocation struct {
+	Provider string `json:"provider"`
+	Status   string `json:"status"`
+}
+
+type AccountDeletionResult struct {
+	Status              string                              `json:"status"`
+	ProviderRevocations []AccountDeletionProviderRevocation `json:"provider_revocations"`
+}
