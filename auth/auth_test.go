@@ -56,3 +56,22 @@ func TestValidateTokenClaimsAcceptsOnlyHS256(t *testing.T) {
 		})
 	}
 }
+
+func TestFreshOrdinarySessionsHaveDistinctIDs(t *testing.T) {
+	id := uuid.New()
+	first, err := GenerateToken("test-secret", "https://example.test/prefix", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := GenerateToken("test-secret", "https://example.test/prefix", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("fresh sessions reused the same JWT")
+	}
+	claims, err := ValidateTokenClaims(second, "test-secret", "https://example.test/prefix")
+	if err != nil || claims.ID == "" || claims.UserID != id {
+		t.Fatalf("claims=%+v err=%v", claims, err)
+	}
+}
