@@ -39,7 +39,7 @@ require (
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/fileflow v0.2.0
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/spf13/viper v1.21.0
 	github.com/stripe/stripe-go/v87 v87.1.0
 	github.com/wneessen/go-mail v0.8.1
