@@ -63,7 +63,7 @@
         "@jsverse/transloco-optimize": "^8.4.0",
         "@playwright/test": "^1.64.1",
         "@types/markdown-it": "14.2.0",
-        "@vitest/browser-playwright": "^5.0.5",
+        "@vitest/browser-playwright": "^5.1.0",
         "@vitest/coverage-v8": "^5.0.5",
         "angular-eslint": "22.6.0",
         "baseline-browser-mapping": "^2.11.33",
