@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -316,7 +317,7 @@ func (s *Store) openReconnectingDB(ctx context.Context) (*sql.DB, error) {
 		connectorPath = s.connectorPath
 	}
 	connector := newReconnectingConnector(connectorPath, func() (driver.Connector, error) {
-		return duckdb.NewConnector(connectorPath, s.initConnection)
+		return newDuckDBConnector(connectorPath, s.initConnection)
 	}, func(ctx context.Context, trigger error) error {
 		err := s.recoverAfterInvalidation(ctx, trigger)
 		if err != nil {
@@ -389,7 +390,7 @@ func (s *Store) openRawDB(ctx context.Context) (*sql.DB, error) {
 	if strings.TrimSpace(s.connectorPath) != "" {
 		connectorPath = s.connectorPath
 	}
-	connector, err := duckdb.NewConnector(connectorPath, s.initConnection)
+	connector, err := newDuckDBConnector(connectorPath, s.initConnection)
 	if err != nil {
 		return nil, err
 	}
@@ -399,6 +400,17 @@ func (s *Store) openRawDB(ctx context.Context) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func newDuckDBConnector(path string, init func(driver.ExecerContext) error) (*duckdb.Connector, error) {
+	file, query, _ := strings.Cut(path, "?")
+	options, err := url.ParseQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	// Keep the pre-2.0 default format for new files, including ATTACH targets.
+	options.Set("storage_compatibility_version", "v1.0.0")
+	return duckdb.NewConnector(file+"?"+options.Encode(), init)
 }
 
 func (s *Store) initConnection(execer driver.ExecerContext) error {
