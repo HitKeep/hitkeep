@@ -249,6 +249,9 @@ func (s *Store) UpdateTenant(ctx context.Context, tenantID uuid.UUID, name, logo
 func (s *Store) CreateTenant(ctx context.Context, creatorID uuid.UUID, name, logoURL string) (*api.Team, error) {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, creatorID); err != nil {
+		return nil, err
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("team name cannot be empty")

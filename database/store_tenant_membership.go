@@ -840,6 +840,12 @@ func (s *Store) TransferTeamOwnership(ctx context.Context, tenantID, actorID, ta
 	if actorID == targetUserID {
 		return ErrTeamTransferSelf
 	}
+	if err := s.requireAccountNotRemoving(ctx, actorID); err != nil {
+		return err
+	}
+	if err := s.requireAccountNotRemoving(ctx, targetUserID); err != nil {
+		return err
+	}
 
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
 		var actorRole string

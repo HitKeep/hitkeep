@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 	stduuid "uuid"
@@ -193,11 +195,18 @@ func TestPersonalRemovalResumesAfterCommittedCleanupParentFailure(t *testing.T) 
 	if _, err := s.LinkSocialIdentity(ctx, LinkSocialIdentityInput{UserID: u, Provider: "google", Subject: "new-subject"}); err == nil {
 		t.Fatal("identity linked after removal began")
 	}
+	if created, err := s.CreateTenant(ctx, u, "Created after removal began", ""); !errors.Is(err, ErrAccountDeletionBlocked) || created != nil {
+		t.Fatalf("removing user created a team: team=%+v err=%v", created, err)
+	}
 	if err := s.Exec(ctx, `DROP TABLE deletion_failure_probe`); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ResumeAccountRemovals(ctx); err != nil {
 		t.Fatal(err)
+	}
+	var orphaned int
+	if err := s.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM tenants t WHERE NOT EXISTS (SELECT 1 FROM tenant_members m WHERE m.tenant_id=t.id) AND NOT EXISTS (SELECT 1 FROM tenant_archives a WHERE a.tenant_id=t.id)`).Scan(&orphaned); err != nil || orphaned != 0 {
+		t.Fatalf("active teams without members after resume=%d err=%v", orphaned, err)
 	}
 	if providerCalls != 1 {
 		t.Fatalf("provider revocation repeated after persisted result: %d", providerCalls)
@@ -459,6 +468,100 @@ func TestAccountDeletionSecurityFingerprintExcludesUsage(t *testing.T) {
 				t.Fatalf("credential change preserved fingerprint: %v", err)
 			}
 			fingerprint = current
+		})
+	}
+}
+
+func TestPersonalRemovalRejectsOwnershipAfterTenantSyncFailure(t *testing.T) {
+	for _, departingRole := range []string{TenantRoleMember, TenantRoleOwner} {
+		t.Run(departingRole, func(t *testing.T) {
+			s := setupTenantStore(t)
+			ctx := t.Context()
+			owner, err := s.CreateUser(ctx, "sync-owner@example.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			departing, err := s.CreateUser(ctx, "sync-departing@example.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target, err := s.CreateUser(ctx, "sync-target@example.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			team, err := s.CreateTenant(ctx, owner, "Surviving team", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, team.ID, departing, departingRole, owner); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, team.ID, target, TenantRoleMember, owner); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SetActiveTenantID(ctx, departing, team.ID); err != nil {
+				t.Fatal(err)
+			}
+			site, err := s.CreateSite(ctx, departing, "sync-retained.example.test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			choices := api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: team.ID, UserID: owner}}}
+			plan, err := s.PlanAccountDeletion(ctx, departing, choices, false)
+			if err != nil || len(plan.Blockers) != 0 {
+				t.Fatalf("plan=%+v err=%v", plan, err)
+			}
+			hash, err := AccountDeletionConsequenceHash(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			attempt := uuid.NewString()
+			if err := s.SaveAccountDeletionIntent(ctx, AccountDeletionIntent{AttemptID: attempt, UserID: departing, Choices: choices, Plan: plan, ConsequenceHash: hash, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+			dataPath := filepath.Join(t.TempDir(), "blocked-data-directory")
+			if err := os.WriteFile(dataPath, []byte("block tenant directory creation"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			m := NewTenantStoreManager(s, dataPath)
+			t.Cleanup(func() { _ = m.Close() })
+			if err := m.DeleteCurrentAccount(ctx, departing, attempt, "fresh-jti", hash, func() bool { return true }, nil); err == nil {
+				t.Fatal("expected tenant sync failure after ownership reparenting")
+			}
+			if removing, err := s.AccountRemovalStarted(ctx, departing); err != nil || !removing {
+				t.Fatalf("removing=%v err=%v", removing, err)
+			}
+			if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil || current.UserID != owner {
+				t.Fatalf("site reparenting did not precede sync failure: %+v err=%v", current, err)
+			}
+			actorID, targetID := owner, departing
+			if departingRole == TenantRoleOwner {
+				actorID, targetID = departing, target
+			}
+			if err := s.TransferTeamOwnership(ctx, team.ID, actorID, targetID); !errors.Is(err, ErrAccountDeletionBlocked) {
+				t.Fatalf("ownership changed with removing participant: %v", err)
+			}
+			if err := s.AddTeamMember(ctx, team.ID, departing, TenantRoleOwner, owner); !errors.Is(err, ErrAccountDeletionBlocked) {
+				t.Fatalf("removing user promoted through membership write: %v", err)
+			}
+			if err := os.Remove(dataPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.ResumeAccountRemovals(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if user, err := s.GetUserByID(ctx, departing); err != nil || user != nil {
+				t.Fatalf("departing user retained: %+v err=%v", user, err)
+			}
+			if role, err := s.GetTenantRole(ctx, team.ID, owner); err != nil || role != TenantRoleOwner {
+				t.Fatalf("surviving owner lost authority: role=%q err=%v", role, err)
+			}
+			if owners, err := s.CountTeamOwners(ctx, team.ID); err != nil || owners != 1 {
+				t.Fatalf("surviving team owners=%d err=%v", owners, err)
+			}
+			if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil || current.UserID != owner {
+				t.Fatalf("surviving site changed: %+v err=%v", current, err)
+			}
 		})
 	}
 }
