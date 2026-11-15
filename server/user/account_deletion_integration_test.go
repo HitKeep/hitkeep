@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -17,9 +18,15 @@ import (
 )
 
 func TestAccountDeletionRoutedPasswordMFAAndCopiedSession(t *testing.T) {
+	for _, publicURL := range []string{"http://localhost:8080", "https://account.example.test", "HTTPS://ACCOUNT.example.test:443/prefix/"} {
+		t.Run(publicURL, func(t *testing.T) { testAccountDeletionRoutedPasswordMFAAndCopiedSession(t, publicURL) })
+	}
+}
+
+func testAccountDeletionRoutedPasswordMFAAndCopiedSession(t *testing.T, publicURL string) {
 	h, store, departing := setupUserSecurityTestEnv(t)
 	t.Cleanup(func() { _ = store.Close() })
-	h.ctx.Config.PublicURL = "https://account.example.test"
+	h.ctx.Config.PublicURL = publicURL
 	ctx := t.Context()
 	owner, err := store.CreateUser(ctx, "remaining-integration@example.test", "hash")
 	if err != nil {
@@ -59,7 +66,11 @@ func TestAccountDeletionRoutedPasswordMFAAndCopiedSession(t *testing.T) {
 		}
 		r := httptest.NewRequest(method, path, bytes.NewReader(encoded))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("Origin", h.ctx.Config.PublicURL)
+		origin, err := url.Parse(shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Header.Set("Origin", origin.Scheme+"://"+origin.Host)
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
 		if cookie != nil {
 			r.AddCookie(cookie)

@@ -35,10 +35,10 @@ func (h *handler) accountDeletionSession(w http.ResponseWriter, r *http.Request,
 		return uuid.Nil, "", nil, false
 	}
 	if mutation {
-		public, err := url.Parse(h.ctx.Config.PublicURL)
+		public, err := url.Parse(shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
 		origin := r.Header.Get("Origin")
 		fetchSite := r.Header.Get("Sec-Fetch-Site")
-		if err != nil || (origin != "" && origin != public.Scheme+"://"+public.Host) || (fetchSite != "" && fetchSite != "same-origin") || (fetchSite != "" && origin == "") || r.URL.RawQuery != "" {
+		if err != nil || public.Scheme == "" || public.Host == "" || (origin != "" && origin != public.Scheme+"://"+public.Host) || (fetchSite != "" && fetchSite != "same-origin") || (fetchSite != "" && origin == "") || r.URL.RawQuery != "" {
 			accountDeletionError(w, r, http.StatusForbidden, "origin_required")
 			return uuid.Nil, "", nil, false
 		}
@@ -96,7 +96,7 @@ func (h *handler) handlePrepareAccountDeletion() http.HandlerFunc {
 			return
 		}
 		expiry := time.Now().UTC().Add(10 * time.Minute).Truncate(time.Microsecond)
-		attempt := proof.CreateAccountDeletionAttempt(userID, h.ctx.Config.PublicURL, hash, "/settings", expiry)
+		attempt := proof.CreateAccountDeletionAttempt(userID, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL), hash, "/settings", expiry)
 		if attempt == "" {
 			accountDeletionError(w, r, http.StatusServiceUnavailable, "reauth_unavailable")
 			return

@@ -443,12 +443,12 @@ func TestAccountDeletionSecurityFingerprintExcludesUsage(t *testing.T) {
 		name  string
 		apply func() error
 	}{
-		{"email", func() error { return s.UpdateUserProfile(ctx, u, "changed-credential@example.test", "", "") }},
 		{"password", func() error { return s.UpdatePasswordByID(ctx, u.String(), "changed") }},
 		{"totp", func() error { return s.EnableUserTOTP(ctx, u, "secret") }},
 		{"recovery set", func() error { return s.ReplaceUserRecoveryCodes(ctx, u, []string{"hash"}) }},
 		{"passkey removal", func() error { return s.DeleteUserPasskey(ctx, u, key) }},
 		{"social removal", func() error { return s.DeleteSocialIdentityWithGuard(ctx, u, "google", true) }},
+		{"email", func() error { return s.UpdateUserProfile(ctx, u, "changed-credential@example.test", "", "") }},
 	} {
 		t.Run(change.name, func(t *testing.T) {
 			if err := change.apply(); err != nil {

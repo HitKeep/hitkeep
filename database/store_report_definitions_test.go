@@ -14,7 +14,7 @@ import (
 )
 
 func TestReportDefinitionMigrationPreservesLegacyUTC0800Subscriptions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	store := NewStore(":memory:")
 	if err := store.Connect(); err != nil {
 		t.Fatalf("connect store: %v", err)
@@ -24,14 +24,7 @@ func TestReportDefinitionMigrationPreservesLegacyUTC0800Subscriptions(t *testing
 		t.Fatalf("apply baseline migrations: %v", err)
 	}
 
-	userID, err := store.CreateUser(ctx, "legacy-report@example.test", "hash")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	site, err := store.CreateSite(ctx, userID, "legacy-report.example.test")
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	userID, siteID := seedHistoricalReportOwner(t, store, "legacy-report@example.test", "legacy-report.example.test")
 	now := time.Date(2026, 7, 18, 4, 0, 0, 0, time.UTC)
 	for _, subscription := range []struct {
 		table     string
@@ -53,7 +46,7 @@ func TestReportDefinitionMigrationPreservesLegacyUTC0800Subscriptions(t *testing
 		if _, err := store.DB().ExecContext(ctx, `
 			INSERT INTO site_report_subscriptions (id, user_id, site_id, frequency, enabled, created_at, updated_at)
 			VALUES (?, ?, ?, ?, true, ?, ?)
-		`, uuid.New(), userID, site.ID, frequency, now, now); err != nil {
+		`, uuid.New(), userID, siteID, frequency, now, now); err != nil {
 			t.Fatalf("insert site %s: %v", frequency, err)
 		}
 	}
@@ -92,7 +85,7 @@ func TestReportDefinitionMigrationPreservesLegacyUTC0800Subscriptions(t *testing
 			}
 		case api.ReportPresetSiteSummary:
 			siteCount++
-			if len(report.Sites) != 1 || report.Sites[0].ID != site.ID {
+			if len(report.Sites) != 1 || report.Sites[0].ID != siteID {
 				t.Fatalf("site migration has unexpected sites: %+v", report.Sites)
 			}
 		case api.ReportPresetOpportunityBrief:
@@ -124,7 +117,7 @@ func TestReportDefinitionMigrationPreservesLegacyUTC0800Subscriptions(t *testing
 }
 
 func TestExternalRecipientMigrationPreservesMemberDeliveryIdentity(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	store := NewStore(":memory:")
 	if err := store.Connect(); err != nil {
 		t.Fatalf("connect store: %v", err)
@@ -135,14 +128,7 @@ func TestExternalRecipientMigrationPreservesMemberDeliveryIdentity(t *testing.T)
 	}
 	rebuildNamedReportTablesWithHistoricalForeignKeys(t, store)
 
-	userID, err := store.CreateUser(ctx, "delivery-migration@example.test", "hash")
-	if err != nil {
-		t.Fatal(err)
-	}
-	site, err := store.CreateSite(ctx, userID, "delivery-migration.example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	userID, siteID := seedHistoricalReportOwner(t, store, "delivery-migration@example.test", "delivery-migration.example.test")
 	now := time.Date(2026, 7, 18, 8, 0, 0, 0, time.UTC)
 	reportID, recipientID, runID, deliveryID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	if _, err := store.DB().ExecContext(ctx, `
@@ -157,7 +143,7 @@ func TestExternalRecipientMigrationPreservesMemberDeliveryIdentity(t *testing.T)
 	if _, err := store.DB().ExecContext(ctx, `
 		INSERT INTO report_definition_sites (id, report_id, site_id, created_at)
 		VALUES (?, ?, ?, ?)
-	`, uuid.New(), reportID, site.ID, now); err != nil {
+	`, uuid.New(), reportID, siteID, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().ExecContext(ctx, `
@@ -210,6 +196,30 @@ func TestExternalRecipientMigrationPreservesMemberDeliveryIdentity(t *testing.T)
 	`).Scan(&legacyColumnCount); err != nil || legacyColumnCount != 0 {
 		t.Fatalf("legacy delivery identity remains: count=%d err=%v", legacyColumnCount, err)
 	}
+}
+
+// Seed the historical schema without current helpers that require later security migrations.
+func seedHistoricalReportOwner(t *testing.T, store *Store, email, domain string) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+	ctx := t.Context()
+	userID, siteID := uuid.New(), uuid.New()
+	now := time.Now().UTC()
+	for _, seed := range []struct {
+		query string
+		args  []any
+	}{
+		{"INSERT INTO users (id, email, password, created_at) VALUES (?, ?, 'hash', ?)", []any{userID, email, now}},
+		{"INSERT INTO instance_roles (user_id, role) VALUES (?, 'owner')", []any{userID}},
+		{"INSERT INTO tenant_members (tenant_id, user_id, role, added_by) SELECT id, ?, 'owner', ? FROM tenants WHERE is_default = TRUE", []any{userID, userID}},
+		{"INSERT INTO sites (id, user_id, domain, created_at) VALUES (?, ?, ?, ?)", []any{siteID, userID, domain, now}},
+		{"INSERT INTO site_tenants (site_id, tenant_id) SELECT ?, id FROM tenants WHERE is_default = TRUE", []any{siteID}},
+		{"INSERT INTO site_members (site_id, user_id, role, added_by) VALUES (?, ?, 'owner', ?)", []any{siteID, userID, userID}},
+	} {
+		if _, err := store.DB().ExecContext(ctx, seed.query, seed.args...); err != nil {
+			t.Fatalf("seed historical report owner: %v", err)
+		}
+	}
+	return userID, siteID
 }
 
 func rebuildNamedReportTablesWithHistoricalForeignKeys(t *testing.T, store *Store) {
