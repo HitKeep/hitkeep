@@ -1,6 +1,6 @@
 # Contributing to HitKeep
 
-Thank you for improving HitKeep. The repository-owned `./hk` developer CLI is the canonical workflow surface for people, automation, and coding agents. The normal human path is deliberately small; isolated workspace and run details remain available for concurrent worktrees and structured tooling.
+Use the repository-owned `./hk` developer CLI for setup, development, builds, and QA.
 
 Repository policy and product invariants live in [`AGENTS.md`](./AGENTS.md). Read it before making a change.
 
@@ -259,6 +259,13 @@ commit plus the dashboard assets already built for that candidate. It includes t
 embedded UI and trackers without a second frontend build. Assistant and source
 assets are mandatory candidate checks and inventory, alongside the existing native,
 tracker, chart, docs, and supported-floor upgrade proofs.
+
+## Compatibility
+
+- Preserve existing 2.x flags, environment variables, aliases, precedence, defaults, exit behavior, and data paths. Configuration files are explicitly selected; do not add implicit discovery.
+- Keep configuration assembly in `config`; application packages receive `config.Config`, not Viper or CLI objects. `config.Catalog` owns runtime settings and their published examples.
+- Keep database files, WAL, locks, fsync, and atomic replacement on real filesystem primitives. Use `os.Root` for confined paths; do not substitute a filesystem helper that changes overwrite or durability behavior.
+- Keep developer packages out of the production binary. HitKeep is an application; root-level Go packages do not promise a stable library API.
 
 ## Pull Requests
 
