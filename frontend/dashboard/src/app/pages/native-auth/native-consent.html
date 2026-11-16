@@ -1,0 +1,41 @@
+<main class="hk-auth-page" aria-labelledby="native-title">
+    <section class="hk-auth-shell">
+        <app-brand />
+        <app-auth-card>
+            <div class="flex flex-col gap-5">
+                <h1 id="native-title" class="hk-auth-title">{{ 'nativeAuth.title' | transloco }}</h1>
+                @if (failed()) {
+                <p-message severity="error" role="alert">{{ 'nativeAuth.restart' | transloco }}</p-message>
+                } @else if (consent(); as request) {
+                <p>{{ 'nativeAuth.authority' | transloco }}</p>
+                @if (request.purpose === 'account_delete') {
+                <p-message severity="warn">{{ 'nativeAuth.accountDeletionPurpose' | transloco }}</p-message>
+                }
+                <p>{{ 'nativeAuth.publicClient' | transloco }}</p>
+                <dl class="flex flex-col gap-2 break-all">
+                    <dt>{{ 'oauth.signedInAs' | transloco: { email: request.email } }}</dt>
+                    <dd>{{ request.issuer }}</dd>
+                    <dt>{{ 'oauth.applicationId' | transloco }}</dt>
+                    <dd>{{ request.client_id }}</dd>
+                </dl>
+                <form method="post" [action]="action" (submit)="submit($event)" class="flex flex-col gap-5">
+                    <input type="hidden" name="request" [value]="request.request" />
+                    <input type="hidden" name="csrf_token" [value]="request.csrf_token" />
+                    <input type="hidden" name="decision" value="" />
+                    <input type="hidden" name="remember_me" [value]="remember.value ? 'true' : 'false'" />
+                    <div class="flex items-center gap-3">
+                        <p-checkbox inputId="native-remember" [binary]="true" [formControl]="remember" />
+                        <label for="native-remember">{{ 'login.rememberMe' | transloco }}</label>
+                    </div>
+                    <div class="flex gap-3">
+                        <button pButton type="submit" value="deny" severity="secondary" [disabled]="submitting()">{{ 'oauth.deny' | transloco }}</button>
+                        <button pButton type="submit" value="approve" [disabled]="submitting()">{{ 'nativeAuth.approve' | transloco }}</button>
+                    </div>
+                </form>
+                } @else {
+                <p role="status">{{ 'oauth.loading' | transloco }}</p>
+                }
+            </div>
+        </app-auth-card>
+    </section>
+</main>

@@ -8,6 +8,7 @@ export type CloudPlanCode = 'free' | 'pro' | 'business';
 export type BillingInterval = 'monthly' | 'annual';
 
 export interface CloudSignupRequest {
+    return_url?: string;
     email: string;
     password: string;
     team_name: string;

@@ -15,8 +15,25 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"hitkeep/api"
+	"hitkeep/auth"
 	"hitkeep/database"
+	"hitkeep/testutil/testdb"
 )
+
+func TestSeedInstanceRolesRetainOwner(t *testing.T) {
+	store := testdb.Shared(t)
+	owner := ensureUser(t.Context(), store, "demo@example.test", "synthetic-password")
+	if err := store.UpdateInstanceRole(t.Context(), owner, auth.InstanceOwner, owner); err != nil {
+		t.Fatal(err)
+	}
+	admin := ensureAdminUser(t.Context(), store, owner)
+	for id, want := range map[uuid.UUID]auth.InstanceRole{owner: auth.InstanceOwner, admin: auth.InstanceAdmin} {
+		role, err := store.GetInstanceRole(t.Context(), id)
+		if err != nil || role != want {
+			t.Fatalf("role=%q want=%q error=%v", role, want, err)
+		}
+	}
+}
 
 func TestEnsureUserResetsExistingUserPassword(t *testing.T) {
 	ctx := context.Background()

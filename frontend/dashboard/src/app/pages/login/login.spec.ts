@@ -23,12 +23,14 @@ describe('Login', () => {
     let component: Login;
     let fixture: ComponentFixture<Login>;
     let returnUrl: string | null;
+    let fragment: string | null;
     let authError: string | null;
     let authMethod: string | null;
     let email: string | null;
     let plan: string | null;
     let billing: string | null;
     const authMock: {
+        resumeMfa: ReturnType<typeof vi.fn>;
         status: () => string;
         login: ReturnType<typeof vi.fn>;
         getSSOAvailability: ReturnType<typeof vi.fn>;
@@ -44,6 +46,7 @@ describe('Login', () => {
         verifyMfaRecoveryCode: ReturnType<typeof vi.fn>;
         requestMfaEmailLink: ReturnType<typeof vi.fn>;
     } = {
+        resumeMfa: vi.fn(() => of({ status: 'mfa_required', challenge_token: 'challenge', factors: ['totp'] })),
         status: () => 'unknown',
         login: vi.fn(() => of({ status: 'ok' as const })),
         getSSOAvailability: vi.fn(() => of({ enabled: false })),
@@ -81,12 +84,14 @@ describe('Login', () => {
 
     beforeEach(async () => {
         returnUrl = null;
+        fragment = null;
         authError = null;
         authMethod = null;
         email = null;
         plan = null;
         billing = null;
         vi.clearAllMocks();
+        authMock.resumeMfa.mockClear();
         authMock.getSocialProviders.mockReturnValue(of({ providers: [], signup_enabled: false }));
         authMock.startSocial.mockReturnValue(of({ auth_url: 'https://accounts.example.com/authorize' }));
         authMock.consumeSocialMfaHandoff.mockReturnValue(null);
@@ -132,6 +137,9 @@ describe('Login', () => {
                     provide: ActivatedRoute,
                     useValue: {
                         snapshot: {
+                            get fragment() {
+                                return fragment;
+                            },
                             get queryParamMap() {
                                 return convertToParamMap({
                                     ...(returnUrl ? { returnUrl } : {}),
@@ -650,5 +658,24 @@ describe('Login', () => {
         expect(authMock.startPasskeyLogin).toHaveBeenCalledTimes(1);
         expect(first.challenge_token).toBe('challenge-789');
         expect(second.challenge_token).toBe('challenge-789');
+    });
+    it('resumes the server-owned SSO MFA challenge and keeps its deletion return', () => {
+        returnUrl = `/settings?deletion_attempt=${'a'.repeat(43)}`;
+        fragment = 'mfa_challenge=12345678-1234-1234-1234-123456789abc';
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+        fixture = TestBed.createComponent(Login);
+        component = fixture.componentInstance;
+        expect(authMock.resumeMfa).toHaveBeenCalledWith('12345678-1234-1234-1234-123456789abc');
+        expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParamsHandling: 'preserve', replaceUrl: true }));
+        expect(component['isMfaRequired']()).toBe(true);
+        expect(component['mfaFactors']()).toEqual(['totp']);
+        expect(authMock.login).not.toHaveBeenCalled();
+    });
+
+    it('does not resume a fragment for an unrelated return', () => {
+        fragment = 'mfa_challenge=12345678-1234-1234-1234-123456789abc';
+        authMock.resumeMfa.mockClear();
+        fixture = TestBed.createComponent(Login);
+        expect(authMock.resumeMfa).not.toHaveBeenCalled();
     });
 });

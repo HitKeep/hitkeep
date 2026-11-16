@@ -233,6 +233,12 @@ type userFKReference struct {
 }
 
 var userFKReferences = []userFKReference{
+	{table: "cloud_lifecycle_messages", column: "user_id", query: "UPDATE cloud_lifecycle_messages SET user_id = ? WHERE user_id = ?"},
+	{table: "instance_audit_log", column: "actor_id", query: "UPDATE instance_audit_log SET actor_id = ? WHERE actor_id = ?"},
+	{table: "qr_codes", column: "created_by", query: "UPDATE qr_codes SET created_by = ? WHERE created_by = ?"},
+	{table: "qr_code_share_links", column: "created_by", query: "UPDATE qr_code_share_links SET created_by = ? WHERE created_by = ?"},
+	{table: "site_imports", column: "created_by", query: "UPDATE site_imports SET created_by = ? WHERE created_by = ?"},
+	{table: "user_recovery_codes", column: "user_id", query: "UPDATE user_recovery_codes SET user_id = ? WHERE user_id = ?"},
 	{table: "api_clients", column: "user_id", query: "UPDATE api_clients SET user_id = ? WHERE user_id = ?"},
 	{table: "instance_roles", column: "granted_by", query: "UPDATE instance_roles SET granted_by = ? WHERE granted_by = ?"},
 	{table: "instance_roles", column: "user_id", query: "UPDATE instance_roles SET user_id = ? WHERE user_id = ?"},
@@ -280,6 +286,11 @@ func runStoreTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
 }
 
 func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email string, givenName string, lastName string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	email = strings.TrimSpace(email)
 	givenName = strings.TrimSpace(givenName)
 	lastName = strings.TrimSpace(lastName)
@@ -388,12 +399,22 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email s
 
 // DeleteUser removes a user by ID.
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.deleteUser(ctx, id)
+}
+
+func (s *Store) deleteUser(ctx context.Context, id uuid.UUID) error {
 	blockingTeams, err := s.ListSoleOwnerTeams(ctx, id)
 	if err != nil {
 		return fmt.Errorf("could not verify team ownership before deleting user: %w", err)
 	}
 	if len(blockingTeams) > 0 {
 		return &UserOwnsTeamsError{Teams: blockingTeams}
+	}
+
+	if err := s.requireAnotherInstanceOwner(ctx, id); err != nil {
+		return err
 	}
 
 	siteIDs, err := s.ListUserSiteIDs(ctx, id)
@@ -473,6 +494,18 @@ func cleanupUserRows(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
 	if err := execIfTableExists("share_links", "UPDATE share_links SET created_by = NULL WHERE created_by = ?", userID); err != nil {
 		return fmt.Errorf("could not null share link owner: %w", err)
 	}
+	if err := execIfTableExists("qr_codes", "UPDATE qr_codes SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null QR code creator: %w", err)
+	}
+	if err := execIfTableExists("qr_code_share_links", "UPDATE qr_code_share_links SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null QR share creator: %w", err)
+	}
+	if err := execIfTableExists("site_imports", "UPDATE site_imports SET created_by = NULL WHERE created_by = ?", userID); err != nil {
+		return fmt.Errorf("could not null site import creator: %w", err)
+	}
+	if err := execIfTableExists("cloud_lifecycle_messages", "DELETE FROM cloud_lifecycle_messages WHERE user_id = ?", userID); err != nil {
+		return fmt.Errorf("could not delete personal cloud lifecycle messages: %w", err)
+	}
 	if err := execIfTableExists("traffic_exclusions", "UPDATE traffic_exclusions SET created_by = NULL WHERE created_by = ?", userID); err != nil {
 		return fmt.Errorf("could not null traffic exclusion created_by: %w", err)
 	}
@@ -538,6 +571,9 @@ func cleanupUserRows(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
 	}
 	if err := execIfTableExists("social_identities", "DELETE FROM social_identities WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("could not delete user social identities: %w", err)
+	}
+	if err := execIfTableExists("sso_identities", "DELETE FROM sso_identities WHERE user_id = ?", userID); err != nil {
+		return fmt.Errorf("could not delete user SSO identities: %w", err)
 	}
 	if err := execIfTableExists("pending_social_confirmations", "DELETE FROM pending_social_confirmations WHERE target_user_id = ? OR lower(target_email) = lower((SELECT email FROM users WHERE id = ?))", userID, userID); err != nil {
 		return fmt.Errorf("could not delete pending social confirmations: %w", err)

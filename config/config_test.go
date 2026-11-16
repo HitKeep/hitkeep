@@ -549,6 +549,8 @@ func TestLogValueRedactsSecrets(t *testing.T) {
 		SocialGoogleClientSecret:        "social-google-secret",
 		SocialGitHubClientSecret:        "social-github-secret",
 		SocialMicrosoftClientSecret:     "social-microsoft-secret",
+		SocialAppleClientSecret:         "social-apple-secret",
+		SocialAppleTokenEncryptionKey:   "social-apple-encryption-key",
 	}
 	logVal := conf.LogValue()
 	got := logVal.String()
@@ -568,7 +570,7 @@ func TestLogValueRedactsSecrets(t *testing.T) {
 	if strings.Contains(got, "ai-provider-secret") {
 		t.Fatal("LogValue leaked AIAPIKey")
 	}
-	for _, secret := range []string{"social-google-secret", "social-github-secret", "social-microsoft-secret"} {
+	for _, secret := range []string{"social-google-secret", "social-github-secret", "social-microsoft-secret", "social-apple-secret", "social-apple-encryption-key"} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("LogValue leaked social provider secret %q", secret)
 		}
@@ -603,14 +605,17 @@ func TestLogValueRedactsURLCredentialsAndQueries(t *testing.T) {
 
 func TestLoadSocialAuthConfigFromEnv(t *testing.T) {
 	env := map[string]string{
-		"HITKEEP_SOCIAL_GOOGLE_CLIENT_ID":        "google-client",
-		"HITKEEP_SOCIAL_GOOGLE_CLIENT_SECRET":    "google-secret",
-		"HITKEEP_SOCIAL_GITHUB_CLIENT_ID":        "github-client",
-		"HITKEEP_SOCIAL_GITHUB_CLIENT_SECRET":    "github-secret",
-		"HITKEEP_SOCIAL_MICROSOFT_CLIENT_ID":     "microsoft-client",
-		"HITKEEP_SOCIAL_MICROSOFT_CLIENT_SECRET": "microsoft-secret",
-		"HITKEEP_SOCIAL_MICROSOFT_TENANT":        "organizations",
-		"HITKEEP_SOCIAL_SIGNUP_ENABLED":          "true",
+		"HITKEEP_SOCIAL_GOOGLE_CLIENT_ID":           "google-client",
+		"HITKEEP_SOCIAL_GOOGLE_CLIENT_SECRET":       "google-secret",
+		"HITKEEP_SOCIAL_GITHUB_CLIENT_ID":           "github-client",
+		"HITKEEP_SOCIAL_GITHUB_CLIENT_SECRET":       "github-secret",
+		"HITKEEP_SOCIAL_MICROSOFT_CLIENT_ID":        "microsoft-client",
+		"HITKEEP_SOCIAL_MICROSOFT_CLIENT_SECRET":    "microsoft-secret",
+		"HITKEEP_SOCIAL_MICROSOFT_TENANT":           "organizations",
+		"HITKEEP_SOCIAL_SIGNUP_ENABLED":             "true",
+		"HITKEEP_SOCIAL_APPLE_CLIENT_ID":            "apple-service",
+		"HITKEEP_SOCIAL_APPLE_CLIENT_SECRET":        "apple-secret",
+		"HITKEEP_SOCIAL_APPLE_TOKEN_ENCRYPTION_KEY": "apple-encryption-key",
 	}
 	conf := mustLoadConfig(t, []string{}, func(key, fallback string) string {
 		if value, ok := env[key]; ok {
@@ -626,6 +631,9 @@ func TestLoadSocialAuthConfigFromEnv(t *testing.T) {
 	}
 	if conf.SocialMicrosoftClientID != "microsoft-client" || conf.SocialMicrosoftClientSecret != "microsoft-secret" || conf.SocialMicrosoftTenant != "organizations" {
 		t.Fatalf("unexpected Microsoft social config: %+v", conf)
+	}
+	if conf.SocialAppleClientID != "apple-service" || conf.SocialAppleClientSecret != "apple-secret" || conf.SocialAppleTokenEncryptionKey != "apple-encryption-key" {
+		t.Fatal("Apple environment loading failed")
 	}
 	if !conf.SocialSignupEnabled {
 		t.Fatal("expected social signup flag from environment")

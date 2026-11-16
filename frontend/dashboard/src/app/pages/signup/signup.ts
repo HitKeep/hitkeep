@@ -30,6 +30,8 @@ import { cloudBillingReviewUrl, cloudPurchaseIntent, cloudPurchaseQuery } from '
 import { AUTH_FIELDSET_DESIGN_TOKENS, AUTH_SELECT_BUTTON_DESIGN_TOKENS } from '@core/theme/hitkeep-preset';
 import { AuthService, SocialProvider, SocialProviderID } from '@services/auth.service';
 
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
+
 type Jurisdiction = 'EU' | 'US';
 
 @Component({
@@ -51,6 +53,7 @@ export class Signup {
     private readonly router = inject(Router);
     protected readonly oauth = inject(OAuthService);
     private readonly route = inject(ActivatedRoute);
+    private readonly nativeReturn = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'));
     protected readonly isOAuthSignup = this.route.snapshot.queryParamMap.get('oauth') === '1';
     private readonly analytics = inject(AnalyticsService);
     private readonly auth = inject(AuthService);
@@ -74,7 +77,11 @@ export class Signup {
     protected readonly selectedBilling = signal<BillingInterval>('monthly');
     protected readonly loginQueryParams = computed(() => {
         const intent = { plan: this.selectedPlan(), billing: this.selectedBilling() };
-        return { ...cloudPurchaseQuery(intent), ...(this.isOAuthSignup ? { oauth: '1' } : {}), returnUrl: intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent) };
+        return {
+            ...cloudPurchaseQuery(intent),
+            ...(this.isOAuthSignup ? { oauth: '1' } : {}),
+            returnUrl: this.nativeReturn ?? (intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent))
+        };
     });
     private readonly activeLanguage = injectActiveLang();
     protected readonly currentYear = new Date().getFullYear();
@@ -189,7 +196,8 @@ export class Signup {
             billing: this.selectedBilling(),
             jurisdiction: this.currentJurisdiction(),
             locale: this.activeLanguage(),
-            accepted_tos: true
+            accepted_tos: true,
+            ...(this.nativeReturn ? { return_url: this.nativeReturn } : {})
         };
 
         this.isLoading.set(true);
@@ -275,13 +283,14 @@ export class Signup {
         const provider = method as SocialProviderID;
         this.socialLoading.set(provider);
         this.errorMessage.set(null);
-        this.trackSignupEvent('signup_started', { auth_method: 'social', provider });
+        if (provider !== 'apple') this.trackSignupEvent('signup_started', { auth_method: 'social', provider });
         const query = new URLSearchParams({
             plan: this.selectedPlan(),
             billing: this.selectedBilling(),
             region: this.currentJurisdiction()
         });
         if (this.isOAuthSignup) query.set('oauth', '1');
+        if (this.nativeReturn) query.set('native', new URLSearchParams(this.nativeReturn.split('?')[1]).get('request')!);
         this.auth
             .startSocial(provider, {
                 flow: 'signup',
@@ -292,11 +301,12 @@ export class Signup {
                 next: (response) => this.document.defaultView?.location.assign(response.auth_url),
                 error: (err) => {
                     this.errorMessage.set(this.socialErrorKey(err?.error?.code));
-                    this.trackSignupEvent('signup_error_view', {
-                        auth_method: 'social',
-                        provider,
-                        error_code: err?.error?.code ?? 'social_start_failed'
-                    });
+                    if (provider !== 'apple')
+                        this.trackSignupEvent('signup_error_view', {
+                            auth_method: 'social',
+                            provider,
+                            error_code: err?.error?.code ?? 'social_start_failed'
+                        });
                 }
             });
     }

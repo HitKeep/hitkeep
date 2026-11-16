@@ -16,6 +16,10 @@ http-addr: ":8080"
 # jwt-secret:
 # Log level (debug/info/warn/error) (type: string; default: "info")
 log-level: "info"
+# Android release application ID associated with this instance for native passkeys; requires explicit certificate fingerprints and Digital Asset Links (type: string; default: "")
+passkey-android-package-name: ""
+# Comma-separated Android release app-signing certificate SHA-256 fingerprints (32 colon-separated hexadecimal bytes); empty disables native Android passkeys (type: string; default: "")
+passkey-android-sha256-fingerprints: ""
 # Public URL (type: string; default: "unset"; sensitive)
 # public-url:
 
@@ -170,6 +174,12 @@ google-search-console-client-id: ""
 # google-search-console-redirect-url:
 
 # social-sign-in settings
+# Apple Sign in Services ID (type: string; default: "")
+social-apple-client-id: ""
+# Externally signed rotating Apple client-secret JWT (type: string; default: "unset"; sensitive)
+# social-apple-client-secret:
+# Stable Apple refresh-token encryption secret of at least 32 bytes; retain across client-secret rotation (type: string; default: "unset"; sensitive)
+# social-apple-token-encryption-key:
 # GitHub social sign-in OAuth client ID (type: string; default: "")
 social-github-client-id: ""
 # GitHub social sign-in OAuth client secret (type: string; default: "unset"; sensitive)

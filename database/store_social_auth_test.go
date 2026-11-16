@@ -2,10 +2,18 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	"hitkeep/auth"
+	"hitkeep/database/migrations"
 )
 
 func TestSocialIdentityUsesImmutableSubjectAndRejectsCrossAccountConflicts(t *testing.T) {
@@ -167,52 +175,68 @@ func TestManagedSocialAccountStartsPasswordDisabledAndCountsSoleProvider(t *test
 }
 
 func TestConcurrentSocialUnlinksPreserveOnePrimaryMethod(t *testing.T) {
-	store := setupTenantStore(t)
-	ctx := context.Background()
-	userID, err := store.CreateUser(ctx, "concurrent-unlink@social.test", "inaccessible-placeholder")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	if err := store.SetPasswordLoginEnabled(ctx, userID, false); err != nil {
-		t.Fatalf("disable password login: %v", err)
-	}
-	for _, identity := range []LinkSocialIdentityInput{
-		{UserID: userID, Provider: "google", Subject: "google-subject"},
-		{UserID: userID, Provider: "github", Subject: "github-subject"},
-	} {
-		if _, err := store.LinkSocialIdentity(ctx, identity); err != nil {
-			t.Fatalf("link %s identity: %v", identity.Provider, err)
-		}
-	}
+	for _, pair := range [][2]string{{"google", "github"}, {"apple", "google"}} {
+		t.Run(pair[0]+"_"+pair[1], func(t *testing.T) {
+			store := setupTenantStore(t)
+			ctx := t.Context()
+			userID, err := store.CreateUser(ctx, "concurrent-unlink@social.test", "inaccessible-placeholder")
+			if err != nil {
+				t.Fatalf("create user: %v", err)
+			}
+			if err := store.SetPasswordLoginEnabled(ctx, userID, false); err != nil {
+				t.Fatalf("disable password login: %v", err)
+			}
+			for _, identity := range []LinkSocialIdentityInput{
+				{UserID: userID, Provider: pair[0], Subject: pair[0] + "-subject"},
+				{UserID: userID, Provider: pair[1], Subject: pair[1] + "-subject"},
+			} {
+				if _, err := store.LinkSocialIdentity(ctx, identity); err != nil {
+					t.Fatalf("link %s identity: %v", identity.Provider, err)
+				}
+			}
 
-	results := make(chan error, 2)
-	var wg sync.WaitGroup
-	for _, provider := range []string{"google", "github"} {
-		wg.Go(func() {
-			results <- store.DeleteSocialIdentityWithGuard(ctx, userID, provider, false)
+			results := make(chan error, 2)
+			var wg sync.WaitGroup
+			var revocations atomic.Int32
+			for _, provider := range pair {
+				wg.Go(func() {
+					results <- store.DeleteSocialIdentityWithGuardAndHook(ctx, userID, provider, false, func(*SocialIdentity) { revocations.Add(1) })
+				})
+			}
+			wg.Wait()
+			close(results)
+
+			successes := 0
+			guards := 0
+			for unlinkErr := range results {
+				switch {
+				case unlinkErr == nil:
+					successes++
+				case errors.Is(unlinkErr, ErrSocialLastLoginMethod):
+					guards++
+				default:
+					t.Fatalf("unexpected unlink error: %v", unlinkErr)
+				}
+			}
+			if successes != 1 || guards != 1 {
+				t.Fatalf("expected one unlink and one last-method guard, got success=%d guard=%d", successes, guards)
+			}
+			identities, err := store.ListUserSocialIdentities(ctx, userID)
+			if err != nil || len(identities) != 1 {
+				t.Fatalf("expected one usable social identity to remain, identities=%+v err=%v", identities, err)
+			}
+
+			if pair[0] == "apple" {
+				expected := int32(1)
+				if identities[0].Provider == "apple" {
+					expected = 0
+				}
+				if revocations.Load() != expected {
+					t.Fatal("Apple revocation ran before last-method guard")
+				}
+			}
+
 		})
-	}
-	wg.Wait()
-	close(results)
-
-	successes := 0
-	guards := 0
-	for unlinkErr := range results {
-		switch {
-		case unlinkErr == nil:
-			successes++
-		case errors.Is(unlinkErr, ErrSocialLastLoginMethod):
-			guards++
-		default:
-			t.Fatalf("unexpected unlink error: %v", unlinkErr)
-		}
-	}
-	if successes != 1 || guards != 1 {
-		t.Fatalf("expected one unlink and one last-method guard, got success=%d guard=%d", successes, guards)
-	}
-	identities, err := store.ListUserSocialIdentities(ctx, userID)
-	if err != nil || len(identities) != 1 {
-		t.Fatalf("expected one usable social identity to remain, identities=%+v err=%v", identities, err)
 	}
 }
 
@@ -322,6 +346,10 @@ func TestDeleteUserRemovesSocialIdentityAndPendingConfirmation(t *testing.T) {
 		t.Fatalf("create pending confirmation: %v", err)
 	}
 
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := store.DeleteUser(ctx, ownerID); err != nil {
 		t.Fatalf("delete user: %v", err)
 	}
@@ -333,5 +361,131 @@ func TestDeleteUserRemovesSocialIdentityAndPendingConfirmation(t *testing.T) {
 		if count != 0 {
 			t.Fatalf("expected %s cleanup, found %d row(s)", table, count)
 		}
+	}
+}
+
+func TestAppleIdentityTokenRetentionAndPublicDTO(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "apple@private.icloud.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := LinkSocialIdentityInput{UserID: userID, Provider: "apple", Subject: "immutable", ObservedEmail: "apple@private.icloud.com", AppleClientID: "service", AppleRefreshTokenCiphertext: "v1.encrypted"}
+	if _, err := store.LinkSocialIdentity(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	input.AppleClientID = ""
+	input.AppleRefreshTokenCiphertext = ""
+	if _, err := store.LinkSocialIdentity(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := store.GetUserAppleIdentity(ctx, userID)
+	if err != nil || identity.AppleRefreshTokenCiphertext != "v1.encrypted" {
+		t.Fatalf("current credential lost: %v", err)
+	}
+	identities, err := store.ListUserSocialIdentities(ctx, userID)
+	if err != nil || len(identities) != 1 || identities[0].Provider != "apple" {
+		t.Fatalf("public identities: %v", err)
+	}
+	if _, err := store.CreatePendingSocialConfirmation(ctx, PendingSocialConfirmation{Provider: "apple", Subject: "subject", TargetEmail: "apple@private.icloud.com"}); err != nil {
+		t.Fatalf("second CHECK rejects Apple: %v", err)
+	}
+}
+
+func TestAppleForwardMigrationPreservesLegacyRowsAndConstraints(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "legacy@migration.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := migrations.Fs.ReadFile("2026_07_14_030000_add_social_auth.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tables, _ := strings.Cut(string(legacy), "CREATE TABLE IF NOT EXISTS social_identities")
+	if err := store.Exec(ctx, "DROP TABLE pending_social_confirmations; DROP TABLE social_identities; CREATE TABLE IF NOT EXISTS social_identities"+tables); err != nil {
+		t.Fatal(err)
+	}
+	identityID := uuid.New()
+	if err := store.Exec(ctx, "INSERT INTO social_identities(id,user_id,provider,subject,observed_email) VALUES (?,?,'google','legacy-sub','legacy@migration.test')", identityID, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Exec(ctx, "INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,target_user_id,expires_at) VALUES ('hash','microsoft','legacy-pending','legacy@migration.test',?,now()+INTERVAL '1 hour')", userID); err != nil {
+		t.Fatal(err)
+	}
+	forward, err := migrations.Fs.ReadFile("2026_11_04_030000_add_apple_social_auth.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Transact(ctx, func(tx *sql.Tx) error { _, err := tx.ExecContext(ctx, string(forward)); return err }); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := store.GetSocialIdentity(ctx, "google", "legacy-sub")
+	if err != nil || identity == nil || identity.ID != identityID || identity.UserID != userID || identity.AppleRefreshTokenCiphertext != "" {
+		t.Fatalf("legacy identity changed: %v", err)
+	}
+	var pending int
+	if err := store.db.QueryRowContext(ctx, "SELECT count(*) FROM pending_social_confirmations WHERE token_hash='hash' AND target_user_id=?", userID).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("pending confirmation lost: %v", err)
+	}
+	for _, query := range []string{
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'unknown','subject')",
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'google','other-sub')",
+		"INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'google','legacy-sub')",
+		"INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,expires_at) VALUES ('other','unknown','subject','mail@test',now())",
+	} {
+		args := []any{}
+		if strings.Contains(query, "?") {
+			args = append(args, userID)
+		}
+		if err := store.Exec(ctx, query, args...); err == nil {
+			t.Fatal("constraint removed by migration")
+		}
+	}
+	if err := store.Exec(ctx, "INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'apple','orphan')", uuid.New()); err == nil {
+		t.Fatal("foreign key removed")
+	}
+	assertAppleTablesPermitParentDeletion(t, store)
+
+}
+
+func TestAppleMigratedTablesPermitRealParentDeletion(t *testing.T) {
+	assertAppleTablesPermitParentDeletion(t, setupTenantStore(t))
+}
+
+func assertAppleTablesPermitParentDeletion(t *testing.T, store *Store) {
+	t.Helper()
+	for _, table := range []string{"social_identities", "pending_social_confirmations"} {
+		t.Run(table, func(t *testing.T) {
+			ctx := t.Context()
+			userID := uuid.New()
+			if err := store.Exec(ctx, "INSERT INTO users(id,email,password,created_at) VALUES (?,?,?,now())", userID, userID.String()+"@parent.test", "hash"); err != nil {
+				t.Fatal(err)
+			}
+			if table == "social_identities" {
+				if err := store.Exec(ctx, "INSERT INTO social_identities(user_id,provider,subject) VALUES (?,'apple',?)", userID, userID.String()); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := store.Exec(ctx, "INSERT INTO pending_social_confirmations(token_hash,provider,subject,target_email,target_user_id,expires_at) VALUES (?,'apple',?,'parent@test',?,now()+INTERVAL '1 hour')", userID.String(), userID.String(), userID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := store.Exec(ctx, "DELETE FROM users WHERE id = ?", userID); err == nil || !strings.Contains(err.Error(), "Constraint Error") {
+				t.Fatalf("referenced parent must have a live FK constraint: %v", err)
+			}
+			cleanup := "DELETE FROM social_identities WHERE user_id = ?"
+			if table == "pending_social_confirmations" {
+				cleanup = "DELETE FROM pending_social_confirmations WHERE target_user_id = ?"
+			}
+			if err := store.Exec(ctx, cleanup, userID); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Exec(ctx, "DELETE FROM users WHERE id = ?", userID); err != nil {
+				t.Fatalf("parent deletion after child cleanup: %v", err)
+			}
+		})
 	}
 }

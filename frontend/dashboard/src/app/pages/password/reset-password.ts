@@ -7,6 +7,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { TranslocoPipe } from '@jsverse/transloco';
 
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
+
 // OptimusUI
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { MessageModule } from '@openng/optimus-ui/message';
@@ -80,7 +82,11 @@ export class ResetPassword implements OnInit {
     goToLogin() {
         const intent = this.purchaseIntent;
         void this.router.navigate(['/login'], {
-            queryParams: intent.plan === 'free' ? {} : { ...cloudPurchaseQuery(intent), returnUrl: cloudBillingReviewUrl(intent) }
+            queryParams: nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'))
+                ? { returnUrl: this.route.snapshot.queryParamMap.get('returnUrl') }
+                : intent.plan === 'free'
+                  ? {}
+                  : { ...cloudPurchaseQuery(intent), returnUrl: cloudBillingReviewUrl(intent) }
         });
     }
 }

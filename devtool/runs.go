@@ -796,12 +796,17 @@ func (a *App) executeSmoke(ctx context.Context, variantID string, writer io.Writ
 		return err
 	}
 	args := []string{"scripts/docker-smoke.sh", a.localImageRef(variant), variant.ID}
+	previous := os.Getenv("HITKEEP_PREVIOUS_IMAGE")
 	if variant.ID == "cloud" {
 		args = append(args, "--cloud")
 	} else {
+		previous, err = a.previousSmokeImage(ctx, a.localImageRef(variant))
+		if err != nil {
+			return err
+		}
 		args = append(args, "--recreate")
 	}
-	return a.runCommand(ctx, writer, commandSpec{Args: args, Env: []string{"HITKEEP_PREVIOUS_IMAGE=" + os.Getenv("HITKEEP_PREVIOUS_IMAGE")}})
+	return a.runCommand(ctx, writer, commandSpec{Args: args, Env: []string{"HITKEEP_PREVIOUS_IMAGE=" + previous}})
 }
 
 func (a *App) VerifyVariantBuild(ctx context.Context, variantID string, writer io.Writer) error {

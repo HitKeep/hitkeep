@@ -23,7 +23,7 @@ func TestServerPrivateDashboardFramingPolicy(t *testing.T) {
 				r.Header.Set("Accept", "text/html")
 				w := httptest.NewRecorder()
 				srv.httpServer.Handler.ServeHTTP(w, r)
-				if w.Code != http.StatusOK || w.Header().Get("Content-Security-Policy") != "frame-ancestors 'none'" || w.Header().Get("X-Frame-Options") != "DENY" {
+				if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") || w.Header().Get("X-Frame-Options") != "DENY" {
 					t.Errorf("unprotected private shell %s: %d %v", path, w.Code, w.Header())
 				}
 			}

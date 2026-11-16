@@ -259,7 +259,7 @@ func TestGoogleSearchConsoleCallbackStoresConnectionAndAudit(t *testing.T) {
 	if w.Code != http.StatusFound {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusFound, w.Code, w.Body.String())
 	}
-	if location := w.Header().Get("Location"); location != "/integration/google-search-console" {
+	if location := w.Header().Get("Location"); location != "http://localhost:8080/integration/google-search-console" {
 		t.Fatalf("expected redirect to integration page, got %q", location)
 	}
 

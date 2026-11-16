@@ -88,16 +88,16 @@ export function resolveDateRange(range: RangeOption, customRangeDates: Date[] | 
             to = endOfLocalDay(to);
             break;
         case '30m':
-            from.setMinutes(to.getMinutes() - 30);
+            from.setTime(to.getTime() - 30 * 60 * 1000);
             break;
         case '1h':
-            from.setHours(to.getHours() - 1);
+            from.setTime(to.getTime() - 60 * 60 * 1000);
             break;
         case '6h':
-            from.setHours(to.getHours() - 6);
+            from.setTime(to.getTime() - 6 * 60 * 60 * 1000);
             break;
         case '24h':
-            from.setHours(to.getHours() - 24);
+            from.setTime(to.getTime() - 24 * 60 * 60 * 1000);
             break;
         case '3d':
             from.setDate(to.getDate() - 3);

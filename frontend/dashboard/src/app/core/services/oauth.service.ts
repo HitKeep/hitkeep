@@ -1,3 +1,7 @@
+import { proofAuthReturnPath } from '@core/utils/account-deletion-auth';
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
+import { browserBasePath } from '@core/interceptors/base-path.interceptor';
+import { DOCUMENT } from '@angular/common';
 import { inject, Service, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -11,9 +15,21 @@ export class OAuthService {
     private readonly http = inject(HttpClient);
     private readonly router = inject(Router);
     private readonly applicationErrors = inject(ApplicationErrorNavigationService);
+    private readonly document = inject(DOCUMENT);
     readonly resuming = signal(false);
 
     continueAfterAuthentication(fallback: string): void {
+        const nativeReturn = nativeAuthReturnPath(fallback);
+        if (nativeReturn) {
+            // Native forms require the destination document's same-origin referrer policy.
+            this.document.defaultView?.location.assign(`${browserBasePath(this.document)}${nativeReturn.slice(1)}`);
+            return;
+        }
+        const proofReturn = proofAuthReturnPath(fallback);
+        if (proofReturn) {
+            void this.router.navigateByUrl(proofReturn);
+            return;
+        }
         if (this.resuming()) return;
         const destination = this.router.parseUrl(fallback);
         const path = fallback.split(/[?#]/, 1)[0];

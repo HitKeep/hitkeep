@@ -29,6 +29,8 @@ type PendingTOTPSetup struct {
 }
 
 type PasskeyRegistrationChallenge struct {
+	NativeManagement string
+
 	Challenge     string
 	RequestedName string
 	ExpiresAt     time.Time
@@ -42,6 +44,8 @@ type MFAEmailLink struct {
 }
 
 type GoogleSearchConsoleOAuthState struct {
+	NativeManagement string
+
 	UserID     uuid.UUID
 	TeamID     uuid.UUID
 	ReturnPath string
@@ -49,6 +53,7 @@ type GoogleSearchConsoleOAuthState struct {
 }
 
 type SSOOAuthState struct {
+	UserID       uuid.UUID
 	TeamID       uuid.UUID
 	IssuerURL    string
 	ClientID     string
@@ -62,40 +67,56 @@ type SSOOAuthState struct {
 }
 
 type SocialOAuthState struct {
-	Provider     string
-	Flow         string
-	InviteToken  string
-	ReturnPath   string
-	RememberMe   bool
-	UserID       uuid.UUID
-	Nonce        string
-	CodeVerifier string
-	ExpiresAt    time.Time
+	NativeManagement string
+
+	Provider       string
+	Flow           string
+	InviteToken    string
+	ReturnPath     string
+	RememberMe     bool
+	UserID         uuid.UUID
+	Nonce          string
+	CodeVerifier   string
+	AppleReceiptID string
+	ExpiresAt      time.Time
 }
 
 type SocialCompletion struct {
-	Provider      string
-	Subject       string
-	ObservedEmail string
-	EmailVerified bool
-	Flow          string
-	InviteToken   string
-	ReturnPath    string
-	RememberMe    bool
-	ExpiresAt     time.Time
+	UserID                      uuid.UUID
+	AppleClientID               string `json:"-"`
+	AppleRefreshTokenCiphertext string `json:"-"`
+	Provider                    string
+	Subject                     string
+	ObservedEmail               string
+	EmailVerified               bool
+	Flow                        string
+	InviteToken                 string
+	ReturnPath                  string
+	RememberMe                  bool
+	ExpiresAt                   time.Time
 }
 
 type AuthStateStore struct {
-	pendingTOTP          *lru.LRU[uuid.UUID, PendingTOTPSetup]
-	passkeyRegistrations *lru.LRU[uuid.UUID, PasskeyRegistrationChallenge]
-	mfaEmailLinks        *lru.LRU[uuid.UUID, MFAEmailLink]
-	googleSearchConsole  *lru.LRU[uuid.UUID, GoogleSearchConsoleOAuthState]
-	ssoOAuth             *lru.LRU[uuid.UUID, SSOOAuthState]
-	socialOAuth          *lru.LRU[uuid.UUID, SocialOAuthState]
-	socialCompletions    *lru.LRU[uuid.UUID, SocialCompletion]
-	socialOAuthMu        sync.Mutex
-	socialCompletionMu   sync.Mutex
+	nativeMu                sync.Mutex
+	accountDeletionAttempts map[[32]byte]accountDeletionAttempt
+	nativeEmailReturns      map[[32]byte]nativeEmailReturn
+	nativeRequests          map[[32]byte]NativeAuthRequest
+	nativeCodes             map[[32]byte][32]byte
+	pendingTOTP             *lru.LRU[uuid.UUID, PendingTOTPSetup]
+	passkeyRegistrations    *lru.LRU[uuid.UUID, PasskeyRegistrationChallenge]
+	mfaEmailLinks           *lru.LRU[uuid.UUID, MFAEmailLink]
+	googleSearchConsole     *lru.LRU[uuid.UUID, GoogleSearchConsoleOAuthState]
+	ssoOAuth                *lru.LRU[uuid.UUID, SSOOAuthState]
+	socialOAuth             *lru.LRU[uuid.UUID, SocialOAuthState]
+	socialCompletions       *lru.LRU[uuid.UUID, SocialCompletion]
+	socialPOSTReceipts      *lru.LRU[uuid.UUID, SocialPOSTReceipt]
+	socialPOSTMu            sync.Mutex
+	ssoOAuthMu              sync.Mutex
+	socialOAuthMu           sync.Mutex
+	googleSearchConsoleMu   sync.Mutex
+	socialCompletionMu      sync.Mutex
 
+	mfaResumes              map[uuid.UUID]mfaResume
 	loginChallengesMu       sync.Mutex
 	loginChallenges         *lru.LRU[uuid.UUID, database.LoginChallenge]
 	loginChallengeIDsByUser *lru.LRU[uuid.UUID, map[uuid.UUID]struct{}]
@@ -103,14 +124,20 @@ type AuthStateStore struct {
 
 func NewAuthStateStore() *AuthStateStore {
 	return &AuthStateStore{
-		pendingTOTP:          lru.NewLRU[uuid.UUID, PendingTOTPSetup](authStateCacheSize, nil, pendingTOTPSetupTTL),
-		passkeyRegistrations: lru.NewLRU[uuid.UUID, PasskeyRegistrationChallenge](authStateCacheSize, nil, passkeyRegistrationTTL),
-		mfaEmailLinks:        lru.NewLRU[uuid.UUID, MFAEmailLink](authStateCacheSize, nil, passkeyLoginChallengeTTL),
-		googleSearchConsole:  lru.NewLRU[uuid.UUID, GoogleSearchConsoleOAuthState](authStateCacheSize, nil, googleSearchConsoleOAuthStateTTL),
-		ssoOAuth:             lru.NewLRU[uuid.UUID, SSOOAuthState](authStateCacheSize, nil, ssoOAuthStateTTL),
-		socialOAuth:          lru.NewLRU[uuid.UUID, SocialOAuthState](authStateCacheSize, nil, socialOAuthStateTTL),
-		socialCompletions:    lru.NewLRU[uuid.UUID, SocialCompletion](authStateCacheSize, nil, socialCompletionTTL),
-		loginChallenges:      lru.NewLRU[uuid.UUID, database.LoginChallenge](authStateCacheSize, nil, passkeyLoginChallengeTTL),
+		mfaResumes:              make(map[uuid.UUID]mfaResume),
+		accountDeletionAttempts: make(map[[32]byte]accountDeletionAttempt),
+		nativeEmailReturns:      make(map[[32]byte]nativeEmailReturn),
+		nativeRequests:          make(map[[32]byte]NativeAuthRequest),
+		nativeCodes:             make(map[[32]byte][32]byte),
+		pendingTOTP:             lru.NewLRU[uuid.UUID, PendingTOTPSetup](authStateCacheSize, nil, pendingTOTPSetupTTL),
+		passkeyRegistrations:    lru.NewLRU[uuid.UUID, PasskeyRegistrationChallenge](authStateCacheSize, nil, passkeyRegistrationTTL),
+		mfaEmailLinks:           lru.NewLRU[uuid.UUID, MFAEmailLink](authStateCacheSize, nil, passkeyLoginChallengeTTL),
+		googleSearchConsole:     lru.NewLRU[uuid.UUID, GoogleSearchConsoleOAuthState](authStateCacheSize, nil, googleSearchConsoleOAuthStateTTL),
+		ssoOAuth:                lru.NewLRU[uuid.UUID, SSOOAuthState](authStateCacheSize, nil, ssoOAuthStateTTL),
+		socialOAuth:             lru.NewLRU[uuid.UUID, SocialOAuthState](authStateCacheSize, nil, socialOAuthStateTTL),
+		socialCompletions:       lru.NewLRU[uuid.UUID, SocialCompletion](authStateCacheSize, nil, socialCompletionTTL),
+		socialPOSTReceipts:      lru.NewLRU[uuid.UUID, SocialPOSTReceipt](authStateCacheSize, nil, 90*time.Second),
+		loginChallenges:         lru.NewLRU[uuid.UUID, database.LoginChallenge](authStateCacheSize, nil, passkeyLoginChallengeTTL),
 		loginChallengeIDsByUser: lru.NewLRU[uuid.UUID, map[uuid.UUID]struct{}](
 			authStateCacheSize,
 			nil,
@@ -208,6 +235,8 @@ func (s *AuthStateStore) CreateSSOOAuthState(state SSOOAuthState) string {
 	if s == nil {
 		return stateID.String()
 	}
+	s.ssoOAuthMu.Lock()
+	defer s.ssoOAuthMu.Unlock()
 	state.ExpiresAt = state.ExpiresAt.UTC()
 	s.ssoOAuth.Add(stateID, state)
 	return stateID.String()
@@ -217,6 +246,8 @@ func (s *AuthStateStore) ConsumeSSOOAuthState(rawState string) (SSOOAuthState, b
 	if s == nil {
 		return SSOOAuthState{}, false
 	}
+	s.ssoOAuthMu.Lock()
+	defer s.ssoOAuthMu.Unlock()
 	stateID, err := uuid.Parse(strings.TrimSpace(rawState))
 	if err != nil || stateID == uuid.Nil {
 		return SSOOAuthState{}, false
@@ -403,6 +434,8 @@ func (s *AuthStateStore) ConsumeGoogleSearchConsoleOAuthState(rawState string) (
 	if err != nil || stateID == uuid.Nil {
 		return GoogleSearchConsoleOAuthState{}, false
 	}
+	s.googleSearchConsoleMu.Lock()
+	defer s.googleSearchConsoleMu.Unlock()
 	entry, ok := s.googleSearchConsole.Get(stateID)
 	if !ok {
 		return GoogleSearchConsoleOAuthState{}, false
@@ -426,13 +459,14 @@ func (s *AuthStateStore) CreatePasskeyLoginChallenge(challenge string, input dat
 	}
 
 	entry := database.LoginChallenge{
-		ID:           challengeID,
-		RememberMe:   input.RememberMe,
-		Flow:         flow,
-		AuthProvider: strings.TrimSpace(input.AuthProvider),
-		Challenge:    strings.TrimSpace(challenge),
-		Session:      session,
-		ExpiresAt:    expiresAt.UTC(),
+		ID:               challengeID,
+		NativeReturnPath: input.NativeReturnPath,
+		RememberMe:       input.RememberMe,
+		Flow:             flow,
+		AuthProvider:     strings.TrimSpace(input.AuthProvider),
+		Challenge:        strings.TrimSpace(challenge),
+		Session:          session,
+		ExpiresAt:        expiresAt.UTC(),
 	}
 	if input.UserID != nil && *input.UserID != uuid.Nil {
 		entry.UserID = *input.UserID
@@ -463,6 +497,7 @@ func (s *AuthStateStore) GetPasskeyLoginChallenge(challengeID uuid.UUID) (databa
 	}
 	if isExpired(entry.ExpiresAt) {
 		s.loginChallenges.Remove(challengeID)
+		delete(s.mfaResumes, challengeID)
 		if entry.HasUserID {
 			s.removeLoginChallengeUserIndex(entry.UserID, challengeID)
 		}
@@ -482,6 +517,7 @@ func (s *AuthStateStore) DeletePasskeyLoginChallenge(challengeID uuid.UUID) {
 
 	entry, ok := s.loginChallenges.Peek(challengeID)
 	s.loginChallenges.Remove(challengeID)
+	delete(s.mfaResumes, challengeID)
 	if ok && entry.HasUserID {
 		s.removeLoginChallengeUserIndex(entry.UserID, challengeID)
 	}
@@ -492,8 +528,45 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 		return
 	}
 
+	s.InvalidateNativeAuth(userID)
+
 	s.DeletePendingTOTPSetup(userID)
 	s.DeletePasskeyChallenge(userID)
+	s.ssoOAuthMu.Lock()
+	for _, key := range s.ssoOAuth.Keys() {
+		if entry, ok := s.ssoOAuth.Peek(key); ok && entry.UserID == userID {
+			s.ssoOAuth.Remove(key)
+		}
+	}
+	s.ssoOAuthMu.Unlock()
+	s.socialOAuthMu.Lock()
+	for _, key := range s.socialOAuth.Keys() {
+		if entry, ok := s.socialOAuth.Peek(key); ok && entry.UserID == userID {
+			// Receipt creation uses this same OAuth -> POST lock order.
+			if receiptID, err := uuid.Parse(entry.AppleReceiptID); err == nil {
+				s.socialPOSTMu.Lock()
+				s.socialPOSTReceipts.Remove(receiptID)
+				s.socialPOSTMu.Unlock()
+			}
+			s.socialOAuth.Remove(key)
+		}
+	}
+	s.socialOAuthMu.Unlock()
+	s.socialCompletionMu.Lock()
+	for _, key := range s.socialCompletions.Keys() {
+		if entry, ok := s.socialCompletions.Peek(key); ok && entry.UserID == userID {
+			s.socialCompletions.Remove(key)
+		}
+	}
+	s.socialCompletionMu.Unlock()
+	s.googleSearchConsoleMu.Lock()
+	for _, key := range s.googleSearchConsole.Keys() {
+		if entry, ok := s.googleSearchConsole.Peek(key); ok && entry.UserID == userID {
+			s.googleSearchConsole.Remove(key)
+		}
+	}
+
+	s.googleSearchConsoleMu.Unlock()
 
 	s.loginChallengesMu.Lock()
 	defer s.loginChallengesMu.Unlock()
@@ -504,10 +577,45 @@ func (s *AuthStateStore) ClearUser(userID uuid.UUID) {
 	}
 	for challengeID := range challengeIDs {
 		s.loginChallenges.Remove(challengeID)
+		delete(s.mfaResumes, challengeID)
 	}
 	s.loginChallengeIDsByUser.Remove(userID)
 }
 
 func isExpired(expiresAt time.Time) bool {
 	return !expiresAt.IsZero() && time.Now().UTC().After(expiresAt.UTC())
+}
+
+func (s *AuthStateStore) BindGoogleSearchConsoleManagement(state, handle string) {
+	id, err := uuid.Parse(state)
+	if s == nil || err != nil {
+		return
+	}
+	s.googleSearchConsoleMu.Lock()
+	defer s.googleSearchConsoleMu.Unlock()
+	entry, ok := s.googleSearchConsole.Get(id)
+	if ok {
+		entry.NativeManagement = handle
+		s.googleSearchConsole.Add(id, entry)
+	}
+}
+
+func (s *AuthStateStore) BindPasskeyManagement(userID uuid.UUID, challenge, handle string) bool {
+	if s == nil {
+		return false
+	}
+	entry, ok := s.passkeyRegistrations.Get(userID)
+	if !ok || entry.Challenge != challenge {
+		return false
+	}
+	entry.NativeManagement = handle
+	s.passkeyRegistrations.Add(userID, entry)
+	return true
+}
+func (s *AuthStateStore) PasskeyManagement(userID uuid.UUID) string {
+	if s == nil {
+		return ""
+	}
+	entry, _ := s.passkeyRegistrations.Get(userID)
+	return entry.NativeManagement
 }

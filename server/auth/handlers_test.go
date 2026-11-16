@@ -597,6 +597,7 @@ func TestHandleExtendSessionRenewsRememberMeCookie(t *testing.T) {
 	h, store := setupAuthTestEnv(t)
 	defer store.Close()
 	h.ctx.Config.AuthRememberMeDays = 14
+	h.ctx.Config.PublicURL = "HTTPS://EXAMPLE.test:443/prefix"
 
 	userID, err := store.CreateUser(context.Background(), "extend-remember@example.com", "hash")
 	if err != nil {
@@ -639,6 +640,11 @@ func TestHandleExtendSessionRenewsRememberMeCookie(t *testing.T) {
 		t.Fatalf("expected remember me cookie to be set, got %v", cookies)
 	}
 
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Value != "" && !cookie.Secure {
+			t.Errorf("insecure extended cookie %s", cookie.Name)
+		}
+	}
 	resolvedUserID, err := store.ValidateRememberMeToken(context.Background(), rememberToken)
 	if err != nil {
 		t.Fatalf("validate old remember token: %v", err)

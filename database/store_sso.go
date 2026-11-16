@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"hitkeep/api"
 )
 
 var (
@@ -140,6 +142,8 @@ func (s *Store) ListEnabledTeamSSOTeamIDs(ctx context.Context) ([]uuid.UUID, err
 }
 
 func (s *Store) UpsertTeamSSOConfig(ctx context.Context, config TeamSSOConfig) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if config.TeamID == uuid.Nil {
 		return errors.New("team ID is required")
 	}
@@ -185,6 +189,8 @@ func (s *Store) UpsertTeamSSOConfig(ctx context.Context, config TeamSSOConfig) e
 }
 
 func (s *Store) DeleteTeamSSOConfig(ctx context.Context, teamID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	// DuckDB checks the child reference against the transaction's original
 	// snapshot, so the child and parent deletes must be committed separately.
 	domains, err := s.listTeamSSODomains(ctx, teamID)
@@ -205,7 +211,27 @@ func (s *Store) DeleteTeamSSOConfig(ctx context.Context, teamID uuid.UUID) error
 	return nil
 }
 
+// GetUserBySSOIdentity resolves only an existing linked issuer/subject. Fresh
+// account-deletion proof must never create or auto-link an identity by email.
+func (s *Store) GetUserBySSOIdentity(ctx context.Context, teamID uuid.UUID, issuer, subject string) (*api.User, error) {
+	var user api.User
+	err := s.QueryRowOrNil(ctx, `SELECT u.id,u.email,u.password,COALESCE(u.given_name,''),COALESCE(u.last_name,''),COALESCE(u.password_login_enabled,TRUE),u.created_at
+		FROM sso_identities si JOIN users u ON u.id=si.user_id
+		WHERE si.tenant_id=? AND si.issuer_url=? AND si.subject=?
+		AND NOT EXISTS (SELECT 1 FROM account_deletion_intents adi WHERE adi.user_id=u.id AND adi.phase IN ('removing','complete'))`,
+		[]any{&user.ID, &user.Email, &user.Password, &user.GivenName, &user.LastName, &user.PasswordLoginEnabled, &user.CreatedAt}, teamID, strings.TrimSpace(issuer), strings.TrimSpace(subject))
+	if err != nil {
+		return nil, fmt.Errorf("resolve linked SSO identity: %w", err)
+	}
+	if user.ID == uuid.Nil {
+		return nil, nil
+	}
+	return &user, nil
+}
+
 func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (ResolveSSOUserResult, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	input.IssuerURL = strings.TrimSpace(input.IssuerURL)
 	input.Subject = strings.TrimSpace(input.Subject)
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
@@ -232,6 +258,9 @@ func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (
 				return ErrSSOIdentityUserMismatch
 			}
 			result.UserID = linkedUserID
+			if err := s.requireAccountNotRemoving(ctx, linkedUserID); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE sso_identities
 				SET email = ?, updated_at = ?
@@ -243,6 +272,11 @@ func (s *Store) ResolveSSOUser(ctx context.Context, input ResolveSSOUserInput) (
 			err = tx.QueryRowContext(ctx, "SELECT id FROM users WHERE lower(email) = lower(?)", input.Email).Scan(&result.UserID)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("could not resolve SSO user by email: %w", err)
+			}
+			if err == nil {
+				if err := s.requireAccountNotRemoving(ctx, result.UserID); err != nil {
+					return err
+				}
 			}
 			if errors.Is(err, sql.ErrNoRows) && input.ExpectedUserID != uuid.Nil {
 				return ErrSSOIdentityUserMismatch

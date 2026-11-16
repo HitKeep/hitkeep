@@ -1,3 +1,4 @@
+import { nativeAuthReturnPath } from '@core/utils/native-auth';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -126,7 +127,7 @@ export class AcceptInvite implements OnInit {
             .startSocial(provider, {
                 flow: 'invite',
                 invite_token: this.token,
-                return_url: '/dashboard'
+                return_url: nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/dashboard'
             })
             .pipe(finalize(() => this.socialLoading.set(null)))
             .subscribe({
@@ -142,7 +143,7 @@ export class AcceptInvite implements OnInit {
         this.authService
             .startSSOLogin({
                 invite_token: this.token,
-                return_url: '/dashboard'
+                return_url: nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/dashboard'
             })
             .pipe(finalize(() => this.isSSOLoading.set(false)))
             .subscribe({
@@ -164,11 +165,11 @@ export class AcceptInvite implements OnInit {
         this.loginRequired.set(false);
 
         this.authService
-            .acceptInvite(this.token, this.form.password().value())
+            .acceptInvite(this.token, this.form.password().value(), nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? undefined)
             .pipe(finalize(() => this.isLoading.set(false)))
             .subscribe({
                 next: () => {
-                    void this.router.navigateByUrl('/dashboard');
+                    void this.router.navigateByUrl(nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/dashboard');
                 },
                 error: (error: unknown) => this.handleAcceptError(error)
             });
@@ -177,7 +178,7 @@ export class AcceptInvite implements OnInit {
     protected goToLogin(): void {
         if (!this.token) return;
         void this.router.navigate(['/login'], {
-            queryParams: { returnUrl: `/accept-invite?token=${this.token}` }
+            queryParams: { returnUrl: `/accept-invite?token=${this.token}${nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ? '&returnUrl=' + encodeURIComponent(this.route.snapshot.queryParamMap.get('returnUrl')!) : ''}` }
         });
     }
 
@@ -188,7 +189,7 @@ export class AcceptInvite implements OnInit {
         this.errorMessage.set(null);
         this.loginRequired.set(false);
         this.authService
-            .acceptInvite(this.token)
+            .acceptInvite(this.token, undefined, nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? undefined)
             .pipe(
                 finalize(() => {
                     this.isLoading.set(false);
@@ -197,7 +198,7 @@ export class AcceptInvite implements OnInit {
             )
             .subscribe({
                 next: () => {
-                    void this.router.navigateByUrl('/dashboard');
+                    void this.router.navigateByUrl(nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/dashboard');
                 },
                 error: (error: unknown) => this.handleAcceptError(error)
             });
