@@ -1266,7 +1266,8 @@
     "continueWith": {
       "google": "Continue with Google",
       "github": "Continue with GitHub",
-      "microsoft": "Continue with Microsoft"
+      "microsoft": "Continue with Microsoft",
+      "apple": "Continue with Apple"
     },
     "signupMethods": "Social signup methods",
     "confirmEmailSubtitle": "Confirm which HitKeep account this Microsoft identity should access.",
@@ -1322,6 +1323,8 @@
         "passwordConfirmationHint": "Enter your current password in the password section before unlinking your only social provider.",
         "linked": "Provider linked successfully.",
         "unlinked": "Provider unlinked successfully.",
+        "appleManualRevocation": "Apple was unlinked. Revoke HitKeep access in your Apple Account to finish removing the connection.",
+        "appleManageAccess": "Manage Apple access",
         "errors": {
           "linkFailed": "Unable to link this provider.",
           "unlinkFailed": "Unable to unlink this provider.",
@@ -1396,6 +1399,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Delete account",
+        "description": "Permanently remove your identity, personal credentials and personal reports. This cannot be undone.",
+        "terms": "Shared teams and their analytics stay available to their members. Explicitly closing a solo Cloud team removes its analytics immediately and stops subscription renewals at the end of the current paid period. Required billing and legal records remain.",
+        "exportFirst": "Export your analytics first",
+        "reviewAction": "Review account deletion",
+        "teamCloses": "This team and all its analytics will be permanently removed.",
+        "teamSurvives": "This team, its analytics and team credentials will survive.",
+        "successorLabel": "Existing team owner to retain site ownership",
+        "successorPlaceholder": "Select an existing owner",
+        "closeTeam": "Close {{team}} and permanently remove all its analytics. Stop renewals at period end.",
+        "lastOperator": "Assign another instance owner before deleting your account.",
+        "handoverRequired": "For {{team}}, hand over sole ownership through team member settings, or explicitly select closure if the team has no other members.",
+        "successorRequired": "Choose an existing owner of {{team}} to retain site ownership.",
+        "invalidSuccessor": "The successor must already be an owner of {{team}}.",
+        "policyBlocked": "This team cannot be closed through account deletion.",
+        "manageOwnership": "Manage team ownership",
+        "reauthDescription": "Sign in again with a linked login method and complete your configured verification factors. Returning here does not delete anything.",
+        "reauthenticate": "Reauthenticate",
+        "finalConfirmation": "I confirm removal of my account and immediate deletion of every solo team and its data explicitly selected above. I understand the billing retention and period-end cancellation terms.",
+        "deleteAction": "Permanently delete my account",
+        "reauthRequired": "Sign in again to verify this deletion.",
+        "consequencesChanged": "Your teams or billing changed. Review the consequences again.",
+        "unavailable": "Account closure is temporarily unavailable. Retry, or contact your instance operator if access has already ended.",
+        "completedTitle": "Account deleted",
+        "completedDescription": "Your HitKeep account has been removed. Your session and local account data have been cleared.",
+        "manualApple": "Apple authorization could not be confirmed as revoked. You can remove HitKeep under Sign in with Apple in your Apple Account settings.",
+        "manageApple": "Manage Sign in with Apple"
+      },
       "title": "Settings",
       "subtitle": "Manage your account security and preferences.",
       "profile": {
@@ -2081,6 +2113,8 @@
       "disable2faSuccess": "MFA was disabled for {{email}}."
     },
     "confirmDisable2fa": "Disable all MFA methods for {{email}}? This also invalidates remembered sessions.",
+    "confirmForceDeleteUser": "Permanently delete {{email}} and archive these teams:\n{{teams}}\nDelete these sites and all their analytics:\n{{sites}}\nThis cannot be undone.",
+    "deleteUserReviewSite": "{{domain}} — site {{site}}, team {{team}}, owner {{owner}}",
     "confirmDeleteUser": "Delete user {{email}}?",
     "confirmDeleteSite": "Delete site {{domain}}? This action cannot be undone.",
     "confirmDeleteTeam": "Permanently delete team \"{{name}}\"? This cannot be undone.",
@@ -2503,6 +2537,7 @@
         "social_microsoft": {
           "label": "Microsoft sign-in"
         },
+        "social_apple": { "label": "Apple sign-in" },
         "social_signup": {
           "label": "Social signup"
         },
@@ -4186,5 +4221,24 @@
     "readOnly": "Read-only analytics",
     "connectionError": "Unable to connect to HitKeep. Retry or reconnect HitKeep in WordPress.",
     "analyticsNavigation": "Analytics pages"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "Manage your HitKeep account",
+          "authority": "Continue only if you requested this exact change in the HitKeep app. Sign-in alone does not apply it.",
+          "passkey_register": "Register a passkey",
+          "social_link": "Link social account",
+          "search_console_connect": "Connect Google Search Console",
+          "approve": "Approve this action",
+          "return": "Return to app",
+          "completed": "The change was saved. Return to the app to refresh your account.",
+          "restart": "This action could not be verified. Return to the app and refresh its status before starting again."
+      },
+      "accountDeletionPurpose": "This sign-in prepares account deletion. You must review the consequences and confirm deletion separately in the app.",
+      "title": "Sign in to the HitKeep app",
+      "authority": "This gives the app your full account access, including changing data and account settings. Your current team permissions and security checks still apply.",
+      "publicClient": "The public app name does not verify the installed app. Continue only if you started this sign-in in the HitKeep app.",
+      "approve": "Sign in to app",
+      "restart": "This sign-in expired or could not be verified. Restart sign-in in the app."
   }
 }

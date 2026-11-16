@@ -123,6 +123,7 @@ func (h *handler) appendAuthAuditSystem(r *http.Request, action, outcome, target
 
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
+	h.registerNativeAuth(mux)
 	mux.HandleFunc("POST /api/initial-user", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleCreateInitialUser()))
@@ -147,6 +148,8 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/auth/social/{provider}/start", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleSocialStart(false)))
+	mux.HandleFunc("POST /api/auth/social/apple/callback", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleApplePOSTCallback()))
+	mux.HandleFunc("GET /api/auth/social/apple/resume", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleAppleResume()))
 	mux.HandleFunc("GET /api/auth/social/{provider}/callback", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleSocialCallback()))
@@ -196,6 +199,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 	mux.HandleFunc("POST /api/auth/passkey/login/finish", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handlePasskeyLoginFinish()))
+	mux.HandleFunc("POST /api/auth/mfa/resume", ctx.Handler(shared.HandlerConfig{RateLimiter: ctx.AuthLimiter}, h.handleMFAResume()))
 	mux.HandleFunc("POST /api/auth/mfa/totp/verify", ctx.Handler(shared.HandlerConfig{
 		RateLimiter: ctx.AuthLimiter,
 	}, h.handleMFATOTPVerify()))
@@ -309,7 +313,7 @@ func (h *handler) handleCreateInitialUser() http.HandlerFunc {
 			return
 		}
 
-		isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+		isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 		authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 
 		shared.LoggerFromContext(r.Context()).Info("Initial admin user created", "user_id", userID)
@@ -326,6 +330,7 @@ func (h *handler) handleLogin() http.HandlerFunc {
 		//nolint:gosec // request payload intentionally accepts plaintext password input.
 		Password   string `json:"password"`
 		RememberMe bool   `json:"remember_me"`
+		ReturnURL  string `json:"return_url,omitempty"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -335,11 +340,14 @@ func (h *handler) handleLogin() http.HandlerFunc {
 		}
 
 		var req request
-		if err := json.UnmarshalRead(r.Body, &req); err != nil {
+		if err := json.UnmarshalReadStrict(http.MaxBytesReader(w, r.Body, 4096), &req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
 		user, err := h.ctx.Store.GetUserByEmail(r.Context(), req.Email)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Database error during login", "error", err)
@@ -371,6 +379,10 @@ func (h *handler) handleLogin() http.HandlerFunc {
 			return
 		}
 
+		if !h.bindNativeLogin(r, w, req.ReturnURL, user.ID) {
+			return
+		}
+		r = withNativeReturnPath(r, req.ReturnURL)
 		resp, err := h.beginUserLogin(r, w, user.ID, req.RememberMe, "")
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to prepare login", "error", err, "user_id", user.ID)
@@ -395,25 +407,41 @@ type loginResponse struct {
 }
 
 func (h *handler) issueLoginSession(ctx context.Context, w http.ResponseWriter, userID uuid.UUID, rememberMe bool) error {
+	_, err := h.issueLoginSessionWithID(ctx, w, userID, rememberMe)
+	return err
+}
+
+func (h *handler) issueLoginSessionWithID(ctx context.Context, w http.ResponseWriter, userID uuid.UUID, rememberMe bool) (string, error) {
+	available, err := h.ctx.HumanSessionUserAvailable(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if !available {
+		return "", fmt.Errorf("account unavailable")
+	}
 	duration := h.ctx.Config.AuthSessionDuration()
 	token, _, err := authcore.GenerateTokenWithDuration(h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL, userID, duration)
 	if err != nil {
-		return fmt.Errorf("could not generate auth token: %w", err)
+		return "", fmt.Errorf("could not generate auth token: %w", err)
 	}
 
-	isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
-	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
+	isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 
 	if rememberMe {
 		rememberDuration := h.ctx.Config.AuthRememberMeDuration()
 		rememberToken, err := h.ctx.Store.CreateRememberMeTokenWithDuration(ctx, userID, rememberDuration)
 		if err != nil {
 			shared.LoggerFromContext(ctx).Error("Failed to create remember me token", "error", err, "user_id", userID)
-			return nil
+			return "", err
 		}
 		authcore.SetRememberMeCookieWithDuration(w, rememberToken, isSecure, rememberDuration)
 	}
-	return nil
+	claims, err := authcore.ValidateTokenClaims(token, h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL)
+	if err != nil {
+		return "", err
+	}
+	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
+	return claims.ID, nil
 }
 
 func (h *handler) handleGetSession() http.HandlerFunc {
@@ -436,6 +464,20 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			return
 		}
 
+		if h.ctx.Store == nil {
+			http.Error(w, "Service not available", http.StatusServiceUnavailable)
+			return
+		}
+		available, err := h.ctx.HumanSessionUserAvailable(r.Context(), userID)
+		if err != nil {
+			http.Error(w, "Service not available", http.StatusServiceUnavailable)
+			return
+		}
+		if !available {
+			authcore.ClearCookies(w, authcore.CookieSecure(h.ctx.Config.PublicURL))
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		duration := h.ctx.Config.AuthSessionDuration()
 		token, expiresAt, err := authcore.GenerateTokenWithDuration(h.ctx.Config.JWTSecret, h.ctx.Config.PublicURL, userID, duration)
 		if err != nil {
@@ -444,7 +486,7 @@ func (h *handler) handleExtendSession() http.HandlerFunc {
 			return
 		}
 
-		isSecure := strings.HasPrefix(h.ctx.Config.PublicURL, "https://")
+		isSecure := authcore.CookieSecure(h.ctx.Config.PublicURL)
 		authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 		resp := h.ctx.AuthSessionResponse(shared.AuthSessionContext{
 			ExpiresAt: expiresAt.UTC(),

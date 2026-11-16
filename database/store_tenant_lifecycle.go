@@ -25,6 +25,8 @@ func (s *Store) CountTeamSites(ctx context.Context, tenantID uuid.UUID) (int, er
 }
 
 func (s *Store) ArchiveTenant(ctx context.Context, tenantID, actorID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		var isDefault bool
 		err := tx.QueryRowContext(ctx, `
@@ -163,6 +165,12 @@ func (s *Store) ListAllTeams(ctx context.Context) ([]api.AdminTeam, error) {
 // Sites must be deleted before calling this. Intended for instance-admin
 // force-delete flows where the admin is not a member of the target team.
 func (s *Store) AdminArchiveTenant(ctx context.Context, tenantID, actorID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.adminArchiveTenant(ctx, tenantID, actorID)
+}
+
+func (s *Store) adminArchiveTenant(ctx context.Context, tenantID, actorID uuid.UUID) error {
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		var isDefault bool
 		err := tx.QueryRowContext(ctx, `

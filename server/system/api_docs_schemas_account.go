@@ -74,11 +74,12 @@ func openAPIV1AccountSchemas() map[string]any {
 		"SocialProvider": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"id":           map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft"}},
+				"id":           map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft", "apple"}},
 				"display_name": map[string]any{"type": "string"},
 			},
 			"required": []string{"id", "display_name"},
 		},
+		"SocialUnlinkResponse": map[string]any{"type": "object", "required": []string{"status", "provider_revocations"}, "properties": map[string]any{"status": map[string]any{"type": "string", "enum": []string{"unlinked"}}, "provider_revocations": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"provider", "status"}, "properties": map[string]any{"provider": map[string]any{"type": "string", "enum": []string{"apple"}}, "status": map[string]any{"type": "string", "enum": []string{"revoked", "manual_revocation_required"}}}}}}},
 		"SocialProvidersResponse": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -108,7 +109,7 @@ func openAPIV1AccountSchemas() map[string]any {
 		"SocialPreviewResponse": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"provider":                    map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft"}},
+				"provider":                    map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft", "apple"}},
 				"display_name":                map[string]any{"type": "string"},
 				"observed_email":              map[string]any{"type": "string", "format": "email"},
 				"email_verified":              map[string]any{"type": "boolean"},
@@ -720,6 +721,7 @@ func openAPIV1AccountSchemas() map[string]any {
 		"SystemStatus": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"native_auth":   map[string]any{"$ref": "#/components/schemas/NativeAuthStatus"},
 				"ai_enabled":    map[string]any{"type": "boolean", "description": "Raw instance AI feature flag, independent of Ask AI and provider configuration."},
 				"needs_setup":   map[string]any{"type": "boolean"},
 				"version":       map[string]any{"type": "string"},
@@ -955,7 +957,7 @@ func openAPIV1AccountSchemas() map[string]any {
 			"type":        "object",
 			"description": "Safe linked-provider metadata. Immutable provider subjects are intentionally omitted.",
 			"properties": map[string]any{
-				"provider":       map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft"}},
+				"provider":       map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft", "apple"}},
 				"observed_email": map[string]any{"type": "string", "format": "email"},
 				"linked_at":      map[string]any{"type": "string", "format": "date-time"},
 				"last_used_at":   map[string]any{"type": "string", "format": "date-time"},

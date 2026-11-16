@@ -163,6 +163,13 @@ func (h *handler) handleCreateBillingCheckoutSession() http.HandlerFunc {
 }
 
 func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, req billingCheckoutSessionRequest) *checkoutSessionOutput {
+	if h.ctx.Store == nil {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return nil
+	}
+	release := h.ctx.Store.SerializeCloudBillingMutation()
+	defer release()
+
 	h.checkoutMu.Lock()
 	defer h.checkoutMu.Unlock()
 	if h.ctx.Cluster != nil && !h.ctx.Cluster.IsLeader() {
@@ -203,6 +210,15 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		return nil
 	}
 
+	closing, err := h.ctx.Store.IsClosedCloudAccount(r.Context(), activeTenantID, "", "")
+	if err != nil {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return nil
+	}
+	if closing {
+		http.Error(w, "Account closure already authorized", http.StatusConflict)
+		return nil
+	}
 	account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
 	if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
 		// Auto-create a free billing account for legacy users who signed up

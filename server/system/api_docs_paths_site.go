@@ -139,9 +139,9 @@ func openAPIV1AdminSitePaths() map[string]any {
 			"get": op([]string{"Admin"}, "List users", "Lists users for admin management.", secCookie(), nil, nil, map[string]any{"200": jsonSchemaResp("User list", map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}})}),
 		},
 		"/api/admin/users/{id}/role": map[string]any{
-			"post": op([]string{"Admin"}, "Update user role", "Updates instance role for target user.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")},
+			"post": op([]string{"Admin"}, "Update user role", "Instance-owner-only action for another user. Self-role changes are rejected and the last instance owner is preserved across concurrent updates.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")},
 				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"role": map[string]any{"type": "string"}}, "required": []string{"role"}}),
-				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status")}),
+				map[string]any{"200": jsonRefResp("Status", "#/components/schemas/Status"), "400": desc("Plain-text error: invalid user ID, request, or self-role change"), "403": desc("Plain-text error: forbidden"), "409": desc("Plain-text error: last instance owner cannot be removed")}),
 		},
 		"/api/admin/users/{id}/disable-2fa": map[string]any{
 			"post": op([]string{"Admin"}, "Disable user MFA", "Owner-only recovery action that clears TOTP, passkeys, pending MFA challenges, and remember-me sessions for the target user.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")}, nil, map[string]any{
@@ -151,9 +151,12 @@ func openAPIV1AdminSitePaths() map[string]any {
 			}),
 		},
 		"/api/admin/users/{id}": map[string]any{
-			"delete": op([]string{"Admin"}, "Delete user", "Deletes user account (cannot delete self). Deletion is blocked if the target user is the sole owner of any team.", secCookie(), []any{paramRef("#/components/parameters/adminUserID")}, nil, map[string]any{
-				"200": jsonRefResp("Status", "#/components/schemas/Status"),
-				"409": jsonRefResp("Delete user blocked response", "#/components/schemas/AdminDeleteUserBlockedResponse"),
+			"delete": op([]string{"Admin"}, "Delete user", "Cannot delete self or the last instance owner. Rechecks current acting owner and exact consequences under lifecycle serialization before any deletion. Ordinary deletion is blocked by sole-owned active teams. Forced deletion requires strict JSON up to 4 KiB with the reviewed consequence_hash; missing or changed hashes return a complete 409 review and never delete. Review every returned team/site and require a separate explicit confirmation; never retry a refreshed hash automatically. Hash binds actor/target and stable ordered names, domains, ownership and team associations. Default-team archival is blocked before any site is removed; can_force is false. Site lists are complete and untruncated. Other failures can occur after partial execution: refresh authoritative state before a new review.", secCookie(), []any{paramRef("#/components/parameters/adminUserID"), map[string]any{"name": "force", "in": "query", "schema": map[string]any{"type": "boolean"}, "description": "Requires reviewed consequence_hash JSON for destructive team archival."}}, map[string]any{"required": false, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/AdminDeleteUserRequest"}}}}, map[string]any{
+				"200": jsonRefResp("User deleted", "#/components/schemas/Status"),
+				"400": desc("Plain-text invalid request or malformed consequence hash"),
+				"403": desc("Plain-text current acting instance owner authority required"),
+				"404": desc("Plain-text user not found"),
+				"409": map[string]any{"description": "Complete reviewed consequences, or plain-text last-instance-owner conflict", "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/AdminDeleteUserBlockedResponse"}}, "text/plain": map[string]any{"schema": map[string]any{"type": "string"}}}},
 			}),
 		},
 		"/api/admin/sites": map[string]any{

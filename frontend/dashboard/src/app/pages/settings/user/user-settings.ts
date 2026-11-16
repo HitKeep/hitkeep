@@ -1,3 +1,4 @@
+import { AccountDeletion } from './account-deletion/account-deletion';
 import { NgOptimizedImage } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -41,7 +42,7 @@ type UserSettingsTab = 'account' | 'security';
 
 @Component({
     selector: 'app-user-settings',
-    imports: [ReactiveFormsModule, RouterLink, ButtonModule, InputTextModule, SelectModule, TabsModule, SettingsCard, SettingsSecurity, PageFrame, CopyControl, TranslocoPipe, NgOptimizedImage],
+    imports: [AccountDeletion, ReactiveFormsModule, RouterLink, ButtonModule, InputTextModule, SelectModule, TabsModule, SettingsCard, SettingsSecurity, PageFrame, CopyControl, TranslocoPipe, NgOptimizedImage],
     templateUrl: './user-settings.html',
     styleUrl: './user-settings.css',
     changeDetection: ChangeDetectionStrategy.OnPush

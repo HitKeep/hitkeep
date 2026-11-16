@@ -145,6 +145,14 @@ describe('SettingsSecurity', () => {
         expect(component['socialSuccess']()).toBe('settings.security.social.unlinked');
     });
 
+    it('shows Apple account guidance when upstream revocation needs manual completion', () => {
+        userSecurityServiceMock.unlinkSocial.mockReturnValueOnce(of({ status: 'unlinked', provider_revocations: [{ provider: 'apple', status: 'manual_revocation_required' }] }));
+        component['unlinkSocial']('apple');
+        expect(component['socialSuccess']()).toBe('settings.security.social.appleManualRevocation');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('a[href="https://account.apple.com/account/manage"]')).not.toBeNull();
+    });
+
     it('regenerates recovery codes and updates the visible state', () => {
         component['regenerateRecoveryCodes']();
 

@@ -492,6 +492,7 @@ func startTestSSOLogin(t *testing.T, h *handler, email, returnURL string, rememb
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"email": email, "return_url": returnURL, "remember_me": rememberMe})
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/sso/start", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.handleSSOStart().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

@@ -55,7 +55,6 @@ export class SocialSignup {
     protected readonly form = compatForm(this.formModel);
 
     constructor() {
-        this.tracking.install();
         if (!this.completionToken) {
             this.isLoading.set(false);
             this.errorMessage.set('social.errors.completionExpired');
@@ -67,6 +66,7 @@ export class SocialSignup {
             .subscribe({
                 next: (preview) => {
                     this.preview.set(preview);
+                    if (preview.provider !== 'apple') this.tracking.install();
                     if (preview.observed_email) this.form.email().control().setValue(preview.observed_email);
                     this.track('signup_page_view');
                 },
@@ -116,6 +116,7 @@ export class SocialSignup {
     }
 
     private track(name: string, properties: Record<string, unknown> = {}): void {
+        if (this.preview()?.provider === 'apple') return;
         this.tracking.trackEvent(name, {
             jurisdiction: this.jurisdiction(),
             plan: this.selectedPlan(),

@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Doorgaan met Google", "github": "Doorgaan met GitHub", "microsoft": "Doorgaan met Microsoft" },
+    "continueWith": { "google": "Doorgaan met Google", "github": "Doorgaan met GitHub", "microsoft": "Doorgaan met Microsoft",
+      "apple": "Ga door met Apple" },
     "signupMethods": "Sociale registratiemethoden",
     "confirmEmailSubtitle": "Bevestig tot welk HitKeep-account deze Microsoft-identiteit toegang moet krijgen.",
     "confirmEmailPrompt": "Microsoft-e-mailadressen kunnen wijzigen. Controleer het HitKeep-adres voordat we een bevestigingslink sturen.",
@@ -1270,6 +1271,8 @@
         "title": "Sociale aanmelding", "description": "Koppel provideraccounts waarmee je je bij HitKeep kunt aanmelden.", "empty": "Er zijn geen sociale aanmeldproviders gekoppeld.",
         "linkedDate": "Gekoppeld", "lastUsed": "Laatst gebruikt", "connectAction": "{{provider}} koppelen", "unlinkAction": "Ontkoppelen",
         "passwordConfirmationHint": "Voer je huidige wachtwoord in het wachtwoordgedeelte in voordat je je enige sociale provider ontkoppelt.", "linked": "Provider gekoppeld.", "unlinked": "Provider ontkoppeld.",
+        "appleManualRevocation": "Apple is ontkoppeld. Trek de toegang van HitKeep in je Apple Account in om de verbinding volledig te verwijderen.",
+        "appleManageAccess": "Apple-toegang beheren",
         "errors": { "linkFailed": "Deze provider kon niet worden gekoppeld.", "unlinkFailed": "Deze provider kon niet worden ontkoppeld.", "lastMethod": "Voeg een andere sociale provider of passkey toe, of bevestig een ingeschakeld wachtwoord." }
       },
       "twoFactor": {
@@ -1340,6 +1343,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Account verwijderen",
+        "description": "Verwijder je identiteit, persoonlijke inloggegevens en persoonlijke rapporten definitief. Dit kan niet ongedaan worden gemaakt.",
+        "terms": "Gedeelde teams en hun analyses blijven beschikbaar voor hun leden. Als je een uitsluitend door jou gebruikt Cloud-team uitdrukkelijk sluit, worden de analyses direct verwijderd en stoppen abonnementsverlengingen aan het einde van de betaalde periode. Verplichte facturatie- en juridische gegevens blijven bewaard.",
+        "exportFirst": "Exporteer eerst je analyses",
+        "reviewAction": "Accountverwijdering bekijken",
+        "teamCloses": "Dit team en alle bijbehorende analyses worden definitief verwijderd.",
+        "teamSurvives": "Dit team, de analyses en de teaminloggegevens blijven behouden.",
+        "successorLabel": "Bestaande teameigenaar die de sites zal bezitten",
+        "successorPlaceholder": "Selecteer een bestaande eigenaar",
+        "closeTeam": "Sluit {{team}} en verwijder alle analyses definitief. Stop verlengingen aan het einde van de periode.",
+        "lastOperator": "Wijs een andere instantie-eigenaar aan voordat je je account verwijdert.",
+        "handoverRequired": "Draag voor {{team}} het enige eigenaarschap over via de ledeninstellingen, of kies uitdrukkelijk voor sluiten als er geen andere leden zijn.",
+        "successorRequired": "Kies een bestaande eigenaar van {{team}} om het eigenaarschap van de sites te behouden.",
+        "invalidSuccessor": "De opvolger moet al eigenaar van {{team}} zijn.",
+        "policyBlocked": "Dit team kan niet via accountverwijdering worden gesloten.",
+        "manageOwnership": "Teameigenaarschap beheren",
+        "reauthDescription": "Log opnieuw in met een gekoppelde methode en voltooi de ingestelde verificatiefactoren. Terugkeren naar deze pagina verwijdert niets.",
+        "reauthenticate": "Opnieuw verifiëren",
+        "finalConfirmation": "Ik bevestig de verwijdering van mijn account en de directe verwijdering van elk hierboven uitdrukkelijk geselecteerd soloteam en alle bijbehorende gegevens. Ik begrijp de voorwaarden voor factuurbewaring en opzegging aan het einde van de periode.",
+        "deleteAction": "Mijn account definitief verwijderen",
+        "reauthRequired": "Log opnieuw in om deze verwijdering te verifiëren.",
+        "consequencesChanged": "Je teams of facturatie zijn gewijzigd. Bekijk de gevolgen opnieuw.",
+        "unavailable": "Het sluiten van het account is tijdelijk niet beschikbaar. Probeer opnieuw of neem contact op met je instantiebeheerder als je toegang al is beëindigd.",
+        "completedTitle": "Account verwijderd",
+        "completedDescription": "Je HitKeep-account is verwijderd. Je sessie en lokale accountgegevens zijn gewist.",
+        "manualApple": "Het intrekken van de Apple-autorisatie kon niet worden bevestigd. Je kunt HitKeep verwijderen onder Log in met Apple in je Apple Account-instellingen.",
+        "manageApple": "Log in met Apple beheren"
+      },
       "title": "Instellingen",
       "subtitle": "Beheer je accountbeveiliging en voorkeuren.",
       "profile": {
@@ -1990,6 +2022,8 @@
       "disable2faSuccess": "MFA is uitgeschakeld voor {{email}}."
     },
     "confirmDisable2fa": "Alle MFA-methoden uitschakelen voor {{email}}? Dit maakt ook onthouden sessies ongeldig.",
+    "confirmForceDeleteUser": "{{email}} definitief verwijderen en deze teams archiveren:\n{{teams}}\nDeze websites en al hun analysegegevens verwijderen:\n{{sites}}\nDit kan niet ongedaan worden gemaakt.",
+    "deleteUserReviewSite": "{{domain}} — website {{site}}, team {{team}}, eigenaar {{owner}}",
     "confirmDeleteUser": "Gebruiker {{email}} verwijderen?",
     "confirmDeleteSite": "Site {{domain}} verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
     "confirmDeleteTeam": "Team \"{{name}}\" definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
@@ -2386,6 +2420,7 @@
         "social_google": { "label": "Aanmelden met Google" },
         "social_github": { "label": "Aanmelden met GitHub" },
         "social_microsoft": { "label": "Aanmelden met Microsoft" },
+        "social_apple": { "label": "Inloggen met Apple" },
         "social_signup": { "label": "Sociale registratie" },
         "ai": {
           "label": "AI-gateway"
@@ -4062,5 +4097,24 @@
     "readOnly": "Alleen-lezenstatistieken",
     "connectionError": "Kan geen verbinding maken met HitKeep. Probeer het opnieuw of verbind HitKeep opnieuw in WordPress.",
     "analyticsNavigation": "Statistiekpagina’s"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "Je HitKeep-account beheren",
+          "authority": "Ga alleen verder als je precies deze wijziging in de HitKeep-app hebt aangevraagd. Alleen aanmelden voert de wijziging niet uit.",
+          "passkey_register": "Een passkey registreren",
+          "social_link": "Een sociaal account koppelen",
+          "search_console_connect": "Google Search Console verbinden",
+          "approve": "Deze actie goedkeuren",
+          "return": "Terug naar de app",
+          "completed": "De wijziging is opgeslagen. Ga terug naar de app om je account te vernieuwen.",
+          "restart": "Deze actie kon niet worden geverifieerd. Ga terug naar de app en vernieuw de status voordat je opnieuw begint."
+      },
+      "accountDeletionPurpose": "Deze aanmelding bereidt het verwijderen van je account voor. Bekijk de gevolgen en bevestig de verwijdering daarna apart in de app.",
+      "title": "Aanmelden bij de HitKeep-app",
+      "authority": "De app krijgt volledige toegang tot je account, inclusief het wijzigen van gegevens en accountinstellingen. Je teamrechten en beveiligingscontroles blijven gelden.",
+      "publicClient": "De openbare appnaam verifieert de geïnstalleerde app niet. Ga alleen verder als je deze aanmelding in de HitKeep-app hebt gestart.",
+      "approve": "Aanmelden bij app",
+      "restart": "Deze aanvraag is verlopen of kon niet worden geverifieerd. Start de aanmelding opnieuw in de app."
   }
 }

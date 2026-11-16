@@ -1316,7 +1316,8 @@
     "continueWith": {
       "google": "Continuar con Google",
       "github": "Continuar con GitHub",
-      "microsoft": "Continuar con Microsoft"
+      "microsoft": "Continuar con Microsoft",
+      "apple": "Continuar con Apple"
     },
     "signupMethods": "Métodos de registro social",
     "confirmEmailSubtitle": "Confirma a qué cuenta de HitKeep debe acceder esta identidad de Microsoft.",
@@ -1372,6 +1373,8 @@
         "passwordConfirmationHint": "Introduce tu contraseña actual en la sección de contraseña antes de desvincular tu único proveedor social.",
         "linked": "Proveedor vinculado correctamente.",
         "unlinked": "Proveedor desvinculado correctamente.",
+        "appleManualRevocation": "Se ha desvinculado Apple. Revoca el acceso de HitKeep en tu cuenta de Apple para eliminar la conexión por completo.",
+        "appleManageAccess": "Gestionar el acceso de Apple",
         "errors": {
           "linkFailed": "No se pudo vincular este proveedor.",
           "unlinkFailed": "No se pudo desvincular este proveedor.",
@@ -1446,6 +1449,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Eliminar cuenta",
+        "description": "Eliminar permanentemente tu identidad, credenciales personales e informes personales. Esta acción no se puede deshacer.",
+        "terms": "Los equipos compartidos y sus analíticas seguirán disponibles para sus miembros. Cerrar explícitamente un equipo Cloud que solo utilizas tú elimina sus analíticas de inmediato y detiene las renovaciones al final del período pagado. Se conservan los registros legales y de facturación obligatorios.",
+        "exportFirst": "Exporta primero tus analíticas",
+        "reviewAction": "Revisar la eliminación de la cuenta",
+        "teamCloses": "Este equipo y todas sus analíticas se eliminarán permanentemente.",
+        "teamSurvives": "Se conservarán este equipo, sus analíticas y sus credenciales de equipo.",
+        "successorLabel": "Propietario actual del equipo que conservará la propiedad de los sitios",
+        "successorPlaceholder": "Seleccionar un propietario actual",
+        "closeTeam": "Cerrar {{team}} y eliminar permanentemente todas sus analíticas. Detener las renovaciones al final del período.",
+        "lastOperator": "Asigna otro propietario de la instancia antes de eliminar tu cuenta.",
+        "handoverRequired": "Para {{team}}, transfiere la propiedad única en los ajustes de miembros o selecciona explícitamente el cierre si no hay otros miembros.",
+        "successorRequired": "Elige un propietario actual de {{team}} para conservar la propiedad de los sitios.",
+        "invalidSuccessor": "El sucesor ya debe ser propietario de {{team}}.",
+        "policyBlocked": "Este equipo no se puede cerrar mediante la eliminación de la cuenta.",
+        "manageOwnership": "Gestionar la propiedad del equipo",
+        "reauthDescription": "Vuelve a iniciar sesión con un método vinculado y completa los factores de verificación configurados. Volver aquí no elimina nada.",
+        "reauthenticate": "Volver a autenticar",
+        "finalConfirmation": "Confirmo la eliminación de mi cuenta y la eliminación inmediata de cada equipo individual y sus datos seleccionados explícitamente arriba. Entiendo las condiciones de conservación de facturación y cancelación al final del período.",
+        "deleteAction": "Eliminar mi cuenta permanentemente",
+        "reauthRequired": "Vuelve a iniciar sesión para verificar esta eliminación.",
+        "consequencesChanged": "Tus equipos o tu facturación han cambiado. Revisa las consecuencias de nuevo.",
+        "unavailable": "El cierre de la cuenta no está disponible temporalmente. Reintenta o contacta con el operador de tu instancia si ya no tienes acceso.",
+        "completedTitle": "Cuenta eliminada",
+        "completedDescription": "Tu cuenta de HitKeep se ha eliminado. Se han borrado tu sesión y los datos locales de la cuenta.",
+        "manualApple": "No se pudo confirmar la revocación de la autorización de Apple. Puedes quitar HitKeep en Iniciar sesión con Apple, en los ajustes de tu cuenta de Apple.",
+        "manageApple": "Gestionar Iniciar sesión con Apple"
+      },
       "title": "Configuración",
       "subtitle": "Administra la seguridad y las preferencias de tu cuenta.",
       "profile": {
@@ -2213,6 +2245,8 @@
       "disable2faSuccess": "Se desactivó MFA para {{email}}."
     },
     "confirmDisable2fa": "¿Desactivar todos los métodos MFA para {{email}}? Esto también invalidará las sesiones recordadas.",
+    "confirmForceDeleteUser": "Eliminar permanentemente a {{email}} y archivar estos equipos:\n{{teams}}\nEliminar estos sitios y todas sus analíticas:\n{{sites}}\nEsta acción no se puede deshacer.",
+    "deleteUserReviewSite": "{{domain}} — sitio {{site}}, equipo {{team}}, propietario {{owner}}",
     "confirmDeleteUser": "¿Eliminar usuario {{email}}?",
     "confirmDeleteSite": "¿Eliminar sitio {{domain}}? Esta acción no se puede deshacer.",
     "confirmDeleteTeam": "¿Eliminar permanentemente el equipo \"{{name}}\"? Esta acción no se puede deshacer.",
@@ -2635,6 +2669,7 @@
         "social_microsoft": {
           "label": "Inicio de sesión con Microsoft"
         },
+        "social_apple": { "label": "Inicio de sesión con Apple" },
         "social_signup": {
           "label": "Registro social"
         },
@@ -4330,5 +4365,24 @@
     "readOnly": "Analíticas de solo lectura",
     "connectionError": "No se ha podido conectar con HitKeep. Reinténtalo o vuelve a conectar HitKeep en WordPress.",
     "analyticsNavigation": "Páginas de analíticas"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "Gestionar tu cuenta de HitKeep",
+          "authority": "Continúa solo si has solicitado este cambio concreto en la aplicación de HitKeep. Iniciar sesión no lo aplica.",
+          "passkey_register": "Registrar una clave de acceso",
+          "social_link": "Vincular una cuenta social",
+          "search_console_connect": "Conectar Google Search Console",
+          "approve": "Autorizar esta acción",
+          "return": "Volver a la aplicación",
+          "completed": "Se ha guardado el cambio. Vuelve a la aplicación para actualizar tu cuenta.",
+          "restart": "No se ha podido verificar esta acción. Vuelve a la aplicación y actualiza su estado antes de empezar de nuevo."
+      },
+      "accountDeletionPurpose": "Este inicio de sesión prepara la eliminación de la cuenta. Debes revisar las consecuencias y confirmar la eliminación por separado en la aplicación.",
+      "title": "Iniciar sesión en la app de HitKeep",
+      "authority": "La app tendrá acceso completo a tu cuenta, incluidos los cambios en datos y ajustes. Se mantienen tus permisos de equipo y las comprobaciones de seguridad.",
+      "publicClient": "El nombre público no verifica la app instalada. Continúa solo si has iniciado este proceso desde la app de HitKeep.",
+      "approve": "Iniciar sesión en la app",
+      "restart": "Esta solicitud ha caducado o no se pudo verificar. Vuelve a iniciar sesión desde la app."
   }
 }

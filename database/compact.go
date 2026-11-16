@@ -12,8 +12,6 @@ import (
 	"slices"
 	"strings"
 
-	duckdb "github.com/duckdb/duckdb-go/v2"
-
 	"hitkeep/hklog"
 )
 
@@ -470,7 +468,7 @@ func listCatalogFKEdges(ctx context.Context, db *sql.DB, catalog string) ([]fkEd
 }
 
 func openDuckDBFile(path string) (*sql.DB, error) {
-	connector, err := duckdb.NewConnector(path, func(exec driver.ExecerContext) error {
+	connector, err := newDuckDBConnector(path, func(exec driver.ExecerContext) error {
 		return initializeCoreExtensions(context.Background(), exec)
 	})
 	if err != nil {

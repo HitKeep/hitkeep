@@ -200,13 +200,14 @@ func (h *handler) sendTeamInviteEmail(r *http.Request, teamID, actorID uuid.UUID
 		inviterName = inviter.Email
 	}
 	locale := "en"
-	if recipient, err := h.ctx.Store.GetUserByEmail(r.Context(), invite.Email); err == nil && recipient != nil {
-		if resolvedLocale, err := h.ctx.Store.GetUserLocale(r.Context(), recipient.ID); err == nil {
-			locale = resolvedLocale
-		}
-	} else if actorID != uuid.Nil {
+	if invite.RequiresPasswordSetup && actorID != uuid.Nil {
 		if resolvedLocale, err := h.ctx.Store.GetUserLocale(r.Context(), actorID); err == nil && strings.TrimSpace(resolvedLocale) != "" {
 			locale = resolvedLocale
+		}
+	}
+	if recipient, err := h.ctx.Store.GetUserByEmail(r.Context(), invite.Email); err == nil && recipient != nil {
+		if prefs, err := h.ctx.Store.GetUserPreferences(r.Context(), recipient.ID); err == nil && prefs != nil && strings.TrimSpace(prefs.DefaultLocale) != "" {
+			locale = prefs.DefaultLocale
 		}
 	}
 

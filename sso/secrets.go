@@ -24,13 +24,18 @@ type SecretBox struct {
 }
 
 func NewSecretBox(masterSecret string) (*SecretBox, error) {
+	return NewPurposeSecretBox(masterSecret, "hitkeep/team-sso/client-secret/v1")
+}
+
+// NewPurposeSecretBox reuses the versioned cipher with an explicit credential purpose.
+func NewPurposeSecretBox(masterSecret, purpose string) (*SecretBox, error) {
 	masterSecret = strings.TrimSpace(masterSecret)
 	if masterSecret == "" {
 		return nil, errors.New("instance secret is required")
 	}
 
 	mac := hmac.New(sha256.New, []byte(masterSecret))
-	_, _ = mac.Write([]byte("hitkeep/team-sso/client-secret/v1"))
+	_, _ = mac.Write([]byte(purpose))
 	key := mac.Sum(nil)
 	block, err := aes.NewCipher(key)
 	if err != nil {

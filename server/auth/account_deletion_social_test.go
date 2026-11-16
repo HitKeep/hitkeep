@@ -1,0 +1,356 @@
+package auth
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/coreos/go-oidc/v3/oidc/oidctest"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/google/uuid"
+	"golang.org/x/oauth2"
+
+	authcore "hitkeep/auth"
+	"hitkeep/database"
+	json "hitkeep/jsonapi"
+	"hitkeep/mailer"
+	"hitkeep/security"
+	"hitkeep/server/shared"
+	"hitkeep/socialauth"
+	"hitkeep/sso"
+)
+
+// The transport supplies signed provider responses; production verification,
+// browser state, subject lookup, challenge ownership and factors all run normally.
+type deletionSocialProvider struct {
+	name, nonce, challenge, subject, email string
+	key                                    *rsa.PrivateKey
+}
+
+const deletionMicrosoftTenant = "11111111-2222-3333-4444-555555555555"
+const deletionMicrosoftObject = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+func (f *deletionSocialProvider) RoundTrip(r *http.Request) (*http.Response, error) {
+	out := httptest.NewRecorder()
+	out.Header().Set("Content-Type", "application/json")
+	issuer := "https://accounts.google.com"
+	if f.name == "microsoft" {
+		issuer = "https://login.microsoftonline.com/" + deletionMicrosoftTenant + "/v2.0"
+	}
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/.well-known/openid-configuration"):
+		metadataIssuer := issuer
+		if f.name == "microsoft" {
+			metadataIssuer = "https://login.microsoftonline.com/{tenantid}/v2.0"
+		}
+		_ = json.MarshalWrite(out, map[string]any{"issuer": metadataIssuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "response_types_supported": []string{"code"}, "subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{oidc.RS256}})
+	case strings.HasSuffix(r.URL.Path, "/keys"):
+		encoded, _ := json.Marshal(jose.JSONWebKey{Key: &f.key.PublicKey, KeyID: "deletion-provider", Algorithm: oidc.RS256, Use: "sig"})
+		var key map[string]any
+		_ = json.Unmarshal(encoded, &key)
+		key["issuer"] = "https://login.microsoftonline.com/{tenantid}/v2.0"
+		_ = json.MarshalWrite(out, map[string]any{"keys": []any{key}})
+	case strings.HasSuffix(r.URL.Path, "/token") || r.URL.Path == "/login/oauth/access_token":
+		if err := r.ParseForm(); err != nil {
+			return nil, err
+		}
+		if r.Form.Get("code") != "fixture-code" || oauth2.S256ChallengeFromVerifier(r.Form.Get("code_verifier")) != f.challenge {
+			return nil, fmt.Errorf("provider code or PKCE mismatch")
+		}
+		payload := map[string]any{"access_token": "fixture-provider-token", "token_type": "Bearer"}
+		if f.name != "github" {
+			claims := map[string]any{"iss": issuer, "sub": f.subject, "aud": "deletion-client", "exp": time.Now().Add(time.Minute).Unix(), "iat": time.Now().Unix(), "nonce": f.nonce, "email": f.email, "email_verified": true, "tid": deletionMicrosoftTenant, "oid": deletionMicrosoftObject}
+			encoded, _ := json.Marshal(claims)
+			payload["id_token"] = oidctest.SignIDToken(f.key, "deletion-provider", oidc.RS256, string(encoded))
+		}
+		_ = json.MarshalWrite(out, payload)
+	case r.URL.Path == "/user":
+		_ = json.MarshalWrite(out, map[string]any{"id": 42, "login": "fixture-user"})
+	case r.URL.Path == "/user/emails":
+		_ = json.MarshalWrite(out, []any{map[string]any{"email": f.email, "primary": true, "verified": true}})
+	default:
+		return nil, fmt.Errorf("unexpected provider fixture route")
+	}
+	return out.Result(), nil
+}
+
+func TestAccountDeletionSocialVerifiesLinkedProviderAndLocalMFA(t *testing.T) {
+	for _, provider := range []string{"google", "github", "microsoft"} {
+		t.Run(provider, func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			id, err := store.CreateUser(t.Context(), "delete-social@example.test", "unused")
+			if err != nil {
+				t.Fatal(err)
+			}
+			const secret = "JBSWY3DPEHPK3PXP"
+			if err := store.EnableUserTOTP(t.Context(), id, secret); err != nil {
+				t.Fatal(err)
+			}
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &deletionSocialProvider{name: provider, subject: "deletion-subject", email: "delete-social@example.test", key: key}
+			subject := fixture.subject
+			if provider == "github" {
+				subject = "42"
+			}
+			if provider == "microsoft" {
+				subject = deletionMicrosoftTenant + ":" + deletionMicrosoftObject
+			}
+
+			h.ctx.SocialAuth = socialauth.NewClient(sso.NewClient(&http.Client{Transport: fixture}))
+			h.ctx.Config.SocialGoogleClientID = "deletion-client"
+			h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+			h.ctx.Config.SocialGitHubClientID = "deletion-client"
+			h.ctx.Config.SocialGitHubClientSecret = "fixture-secret"
+			h.ctx.Config.SocialMicrosoftClientID = "deletion-client"
+			h.ctx.Config.SocialMicrosoftClientSecret = "fixture-secret"
+			attempt, hash := deletionAttemptFixture(t, h, id)
+			target := shared.AccountDeletionReturnPath(attempt)
+			unlinked := completeDeletionSocialProvider(t, h, fixture, target)
+			if unlinked.Code != 403 || len(unlinked.Result().Cookies()) != 0 {
+				t.Fatal("deletion accepted email-only provider linking")
+			}
+			if linked, err := store.GetSocialIdentity(t.Context(), provider, subject); err != nil || linked != nil {
+				t.Fatal("deletion reauthentication linked an identity")
+			}
+			if _, err := store.LinkSocialIdentity(t.Context(), database.LinkSocialIdentityInput{UserID: id, Provider: provider, Subject: subject, ObservedEmail: fixture.email}); err != nil {
+				t.Fatal(err)
+			}
+			out := completeDeletionSocialProvider(t, h, fixture, target)
+			if out.Code != 200 || len(out.Result().Cookies()) != 0 {
+				t.Fatalf("complete %d %s", out.Code, out.Body.String())
+			}
+			var response loginResponse
+			if err := json.Unmarshal(out.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Status != "mfa_required" {
+				t.Fatal("social skipped local MFA")
+			}
+			code, err := security.GenerateCurrentTOTPCode(secret, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := json.Marshal(mfaTotpVerifyRequest{ChallengeToken: response.ChallengeToken, Code: code})
+			completed := httptest.NewRecorder()
+			h.handleMFATOTPVerify()(completed, deletionJSONRequest("/api/auth/mfa/totp/verify", body))
+			if completed.Code != 200 || !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, responseSessionID(t, h, completed), hash) {
+				t.Fatalf("factor %d %s", completed.Code, completed.Body.String())
+			}
+		})
+	}
+}
+
+func completeDeletionSocialProvider(t *testing.T, h *handler, fixture *deletionSocialProvider, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	token := verifiedSocialCompletion(t, h, fixture, target)
+	body, _ := json.Marshal(map[string]string{"completion_token": token})
+	out := httptest.NewRecorder()
+	h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
+	return out
+}
+
+func verifiedSocialCompletion(t *testing.T, h *handler, fixture *deletionSocialProvider, target string) string {
+	t.Helper()
+	provider := fixture.name
+	body, _ := json.Marshal(map[string]string{"flow": "login", "return_url": target})
+	req := deletionJSONRequest("/api/auth/social/"+provider+"/start", body)
+	req.SetPathValue("provider", provider)
+	started := httptest.NewRecorder()
+	h.handleSocialStart(false)(started, req)
+	if started.Code != 200 {
+		t.Fatalf("start %d %s", started.Code, started.Body.String())
+	}
+	var start struct {
+		AuthURL string `json:"auth_url"`
+	}
+	if err := json.Unmarshal(started.Body.Bytes(), &start); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(start.AuthURL)
+	fixture.nonce = u.Query().Get("nonce")
+	fixture.challenge = u.Query().Get("code_challenge")
+	req = httptest.NewRequest("GET", "/api/auth/social/"+provider+"/callback?state="+u.Query().Get("state")+"&code=fixture-code", nil)
+	req.SetPathValue("provider", provider)
+	for _, cookie := range started.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+	callback := httptest.NewRecorder()
+	h.handleSocialCallback()(callback, req)
+	if callback.Code != 303 {
+		t.Fatalf("callback %d", callback.Code)
+	}
+	u, _ = url.Parse(callback.Header().Get("Location"))
+	fragment, _ := url.ParseQuery(u.Fragment)
+	token := fragment.Get("social_token")
+	if token == "" {
+		t.Fatalf("provider verification failed: %s", u.Query().Get("error"))
+	}
+	return token
+}
+
+func freshSocialMutationProof(t *testing.T, h *handler, id uuid.UUID, email string) (string, string, string) {
+	t.Helper()
+	attempt, hash := deletionAttemptFixture(t, h, id)
+	body, _ := json.Marshal(map[string]string{"email": email, "password": "password123", "return_url": shared.AccountDeletionReturnPath(attempt)})
+	out := httptest.NewRecorder()
+	h.handleLogin()(out, deletionJSONRequest("/api/login", body))
+	if out.Code != 200 {
+		t.Fatalf("actual primary %d %s", out.Code, out.Body.String())
+	}
+	jti := responseSessionID(t, h, out)
+	if !h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+		t.Fatal("primary proof missing")
+	}
+	return attempt, hash, jti
+}
+
+func TestAutomaticSocialLinkInvalidatesExistingDeletionProof(t *testing.T) {
+	for _, provider := range []string{"google", "github", "microsoft"} {
+		for _, lateFailure := range []bool{false, true} {
+			if provider == "microsoft" && lateFailure {
+				continue
+			}
+			t.Run(provider+map[bool]string{false: "/linked", true: "/later_login_read_fails"}[lateFailure], func(t *testing.T) {
+				h, store := setupAuthTestEnv(t)
+				defer store.Close()
+				password, err := HashPassword("password123")
+				if err != nil {
+					t.Fatal(err)
+				}
+				id, err := store.CreateUser(t.Context(), "social-link@example.test", password)
+				if err != nil {
+					t.Fatal(err)
+				}
+				attempt, hash, jti := freshSocialMutationProof(t, h, id, "social-link@example.test")
+				key, err := rsa.GenerateKey(rand.Reader, 2048)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixture := &deletionSocialProvider{name: provider, subject: "new-primary-subject", email: "social-link@example.test", key: key}
+				h.ctx.SocialAuth = socialauth.NewClient(sso.NewClient(&http.Client{Transport: fixture}))
+				h.ctx.Config.SocialGoogleClientID = "deletion-client"
+				h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+				h.ctx.Config.SocialGitHubClientID = "deletion-client"
+				h.ctx.Config.SocialGitHubClientSecret = "fixture-secret"
+				h.ctx.Config.SocialMicrosoftClientID = "deletion-client"
+				h.ctx.Config.SocialMicrosoftClientSecret = "fixture-secret"
+				driver := &authTestMailDriver{}
+				if provider == "microsoft" {
+					h.ctx.Mailer = mailer.NewWithDriver(driver, h.ctx.Config)
+				}
+				if lateFailure {
+					if err := store.Exec(t.Context(), "DROP TABLE user_recovery_codes"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				out := completeDeletionSocialProvider(t, h, fixture, "/dashboard")
+				want := 200
+				if lateFailure {
+					want = 500
+				}
+				if out.Code != want {
+					t.Fatalf("link %d want%d: %s", out.Code, want, out.Body.String())
+				}
+				subject := fixture.subject
+				if provider == "github" {
+					subject = "42"
+				}
+				if provider == "microsoft" {
+					subject = deletionMicrosoftTenant + ":" + deletionMicrosoftObject
+					const marker = "/api/auth/social/confirm?token="
+					_, raw, found := strings.Cut(driver.textBody, marker)
+					if !found {
+						t.Fatal("confirmation mail missing")
+					}
+					fields := strings.Fields(raw)
+					if len(fields) == 0 {
+						t.Fatal("confirmation token missing")
+					}
+					token, err := url.QueryUnescape(fields[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					confirmed := httptest.NewRecorder()
+					h.handleSocialConfirmation()(confirmed, httptest.NewRequest("GET", "/api/auth/social/confirm?token="+url.QueryEscape(token), nil))
+					if confirmed.Code != 303 {
+						t.Fatal("confirmation failed")
+					}
+				}
+				linked, err := store.GetSocialIdentity(t.Context(), provider, subject)
+				if err != nil || linked == nil || linked.UserID != id {
+					t.Fatal("new primary identity did not commit")
+				}
+				if h.ctx.AuthState.AccountDeletionProofVerified(attempt, id, jti, hash) {
+					t.Fatal("new linked primary retained prior deletion proof")
+				}
+			})
+		}
+	}
+}
+
+func TestPendingSocialCompletionCannotChangeAccountAfterDeletion(t *testing.T) {
+	for _, clear := range []bool{false, true} {
+		t.Run(map[bool]string{false: "old_subject_after_account_replacement", true: "clear_pending_completion"}[clear], func(t *testing.T) {
+			h, store := setupAuthTestEnv(t)
+			defer store.Close()
+			const email = "pending-social@example.test"
+			id, err := store.CreateUserWithoutDefaultTenant(t.Context(), email, "unused-hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = store.LinkSocialIdentity(t.Context(), database.LinkSocialIdentityInput{UserID: id, Provider: "google", Subject: "pending-subject", ObservedEmail: email})
+			if err != nil {
+				t.Fatal(err)
+			}
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &deletionSocialProvider{name: "google", subject: "pending-subject", email: email, key: key}
+			h.ctx.SocialAuth = socialauth.NewClient(sso.NewClient(&http.Client{Transport: fixture}))
+			h.ctx.Config.SocialGoogleClientID = "deletion-client"
+			h.ctx.Config.SocialGoogleClientSecret = "fixture-secret"
+			token := verifiedSocialCompletion(t, h, fixture, "/dashboard")
+			completion, ok := h.ctx.AuthState.GetSocialCompletion(token)
+			if !ok || completion.UserID != id {
+				t.Fatal("verified provider completion lost its existing account")
+			}
+			h.ctx.Config.CloudHosted = true
+			h.ctx.Config.CloudSignupEnabled = true
+			h.ctx.Config.SocialSignupEnabled = true
+			signupBody, _ := json.Marshal(map[string]any{"completion_token": token, "team_name": "New Team", "plan_code": "free", "billing": "monthly", "jurisdiction": "EU", "locale": "en", "accepted_tos": true})
+			signup := httptest.NewRecorder()
+			h.handleSocialCloudSignupComplete()(signup, deletionJSONRequest("/api/cloud/signup/social/complete", signupBody))
+			if signup.Code != 409 || !strings.Contains(signup.Body.String(), "social_completion_invalid") {
+				t.Fatal("existing-account completion was accepted as a signup grant")
+			}
+			if clear {
+				h.ctx.AuthState.ClearUser(id)
+			} else {
+				if err := store.DeleteUser(t.Context(), id); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := store.CreateUserWithoutDefaultTenant(t.Context(), email, "different-user-hash"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body, _ := json.Marshal(map[string]string{"completion_token": token})
+			out := httptest.NewRecorder()
+			h.handleSocialComplete()(out, deletionJSONRequest("/api/auth/social/complete", body))
+			if out.Code != 409 || hasCookie(out.Result().Cookies(), authcore.CookieName) {
+				t.Fatalf("old verified receipt continued with %d", out.Code)
+			}
+		})
+	}
+}

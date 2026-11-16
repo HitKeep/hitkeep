@@ -1249,7 +1249,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Mit Google fortfahren", "github": "Mit GitHub fortfahren", "microsoft": "Mit Microsoft fortfahren" },
+    "continueWith": { "google": "Mit Google fortfahren", "github": "Mit GitHub fortfahren", "microsoft": "Mit Microsoft fortfahren",
+      "apple": "Mit Apple fortfahren" },
     "signupMethods": "Soziale Registrierungsmethoden",
     "confirmEmailSubtitle": "Bestätige, auf welches HitKeep-Konto diese Microsoft-Identität zugreifen soll.",
     "confirmEmailPrompt": "Microsoft-E-Mail-Angaben können sich ändern. Prüfe die HitKeep-E-Mail-Adresse, bevor wir einen Bestätigungslink senden.",
@@ -1304,6 +1305,8 @@
         "passwordConfirmationHint": "Gib im Passwortbereich dein aktuelles Passwort ein, bevor du deinen einzigen sozialen Anbieter entfernst.",
         "linked": "Anbieter erfolgreich verknüpft.",
         "unlinked": "Anbieter erfolgreich getrennt.",
+        "appleManualRevocation": "Apple wurde getrennt. Widerrufe den Zugriff von HitKeep in deinem Apple Account, um die Verbindung vollständig zu entfernen.",
+        "appleManageAccess": "Apple-Zugriff verwalten",
         "errors": { "linkFailed": "Dieser Anbieter konnte nicht verknüpft werden.", "unlinkFailed": "Dieser Anbieter konnte nicht getrennt werden.", "lastMethod": "Füge einen weiteren Anbieter oder Passkey hinzu oder bestätige ein aktiviertes Passwort." }
       },
       "twoFactor": {
@@ -1374,6 +1377,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Konto löschen",
+        "description": "Deine Identität, persönlichen Zugangsdaten und persönlichen Berichte dauerhaft entfernen. Dies kann nicht rückgängig gemacht werden.",
+        "terms": "Geteilte Teams und ihre Analysen bleiben für ihre Mitglieder verfügbar. Wenn du ein allein genutztes Cloud-Team ausdrücklich schließt, werden dessen Analysedaten sofort gelöscht und das Abonnement zum Ende des bezahlten Zeitraums gekündigt. Erforderliche Abrechnungs- und Rechtsunterlagen bleiben erhalten.",
+        "exportFirst": "Zuerst Analysedaten exportieren",
+        "reviewAction": "Kontolöschung prüfen",
+        "teamCloses": "Dieses Team und alle seine Analysedaten werden dauerhaft gelöscht.",
+        "teamSurvives": "Dieses Team, seine Analysedaten und seine Team-Zugangsdaten bleiben erhalten.",
+        "successorLabel": "Bestehender Team-Inhaber für die Website-Inhaberschaft",
+        "successorPlaceholder": "Bestehenden Inhaber auswählen",
+        "closeTeam": "{{team}} schließen und alle Analysedaten dauerhaft löschen. Verlängerungen zum Periodenende beenden.",
+        "lastOperator": "Ernenne vor der Kontolöschung einen weiteren Instanz-Inhaber.",
+        "handoverRequired": "Übertrage für {{team}} die alleinige Inhaberschaft in den Teameinstellungen oder wähle ausdrücklich die Schließung, wenn das Team keine weiteren Mitglieder hat.",
+        "successorRequired": "Wähle einen bestehenden Inhaber von {{team}} für die Website-Inhaberschaft.",
+        "invalidSuccessor": "Die Nachfolge muss bereits Inhaber von {{team}} sein.",
+        "policyBlocked": "Dieses Team kann bei der Kontolöschung nicht geschlossen werden.",
+        "manageOwnership": "Team-Inhaberschaft verwalten",
+        "reauthDescription": "Melde dich erneut mit einer verknüpften Anmeldemethode an und bestätige deine eingerichteten Sicherheitsfaktoren. Die Rückkehr hierher löscht nichts.",
+        "reauthenticate": "Erneut authentifizieren",
+        "finalConfirmation": "Ich bestätige die Löschung meines Kontos und die sofortige Löschung aller oben ausdrücklich ausgewählten, allein genutzten Teams und ihrer Daten. Ich verstehe die Bedingungen zur Aufbewahrung von Abrechnungsunterlagen und zur Kündigung zum Periodenende.",
+        "deleteAction": "Mein Konto dauerhaft löschen",
+        "reauthRequired": "Melde dich erneut an, um diese Löschung zu bestätigen.",
+        "consequencesChanged": "Deine Teams oder Abrechnung haben sich geändert. Prüfe die Folgen erneut.",
+        "unavailable": "Die Kontoschließung ist vorübergehend nicht verfügbar. Versuche es erneut oder kontaktiere deinen Instanzbetreiber, falls dein Zugriff bereits beendet wurde.",
+        "completedTitle": "Konto gelöscht",
+        "completedDescription": "Dein HitKeep-Konto wurde entfernt. Deine Sitzung und lokalen Kontodaten wurden gelöscht.",
+        "manualApple": "Der Widerruf der Apple-Autorisierung konnte nicht bestätigt werden. Du kannst HitKeep in deinen Apple-Account-Einstellungen unter „Mit Apple anmelden“ entfernen.",
+        "manageApple": "„Mit Apple anmelden“ verwalten"
+      },
       "title": "Einstellungen",
       "subtitle": "Verwalte die Sicherheit und Einstellungen deines Kontos.",
       "profile": {
@@ -2046,6 +2078,8 @@
       "disable2faSuccess": "MFA wurde für {{email}} deaktiviert."
     },
     "confirmDisable2fa": "Alle MFA-Methoden für {{email}} deaktivieren? Dadurch werden auch gespeicherte Sitzungen ungültig.",
+    "confirmForceDeleteUser": "{{email}} dauerhaft löschen und diese Teams archivieren:\n{{teams}}\nDiese Websites und alle ihre Analysedaten löschen:\n{{sites}}\nDies kann nicht rückgängig gemacht werden.",
+    "deleteUserReviewSite": "{{domain}} — Website {{site}}, Team {{team}}, Inhaber {{owner}}",
     "confirmDeleteUser": "Benutzer {{email}} löschen?",
     "confirmDeleteSite": "Seite {{domain}} löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "confirmDeleteTeam": "Team \"{{name}}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -2442,6 +2476,7 @@
         "social_google": { "label": "Google-Anmeldung" },
         "social_github": { "label": "GitHub-Anmeldung" },
         "social_microsoft": { "label": "Microsoft-Anmeldung" },
+        "social_apple": { "label": "Apple-Anmeldung" },
         "social_signup": { "label": "Soziale Registrierung" },
         "ai": {
           "label": "KI-Gateway"
@@ -4123,5 +4158,24 @@
     "readOnly": "Schreibgeschützte Statistiken",
     "connectionError": "Die Verbindung zu HitKeep ist fehlgeschlagen. Versuche es erneut oder verbinde HitKeep in WordPress neu.",
     "analyticsNavigation": "Statistikseiten"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "HitKeep-Konto verwalten",
+          "authority": "Fahre nur fort, wenn du genau diese Änderung in der HitKeep-App angefordert hast. Die Anmeldung allein führt sie nicht aus.",
+          "passkey_register": "Passkey registrieren",
+          "social_link": "Social-Media-Konto verknüpfen",
+          "search_console_connect": "Google Search Console verbinden",
+          "approve": "Diese Aktion genehmigen",
+          "return": "Zur App zurückkehren",
+          "completed": "Die Änderung wurde gespeichert. Kehre zur App zurück, um dein Konto zu aktualisieren.",
+          "restart": "Diese Aktion konnte nicht bestätigt werden. Kehre zur App zurück und aktualisiere den Status, bevor du erneut beginnst."
+      },
+      "accountDeletionPurpose": "Diese Anmeldung bereitet die Kontolöschung vor. Du musst die Folgen prüfen und die Löschung anschließend separat in der App bestätigen.",
+      "title": "In der HitKeep-App anmelden",
+      "authority": "Die App erhält vollständigen Zugriff auf dein Konto, einschließlich Änderungen an Daten und Kontoeinstellungen. Deine Teamberechtigungen und Sicherheitsprüfungen gelten weiterhin.",
+      "publicClient": "Der öffentliche App-Name bestätigt die installierte App nicht. Fahre nur fort, wenn du diese Anmeldung in der HitKeep-App gestartet hast.",
+      "approve": "In der App anmelden",
+      "restart": "Diese Anmeldung ist abgelaufen oder konnte nicht überprüft werden. Starte die Anmeldung in der App erneut."
   }
 }

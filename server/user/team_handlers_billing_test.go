@@ -26,6 +26,13 @@ func TestHandleGetTeamsIncludesPlanMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	operator, err := store.CreateUserWithoutDefaultTenant(t.Context(), "other-operator@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateInstanceRole(t.Context(), operator, authcore.InstanceOwner, userID); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.UpdateInstanceRole(context.Background(), userID, authcore.InstanceUser, userID); err != nil {
 		t.Fatalf("demote user: %v", err)
 	}
@@ -102,6 +109,13 @@ func TestHandleGetTeamsTreatsPendingCheckoutAsFreePlan(t *testing.T) {
 	userID, err := store.CreateUser(context.Background(), "pending@test.dev", "hash")
 	if err != nil {
 		t.Fatalf("create user: %v", err)
+	}
+	operator, err := store.CreateUserWithoutDefaultTenant(t.Context(), "other-operator@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateInstanceRole(t.Context(), operator, authcore.InstanceOwner, userID); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.UpdateInstanceRole(context.Background(), userID, authcore.InstanceUser, userID); err != nil {
 		t.Fatalf("demote user: %v", err)

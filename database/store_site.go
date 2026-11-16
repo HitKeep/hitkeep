@@ -114,6 +114,8 @@ func (s *Store) CreateSiteWithQuota(ctx context.Context, userID, tenantID uuid.U
 }
 
 func (s *Store) createSite(ctx context.Context, userID, expectedTenantID uuid.UUID, domain string, maxSites int) (*api.Site, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	id := uuid.New()
 	now := time.Now()
 
@@ -181,6 +183,8 @@ func (s *Store) createSite(ctx context.Context, userID, expectedTenantID uuid.UU
 }
 
 func (s *Store) UpdateSiteTenant(ctx context.Context, siteID, tenantID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if err := updateSiteTenant(ctx, s.db, siteID, tenantID); err != nil {
 		return err
 	}
@@ -432,6 +436,13 @@ func moveSiteForeignKeys(ctx context.Context, tx *sql.Tx, refs []fkEdge, fromSit
 // site. Mirror the shadow-row sequence from UpdateUserProfile: park the
 // references on a shadow site, update the domain, then move them back.
 func (s *Store) UpdateSiteDomain(ctx context.Context, siteID uuid.UUID, domain string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.updateSiteIndexed(ctx, siteID, domain, uuid.Nil)
+}
+
+// updateSiteIndexed preserves foreign-key children when DuckDB rewrites an indexed site row.
+func (s *Store) updateSiteIndexed(ctx context.Context, siteID uuid.UUID, domain string, successorID uuid.UUID) error {
 	var userID uuid.UUID
 	var previousDomain string
 	var createdAt time.Time
@@ -440,6 +451,12 @@ func (s *Store) UpdateSiteDomain(ctx context.Context, siteID uuid.UUID, domain s
 			return fmt.Errorf("site %s not found", siteID)
 		}
 		return fmt.Errorf("could not load site for domain update: %w", err)
+	}
+	if domain == "" {
+		domain = previousDomain
+	}
+	if successorID == uuid.Nil {
+		successorID = userID
 	}
 	defer func() {
 		s.invalidateSiteDomain(previousDomain)
@@ -484,7 +501,7 @@ func (s *Store) UpdateSiteDomain(ctx context.Context, siteID uuid.UUID, domain s
 	}
 
 	if err := runStoreTx(ctx, s.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "UPDATE sites SET domain = ? WHERE id = ?", domain, siteID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE sites SET domain = ?, user_id = ? WHERE id = ?", domain, successorID, siteID); err != nil {
 			return fmt.Errorf("could not update site domain: %w", err)
 		}
 		return moveSiteForeignKeys(ctx, tx, refs, shadowSiteID, siteID)
