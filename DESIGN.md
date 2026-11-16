@@ -1,6 +1,6 @@
 ---
 name: HitKeep
-description: A calm, modern analytics console built for sustained focus and predictable operation.
+description: Dashboard colors, typography, spacing, and shared components.
 colors:
   primary: "#10b981"
   primary-hover: "#059669"
@@ -146,26 +146,9 @@ components:
 
 ## 1. Overview
 
-**Creative North Star: "The Quiet Operations Console"**
+Use shared OptimusUI components and semantic tokens in both light and dark modes. Keep controls and content stable during loading and refresh. Equivalent actions use the same placement, feedback, and interaction pattern.
 
-HitKeep is a calm, trustworthy workspace for people who spend real time interpreting analytics and operating a product. The interface is deliberately easy on the eyes: visual groups are clear, placement is predictable, contrast is sufficient without becoming harsh, and motion never competes with the task. This sensory-conscious approach supports neurodivergent users and anyone affected by visual fatigue without reducing information density or making the product feel clinical.
-
-Professional structure comes first. Modernity comes from Lexend, disciplined spacing, crisp semantic color, responsive controls, and small state transitions—not decorative effects. Every surface should make privacy, permissions, scope, loading, and one-time security boundaries understandable at the point of action.
-
-The system rejects opaque ad-tech dashboards, dependency-heavy enterprise administration, and decorative SaaS surfaces. A screen succeeds when an experienced operator can predict where actions, status, filters, and feedback will appear before reading every label.
-
-**Key Characteristics:**
-
-- Calm, restrained surfaces with one emerald action signal.
-- Consistent light and dark modes built from semantic OptimusUI tokens.
-- Dense but orderly information with stable placement during loading and refresh.
-- Shared controls and interaction harnesses before page-local markup.
-- Explicit, localized feedback close to the action that caused it.
-- Keyboard access, visible focus, reduced-motion support, and no reliance on color alone.
-
-**The Quiet Surface Rule.** Remove competing emphasis, not useful information. One region leads; supporting regions remain legible and structurally stable.
-
-**The Predictability Rule.** Equivalent tasks must use the same component, placement, loading behavior, and feedback pattern across the dashboard.
+Show permissions, scope, and destructive consequences where the user acts. Keep feedback localized and close to the affected control. Support keyboard navigation, visible focus, sufficient contrast, and reduced motion.
 
 ## 2. Colors
 
@@ -312,31 +295,3 @@ HitKeep is flat by default and layered by structure. Borders and surface tones s
 - **Custom CSS:** use `--p-content-background`, `--p-content-border-color`, `--p-text-color`, `--p-text-muted-color`, `--p-primary-color`, and surface ramps. Paired light/dark selectors are allowed only for real product-specific differences that semantic tokens cannot represent.
 - **Motion:** standard control transitions use Aura's 200ms duration. Motion communicates state and must honor reduced-motion preferences; never add orchestrated product-page entrances.
 - **Charts:** use the shared HitKeep chart theme and option builder so text, grid, tooltip, accessibility, and light/dark behavior stay consistent.
-
-## 6. Do's and Don'ts
-
-### Do:
-
-- **Do** make privacy, permissions, scope, destructive consequences, and one-time credentials visible at the point of action.
-- **Do** keep one clear visual lead per region while preserving useful information and stable placement.
-- **Do** use OptimusUI's components, severities, states, templates, accessibility, and theme tokens before custom control markup or CSS.
-- **Do** reuse `SettingsCard`, `PageFrame`, `DialogShell`, `CrudDialog`, `TableRowActions`, `PageState`, `CopyControl`, `OneTimeCredential`, `KpiCard`, `MetricCardGroup`, and `AuditTableComponent` when their contracts fit.
-- **Do** make ordinary CRUD tables searchable, intentionally sortable, paginated, responsive, and keyboard accessible using the established OptimusUI composition.
-- **Do** keep errors near the failed action, keep dialog errors inside the dialog, and announce successful state changes near the updated surface.
-- **Do** test every changed surface in light mode, dark mode, keyboard navigation, narrow layout, and reduced motion.
-- **Do** maintain WCAG AA contrast and reinforce semantic color with text, iconography, or structure.
-- **Do** put every user-facing string in Transloco and preserve behavior across all seven supported locales.
-
-### Don't:
-
-- **Don't** create opaque ad-tech dashboards that conceal data collection, privacy, permission, or security boundaries.
-- **Don't** create dependency-heavy enterprise administration interfaces that make routine operations feel complex.
-- **Don't** create decorative SaaS surfaces that trade information hierarchy and legibility for visual novelty.
-- **Don't** duplicate OptimusUI control chrome in page CSS; extend the shared Aura preset or use semantic variables.
-- **Don't** copy a repeated interaction or card treatment into another feature; use or extract a shared component.
-- **Don't** interpret “easy on the eyes” as faint text, hidden labels, ambiguous icons, excessive empty space, or missing information.
-- **Don't** use decorative gradients, gradient text, default glassmorphism, diagonal stripes, decorative grid backgrounds, or large ambient glows.
-- **Don't** use colored side-stripe accents, nested cards, or a border plus a wide decorative shadow.
-- **Don't** over-round cards, dialogs, or inputs; ordinary surfaces stop at `rounded.xl`, while full pills are reserved for tags and compact controls.
-- **Don't** rely on color alone, introduce flashing or decorative motion, or animate layout properties during ordinary state changes.
-- **Don't** replace standard OptimusUI affordances with novel controls that make an experienced operator pause.
