@@ -96,7 +96,7 @@
                             }
                         </div>
                     </fieldset>
-                    @if (team.can_create_site) {
+                    @if (team.can_create_site && selectedSiteIds().length === 0) {
                     <section class="flex flex-col gap-3" aria-labelledby="oauth-create-site-title">
                         <h2 id="oauth-create-site-title" class="oauth-section-title">{{ 'oauth.createSiteTitle' | transloco }}</h2>
                         <p class="oauth-help">{{ 'oauth.createSiteHelp' | transloco }}</p>
