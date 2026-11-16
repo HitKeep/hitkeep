@@ -178,6 +178,7 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 }
 
 type signupRequest struct {
+	ReturnURL       string `json:"return_url,omitempty"`
 	Email           string `json:"email"`
 	Password        string `json:"password"`
 	GivenName       string `json:"given_name"`
@@ -308,6 +309,7 @@ func (h *handler) handleSignup() http.HandlerFunc {
 			return
 		}
 
+		h.ctx.AuthState.SaveNativeEmailReturn(token, req.ReturnURL)
 		verifyLink := signupVerificationLink(h.ctx.Config.PublicURL, token)
 		if err := h.ctx.Mailer.Send(req.Email, mailables.NewEmailVerification(verifyLink, req.TeamName, req.Locale)); err != nil {
 			details := mailer.DescribeError(err)
@@ -457,12 +459,21 @@ func (h *handler) handleVerifySignup() http.HandlerFunc {
 			shared.LoggerFromContext(r.Context()).Warn("Failed to record verified signup conversion", "error", err, "team_id", account.TenantID)
 		}
 
-		if err := issueLoginSession(w, h.ctx.Config, account.UserID); err != nil {
+		nativeReturn := h.ctx.AuthState.NativeEmailReturn(token)
+		if nativeReturn != "" && (!h.ctx.NativeAuthReady() || !h.ctx.AuthState.BindNativeReturnPath(nativeReturn, account.UserID)) {
+			http.Error(w, "Native sign-in expired; restart in the app", http.StatusConflict)
+			return
+		}
+		if err := issueLoginSession(r.Context(), w, h.ctx, account.UserID); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue cloud signup login session", "error", err, "user_id", account.UserID)
 			http.Redirect(w, r, signupURL("expired"), http.StatusFound)
 			return
 		}
 
+		if nativeReturn != "" {
+			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, nativeReturn), http.StatusSeeOther)
+			return
+		}
 		if entry.PlanCode == database.CloudPlanPro || entry.PlanCode == database.CloudPlanBusiness {
 			query := url.Values{}
 			query.Set("plan", entry.PlanCode)

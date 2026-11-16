@@ -71,6 +71,23 @@ func (s *Store) createAPIClient(
 	siteRoles map[uuid.UUID]auth.SiteRole,
 	expiresAt *time.Time,
 ) (*api.APIClient, string, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if userID != nil {
+		if err := s.requireAccountNotRemoving(ctx, *userID); err != nil {
+			return nil, "", err
+		}
+	}
+	if tenantID != nil {
+		closed, err := s.IsClosedCloudAccount(ctx, *tenantID, "", "")
+		if err != nil {
+			return nil, "", err
+		}
+		if closed {
+			return nil, "", ErrAccountDeletionBlocked
+		}
+	}
+
 	id := uuid.New()
 	now := time.Now().UTC()
 	token, tokenHash, err := generateAPIClientToken()

@@ -104,4 +104,18 @@ describe('SocialSignup', () => {
         expect(signupProperties?.['provider']).toBe('google');
         expect(routerMock.navigateByUrl).toHaveBeenCalledWith('/signup/verified?plan=pro&billing=monthly');
     });
+    it('does not install marketing tracking or emit callback events for Apple', () => {
+        fixture.destroy();
+        trackingMock.install.mockClear();
+        trackingMock.trackEvent.mockClear();
+        authMock.previewSocial.mockReturnValueOnce(of({ provider: 'apple', display_name: 'Apple', observed_email: 'alias@private.icloud.com', email_verified: true, email_confirmation_required: false, flow: 'signup' }));
+        fixture = TestBed.createComponent(SocialSignup);
+        component = fixture.componentInstance;
+        fixture.detectChanges();
+        component['form'].teamName().control().setValue('Apple Team');
+        component['form'].acceptedTos().control().setValue(true);
+        component['onSubmit']();
+        expect(trackingMock.install).not.toHaveBeenCalled();
+        expect(trackingMock.trackEvent).not.toHaveBeenCalled();
+    });
 });

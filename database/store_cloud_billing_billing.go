@@ -182,6 +182,16 @@ func (s *Store) CreateManagedCloudAccount(ctx context.Context, input CreateManag
 }
 
 func (s *Store) UpsertCloudBillingAccount(ctx context.Context, account CloudBillingAccount) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	removed, err := s.IsRemovedCloudAccount(ctx, account.TenantID, account.StripeCustomerID, account.StripeSubscriptionID)
+	if err != nil {
+		return err
+	}
+	if removed {
+		return nil
+	}
+
 	now := time.Now().UTC()
 	account.BillingInterval = normalizeCloudBillingInterval(account.BillingInterval)
 	if account.CreatedAt.IsZero() {

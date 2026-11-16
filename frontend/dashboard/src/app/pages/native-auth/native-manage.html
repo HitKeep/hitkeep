@@ -1,0 +1,48 @@
+<main class="hk-auth-page" aria-labelledby="native-management-title">
+    <section class="hk-auth-shell">
+        <app-brand />
+        <app-auth-card>
+            <div class="flex flex-col gap-5">
+                <h1 id="native-management-title" class="hk-auth-title">{{ 'nativeAuth.management.title' | transloco }}</h1>
+                @if (failed()) {
+                <p-message severity="error" role="alert">{{ 'nativeAuth.management.restart' | transloco }}</p-message>
+                } @else if (consent(); as request) {
+                <p>{{ 'nativeAuth.management.authority' | transloco }}</p>
+                <dl class="flex flex-col gap-2 break-all">
+                    <dt>{{ 'oauth.signedInAs' | transloco: { email: request.email } }}</dt>
+                    <dd>{{ request.issuer }}</dd>
+                    <dt>{{ 'oauth.applicationId' | transloco }}</dt>
+                    <dd>{{ request.client_id }}</dd>
+                    <dt>{{ ('nativeAuth.management.' + request.management.action) | transloco }}</dt>
+                    @if (request.management.provider) {
+                    <dd>{{ request.management.provider }}</dd>
+                    } @if (request.management.team_id) {
+                    <dd>{{ request.management.team_name }} · {{ request.management.team_id }}</dd>
+                    }
+                </dl>
+                @if (request.management.phase === 'authorized') { @if (request.management.action === 'passkey_register') {
+                <label for="native-passkey-name">{{ 'settings.security.passkeys.nameLabel' | transloco }}</label>
+                <input pInputText id="native-passkey-name" [formControl]="name" maxlength="100" autocomplete="off" />
+                }
+                <button pButton type="button" (click)="perform()" [disabled]="pending()">{{ ('nativeAuth.management.' + request.management.action) | transloco }}</button>
+                } @else if (request.management.phase === 'succeeded') {
+                <p-message severity="success" role="status">{{ 'nativeAuth.management.completed' | transloco }}</p-message>
+                } @else if (request.management.phase !== 'pending') {
+                <p-message severity="warn" role="status">{{ 'nativeAuth.management.restart' | transloco }}</p-message>
+                }
+                <form method="post" [action]="action" (submit)="submit($event)" class="flex gap-3">
+                    <input type="hidden" name="request" [value]="request.request" />
+                    <input type="hidden" name="csrf_token" [value]="request.csrf_token" />
+                    <input type="hidden" name="decision" value="" />
+                    <button pButton type="submit" value="deny" severity="secondary" [disabled]="pending()">{{ 'oauth.deny' | transloco }}</button>
+                    @if (request.management.phase === 'pending' || request.management.phase === 'succeeded') {
+                    <button pButton type="submit" value="approve" [disabled]="pending()">{{ (request.management.phase === 'pending' ? 'nativeAuth.management.approve' : 'nativeAuth.management.return') | transloco }}</button>
+                    }
+                </form>
+                } @else {
+                <p role="status">{{ 'oauth.loading' | transloco }}</p>
+                }
+            </div>
+        </app-auth-card>
+    </section>
+</main>

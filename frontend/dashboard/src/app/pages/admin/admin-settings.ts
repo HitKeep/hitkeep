@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, DOCUMENT } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ConfirmationService } from '@openng/optimus-ui/api';
 import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
@@ -78,6 +78,9 @@ interface Site {
 }
 
 interface DeleteUserBlockedResponse {
+    consequence_hash?: string;
+    can_force?: boolean;
+    sites?: { id: string; team_id: string; user_id: string; domain: string }[];
     status: string;
     code: string;
     message: string;
@@ -150,6 +153,7 @@ interface StatusState {
 export class AdminSettings implements OnInit {
     private http = inject(HttpClient);
     private confirmationService = inject(ConfirmationService);
+    private readonly document = inject(DOCUMENT);
     private transloco = inject(TranslocoService);
     private router = inject(Router);
     private destroyRef = inject(DestroyRef);
@@ -1473,46 +1477,71 @@ export class AdminSettings implements OnInit {
     }
 
     confirmDeleteUser(user: User) {
-        if (user.id === this.currentUserId() || this.isDeletingUser(user)) {
-            return;
-        }
-
+        if (user.id === this.currentUserId() || this.isDeletingUser(user)) return;
         this.confirmationService.confirm({
             message: this.transloco.translate('admin.confirmDeleteUser', { email: user.email }),
             icon: 'pi pi-exclamation-triangle',
             rejectButtonProps: dialogCancelButton(this.transloco.translate('common.actions.cancel')),
             acceptButtonProps: dialogDangerButton(this.transloco.translate('share.dialog.deleteAction')),
+            accept: () => this.deleteUser(user)
+        });
+    }
+
+    private confirmForceDeleteUser(user: User, review: DeleteUserBlockedResponse): void {
+        const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+        if (
+            review.status !== 'error' ||
+            !['user_owns_teams', 'delete_confirmation_required'].includes(review.code) ||
+            review.can_force !== true ||
+            !/^[a-f0-9]{64}$/.test(review.consequence_hash ?? '') ||
+            !Array.isArray(review.teams) ||
+            !Array.isArray(review.sites)
+        )
+            return;
+        if (
+            review.teams.some((team) => !team || !uuid.test(team.id) || typeof team.name !== 'string') ||
+            review.sites.some((site) => !site || !uuid.test(site.id) || !uuid.test(site.team_id) || !uuid.test(site.user_id) || typeof site.domain !== 'string' || !site.domain)
+        )
+            return;
+        const hash = review.consequence_hash!;
+        const actor = this.currentUserId();
+        const message = this.document.createElement('span');
+        message.textContent = this.transloco.translate('admin.confirmForceDeleteUser', {
+            email: user.email,
+            teams: review.teams.map((team) => `${team.name} (${team.id})`).join('\n'),
+            sites: review.sites.map((site) => this.transloco.translate('admin.deleteUserReviewSite', { domain: site.domain, site: site.id, team: site.team_id, owner: site.user_id })).join('\n')
+        });
+        this.confirmationService.confirm({
+            message: message.innerHTML.replaceAll('\n', '<br>'),
+            icon: 'pi pi-exclamation-triangle',
+            rejectButtonProps: dialogCancelButton(this.transloco.translate('common.actions.cancel')),
+            acceptButtonProps: dialogDangerButton(this.transloco.translate('share.dialog.deleteAction')),
             accept: () => {
-                this.deleteUserBlock.set(null);
-                this.userMfaStatus.set(null);
-                this.userActionStatus.set(null);
-                this.deletingUserId.set(user.id);
-                this.http
-                    .delete(`/api/admin/users/${user.id}?force=true`)
-                    .pipe(finalize(() => this.deletingUserId.set('')))
-                    .subscribe({
-                        next: () => {
-                            this.userActionStatus.set({
-                                severity: 'success',
-                                key: 'admin.status.deleteUserSuccess',
-                                params: { email: user.email }
-                            });
-                            this.loadUsers();
-                        },
-                        error: (err) => {
-                            if (this.handleDeleteUserError(err, user)) {
-                                return;
-                            }
-                            this.userActionStatus.set({
-                                severity: 'error',
-                                key: this.resolveDeleteErrorKey(err, 'admin.errors.deleteUserFailed'),
-                                params: { email: user.email }
-                            });
-                            console.error('Failed to delete user', err);
-                        }
-                    });
+                if (this.currentUserId() === actor) this.deleteUser(user, hash);
             }
         });
+    }
+
+    private deleteUser(user: User, consequenceHash?: string): void {
+        if (user.id === this.currentUserId() || this.isDeletingUser(user)) return;
+        this.deleteUserBlock.set(null);
+        this.userMfaStatus.set(null);
+        this.userActionStatus.set(null);
+        this.deletingUserId.set(user.id);
+        this.http
+            .delete(`/api/admin/users/${user.id}${consequenceHash ? '?force=true' : ''}`, { body: consequenceHash ? { consequence_hash: consequenceHash } : undefined })
+            .pipe(finalize(() => this.deletingUserId.set('')))
+            .subscribe({
+                next: () => {
+                    this.userActionStatus.set({ severity: 'success', key: 'admin.status.deleteUserSuccess', params: { email: user.email } });
+                    this.loadUsers();
+                },
+                error: (err) => {
+                    if (!consequenceHash && err instanceof HttpErrorResponse && err.status === 409 && err.error) this.confirmForceDeleteUser(user, err.error);
+                    if (this.handleDeleteUserError(err, user)) return;
+                    this.userActionStatus.set({ severity: 'error', key: this.resolveDeleteErrorKey(err, 'admin.errors.deleteUserFailed'), params: { email: user.email } });
+                }
+            });
     }
 
     confirmDeleteSite(site: Site) {
@@ -1620,7 +1649,7 @@ export class AdminSettings implements OnInit {
     private handleDeleteUserError(err: unknown, user: User): boolean {
         const httpErr = err instanceof HttpErrorResponse ? err : null;
         const response = httpErr?.error as DeleteUserBlockedResponse | undefined;
-        if (!response || response.code !== 'user_owns_teams' || !Array.isArray(response.teams)) {
+        if (!response || !['user_owns_teams', 'delete_confirmation_required', 'delete_consequences_changed', 'delete_policy_blocked'].includes(response.code) || !Array.isArray(response.teams)) {
             return false;
         }
 

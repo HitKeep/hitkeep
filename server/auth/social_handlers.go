@@ -14,6 +14,7 @@ import (
 
 	"hitkeep/api"
 	"hitkeep/appurl"
+	authcore "hitkeep/auth"
 	"hitkeep/database"
 	json "hitkeep/jsonapi"
 	"hitkeep/localization"
@@ -87,6 +88,9 @@ func (h *handler) handleSocialProviders() http.HandlerFunc {
 
 func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(shared.NativeManagementHeader)) > 0 {
+			shared.NativeManagementHeaders(w)
+		}
 		if h.ctx.Store == nil || h.ctx.AuthState == nil || h.ctx.SocialAuth == nil {
 			writeSocialError(r.Context(), w, http.StatusServiceUnavailable, "social_unavailable")
 			return
@@ -134,6 +138,29 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			}
 		}
 
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
+		if h.deletionReauthentication(req.ReturnURL) && flow != "login" {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+			return
+		}
+		if h.deletionReauthentication(req.ReturnURL) {
+			var ok bool
+			userID, ok = h.ctx.AuthState.AccountDeletionSubject(req.ReturnURL, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL))
+			if !ok {
+				writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+				return
+			}
+		}
+		management, valid := shared.NativeManagementReference(r)
+		if !valid || management != "" && !linkFlow {
+			writeSocialError(r.Context(), w, 400, "social_request_invalid")
+			return
+		}
+		if management != "" && !h.ctx.NativeManagementOperation(w, r, management, shared.NativeManagement{Action: "social_link", Provider: providerName}, "", true) {
+			return
+		}
 		authorization, err := h.ctx.SocialAuth.Begin(r.Context(), providerConfig)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider authorization could not be prepared", "provider", providerName, "category", socialErrorCategory(err))
@@ -141,11 +168,15 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 			return
 		}
 		state := h.ctx.AuthState.CreateSocialOAuthState(shared.SocialOAuthState{
-			Provider: providerName, Flow: flow, InviteToken: strings.TrimSpace(req.InviteToken),
+			NativeManagement: management, Provider: providerName, Flow: flow, InviteToken: strings.TrimSpace(req.InviteToken),
 			ReturnPath: sanitizeAuthReturnPath(req.ReturnURL), RememberMe: req.RememberMe, UserID: userID,
 			Nonce: authorization.FlowState.Nonce, CodeVerifier: authorization.FlowState.CodeVerifier,
 			ExpiresAt: time.Now().UTC().Add(socialFlowTTL),
 		})
+		if management != "" && !h.ctx.AuthState.BindNativeManagementOperation(management, state) {
+			writeSocialError(r.Context(), w, 403, "social_request_invalid")
+			return
+		}
 		h.setSocialStateCookie(w, state)
 		shared.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"auth_url": authorization.URL(state)})
 	}
@@ -153,6 +184,12 @@ func (h *handler) handleSocialStart(linkFlow bool) http.HandlerFunc {
 
 func (h *handler) handleSocialCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if strings.EqualFold(strings.TrimSpace(r.PathValue("provider")), socialauth.ProviderApple) && r.Context().Value(appleReceiptContextKey{}) != true {
+			writeSocialError(r.Context(), w, http.StatusBadRequest, "social_request_invalid")
+			return
+		}
+
 		continueOAuth, err := h.ctx.OAuthProvider.HasContinuation(r.Context(), r)
 		if err != nil {
 			w.Header().Set("Retry-After", "5")
@@ -179,13 +216,23 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.loginErrorRedirectURL("social_state_invalid")+oauthQuery, http.StatusSeeOther)
 			return
 		}
+		if !h.socialUserAvailable(r, state.UserID) {
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_state_invalid", continueOAuth), http.StatusSeeOther)
+			return
+		}
+		if state.NativeManagement != "" {
+			shared.NativeManagementHeaders(w)
+		}
 		if strings.TrimSpace(r.URL.Query().Get("error")) != "" {
 			h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", providerName, "provider="+providerName+";reason=cancelled")
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_provider_cancelled", continueOAuth), http.StatusSeeOther)
 			return
 		}
 		providerConfig, err := socialauth.ConfigForProvider(h.ctx.Config, providerName)
 		if err != nil {
+			//nolint:gosec // Server-owned state selects only fixed same-instance error/management paths; the opaque handle is query-encoded.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_provider_unavailable", continueOAuth), http.StatusSeeOther)
 			return
 		}
@@ -195,16 +242,29 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Warn("Social provider callback failed", "provider", providerName, "category", socialErrorCategory(err))
 			h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", providerName, "provider="+providerName+";reason="+socialErrorCategory(err))
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 			http.Redirect(w, r, h.socialErrorRedirectURL(state, socialCallbackErrorCode(err), continueOAuth), http.StatusSeeOther)
 			return
 		}
 
 		if state.Flow == "link" {
+			if state.NativeManagement != "" {
+				if continueOAuth || !h.ctx.NativeManagementOperation(w, r, state.NativeManagement, shared.NativeManagement{Action: "social_link", Provider: state.Provider}, rawState, false) {
+					return
+				}
+				r = r.WithContext(context.WithValue(r.Context(), nativeManagementMutationKey{}, state.NativeManagement))
+			}
 			if err := h.completeAuthenticatedSocialLink(r, state.UserID, identity); err != nil {
 				category := socialDatabaseErrorCategory(err)
 				shared.LoggerFromContext(r.Context()).Warn("Social identity link failed", "provider", providerName, "category", category, "user_id", state.UserID)
 				h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_link_failed", "failure", "provider="+providerName+";reason="+category, true)
+				//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
 				http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_identity_conflict", continueOAuth), http.StatusSeeOther)
+				return
+			}
+			if state.NativeManagement != "" {
+				h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
+				http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, shared.NativeManagementReturnPath(state.NativeManagement)), http.StatusSeeOther)
 				return
 			}
 			h.appendAuthAuditForUserTeams(r, state.UserID, "auth.social_identity_linked", "success", "provider="+providerName+";reason=authenticated_session", true)
@@ -212,9 +272,34 @@ func (h *handler) handleSocialCallback() http.HandlerFunc {
 			return
 		}
 
+		credential, err := h.appleLinkCredential(identity)
+		if credential == "" {
+			identity.AppleClientID = ""
+		}
+		if err != nil {
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
+			return
+		}
+
+		user, _, err := h.ctx.Store.GetUserBySocialIdentity(r.Context(), identity.Provider, identity.Subject)
+		if err == nil && user == nil && identity.EmailVerified && identity.Provider != socialauth.ProviderMicrosoft {
+			user, err = h.ctx.Store.GetUserByEmail(r.Context(), identity.Email)
+		}
+		if err != nil || (state.UserID != uuid.Nil && user != nil && user.ID != state.UserID) {
+			//nolint:gosec // The server-owned attempt selects only fixed same-instance paths and query-encodes its opaque handle.
+			http.Redirect(w, r, h.socialErrorRedirectURL(state, "social_login_failed", continueOAuth), http.StatusSeeOther)
+			return
+		}
+		userID := state.UserID
+		if user != nil {
+			userID = user.ID
+		}
 		completionToken := h.ctx.AuthState.CreateSocialCompletion(shared.SocialCompletion{
+			UserID:   userID,
 			Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 			EmailVerified: identity.EmailVerified, Flow: state.Flow,
+			AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
 			InviteToken: state.InviteToken, ReturnPath: state.ReturnPath, RememberMe: state.RememberMe,
 			ExpiresAt: time.Now().UTC().Add(socialCompletionTTL),
 		})
@@ -240,7 +325,7 @@ func (h *handler) setSocialStateCookie(w http.ResponseWriter, rawState string) {
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the configured public URL; local HTTP development intentionally uses an insecure cookie.
 		Name: name, Value: canonical, Path: h.socialStateCookiePath(),
 		Expires: time.Now().UTC().Add(socialFlowTTL), MaxAge: int(socialFlowTTL / time.Second),
-		HttpOnly: true, Secure: strings.HasPrefix(strings.ToLower(strings.TrimSpace(h.ctx.Config.PublicURL)), "https://"),
+		HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -261,7 +346,7 @@ func (h *handler) clearSocialStateCookie(w http.ResponseWriter, rawState string)
 	}
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the configured public URL; local HTTP development intentionally uses an insecure cookie.
 		Name: name, Value: "", Path: h.socialStateCookiePath(), Expires: time.Unix(0, 0), MaxAge: -1,
-		HttpOnly: true, Secure: strings.HasPrefix(strings.ToLower(strings.TrimSpace(h.ctx.Config.PublicURL)), "https://"),
+		HttpOnly: true, Secure: authcore.CookieSecure(h.ctx.Config.PublicURL),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -274,11 +359,33 @@ func (h *handler) socialStateCookiePath() string {
 	if err != nil {
 		return socialStateCookieRoute
 	}
-	prefix := strings.TrimRight(publicURL.EscapedPath(), "/")
+	_, prefix, ok := appurl.Prefix(publicURL.EscapedPath())
+	if !ok {
+		return socialStateCookieRoute
+	}
 	if prefix == "" {
 		return socialStateCookieRoute
 	}
 	return prefix + socialStateCookieRoute
+}
+
+// Linking can commit before the store's final read fails; invalidate either way.
+func (h *handler) linkPrimarySocialIdentity(r *http.Request, input database.LinkSocialIdentityInput) (*database.SocialIdentity, error) {
+	identity, err := h.ctx.Store.LinkSocialIdentity(r.Context(), input)
+	if handle, _ := r.Context().Value(nativeManagementMutationKey{}).(string); handle != "" && err == nil {
+		h.ctx.FinishNativeManagementMutation(r, handle, input.UserID)
+	} else {
+		h.ctx.AuthState.InvalidateNativeAuth(input.UserID)
+	}
+	return identity, err
+}
+
+func (h *handler) socialUserAvailable(r *http.Request, userID uuid.UUID) bool {
+	if userID == uuid.Nil {
+		return true
+	}
+	available, err := h.ctx.HumanSessionUserAvailable(r.Context(), userID)
+	return err == nil && available
 }
 
 func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.UUID, identity socialauth.Identity) error {
@@ -294,7 +401,15 @@ func (h *handler) completeAuthenticatedSocialLink(r *http.Request, userID uuid.U
 			return database.ErrSocialIdentityConflict
 		}
 	}
-	_, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+	credential, err := h.appleLinkCredential(identity)
+	if credential == "" {
+		identity.AppleClientID = ""
+	}
+	if err != nil {
+		return err
+	}
+	_, err = h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
+		AppleClientID: identity.AppleClientID, AppleRefreshTokenCiphertext: credential,
 		UserID: userID, Provider: identity.Provider, Subject: identity.Subject, ObservedEmail: identity.Email,
 	})
 	return err
@@ -311,7 +426,7 @@ func (h *handler) handleSocialPreview() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.GetSocialCompletion(req.CompletionToken)
-		if !ok {
+		if !ok || !h.socialUserAvailable(r, completion.UserID) {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
@@ -347,8 +462,15 @@ func (h *handler) handleSocialComplete() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.ConsumeSocialCompletion(req.CompletionToken)
-		if !ok {
+		if !ok || !h.socialUserAvailable(r, completion.UserID) {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+			return
+		}
+		if h.deletionReauthentication(completion.ReturnPath) && completion.Flow != "login" {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_flow_invalid")
+			return
+		}
+		if !h.deletionAuthRequest(w, r, completion.ReturnPath) {
 			return
 		}
 		switch completion.Flow {
@@ -368,6 +490,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		writeSocialError(r.Context(), w, http.StatusInternalServerError, "social_login_failed")
 		return
 	}
+	if h.deletionReauthentication(completion.ReturnPath) && (identity == nil || user == nil || !h.validateDeletionSubject(completion.ReturnPath, user.ID)) {
+		writeSocialError(r.Context(), w, http.StatusForbidden, "social_login_failed")
+		return
+	}
 	if identity == nil && completion.EmailVerified && completion.Provider != socialauth.ProviderMicrosoft {
 		user, err = h.ctx.Store.GetUserByEmail(r.Context(), completion.ObservedEmail)
 		if err != nil {
@@ -375,9 +501,14 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 			return
 		}
 		if user != nil {
-			identity, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+			if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+				writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+				return
+			}
+			identity, err = h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 				ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+				AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 			})
 			if err != nil {
 				h.appendAuthAuditSystem(r, "auth.social_login_failed", "failure", completion.Provider, "provider="+completion.Provider+";reason=identity_conflict")
@@ -388,9 +519,14 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		}
 	}
 	if identity != nil && user != nil {
+		if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+			return
+		}
 		_, err = h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
 			UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 			ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+			AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 		})
 		if err != nil {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_identity_conflict")
@@ -432,6 +568,10 @@ func (h *handler) completeSocialLogin(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
+	if completion.Provider == socialauth.ProviderApple && !completion.EmailVerified {
+		writeSocialError(r.Context(), w, http.StatusForbidden, "social_email_unverified")
+		return
+	}
 	if h.socialSignupEnabled() {
 		shared.WriteJSON(r.Context(), w, http.StatusOK, h.socialSignupRequiredResponse(completion))
 		return
@@ -459,6 +599,10 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 		writeSocialError(r.Context(), w, http.StatusBadRequest, "invite_invalid")
 		return
 	}
+	if completion.UserID != uuid.Nil && completion.UserID != user.ID {
+		writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
+		return
+	}
 	pendingInvites, err := h.ctx.Store.ListPendingTeamInvitesByEmail(r.Context(), email)
 	if err != nil || len(pendingInvites) == 0 {
 		writeSocialError(r.Context(), w, http.StatusBadRequest, "invite_invalid")
@@ -468,9 +612,10 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 		h.writeInviteAcceptanceError(r.Context(), w, err, user.ID)
 		return
 	}
-	if _, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+	if _, err := h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 		UserID: user.ID, Provider: completion.Provider, Subject: completion.Subject,
 		ObservedEmail: completion.ObservedEmail, MarkUsed: true,
+		AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 	}); err != nil {
 		writeSocialError(r.Context(), w, http.StatusConflict, "social_identity_conflict")
 		return
@@ -486,6 +631,10 @@ func (h *handler) completeSocialInvite(w http.ResponseWriter, r *http.Request, c
 }
 
 func (h *handler) writeCompletedSocialLogin(w http.ResponseWriter, r *http.Request, userID uuid.UUID, completion shared.SocialCompletion) {
+	if !h.bindNativeLogin(r, w, completion.ReturnPath, userID) {
+		return
+	}
+	r = withNativeReturnPath(r, completion.ReturnPath)
 	response, err := h.beginUserLogin(r, w, userID, completion.RememberMe, completion.Provider)
 	if err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to complete social login", "error_kind", socialLoginErrorCategory(err), "provider", completion.Provider, "user_id", userID)
@@ -518,7 +667,7 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			return
 		}
 		completion, ok := h.ctx.AuthState.GetSocialCompletion(req.CompletionToken)
-		if !ok || (completion.Flow != "signup" && completion.Flow != "login") {
+		if !ok || completion.UserID != uuid.Nil || (completion.Flow != "signup" && completion.Flow != "login") {
 			writeSocialError(r.Context(), w, http.StatusConflict, "social_completion_invalid")
 			return
 		}
@@ -541,6 +690,10 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			return
 		}
 
+		if completion.Provider == socialauth.ProviderApple && !completion.EmailVerified {
+			writeSocialError(r.Context(), w, http.StatusForbidden, "social_email_unverified")
+			return
+		}
 		targetEmail := completion.ObservedEmail
 		if completion.Provider == socialauth.ProviderMicrosoft {
 			targetEmail = req.Email
@@ -589,6 +742,9 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 			writeSocialError(r.Context(), w, status, code)
 			return
 		}
+		if !h.bindNativeLogin(r, w, completion.ReturnPath, account.UserID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, account.UserID, false); err != nil {
 			writeSocialError(r.Context(), w, http.StatusInternalServerError, "social_signup_failed")
 			return
@@ -596,7 +752,7 @@ func (h *handler) handleSocialCloudSignupComplete() http.HandlerFunc {
 		h.appendAuthAuditForUserTeams(r, account.UserID, "auth.social_signup_succeeded", "success", "provider="+completion.Provider+";reason=verified_provider_email", true)
 		shared.WriteJSON(r.Context(), w, http.StatusCreated, map[string]any{
 			"status": "ok", "plan_code": req.PlanCode, "billing": req.BillingInterval,
-			"redirect_url": socialSignupRedirect(req.PlanCode, req.BillingInterval),
+			"redirect_url": nativeSignupDestination(completion.ReturnPath, socialSignupRedirect(req.PlanCode, req.BillingInterval)),
 		})
 	}
 }
@@ -609,7 +765,7 @@ func (h *handler) sendSocialConfirmation(r *http.Request, completion shared.Soci
 		Provider: completion.Provider, Subject: completion.Subject, ObservedEmail: completion.ObservedEmail,
 		TargetEmail: targetEmail, TargetUserID: targetUserID, TeamName: signup.TeamName,
 		Jurisdiction: signup.Jurisdiction, Locale: signup.Locale, PlanCode: signup.PlanCode,
-		BillingInterval: signup.BillingInterval, ReturnPath: completion.ReturnPath,
+		BillingInterval: signup.BillingInterval, ReturnPath: nativeSignupReturnPath(completion.ReturnPath),
 		RememberMe: completion.RememberMe,
 	}
 	if signup.AcceptedTOS {
@@ -636,6 +792,8 @@ func providerDisplayName(provider string) string {
 		return "Google"
 	case socialauth.ProviderGitHub:
 		return "GitHub"
+	case socialauth.ProviderApple:
+		return "Apple"
 	case socialauth.ProviderMicrosoft:
 		return "Microsoft"
 	default:
@@ -646,8 +804,12 @@ func providerDisplayName(provider string) string {
 func (h *handler) socialSignupRequiredResponse(completion shared.SocialCompletion) socialCompleteResponse {
 	completion.Flow = "signup"
 	completion.ExpiresAt = time.Now().UTC().Add(socialCompletionTTL)
+	destination := "/signup/social/complete"
+	if handle := shared.NativeAuthHandle(completion.ReturnPath); handle != "" {
+		destination += "?native=" + url.QueryEscape(handle)
+	}
 	return socialCompleteResponse{
-		Status: "signup_required", RedirectURL: "/signup/social/complete",
+		Status: "signup_required", RedirectURL: destination,
 		CompletionToken: h.ctx.AuthState.CreateSocialCompletion(completion),
 	}
 }
@@ -677,7 +839,7 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 				http.Redirect(w, r, h.loginErrorRedirectURL("social_confirmation_invalid")+oauthQuery, http.StatusSeeOther)
 				return
 			}
-			if _, err := h.ctx.Store.LinkSocialIdentity(r.Context(), database.LinkSocialIdentityInput{
+			if _, err := h.linkPrimarySocialIdentity(r, database.LinkSocialIdentityInput{
 				UserID: user.ID, Provider: entry.Provider, Subject: entry.Subject, ObservedEmail: entry.ObservedEmail,
 			}); err != nil {
 				http.Redirect(w, r, h.loginErrorRedirectURL("social_identity_conflict")+oauthQuery, http.StatusSeeOther)
@@ -685,11 +847,15 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 			}
 			h.appendAuthAuditForUserTeams(r, user.ID, "auth.social_identity_linked", "success", "provider="+entry.Provider+";reason=hitkeep_email_confirmed", true)
 			completionToken := h.ctx.AuthState.CreateSocialCompletion(shared.SocialCompletion{
+				UserID:   user.ID,
 				Provider: entry.Provider, Subject: entry.Subject, ObservedEmail: entry.ObservedEmail,
 				Flow: "login", ReturnPath: sanitizeAuthReturnPath(entry.ReturnPath), RememberMe: entry.RememberMe,
 				ExpiresAt: time.Now().UTC().Add(socialCompletionTTL),
 			})
 			query := url.Values{"info": {"social_confirmed"}, "email": {user.Email}}
+			if shared.NativeAuthHandle(entry.ReturnPath) != "" {
+				query.Set("returnUrl", entry.ReturnPath)
+			}
 			if continueOAuth {
 				query.Set("oauth", "1")
 			}
@@ -713,16 +879,20 @@ func (h *handler) handleSocialConfirmation() http.HandlerFunc {
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/signup?error=social_confirmation_invalid"+oauthQuery), http.StatusSeeOther)
 			return
 		}
+		if !h.bindNativeLogin(r, w, entry.ReturnPath, account.UserID) {
+			return
+		}
 		if err := h.issueLoginSession(r.Context(), w, account.UserID, entry.RememberMe); err != nil {
 			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, "/signup?error=social_confirmation_invalid"+oauthQuery), http.StatusSeeOther)
 			return
 		}
 		h.appendAuthAuditForUserTeams(r, account.UserID, "auth.social_signup_succeeded", "success", "provider="+entry.Provider+";reason=hitkeep_email_confirmed", true)
-		destination := socialSignupRedirect(entry.PlanCode, entry.BillingInterval)
+		destination := nativeSignupDestination(entry.ReturnPath, socialSignupRedirect(entry.PlanCode, entry.BillingInterval))
 		if continueOAuth && destination == "/dashboard" {
 			destination = "/oauth/consent"
 		}
-		http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, destination), http.StatusSeeOther)
+		//nolint:gosec // G710: destination is a bounded native reference or allowlisted plan path; publicRedirectURL pins the configured origin and prefix.
+		http.Redirect(w, r, h.publicRedirectURL(destination), http.StatusSeeOther)
 	}
 }
 
@@ -738,6 +908,7 @@ func (h *handler) createSocialCloudAccount(r *http.Request, completion shared.So
 	account, err := h.ctx.Store.CreateManagedSocialAccount(r.Context(), database.CreateManagedSocialAccountInput{
 		Email: email, HashedPassword: passwordHash, TeamName: req.TeamName, Locale: req.Locale,
 		Provider: completion.Provider, Subject: completion.Subject, ObservedEmail: completion.ObservedEmail,
+		AppleClientID: completion.AppleClientID, AppleRefreshTokenCiphertext: completion.AppleRefreshTokenCiphertext,
 		PlanCode: req.PlanCode, BillingInterval: req.BillingInterval,
 	})
 	if err != nil {
@@ -776,7 +947,10 @@ func (h *handler) handleSocialUnlink() http.HandlerFunc {
 			}
 		}
 
-		if err := h.ctx.Store.DeleteSocialIdentityWithGuard(r.Context(), userID, provider, passwordConfirmed); err != nil {
+		manualRevocation := false
+		if err := h.ctx.Store.DeleteSocialIdentityWithGuardAndHook(r.Context(), userID, provider, passwordConfirmed, func(identity *database.SocialIdentity) {
+			manualRevocation = !h.revokeAppleIdentity(r.Context(), identity)
+		}); err != nil {
 			reason := "storage"
 			switch {
 			case errors.Is(err, database.ErrSocialIdentityNotFound):
@@ -791,7 +965,16 @@ func (h *handler) handleSocialUnlink() http.HandlerFunc {
 			h.appendAuthAuditForUserTeams(r, userID, "auth.social_identity_unlink_failed", "failure", "provider="+provider+";reason="+reason, true)
 			return
 		}
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
 		h.appendAuthAuditForUserTeams(r, userID, "auth.social_identity_unlinked", "success", "provider="+provider+";reason=alternative_method_available", true)
+		if provider == socialauth.ProviderApple {
+			status := "revoked"
+			if manualRevocation {
+				status = "manual_revocation_required"
+			}
+			shared.WriteJSON(r.Context(), w, http.StatusOK, api.SocialUnlinkResponse{Status: "unlinked", ProviderRevocations: []api.AccountDeletionProviderRevocation{{Provider: socialauth.ProviderApple, Status: status}}})
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -810,13 +993,25 @@ func (h *handler) socialCompletionRedirectURL(state shared.SocialOAuthState, tok
 		}
 		return appurl.Path(h.ctx.Config.PublicURL, path) + fragment
 	case "invite":
-		return appurl.Path(h.ctx.Config.PublicURL, "/accept-invite?token="+url.QueryEscape(state.InviteToken)) + fragment
+		destination := "/accept-invite?token=" + url.QueryEscape(state.InviteToken)
+		if shared.NativeAuthHandle(state.ReturnPath) != "" {
+			destination += "&returnUrl=" + url.QueryEscape(state.ReturnPath)
+		}
+		return appurl.Path(h.ctx.Config.PublicURL, destination) + fragment
 	default:
-		return appurl.Path(h.ctx.Config.PublicURL, "/login") + fragment
+		loginPath := "/login"
+		if shared.NativeAuthHandle(state.ReturnPath) != "" {
+			loginPath += "?returnUrl=" + url.QueryEscape(state.ReturnPath)
+		}
+		return appurl.Path(h.ctx.Config.PublicURL, loginPath) + fragment
 	}
 }
 
 func (h *handler) socialErrorRedirectURL(state shared.SocialOAuthState, code string, continueOAuth bool) string {
+	if state.NativeManagement != "" {
+		h.ctx.AuthState.FailNativeManagement(state.NativeManagement)
+		return appurl.Path(h.ctx.Config.PublicURL, shared.NativeManagementReturnPath(state.NativeManagement))
+	}
 	oauthQuery := ""
 	if continueOAuth {
 		oauthQuery = "&oauth=1"

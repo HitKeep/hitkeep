@@ -87,6 +87,9 @@ func LoadArgs(fsys afero.Fs, args []string, configFile string, logger *slog.Logg
 	if conf.Healthcheck {
 		return &conf, nil
 	}
+	if _, err := conf.AndroidPasskeyOrigins(); err != nil {
+		return nil, err
+	}
 	normalizeConfig(&conf, logger)
 	return &conf, nil
 }

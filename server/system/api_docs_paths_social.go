@@ -3,7 +3,7 @@ package system
 func openAPIV1SocialAuthPaths() map[string]any {
 	providerParam := map[string]any{
 		"name": "provider", "in": "path", "required": true,
-		"schema": map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft"}},
+		"schema": map[string]any{"type": "string", "enum": []string{"google", "github", "microsoft", "apple"}},
 	}
 	return map[string]any{
 		"/api/auth/social/providers": map[string]any{
@@ -11,14 +11,22 @@ func openAPIV1SocialAuthPaths() map[string]any {
 				map[string]any{"200": jsonRefResp("Social provider availability", "#/components/schemas/SocialProvidersResponse")}),
 		},
 		"/api/auth/social/{provider}/start": map[string]any{
-			"post": op([]string{"Auth"}, "Start social authentication", "Starts a login, signup, or invitation flow using authorization code, browser-bound one-time state, PKCE S256, and an OIDC nonce where applicable. Return URLs are restricted to safe local application paths.", nil, []any{providerParam},
+			"post": op([]string{"Auth"}, "Start social authentication", "Starts a login, signup, or invitation flow using authorization code, browser-bound one-time state and an OIDC nonce where applicable. Apple uses email-only form_post with no upstream PKCE; other providers use PKCE S256. Return URLs are restricted to safe local application paths.", nil, []any{providerParam},
 				jsonBody(map[string]any{"$ref": "#/components/schemas/SocialStartRequest"}),
 				map[string]any{"200": jsonRefResp("Provider authorization URL", "#/components/schemas/SSOStartResponse"), "400": errResp("Invalid flow"), "404": errResp("Provider or social signup unavailable"), "503": errResp("Provider unavailable")}),
 		},
 		"/api/auth/social/{provider}/callback": map[string]any{
-			"get": op([]string{"Auth"}, "Validate social provider callback", "Consumes the state once, exchanges the code, validates the immutable provider identity and required claims, discards provider tokens, and redirects with a short-lived completion token in the URL fragment. Upstream responses are never exposed.", nil,
+			"get": op([]string{"Auth"}, "Validate social provider callback", "Consumes the state once, exchanges the code, validates the immutable provider identity and required claims, discards access/ID tokens and all non-Apple provider tokens, retains one encrypted Apple refresh token bound to client and immutable identity for revocation, and redirects with a short-lived completion token in the URL fragment. Upstream responses are never exposed.", nil,
 				[]any{providerParam, map[string]any{"name": "state", "in": "query", "required": true, "schema": map[string]any{"type": "string"}}, map[string]any{"name": "code", "in": "query", "required": false, "schema": map[string]any{"type": "string"}}, map[string]any{"name": "error", "in": "query", "required": false, "schema": map[string]any{"type": "string"}}}, nil,
 				map[string]any{"303": desc("Redirects to the bound local flow with a fragment completion token or stable error code")}),
+		},
+		"/api/auth/social/apple/callback": map[string]any{
+			"post": op([]string{"Auth"}, "Receive Apple form callback", "Accepts only a bounded application/x-www-form-urlencoded code or error with one-use Apple state. Saves a short-lived opaque receipt and redirects to a same-origin GET so the original Lax browser cookies remain required. Duplicate values, replay and malformed forms fail closed; provider forms are never logged.", nil, nil,
+				map[string]any{"required": true, "content": map[string]any{"application/x-www-form-urlencoded": map[string]any{"schema": map[string]any{"type": "object", "required": []string{"state"}, "properties": map[string]any{"state": map[string]any{"type": "string", "format": "uuid"}, "code": map[string]any{"type": "string", "maxLength": 4096}, "error": map[string]any{"type": "string", "maxLength": 128}}}}}},
+				map[string]any{"303": desc("Same-origin receipt resume"), "400": errResp("Invalid Apple callback")}),
+		},
+		"/api/auth/social/apple/resume": map[string]any{
+			"get": op([]string{"Auth"}, "Resume Apple callback", "Requires the original browser state cookie before consuming the receipt, then validates nonce, RS256 signature, exact issuer/audience, expiration and immutable Apple subject. No user object is required.", nil, []any{map[string]any{"name": "receipt", "in": "query", "required": true, "schema": map[string]any{"type": "string", "format": "uuid"}}}, nil, map[string]any{"303": desc("Bound local flow or stable error"), "400": errResp("Invalid receipt or wrong browser")}),
 		},
 		"/api/auth/social/preview": map[string]any{
 			"post": op([]string{"Auth"}, "Preview social completion", "Returns safe provider and observed-email metadata for a still-valid completion token. Provider subjects are never returned.", nil, nil,
@@ -36,7 +44,7 @@ func openAPIV1SocialAuthPaths() map[string]any {
 				map[string]any{"303": desc("Redirects to sign-in, onboarding, checkout, or a stable error path")}),
 		},
 		"/api/cloud/signup/social/complete": map[string]any{
-			"post": cloudOp("Complete managed social signup", "Creates a hosted cloud user and team after provider authentication, preserving the existing plan, billing-intent, locale, region, Terms, and onboarding behavior. Google and GitHub verified email skip HitKeep email verification; Microsoft returns verification_sent.", nil, nil,
+			"post": cloudOp("Complete managed social signup", "Creates a hosted cloud user and team after provider authentication, preserving the existing plan, billing-intent, locale, region, Terms, and onboarding behavior. Google, GitHub, and Apple verified email skip HitKeep email verification; Microsoft returns verification_sent.", nil, nil,
 				jsonBody(map[string]any{"$ref": "#/components/schemas/SocialSignupCompleteRequest"}),
 				map[string]any{"201": jsonRefResp("Social signup result", "#/components/schemas/SocialSignupCompleteResponse"), "400": errResp("Invalid signup intent"), "404": errResp("Social signup disabled"), "409": errResp("Account or identity already exists")}),
 		},
@@ -45,9 +53,9 @@ func openAPIV1SocialAuthPaths() map[string]any {
 				map[string]any{"200": jsonRefResp("Provider authorization URL", "#/components/schemas/SSOStartResponse"), "404": errResp("Provider unavailable")}),
 		},
 		"/api/user/security/social/{provider}": map[string]any{
-			"delete": op([]string{"User"}, "Unlink social provider", "Unlinks a provider only when another social provider, passkey, or recently confirmed enabled password remains usable. TOTP, recovery codes, email MFA, and team SSO do not satisfy this guard.", secCookie(), []any{providerParam},
+			"delete": op([]string{"User"}, "Unlink social provider", "Unlinks a provider only when another social provider, passkey, or recently confirmed enabled password remains usable. TOTP, recovery codes, email MFA, and team SSO do not satisfy this guard. Apple attempts bounded grant revocation before local unlink and returns its accurate outcome; manual_revocation_required means revoke HitKeep access in Apple Account settings. Local unlink proceeds on Apple unavailability.", secCookie(), []any{providerParam},
 				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"current_password": map[string]any{"type": "string", "writeOnly": true}}}),
-				map[string]any{"204": desc("Provider unlinked"), "404": errResp("Identity not linked"), "409": errResp("No alternative primary login method")}),
+				map[string]any{"200": jsonRefResp("Apple provider unlinked with revocation outcome", "#/components/schemas/SocialUnlinkResponse"), "204": desc("Non-Apple provider unlinked"), "404": errResp("Identity not linked"), "409": errResp("No alternative primary login method")}),
 		},
 	}
 }

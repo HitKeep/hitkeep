@@ -57,6 +57,13 @@ func (h *handler) handleSSOStart() http.HandlerFunc {
 			writeSSOStartError(r.Context(), w, http.StatusBadRequest, "invalid_email")
 			return
 		}
+		if !h.deletionAuthRequest(w, r, req.ReturnURL) {
+			return
+		}
+		if h.deletionReauthentication(req.ReturnURL) && req.InviteToken != "" {
+			writeSSOStartError(r.Context(), w, http.StatusForbidden, "sso_access_denied")
+			return
+		}
 		email, err := h.resolveSSORequestEmail(r.Context(), req.Email, req.InviteToken)
 		if err != nil {
 			if strings.TrimSpace(req.InviteToken) != "" {
@@ -115,6 +122,7 @@ func (h *handler) handleSSOStart() http.HandlerFunc {
 			return
 		}
 		state := h.ctx.AuthState.CreateSSOOAuthState(shared.SSOOAuthState{
+			UserID:       decision.UserID,
 			TeamID:       config.TeamID,
 			IssuerURL:    config.IssuerURL,
 			ClientID:     config.ClientID,
@@ -284,6 +292,13 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.loginErrorRedirectURL("sso_failed"), http.StatusSeeOther)
 			return
 		}
+		if state.UserID != uuid.Nil {
+			available, err := h.ctx.HumanSessionUserAvailable(r.Context(), state.UserID)
+			if err != nil || !available {
+				http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+				return
+			}
+		}
 		if !h.ctx.Limits().AllowsSSO(r.Context(), uuid.Nil, state.TeamID) {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", state.TeamID, uuid.Nil, state.Email, ssoAuditFlowCallback, ssoReasonEntitlementDenied, 0, "SSO entitlement changed during login")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_unavailable"), http.StatusSeeOther)
@@ -336,12 +351,21 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
 			return
 		}
+		if state.UserID != uuid.Nil && decision.UserID != state.UserID {
+			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+			return
+		}
 		if err := h.requireSSOAccessCapacity(r.Context(), config.TeamID, decision); err != nil {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, decision.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonCapacityDenied, decision.Mode, "SSO login exceeded a managed-cloud team or seat limit")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
 			return
 		}
 
+		linked, err := h.ctx.Store.GetUserBySSOIdentity(r.Context(), config.TeamID, config.IssuerURL, identity.Subject)
+		if err != nil || (h.deletionReauthentication(state.ReturnPath) && (linked == nil || !h.validateDeletionSubject(state.ReturnPath, linked.ID))) {
+			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
+			return
+		}
 		randomPassword, err := security.GenerateRandomChallenge(48)
 		if err != nil {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, decision.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonInternalError, decision.Mode, "SSO login could not create a local credential")
@@ -371,6 +395,9 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_failed"), http.StatusSeeOther)
 			return
 		}
+		if linked == nil && !resolved.Created {
+			h.ctx.AuthState.InvalidateNativeAuth(resolved.UserID)
+		}
 		if decision.UserID != uuid.Nil && decision.UserID != resolved.UserID {
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, resolved.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonAccessDenied, decision.Mode, "SSO identity resolved to a different authorized user")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
@@ -382,7 +409,23 @@ func (h *handler) handleSSOCallback() http.HandlerFunc {
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_access_denied"), http.StatusSeeOther)
 			return
 		}
-		if err := h.issueLoginSession(r.Context(), w, resolved.UserID, state.RememberMe); err != nil {
+		if !h.bindNativeLogin(r, w, state.ReturnPath, resolved.UserID) {
+			return
+		}
+		var issueErr error
+		if h.deletionReauthentication(state.ReturnPath) {
+			response, err := h.beginUserLogin(withNativeReturnPath(r, state.ReturnPath), w, resolved.UserID, state.RememberMe, "sso")
+			issueErr = err
+			if err == nil && response.Status == "mfa_required" {
+				if !h.redirectDeletionMFA(w, r, state.ReturnPath, response) {
+					http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_failed"), http.StatusSeeOther)
+				}
+				return
+			}
+		} else {
+			issueErr = h.issueLoginSession(r.Context(), w, resolved.UserID, state.RememberMe)
+		}
+		if err := issueErr; err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue SSO login session", "error_kind", ssoErrorKind(err, "session_issue_failed"), "user_id", resolved.UserID)
 			h.appendSSOAudit(r, "auth.sso_login_failed", "failure", config.TeamID, resolved.UserID, identity.Email, ssoAuditFlowCallback, ssoReasonSessionFailed, decision.Mode, "SSO login session could not be issued")
 			http.Redirect(w, r, h.ssoErrorRedirectURL(state, "sso_failed"), http.StatusSeeOther)

@@ -132,6 +132,13 @@ type GoogleSearchConsoleSystemStatus struct {
 
 const GoogleSearchConsoleErrorMessageRetention = 30 * 24 * time.Hour
 
+// SerializeGoogleSearchConsoleConnection protects final authority checks and persistence
+// from membership, credential, and account removal changes, after provider HTTP finishes.
+func (s *Store) SerializeGoogleSearchConsoleConnection() func() {
+	s.lifecycleMu.Lock()
+	return s.lifecycleMu.Unlock
+}
+
 func (s *Store) UpsertGoogleSearchConsoleConnection(ctx context.Context, input GoogleSearchConsoleConnectionInput) error {
 	return upsertGoogleSearchConsoleConnection(ctx, s.db, input)
 }
@@ -453,6 +460,12 @@ func (s *Store) DeleteGoogleSearchConsoleSiteMappingWithAudit(ctx context.Contex
 }
 
 func (s *Store) TransferSiteTeamWithAudit(ctx context.Context, siteID, destinationTeamID uuid.UUID, clearSearchConsoleMapping bool, audits []AuditEntryParams) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.transferSiteTeamWithAudit(ctx, siteID, destinationTeamID, clearSearchConsoleMapping, audits)
+}
+
+func (s *Store) transferSiteTeamWithAudit(ctx context.Context, siteID, destinationTeamID uuid.UUID, clearSearchConsoleMapping bool, audits []AuditEntryParams) error {
 	defer s.invalidateSiteTenantID(siteID)
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if err := updateSiteTenant(ctx, tx, siteID, destinationTeamID); err != nil {

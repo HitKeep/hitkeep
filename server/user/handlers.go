@@ -29,6 +29,7 @@ type handler struct {
 
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}
+	h.registerAccountDeletion(mux)
 	mux.HandleFunc("GET /api/user/bootstrap", ctx.Handler(shared.HandlerConfig{
 		RequireAuth: true,
 		RateLimiter: ctx.ApiLimiter,
@@ -362,7 +363,10 @@ func (h *handler) handleUpdateUserProfile() http.HandlerFunc {
 			return
 		}
 
-		if err := h.ctx.Store.UpdateUserProfile(r.Context(), userID, email, givenName, lastName); err != nil {
+		err = h.ctx.Store.UpdateUserProfile(r.Context(), userID, email, givenName, lastName)
+		// Profile storage can commit the email before a later cleanup/read fails.
+		h.ctx.AuthState.InvalidateNativeAuth(userID)
+		if err != nil {
 			switch {
 			case errors.Is(err, database.ErrUserEmailAlreadyExists):
 				http.Error(w, "Email already exists", http.StatusConflict)

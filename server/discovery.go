@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 
@@ -39,7 +38,7 @@ func (s *Server) discoveryBase() *url.URL {
 		return nil
 	}
 	u, err := url.Parse(strings.TrimSpace(s.conf.PublicURL))
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(s.conf.PublicURL, "#") || u.RawPath != "" || u.Opaque != "" {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(s.conf.PublicURL, "#") || u.Opaque != "" {
 		return nil
 	}
 	if port := u.Port(); port != "" {
@@ -48,10 +47,15 @@ func (s *Server) discoveryBase() *url.URL {
 			return nil
 		}
 	}
-	if strings.HasSuffix(u.Host, ":") || strings.ContainsAny(u.Host, "\r\n\t <>{}\\") || strings.ContainsAny(u.Path, "\r\n\t <>{}\\") || strings.TrimSuffix(u.Path, "/") != strings.TrimSuffix(path.Clean("/"+strings.TrimPrefix(u.Path, "/")), "/") {
+	if strings.HasSuffix(u.Host, ":") || strings.ContainsAny(u.Host, "\r\n\t <>{}\\") {
 		return nil
 	}
-	u.Path = strings.TrimRight(u.Path, "/")
+	decoded, escaped, ok := appurl.Prefix(u.EscapedPath())
+	if !ok {
+		return nil
+	}
+	u.Path = decoded
+	u.RawPath = escaped
 	return u
 }
 
@@ -398,7 +402,7 @@ func (s *Server) discoveryRobots(w http.ResponseWriter, r *http.Request) {
 	var text strings.Builder
 	text.WriteString("User-agent: *\nDisallow: /\n")
 	if base := s.discoveryBase(); base != nil {
-		allow := func(route string) { text.WriteString("Allow: " + base.Path + route + "$\n") }
+		allow := func(route string) { text.WriteString("Allow: " + base.EscapedPath() + route + "$\n") }
 		for _, route := range []string{"/.well-known/api-catalog", "/.well-known/ai-catalog.json", "/.well-known/ard.json", "/.well-known/integrations.json"} {
 			allow(route)
 			if base.Path != "" {

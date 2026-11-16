@@ -26,7 +26,7 @@ func TestProviderStatusesRequireCompleteConfiguration(t *testing.T) {
 		SocialGoogleClientID: "google-id",
 		SocialGitHubClientID: "github-id", SocialGitHubClientSecret: "github-secret",
 	})
-	if len(statuses) != 3 || !statuses[0].Partial || statuses[0].Configured {
+	if len(statuses) != 4 || !statuses[0].Partial || statuses[0].Configured {
 		t.Fatalf("expected partial Google configuration, got %+v", statuses)
 	}
 	if !statuses[1].Configured || statuses[1].Partial {

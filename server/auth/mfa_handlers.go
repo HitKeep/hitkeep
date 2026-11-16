@@ -60,6 +60,9 @@ func (h *handler) loadMFAChallenge(w http.ResponseWriter, r *http.Request, chall
 		return database.LoginChallenge{}, false
 	}
 
+	if !h.deletionAuthRequest(w, r, challenge.NativeReturnPath) {
+		return database.LoginChallenge{}, false
+	}
 	return challenge, true
 }
 
@@ -97,7 +100,10 @@ func (h *handler) handleMFATOTPVerify() http.HandlerFunc {
 		}
 		h.ctx.AuthState.DeletePasskeyLoginChallenge(challengeID)
 
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
+			return
+		}
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after mfa totp verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -139,7 +145,10 @@ func (h *handler) handleMFARecoveryCodeVerify() http.HandlerFunc {
 		}
 		h.ctx.AuthState.DeletePasskeyLoginChallenge(challengeID)
 
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
+			return
+		}
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after recovery code verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -184,7 +193,11 @@ func (h *handler) handleMFAEmailLinkRequest() http.HandlerFunc {
 			return
 		}
 
-		tokenID := h.ctx.AuthState.CreateMFAEmailLink(challengeID, sanitizeAuthReturnPath(req.ReturnURL), challenge.ExpiresAt)
+		returnPath := sanitizeAuthReturnPath(req.ReturnURL)
+		if challenge.NativeReturnPath != "" {
+			returnPath = challenge.NativeReturnPath
+		}
+		tokenID := h.ctx.AuthState.CreateMFAEmailLink(challengeID, returnPath, challenge.ExpiresAt)
 		expiresInMinutes := max(int(time.Until(challenge.ExpiresAt).Minutes()), 1)
 		verifyURL := appurl.Path(h.ctx.Config.PublicURL, "/api/auth/mfa/email-link/verify?token="+tokenID.String())
 		locale := h.preferredMailLocale(r, user.ID)
@@ -229,7 +242,10 @@ func (h *handler) handleMFAEmailLinkVerify() http.HandlerFunc {
 			return
 		}
 
-		if err := h.issueLoginSession(r.Context(), w, challenge.UserID, challenge.RememberMe); err != nil {
+		if !h.bindNativeLogin(r, w, challenge.NativeReturnPath, challenge.UserID) {
+			return
+		}
+		if err := h.issueVerifiedLoginSession(r, w, challenge.UserID, challenge.RememberMe, challenge.NativeReturnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after mfa email link verification", "error", err, "user_id", challenge.UserID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

@@ -1,0 +1,15 @@
+<main class="hk-auth-page">
+    <section class="hk-auth-shell" aria-labelledby="account-deleted-title">
+        <app-auth-card>
+            <div class="grid gap-4">
+                <h1 id="account-deleted-title" class="hk-auth-title">{{ 'settings.user.deletion.completedTitle' | transloco }}</h1>
+                <p>{{ 'settings.user.deletion.completedDescription' | transloco }}</p>
+                @if (manualApple) {
+                <p role="status">{{ 'settings.user.deletion.manualApple' | transloco }}</p>
+                <a pButton href="https://account.apple.com/" rel="noopener noreferrer"><span pButtonLabel>{{ 'settings.user.deletion.manageApple' | transloco }}</span></a>
+                }
+                <a routerLink="/login" class="underline">{{ 'login.signIn' | transloco }}</a>
+            </div>
+        </app-auth-card>
+    </section>
+</main>

@@ -14,6 +14,39 @@ export interface UserProfile {
     avatar_url: string;
 }
 
+export interface AccountDeletionChoices {
+    successors: { team_id: string; user_id: string }[];
+    close_team_ids: string[];
+}
+
+export interface AccountDeletionPreparation {
+    attempt_id: string;
+    expires_at: string;
+    purpose: 'delete-current-account';
+    consequence_hash: string;
+    phase: 'blocked' | 'prepared' | 'authorized' | 'removing' | 'complete';
+    blockers: { code: string; team_id?: string }[];
+    teams: {
+        id: string;
+        name: string;
+        action: 'leave' | 'reparent' | 'close';
+        closure_allowed: boolean;
+        member_count: number;
+        sites: { id: string; domain: string; owned: boolean }[];
+        eligible_successors: { id: string; email: string }[];
+        successor_id?: string;
+        cancellation_required: boolean;
+        billing_fingerprint?: string;
+    }[];
+    reauth: { return_path: string; methods: string[] | null; verified: boolean };
+    retention: { billing_records: boolean; cancellation: 'period_end' };
+}
+
+export interface AccountDeletionResult {
+    status: 'deleted';
+    provider_revocations: { provider: 'apple'; status: 'revoked' | 'manual_revocation_required' }[];
+}
+
 @Service()
 export class UserProfileService {
     private http = inject(HttpClient);
@@ -54,6 +87,41 @@ export class UserProfileService {
                 this.isSaving.set(false);
             })
         );
+    }
+
+    prepareAccountDeletion(choices: AccountDeletionChoices) {
+        return this.http.post<AccountDeletionPreparation>('/api/user/account/deletion/prepare', choices);
+    }
+
+    accountDeletionStatus(attemptId: string) {
+        return this.http.get<AccountDeletionPreparation>(`/api/user/account/deletion/${encodeURIComponent(attemptId)}`);
+    }
+
+    deleteAccount(preparation: AccountDeletionPreparation) {
+        return this.http
+            .delete<AccountDeletionResult>('/api/user/account', {
+                body: { attempt_id: preparation.attempt_id, consequence_hash: preparation.consequence_hash, confirm: true }
+            })
+            .pipe(
+                tap((result) => {
+                    this.profile.set(null);
+                    this.auth.markUnauthenticated();
+                    const view = this.document.defaultView;
+                    if (view) {
+                        try {
+                            for (const storage of [view.localStorage, view.sessionStorage]) {
+                                for (const key of Object.keys(storage)) {
+                                    if (key.startsWith('hk_') || key.startsWith('hitkeep.')) storage.removeItem(key);
+                                }
+                            }
+                        } catch {
+                            /* Storage can be disabled; navigation still clears memory. */
+                        }
+                        const manualApple = result.provider_revocations.some((outcome) => outcome.provider === 'apple' && outcome.status === 'manual_revocation_required');
+                        view.location.assign(browserAppUrl(this.document, '/account-deleted' + (manualApple ? '?manual_revocation=apple' : '')));
+                    }
+                })
+            );
     }
 
     applyProfile(profile: UserProfile) {

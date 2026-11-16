@@ -4,7 +4,9 @@
         <p-message severity="error" styleClass="w-full">{{ socialError()! | transloco }}</p-message>
         } @if (socialSuccess()) {
         <p-message severity="success" styleClass="w-full">{{ socialSuccess()! | transloco }}</p-message>
-        } @if (socialIdentities().length === 0) {
+        @if (socialSuccess() === 'settings.security.social.appleManualRevocation') {
+        <a href="https://account.apple.com/account/manage" target="_blank" rel="noopener noreferrer" class="underline">{{ "settings.security.social.appleManageAccess" | transloco }}</a>
+        } } @if (socialIdentities().length === 0) {
         <p class="text-sm text-muted-color">{{ "settings.security.social.empty" | transloco }}</p>
         } @else {
         <div class="passkey-list">

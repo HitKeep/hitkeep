@@ -37,22 +37,24 @@ type PasskeyCredential struct {
 }
 
 type CreateLoginChallengeInput struct {
-	UserID       *uuid.UUID
-	RememberMe   bool
-	Flow         string
-	AuthProvider string
+	NativeReturnPath string
+	UserID           *uuid.UUID
+	RememberMe       bool
+	Flow             string
+	AuthProvider     string
 }
 
 type LoginChallenge struct {
-	ID           uuid.UUID
-	UserID       uuid.UUID
-	HasUserID    bool
-	RememberMe   bool
-	Flow         string
-	AuthProvider string
-	Challenge    string
-	Session      *webauthnlib.SessionData
-	ExpiresAt    time.Time
+	NativeReturnPath string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	HasUserID        bool
+	RememberMe       bool
+	Flow             string
+	AuthProvider     string
+	Challenge        string
+	Session          *webauthnlib.SessionData
+	ExpiresAt        time.Time
 }
 
 type DisableUserMFAResult struct {
@@ -79,6 +81,11 @@ func (s *Store) HasEnabledTOTP(ctx context.Context, userID uuid.UUID) (bool, err
 }
 
 func (s *Store) EnableUserTOTP(ctx context.Context, userID uuid.UUID, secret string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM user_totp_factors WHERE user_id = ?", userID); err != nil {
@@ -111,6 +118,11 @@ func (s *Store) GetUserTOTPSecret(ctx context.Context, userID uuid.UUID) (secret
 }
 
 func (s *Store) DisableUserTOTP(ctx context.Context, userID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	if err := s.Exec(ctx, "DELETE FROM user_totp_factors WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("could not remove enabled totp factor: %w", err)
 	}
@@ -118,6 +130,11 @@ func (s *Store) DisableUserTOTP(ctx context.Context, userID uuid.UUID) error {
 }
 
 func (s *Store) DisableUserMFA(ctx context.Context, userID uuid.UUID) (DisableUserMFAResult, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return DisableUserMFAResult{}, err
+	}
 	var result DisableUserMFAResult
 
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
@@ -159,6 +176,11 @@ func (s *Store) DisableUserMFA(ctx context.Context, userID uuid.UUID) (DisableUs
 }
 
 func (s *Store) ReplaceUserRecoveryCodes(ctx context.Context, userID uuid.UUID, codeHashes []string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	return s.Transact(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM user_recovery_codes WHERE user_id = ?", userID); err != nil {
@@ -277,6 +299,11 @@ func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID uuid.UUID, code 
 }
 
 func (s *Store) CreateUserPasskey(ctx context.Context, userID uuid.UUID, name string, credentialID string, publicKey string, transports []string) (uuid.UUID, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return uuid.Nil, err
+	}
 	passkeyID := uuid.New()
 	now := time.Now().UTC()
 
@@ -311,6 +338,11 @@ func (s *Store) CreateUserPasskey(ctx context.Context, userID uuid.UUID, name st
 }
 
 func (s *Store) CreateUserPasskeyCredential(ctx context.Context, userID uuid.UUID, name string, credential webauthnlib.Credential) (uuid.UUID, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return uuid.Nil, err
+	}
 	passkeyID := uuid.New()
 	now := time.Now().UTC()
 
@@ -375,6 +407,11 @@ func (s *Store) ListUserPasskeys(ctx context.Context, userID uuid.UUID) ([]api.U
 }
 
 func (s *Store) DeleteUserPasskey(ctx context.Context, userID uuid.UUID, passkeyID uuid.UUID) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, userID); err != nil {
+		return err
+	}
 	s.primaryAuthMu.Lock()
 	defer s.primaryAuthMu.Unlock()
 

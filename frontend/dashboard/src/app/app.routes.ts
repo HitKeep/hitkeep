@@ -13,6 +13,13 @@ import type { DashboardTitleScope } from '@services/dashboard-title.service';
 const titleData = (titleKey: string, titleScope: DashboardTitleScope = 'none') => ({ titleKey, titleScope });
 
 export const routes: Routes = [
+    { path: 'auth/native/manage', loadComponent: () => import('@pages/native-auth/native-manage').then((m) => m.NativeManagePage), canActivate: [setupGuard, authGuard], data: titleData('nativeAuth.management.title') },
+    { path: 'auth/native/consent', loadComponent: () => import('@pages/native-auth/native-consent').then((m) => m.NativeConsentPage), canActivate: [setupGuard, authGuard], data: titleData('nativeAuth.title') },
+    {
+        path: 'account-deleted',
+        loadComponent: () => import('@pages/account-deleted/account-deleted').then((m) => m.AccountDeleted),
+        data: titleData('settings.user.deletion.completedTitle')
+    },
     {
         path: 'embed/:siteId',
         loadComponent: () => import('@pages/embed/embed').then((m) => m.EmbedDashboard),

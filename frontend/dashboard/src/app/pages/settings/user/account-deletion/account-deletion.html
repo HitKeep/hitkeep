@@ -1,0 +1,55 @@
+<app-settings-card [title]="'settings.user.deletion.title' | transloco" [subtitle]="'settings.user.deletion.description' | transloco" icon="pi pi-trash" tone="danger">
+    <div settings-card-body class="grid gap-4">
+        <p>{{ 'settings.user.deletion.terms' | transloco }}</p>
+        <a routerLink="/import-export/export" class="underline">{{ 'settings.user.deletion.exportFirst' | transloco }}</a>
+        @if (error(); as errorKey) {
+        <p role="alert" class="text-[var(--p-red-600)]">{{ errorKey | transloco }}</p>
+        } @if (review(); as preparation) { @for (team of preparation.teams; track team.id) {
+        <section class="grid gap-3 border-t border-[var(--p-content-border-color)] pt-3" [attr.aria-label]="team.name">
+            <h3 class="font-semibold break-words">{{ team.name }}</h3>
+            <p>{{ (team.action === 'close' ? 'settings.user.deletion.teamCloses' : 'settings.user.deletion.teamSurvives') | transloco }}</p>
+            @if (team.sites.length) {
+            <ul class="list-disc ps-5">
+                @for (site of team.sites; track site.id) {
+                <li class="break-all">{{ site.domain }}</li>
+                }
+            </ul>
+            } @if (team.eligible_successors.length) {
+            <label [for]="'deletion-successor-' + team.id">{{ 'settings.user.deletion.successorLabel' | transloco }}</label>
+            <p-select
+                [inputId]="'deletion-successor-' + team.id"
+                [options]="team.eligible_successors"
+                optionLabel="email"
+                optionValue="id"
+                [ngModel]="successors()[team.id]"
+                (ngModelChange)="selectSuccessor(team.id, $event)"
+                [disabled]="busy()"
+                [placeholder]="'settings.user.deletion.successorPlaceholder' | transloco"
+                appendTo="body"
+            />
+            } @if (team.closure_allowed) {
+            <div class="flex items-start gap-2">
+                <p-checkbox [inputId]="'deletion-close-' + team.id" [binary]="true" [ngModel]="closedTeams().includes(team.id)" (ngModelChange)="selectClosure(team.id, $event)" [disabled]="busy()" />
+                <label [for]="'deletion-close-' + team.id">{{ 'settings.user.deletion.closeTeam' | transloco: { team: team.name } }}</label>
+            </div>
+            }
+        </section>
+        } @for (blocker of preparation.blockers; track $index) {
+        <p role="status">{{ blockerKey(blocker.code) | transloco: { team: teamName(blocker.team_id) } }}</p>
+        } @if (preparation.blockers.length) {
+        <a routerLink="/admin/team/members" class="underline">{{ 'settings.user.deletion.manageOwnership' | transloco }}</a>
+        } @if (preparation.attempt_id && !needsReview()) { @if (!preparation.reauth.verified) {
+        <p>{{ 'settings.user.deletion.reauthDescription' | transloco }}</p>
+        <a pButton [href]="reauthUrl()"><span pButtonLabel>{{ 'settings.user.deletion.reauthenticate' | transloco }}</span></a>
+        } @else {
+        <div class="flex items-start gap-2">
+            <p-checkbox inputId="deletion-final-confirmation" [binary]="true" [ngModel]="confirmed()" (ngModelChange)="confirmed.set($event)" [disabled]="busy()" />
+            <label for="deletion-final-confirmation">{{ 'settings.user.deletion.finalConfirmation' | transloco }}</label>
+        </div>
+        <p-button severity="danger" [label]="'settings.user.deletion.deleteAction' | transloco" [disabled]="!canDelete()" [loading]="busy()" (onClick)="deleteAccount()" />
+        } } }
+    </div>
+    <div settings-card-footer>
+        <p-button [label]="'settings.user.deletion.reviewAction' | transloco" severity="danger" [outlined]="true" [loading]="busy()" [disabled]="busy()" (onClick)="prepare()" />
+    </div>
+</app-settings-card>

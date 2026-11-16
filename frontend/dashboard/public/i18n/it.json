@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Continua con Google", "github": "Continua con GitHub", "microsoft": "Continua con Microsoft" },
+    "continueWith": { "google": "Continua con Google", "github": "Continua con GitHub", "microsoft": "Continua con Microsoft",
+      "apple": "Continua con Apple" },
     "signupMethods": "Metodi di registrazione social",
     "confirmEmailSubtitle": "Conferma a quale account HitKeep deve accedere questa identità Microsoft.",
     "confirmEmailPrompt": "Gli indirizzi Microsoft possono cambiare. Controlla l’e-mail HitKeep prima dell’invio del link di conferma.",
@@ -1270,6 +1271,8 @@
         "title": "Accesso social", "description": "Collega gli account dei provider utilizzabili per accedere a HitKeep.", "empty": "Nessun provider di accesso social collegato.",
         "linkedDate": "Collegato", "lastUsed": "Ultimo utilizzo", "connectAction": "Collega {{provider}}", "unlinkAction": "Scollega",
         "passwordConfirmationHint": "Inserisci la password attuale nella sezione password prima di scollegare il tuo unico provider social.", "linked": "Provider collegato.", "unlinked": "Provider scollegato.",
+        "appleManualRevocation": "Apple è stato scollegato. Revoca l’accesso di HitKeep nel tuo Apple Account per rimuovere completamente il collegamento.",
+        "appleManageAccess": "Gestisci l’accesso Apple",
         "errors": { "linkFailed": "Impossibile collegare questo provider.", "unlinkFailed": "Impossibile scollegare questo provider.", "lastMethod": "Aggiungi un altro provider social o una passkey, oppure conferma una password abilitata." }
       },
       "twoFactor": {
@@ -1340,6 +1343,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Elimina account",
+        "description": "Rimuovi definitivamente la tua identità, le credenziali personali e i rapporti personali. Questa azione è irreversibile.",
+        "terms": "I team condivisi e le loro analisi restano disponibili ai membri. La chiusura esplicita di un team Cloud usato solo da te elimina subito le sue analisi e interrompe i rinnovi alla fine del periodo pagato. I documenti contabili e legali obbligatori vengono conservati.",
+        "exportFirst": "Esporta prima le tue analisi",
+        "reviewAction": "Esamina l’eliminazione dell’account",
+        "teamCloses": "Questo team e tutte le sue analisi verranno eliminati definitivamente.",
+        "teamSurvives": "Questo team, le sue analisi e le credenziali del team verranno conservati.",
+        "successorLabel": "Proprietario attuale del team che manterrà la proprietà dei siti",
+        "successorPlaceholder": "Seleziona un proprietario attuale",
+        "closeTeam": "Chiudi {{team}} ed elimina definitivamente tutte le sue analisi. Interrompi i rinnovi a fine periodo.",
+        "lastOperator": "Assegna un altro proprietario dell’istanza prima di eliminare il tuo account.",
+        "handoverRequired": "Per {{team}}, trasferisci la proprietà esclusiva nelle impostazioni dei membri oppure scegli esplicitamente la chiusura se non ci sono altri membri.",
+        "successorRequired": "Scegli un proprietario attuale di {{team}} per mantenere la proprietà dei siti.",
+        "invalidSuccessor": "Il successore deve già essere proprietario di {{team}}.",
+        "policyBlocked": "Questo team non può essere chiuso tramite l’eliminazione dell’account.",
+        "manageOwnership": "Gestisci la proprietà del team",
+        "reauthDescription": "Accedi di nuovo con un metodo collegato e completa i fattori di verifica configurati. Tornare qui non elimina nulla.",
+        "reauthenticate": "Autenticati di nuovo",
+        "finalConfirmation": "Confermo l’eliminazione del mio account e l’eliminazione immediata di ogni team individuale e dei relativi dati selezionati esplicitamente sopra. Comprendo le condizioni di conservazione contabile e disdetta a fine periodo.",
+        "deleteAction": "Elimina definitivamente il mio account",
+        "reauthRequired": "Accedi di nuovo per verificare questa eliminazione.",
+        "consequencesChanged": "I tuoi team o la fatturazione sono cambiati. Esamina di nuovo le conseguenze.",
+        "unavailable": "La chiusura dell’account è temporaneamente indisponibile. Riprova o contatta il gestore dell’istanza se l’accesso è già terminato.",
+        "completedTitle": "Account eliminato",
+        "completedDescription": "Il tuo account HitKeep è stato rimosso. La sessione e i dati locali dell’account sono stati cancellati.",
+        "manualApple": "Non è stato possibile confermare la revoca dell’autorizzazione Apple. Puoi rimuovere HitKeep da Accedi con Apple nelle impostazioni del tuo Apple Account.",
+        "manageApple": "Gestisci Accedi con Apple"
+      },
       "title": "Impostazioni",
       "subtitle": "Gestisci sicurezza e preferenze del tuo account.",
       "profile": {
@@ -2004,6 +2036,8 @@
       "disable2faSuccess": "MFA è stata disattivata per {{email}}."
     },
     "confirmDisable2fa": "Disattivare tutti i metodi MFA per {{email}}? Questa azione invalida anche le sessioni ricordate.",
+    "confirmForceDeleteUser": "Eliminare definitivamente {{email}} e archiviare questi team:\n{{teams}}\nEliminare questi siti e tutti i relativi dati analitici:\n{{sites}}\nQuesta azione non può essere annullata.",
+    "deleteUserReviewSite": "{{domain}} — sito {{site}}, team {{team}}, proprietario {{owner}}",
     "confirmDeleteUser": "Eliminare l'utente {{email}}?",
     "confirmDeleteSite": "Eliminare il sito {{domain}}? Questa azione non può essere annullata.",
     "confirmDeleteTeam": "Eliminare definitivamente il team \"{{name}}\"? Questa azione non può essere annullata.",
@@ -2400,6 +2434,7 @@
         "social_google": { "label": "Accesso con Google" },
         "social_github": { "label": "Accesso con GitHub" },
         "social_microsoft": { "label": "Accesso con Microsoft" },
+        "social_apple": { "label": "Accesso con Apple" },
         "social_signup": { "label": "Registrazione social" },
         "ai": {
           "label": "Gateway IA"
@@ -4076,5 +4111,24 @@
     "readOnly": "Statistiche in sola lettura",
     "connectionError": "Impossibile connettersi a HitKeep. Riprova o riconnetti HitKeep in WordPress.",
     "analyticsNavigation": "Pagine delle statistiche"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "Gestisci il tuo account HitKeep",
+          "authority": "Continua solo se hai richiesto questa specifica modifica nell’app HitKeep. Il solo accesso non la applica.",
+          "passkey_register": "Registra una passkey",
+          "social_link": "Collega un account social",
+          "search_console_connect": "Collega Google Search Console",
+          "approve": "Autorizza questa azione",
+          "return": "Torna all’app",
+          "completed": "La modifica è stata salvata. Torna all’app per aggiornare il tuo account.",
+          "restart": "Non è stato possibile verificare questa azione. Torna all’app e aggiorna lo stato prima di ricominciare."
+      },
+      "accountDeletionPurpose": "Questo accesso prepara l’eliminazione dell’account. Devi esaminare le conseguenze e confermare separatamente l’eliminazione nell’app.",
+      "title": "Accedi all’app HitKeep",
+      "authority": "L’app avrà accesso completo al tuo account, comprese le modifiche ai dati e alle impostazioni. Restano validi i permessi del team e i controlli di sicurezza.",
+      "publicClient": "Il nome pubblico non verifica l’app installata. Continua solo se hai avviato questo accesso dall’app HitKeep.",
+      "approve": "Accedi all’app",
+      "restart": "Questa richiesta è scaduta o non è stato possibile verificarla. Riavvia l’accesso dall’app."
   }
 }
