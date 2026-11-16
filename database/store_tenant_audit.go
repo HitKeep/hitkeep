@@ -231,6 +231,8 @@ func (s *Store) GetTenant(ctx context.Context, tenantID uuid.UUID) (*api.Team, e
 }
 
 func (s *Store) UpdateTenant(ctx context.Context, tenantID uuid.UUID, name, logoURL string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("team name cannot be empty")

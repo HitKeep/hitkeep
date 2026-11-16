@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"hitkeep/auth"
 	"hitkeep/database/migrations"
 )
 
@@ -343,6 +344,10 @@ func TestDeleteUserRemovesSocialIdentityAndPendingConfirmation(t *testing.T) {
 		Provider: "microsoft", Subject: "delete-tenant:object", TargetEmail: "delete-social-owner@example.com", TargetUserID: &ownerID,
 	}); err != nil {
 		t.Fatalf("create pending confirmation: %v", err)
+	}
+
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := store.DeleteUser(ctx, ownerID); err != nil {

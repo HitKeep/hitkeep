@@ -489,6 +489,18 @@ func TestPersonalRemovalRejectsOwnershipAfterTenantSyncFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if departingRole == TenantRoleOwner {
+				if err := s.UpdateInstanceRole(ctx, departing, auth.InstanceOwner, owner); err != nil {
+					t.Fatal(err)
+				}
+				defaultID, err := s.GetDefaultTenantID(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := s.AddTeamMember(ctx, defaultID, departing, TenantRoleOwner, owner); err != nil {
+					t.Fatal(err)
+				}
+			}
 			team, err := s.CreateTenant(ctx, owner, "Surviving team", "")
 			if err != nil {
 				t.Fatal(err)
@@ -533,6 +545,25 @@ func TestPersonalRemovalRejectsOwnershipAfterTenantSyncFailure(t *testing.T) {
 			}
 			if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil || current.UserID != owner {
 				t.Fatalf("site reparenting did not precede sync failure: %+v err=%v", current, err)
+			}
+			if departingRole == TenantRoleOwner {
+				if err := s.UpdateInstanceRole(ctx, owner, auth.InstanceUser, departing); !errors.Is(err, ErrLastInstanceOwner) {
+					t.Fatalf("removing owner authorized last live owner demotion: %v", err)
+				}
+				if err := s.DeleteUser(ctx, owner); !errors.Is(err, ErrLastInstanceOwner) {
+					t.Fatalf("removing owner counted as surviving operator: %v", err)
+				}
+				otherPlan, err := s.PlanAccountDeletion(ctx, owner, api.AccountDeletionChoices{}, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				blocked := false
+				for _, blocker := range otherPlan.Blockers {
+					blocked = blocked || blocker.Code == "last_operator"
+				}
+				if !blocked {
+					t.Fatal("personal deletion relied on an already removing operator")
+				}
 			}
 			actorID, targetID := owner, departing
 			if departingRole == TenantRoleOwner {

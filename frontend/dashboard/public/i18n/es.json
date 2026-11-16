@@ -2245,6 +2245,8 @@
       "disable2faSuccess": "Se desactivó MFA para {{email}}."
     },
     "confirmDisable2fa": "¿Desactivar todos los métodos MFA para {{email}}? Esto también invalidará las sesiones recordadas.",
+    "confirmForceDeleteUser": "Eliminar permanentemente a {{email}} y archivar estos equipos:\n{{teams}}\nEliminar estos sitios y todas sus analíticas:\n{{sites}}\nEsta acción no se puede deshacer.",
+    "deleteUserReviewSite": "{{domain}} — sitio {{site}}, equipo {{team}}, propietario {{owner}}",
     "confirmDeleteUser": "¿Eliminar usuario {{email}}?",
     "confirmDeleteSite": "¿Eliminar sitio {{domain}}? Esta acción no se puede deshacer.",
     "confirmDeleteTeam": "¿Eliminar permanentemente el equipo \"{{name}}\"? Esta acción no se puede deshacer.",

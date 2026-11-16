@@ -2113,6 +2113,8 @@
       "disable2faSuccess": "MFA was disabled for {{email}}."
     },
     "confirmDisable2fa": "Disable all MFA methods for {{email}}? This also invalidates remembered sessions.",
+    "confirmForceDeleteUser": "Permanently delete {{email}} and archive these teams:\n{{teams}}\nDelete these sites and all their analytics:\n{{sites}}\nThis cannot be undone.",
+    "deleteUserReviewSite": "{{domain}} — site {{site}}, team {{team}}, owner {{owner}}",
     "confirmDeleteUser": "Delete user {{email}}?",
     "confirmDeleteSite": "Delete site {{domain}}? This action cannot be undone.",
     "confirmDeleteTeam": "Permanently delete team \"{{name}}\"? This cannot be undone.",

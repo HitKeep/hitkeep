@@ -353,6 +353,10 @@ func (m *TenantStoreManager) deleteSite(ctx context.Context, siteID uuid.UUID) e
 func (m *TenantStoreManager) DeleteSiteWithWebhookEvent(ctx context.Context, siteID uuid.UUID, event WebhookEventInput) ([]WebhookDeliveryJob, error) {
 	m.shared.lifecycleMu.Lock()
 	defer m.shared.lifecycleMu.Unlock()
+	return m.deleteSiteWithWebhookEvent(ctx, siteID, event)
+}
+
+func (m *TenantStoreManager) deleteSiteWithWebhookEvent(ctx context.Context, siteID uuid.UUID, event WebhookEventInput) ([]WebhookDeliveryJob, error) {
 	analyticsStore, _, err := m.ResolveSiteStore(ctx, siteID)
 	if err != nil {
 		return nil, err

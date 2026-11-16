@@ -401,12 +401,20 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID uuid.UUID, email s
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	return s.deleteUser(ctx, id)
+}
+
+func (s *Store) deleteUser(ctx context.Context, id uuid.UUID) error {
 	blockingTeams, err := s.ListSoleOwnerTeams(ctx, id)
 	if err != nil {
 		return fmt.Errorf("could not verify team ownership before deleting user: %w", err)
 	}
 	if len(blockingTeams) > 0 {
 		return &UserOwnsTeamsError{Teams: blockingTeams}
+	}
+
+	if err := s.requireAnotherInstanceOwner(ctx, id); err != nil {
+		return err
 	}
 
 	siteIDs, err := s.ListUserSiteIDs(ctx, id)

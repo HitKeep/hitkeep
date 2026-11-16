@@ -2,8 +2,10 @@ package admin
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -469,72 +471,64 @@ func (h *handler) handleDeleteUser() http.HandlerFunc {
 		}
 
 		force := r.URL.Query().Get("force") == "true"
-
-		if force {
-			soleTeams, listErr := h.ctx.Store.ListSoleOwnerTeams(r.Context(), targetUserID)
-			if listErr != nil {
-				shared.LoggerFromContext(r.Context()).Error("Failed to list sole-owner teams for force delete", "error", listErr, "target_user_id", targetUserID)
-				http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+		var input struct {
+			ConsequenceHash json.RawMessage `json:"consequence_hash"`
+		}
+		if err := json.UnmarshalReadOptionalStrict(http.MaxBytesReader(w, r.Body, 4<<10), &input); err != nil && !errors.Is(err, io.EOF) {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		expectedHash := ""
+		if len(input.ConsequenceHash) > 0 {
+			if string(input.ConsequenceHash) == "null" || json.Unmarshal(input.ConsequenceHash, &expectedHash) != nil {
+				http.Error(w, "Invalid consequence hash", http.StatusBadRequest)
 				return
 			}
-			for _, team := range soleTeams {
-				sites, sitesErr := h.ctx.Store.ListSitesForTenant(r.Context(), team.ID)
-				if sitesErr != nil {
-					shared.LoggerFromContext(r.Context()).Error("Failed to list sites for team during force delete", "error", sitesErr, "team_id", team.ID)
-					http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-					return
-				}
-				for _, site := range sites {
-					if delErr := h.deleteSite(r.Context(), site.ID); delErr != nil {
-						shared.LoggerFromContext(r.Context()).Error("Failed to delete site during force delete", "error", delErr, "site_id", site.ID, "team_id", team.ID)
-						http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-						return
-					}
-				}
-
-				if archiveErr := h.archiveTeam(r.Context(), team.ID, actorID); archiveErr != nil {
-					shared.LoggerFromContext(r.Context()).Error("Failed to archive team during force delete", "error", archiveErr, "team_id", team.ID, "target_user_id", targetUserID)
-					http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+			if expectedHash != "" {
+				digest, err := hex.DecodeString(expectedHash)
+				if err != nil || len(digest) != 32 || expectedHash != strings.ToLower(expectedHash) {
+					http.Error(w, "Invalid consequence hash", http.StatusBadRequest)
 					return
 				}
 			}
 		}
-
+		version := "0.0"
+		if h.ctx.Config != nil {
+			version = webhooks.MinorAPIVersion(h.ctx.Config.Version)
+		}
+		event := database.WebhookEventInput{EventType: webhooks.EventSiteDeleted, APIVersion: version, PreserveAfterSiteDeletion: true}
+		var result database.AdminUserDeletionResult
 		if h.ctx.TenantStores != nil {
-			blockingTeams, listErr := h.ctx.Store.ListSoleOwnerTeams(r.Context(), targetUserID)
-			if listErr != nil {
-				shared.LoggerFromContext(r.Context()).Error("Failed to list sole-owner teams before delete", "error", listErr, "target_user_id", targetUserID)
-				http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-				return
-			}
-			if len(blockingTeams) > 0 {
-				writeDeleteUserBlocked(r.Context(), w, targetUserID, blockingTeams)
-				return
-			}
-
-			siteIDs, listErr := h.ctx.Store.ListUserSiteIDs(r.Context(), targetUserID)
-			if listErr != nil {
-				shared.LoggerFromContext(r.Context()).Error("Failed to list owned sites before delete", "error", listErr, "target_user_id", targetUserID)
-				http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-				return
-			}
-			for _, siteID := range siteIDs {
-				if delErr := h.deleteSite(r.Context(), siteID); delErr != nil {
-					shared.LoggerFromContext(r.Context()).Error("Failed to delete owned site before user delete", "error", delErr, "site_id", siteID, "target_user_id", targetUserID)
-					http.Error(w, "Failed to delete user", http.StatusInternalServerError)
-					return
-				}
-			}
+			result, err = h.ctx.TenantStores.AdminDeleteUser(r.Context(), actorID, targetUserID, force, expectedHash, event)
+		} else {
+			result, err = h.ctx.Store.AdminDeleteUser(r.Context(), actorID, targetUserID, force, expectedHash, event)
 		}
-
-		err = h.ctx.Store.DeleteUser(r.Context(), targetUserID)
+		if publisher, ok := h.ctx.Webhooks.(webhooks.DeliveryPublisher); ok {
+			ids := make([]uuid.UUID, 0, len(result.Deliveries))
+			for _, job := range result.Deliveries {
+				ids = append(ids, job.DeliveryID)
+			}
+			publisher.PublishDeliveries(r.Context(), ids)
+		}
+		for _, teamID := range result.ArchivedTeams {
+			h.ctx.EmitWebhookEvent(r.Context(), webhooks.Event{Type: webhooks.EventTeamArchived, Data: map[string]any{"team_id": teamID.String()}})
+		}
 		if err != nil {
-			if ownsTeamsErr, ok := errors.AsType[*database.UserOwnsTeamsError](err); ok {
-				writeDeleteUserBlocked(r.Context(), w, targetUserID, ownsTeamsErr.Teams)
+			if review, ok := errors.AsType[*database.AdminUserDeletionReviewError](err); ok {
+				shared.WriteJSON(r.Context(), w, http.StatusConflict, review.Review)
 				return
 			}
-			shared.LoggerFromContext(r.Context()).Error("Failed to delete user", "error", err)
-			http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+			switch {
+			case errors.Is(err, database.ErrAdminUserDeletionForbidden), errors.Is(err, database.ErrAccountDeletionBlocked):
+				http.Error(w, "Current instance owner authority required", http.StatusForbidden)
+			case errors.Is(err, database.ErrLastInstanceOwner):
+				http.Error(w, "Cannot remove the last instance owner", http.StatusConflict)
+			case errors.Is(err, database.ErrUserNotFound):
+				http.Error(w, "User not found", http.StatusNotFound)
+			default:
+				shared.LoggerFromContext(r.Context()).Error("Failed to delete user", "error", err)
+				http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+			}
 			return
 		}
 		h.ctx.AuthState.ClearUser(targetUserID)
@@ -548,13 +542,4 @@ func (h *handler) handleDeleteUser() http.HandlerFunc {
 			shared.LoggerFromContext(r.Context()).Error("Failed to encode response", "error", err)
 		}
 	}
-}
-
-func writeDeleteUserBlocked(ctx context.Context, w http.ResponseWriter, targetUserID uuid.UUID, teams []api.Team) {
-	shared.WriteJSON(ctx, w, http.StatusConflict, api.AdminDeleteUserBlockedResponse{
-		Status:  "error",
-		Code:    "user_owns_teams",
-		Message: "Transfer ownership before deleting this user, or use ?force=true to archive their teams.",
-		Teams:   teams,
-	})
 }

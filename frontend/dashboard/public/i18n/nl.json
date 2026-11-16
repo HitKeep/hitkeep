@@ -2022,6 +2022,8 @@
       "disable2faSuccess": "MFA is uitgeschakeld voor {{email}}."
     },
     "confirmDisable2fa": "Alle MFA-methoden uitschakelen voor {{email}}? Dit maakt ook onthouden sessies ongeldig.",
+    "confirmForceDeleteUser": "{{email}} definitief verwijderen en deze teams archiveren:\n{{teams}}\nDeze websites en al hun analysegegevens verwijderen:\n{{sites}}\nDit kan niet ongedaan worden gemaakt.",
+    "deleteUserReviewSite": "{{domain}} — website {{site}}, team {{team}}, eigenaar {{owner}}",
     "confirmDeleteUser": "Gebruiker {{email}} verwijderen?",
     "confirmDeleteSite": "Site {{domain}} verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
     "confirmDeleteTeam": "Team \"{{name}}\" definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",

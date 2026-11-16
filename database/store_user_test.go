@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"hitkeep/auth"
 )
 
 func TestDeleteUserBlocksSoleOwnerDeletion(t *testing.T) {
@@ -79,6 +81,10 @@ func TestDeleteUserAllowsDeletionWhenAnotherOwnerExists(t *testing.T) {
 	site, err := store.CreateSite(ctx, ownerID, "delete-user-success.test")
 	if err != nil {
 		t.Fatalf("create site: %v", err)
+	}
+
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := store.DeleteUser(ctx, ownerID); err != nil {
@@ -157,6 +163,10 @@ func TestDeleteUserRemovesLegacyAuthStateRows(t *testing.T) {
 		ownerID, "challenge", "Key", now, now.Add(time.Hour),
 	); err != nil {
 		t.Fatalf("insert legacy passkey row: %v", err)
+	}
+
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := store.DeleteUser(ctx, ownerID); err != nil {
@@ -302,5 +312,35 @@ func TestUserProfileEmailPreservesRecoveryCodesAndAuditReferences(t *testing.T) 
 	var shadows int
 	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email LIKE '__shadow_%@hitkeep.invalid'`).Scan(&shadows); err != nil || shadows != 0 {
 		t.Fatalf("shadow users=%d err=%v", shadows, err)
+	}
+}
+
+func TestDeleteUserPreservesLastInstanceOwnerAndSites(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateUser(ctx, "last-operator@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateUser(ctx, "team-only-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTeamMember(ctx, team, other, TenantRoleOwner, owner); err != nil {
+		t.Fatal(err)
+	}
+	site, err := s.CreateSite(ctx, owner, "last-owner-site.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, owner); !errors.Is(err, ErrLastInstanceOwner) {
+		t.Fatalf("last owner deletion=%v", err)
+	}
+	if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil {
+		t.Fatalf("site removed before owner guard: %+v err=%v", current, err)
 	}
 }

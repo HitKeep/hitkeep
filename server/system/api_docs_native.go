@@ -73,7 +73,7 @@ func nativeAuthPaths() map[string]any {
 	}
 
 	description := "First-party full human-session handoff, independent of integration OAuth and AI availability. Public client IDs do not authenticate app binaries. Fixed exact claimed HTTPS callbacks, immutable issuer/prefix/client/PKCE/state bindings, explicit per-attempt full-account consent. All responses no-store; APIs and callback pages no-referrer. Only the exact native consent/manage HTML documents use same-origin referrer policy for strict browser form Origin checks, suppressing cross-origin Referer. No credential-bearing callback or logs. Missing/expired state, consumed codes, issuance failure and lost exchange response require restarting. Native cookies must be isolated per full canonical instance including prefix. Ordinary logout does not instantly revoke copied stateless JWTs."
-	return map[string]any{
+	paths := map[string]any{
 		"/api/auth/native/management/start":    map[string]any{"post": op([]string{"Auth"}, "Start native browser management", "Strict bounded JSON and a current ordinary human JWT only, independent of AI. No remember restoration or cookie issuance. Origin and Referer may be absent; supplied Origin must be exactly the canonical issuer origin. Reject ambient Authorization/API key/embed, duplicate/unknown fields. Freeze actual current user and exactly one action: passkey_register (no target fields), social_link (configured provider only), or search_console_connect (exact authorized team). Fresh same-user primary plus all configured MFA and explicit same-origin browser approval are required before any operation. Uses existing exact HTTPS callbacks and issuer/client/state/S256 bindings; never transfers sessions/provider credentials.", secCookie(), nil, body("NativeManagementStart"), response("200", "NativeAuthStarted"))},
 		"/api/auth/native/management/complete": map[string]any{"post": op([]string{"Auth"}, "Complete native management receipt", "Strict four-field NativeAuthExchange JSON; current ordinary native JWT must match the frozen actual user. Missing or expired current identity returns401 without consuming a valid receipt; remember-only credentials cannot restore a session. Rechecks current authority, exact action/provider/team/client/callback/issuer/PKCE, persisted success and expiry; consumes atomically once. Returns status only with NO Set-Cookie or credential. Login/deletion codes are rejected, and management receipts cannot mint login/deletion proof. Lost response requires authoritative security or exact-team GSC refresh, never replay or mutation retry. Origin/Referer may be absent; supplied foreign/null/duplicate Origin is rejected.", secCookie(), nil, body("NativeAuthExchange"), response("200", "NativeAuthOK"))},
 		"/api/auth/native/start":               map[string]any{"post": op([]string{"Auth"}, "Start native sign-in", description+" Strict bounded application/json only; S256 required; signup only when Cloud signup enabled. Optional purpose=account_delete and reauth_attempt must occur together with intent=login; they freeze the existing deletion attempt and force actual linked primary plus configured MFA despite existing HitKeep cookies. Approval prepares a separately confirmed deletion and does not delete. Reject duplicate/unknown fields, ambient bearer and disallowed supplied Origin.", nil, nil, body("NativeAuthStart"), response("200", "NativeAuthStarted"))},
@@ -83,4 +83,18 @@ func nativeAuthPaths() map[string]any {
 		"/api/auth/native/consent":  map[string]any{"get": op([]string{"Auth"}, "Read native session consent", description+" Requires human cookie. Establishes fresh browser-bound CSRF, including after cross-browser email completion; never approves. Management uses the dedicated /auth/native/manage page and returns only its frozen action/provider/team and operation phase.", secCookie(), []any{queryParam("request", "string", true, "Opaque pending request")}, nil, response("200", "NativeAuthConsent"))},
 		"/api/auth/native/exchange": map[string]any{"post": op([]string{"Auth"}, "Exchange one-time native code", description+" Strict bounded application/json only. No forms, GET or ambient bearer. Rechecks account, issuer, exact client/callback and S256, atomically consumes before issuing fresh ordinary session/remember cookies; returns status ok. Account-deletion proof binds only to this NEW native cookie JTI, never the intermediate browser session. Never accepts an OAuth grant.", nil, nil, body("NativeAuthExchange"), map[string]any{"200": jsonResponse("Fresh ordinary cookies; no token in body", "NativeAuthOK"), "400": jsonResponse("Invalid grant; restart", "NativeAuthError"), "403": jsonResponse("Ambient bearer rejected", "NativeAuthError"), "503": jsonResponse("Issuance unavailable; restart", "NativeAuthError")})},
 	}
+	for _, route := range []struct{ path, method string }{
+		{"/api/auth/native/management/start", "post"},
+		{"/api/auth/native/management/complete", "post"},
+		{"/api/auth/native/consent", "get"},
+		{"/api/auth/native/authorize", "post"},
+	} {
+		operation := paths[route.path].(map[string]any)[route.method].(map[string]any)
+		operation["responses"].(map[string]any)["401"] = map[string]any{
+			"description": "Current human session required; management receipt is not consumed and no cookies are issued",
+			"content":     map[string]any{"text/plain": map[string]any{"schema": map[string]any{"type": "string"}}},
+		}
+	}
+	return paths
+
 }

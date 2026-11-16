@@ -129,15 +129,25 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 				"message": map[string]any{"type": "string"},
 			},
 		},
+		"AdminDeleteUserSite": map[string]any{
+			"type": "object", "required": []string{"id", "team_id", "user_id", "domain"},
+			"properties": map[string]any{"id": map[string]any{"type": "string", "format": "uuid"}, "team_id": map[string]any{"type": "string", "format": "uuid"}, "user_id": map[string]any{"type": "string", "format": "uuid"}, "domain": map[string]any{"type": "string"}},
+		},
+		"AdminDeleteUserRequest": map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": map[string]any{"consequence_hash": map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+		},
 		"AdminDeleteUserBlockedResponse": map[string]any{
-			"type": "object",
+			"type": "object", "required": []string{"status", "code", "message", "teams", "sites", "consequence_hash", "can_force"},
 			"properties": map[string]any{
-				"status":  map[string]any{"type": "string"},
-				"code":    map[string]any{"type": "string"},
-				"message": map[string]any{"type": "string"},
-				"teams":   map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/Team"}},
+				"status":           map[string]any{"type": "string", "const": "error"},
+				"code":             map[string]any{"type": "string", "enum": []string{"user_owns_teams", "delete_confirmation_required", "delete_consequences_changed", "delete_policy_blocked"}},
+				"message":          map[string]any{"type": "string"},
+				"teams":            map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/Team"}},
+				"sites":            map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/AdminDeleteUserSite"}},
+				"consequence_hash": map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"},
+				"can_force":        map[string]any{"type": "boolean"},
 			},
-			"required": []string{"status", "code", "message", "teams"},
 		},
 		"SiteTransferResponse": map[string]any{
 			"type": "object",

@@ -46,3 +46,24 @@ func TestDeletionAuthenticationContractIsNarrow(t *testing.T) {
 		t.Fatal("native exchange changed")
 	}
 }
+
+func TestNativeHumanSessionContractDocumentsPlainTextUnauthorized(t *testing.T) {
+	paths := nativeAuthPaths()
+	for _, route := range []struct{ path, method string }{
+		{"/api/auth/native/management/start", "post"},
+		{"/api/auth/native/management/complete", "post"},
+		{"/api/auth/native/consent", "get"},
+		{"/api/auth/native/authorize", "post"},
+	} {
+		operation := paths[route.path].(map[string]any)[route.method].(map[string]any)
+		response, ok := operation["responses"].(map[string]any)["401"].(map[string]any)
+		if !ok {
+			t.Errorf("%s %s omits unauthenticated response", route.method, route.path)
+			continue
+		}
+		content, ok := response["content"].(map[string]any)["text/plain"].(map[string]any)
+		if !ok || content["schema"].(map[string]any)["type"] != "string" {
+			t.Errorf("%s misrepresents plain-text 401", route.path)
+		}
+	}
+}

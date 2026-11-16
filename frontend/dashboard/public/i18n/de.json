@@ -2078,6 +2078,8 @@
       "disable2faSuccess": "MFA wurde für {{email}} deaktiviert."
     },
     "confirmDisable2fa": "Alle MFA-Methoden für {{email}} deaktivieren? Dadurch werden auch gespeicherte Sitzungen ungültig.",
+    "confirmForceDeleteUser": "{{email}} dauerhaft löschen und diese Teams archivieren:\n{{teams}}\nDiese Websites und alle ihre Analysedaten löschen:\n{{sites}}\nDies kann nicht rückgängig gemacht werden.",
+    "deleteUserReviewSite": "{{domain}} — Website {{site}}, Team {{team}}, Inhaber {{owner}}",
     "confirmDeleteUser": "Benutzer {{email}} löschen?",
     "confirmDeleteSite": "Seite {{domain}} löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "confirmDeleteTeam": "Team \"{{name}}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",

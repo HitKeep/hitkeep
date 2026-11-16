@@ -24,12 +24,10 @@ func (s *Store) PlanAccountDeletion(ctx context.Context, userID uuid.UUID, choic
 	if u == nil {
 		return plan, ErrUserNotFound
 	}
-	var lastOperator bool
-	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM instance_roles WHERE user_id=? AND role='owner') AND NOT EXISTS (SELECT 1 FROM instance_roles ir JOIN users u ON u.id=ir.user_id WHERE ir.user_id<>? AND ir.role='owner')`, userID, userID).Scan(&lastOperator); err != nil {
-		return plan, err
-	}
-	if lastOperator {
+	if err := s.requireAnotherInstanceOwner(ctx, userID); errors.Is(err, ErrLastInstanceOwner) {
 		plan.Blockers = append(plan.Blockers, api.AccountDeletionBlocker{Code: "last_operator"})
+	} else if err != nil {
+		return plan, err
 	}
 	successors := make(map[uuid.UUID]uuid.UUID)
 	closing := make(map[uuid.UUID]bool)

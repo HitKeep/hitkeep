@@ -1746,11 +1746,21 @@ type AdminTeam struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type AdminDeleteUserSite struct {
+	ID     uuid.UUID `json:"id"`
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+	Domain string    `json:"domain"`
+}
+
 type AdminDeleteUserBlockedResponse struct {
-	Status  string `json:"status"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Teams   []Team `json:"teams"`
+	ConsequenceHash string                `json:"consequence_hash"`
+	CanForce        bool                  `json:"can_force"`
+	Sites           []AdminDeleteUserSite `json:"sites"`
+	Status          string                `json:"status"`
+	Code            string                `json:"code"`
+	Message         string                `json:"message"`
+	Teams           []Team                `json:"teams"`
 }
 
 type AdminDeleteTeamResponse struct {

@@ -171,6 +171,9 @@ func TestHandleCreateInstanceCountryExclusion(t *testing.T) {
 
 func TestHandleDeleteUserReturnsConflictForSoleOwner(t *testing.T) {
 	h, store, _, _, actorUserID, targetUserID := setupAdminTestEnv(t)
+	if err := store.UpdateInstanceRole(t.Context(), actorUserID, auth.InstanceOwner, targetUserID); err != nil {
+		t.Fatal(err)
+	}
 
 	req := withAdminTestUser(httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+targetUserID.String(), nil), actorUserID)
 	req.SetPathValue("id", targetUserID.String())
@@ -203,6 +206,9 @@ func TestHandleDeleteUserReturnsConflictForSoleOwner(t *testing.T) {
 
 func TestHandleDeleteUserDeletesWhenTeamHasAnotherOwner(t *testing.T) {
 	h, store, _, _, actorUserID, targetUserID := setupAdminTestEnv(t)
+	if err := store.UpdateInstanceRole(t.Context(), actorUserID, auth.InstanceOwner, targetUserID); err != nil {
+		t.Fatal(err)
+	}
 
 	defaultTenantID, err := store.GetDefaultTenantID(context.Background())
 	if err != nil {
@@ -232,6 +238,9 @@ func TestHandleDeleteUserDeletesWhenTeamHasAnotherOwner(t *testing.T) {
 
 func TestHandleDeleteUserRemovesTenantLocalOwnedSites(t *testing.T) {
 	h, store, tenantStores, _, actorUserID, targetUserID := setupAdminTestEnv(t)
+	if err := store.UpdateInstanceRole(t.Context(), actorUserID, auth.InstanceOwner, targetUserID); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 
 	team, err := store.CreateTenant(ctx, targetUserID, "Tenant Local Cleanup", "")
