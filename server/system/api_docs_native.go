@@ -96,5 +96,4 @@ func nativeAuthPaths() map[string]any {
 		}
 	}
 	return paths
-
 }

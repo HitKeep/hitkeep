@@ -982,6 +982,9 @@ func TestTeamReportRemainsManageableAfterCreatorDeletion(t *testing.T) {
 	if err := store.AddTeamMember(ctx, tenantID, successorID, TenantRoleOwner, creatorID); err != nil {
 		t.Fatalf("promote successor: %v", err)
 	}
+	if err := store.UpdateInstanceRole(ctx, successorID, auth.InstanceOwner, creatorID); err != nil {
+		t.Fatalf("preserve surviving instance owner: %v", err)
+	}
 	site, err := store.CreateSite(ctx, successorID, "surviving-team-report.example.test")
 	if err != nil {
 		t.Fatal(err)

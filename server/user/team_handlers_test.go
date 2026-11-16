@@ -342,7 +342,11 @@ func TestSendTeamInviteEmailFallsBackToInviterLocaleForNewRecipient(t *testing.T
 		t.Fatalf("get active team: %v", err)
 	}
 
-	invite, err := store.CreateTeamInvite(ctx, teamID, "neu@example.com", database.TenantRoleMember, nil, ownerID, true)
+	inviteeID, err := h.createInviteeUser(ctx, "neu@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invite, err := store.CreateTeamInvite(ctx, teamID, "neu@example.com", database.TenantRoleMember, &inviteeID, ownerID, true)
 	if err != nil {
 		t.Fatalf("create team invite: %v", err)
 	}
@@ -364,6 +368,58 @@ func TestSendTeamInviteEmailFallsBackToInviterLocaleForNewRecipient(t *testing.T
 	}
 	if !strings.Contains(drv.textBody, "https://www.example.net/hitkeep/accept-invite?token=") {
 		t.Fatalf("expected invite link to use prefixed public URL, got:\n%s", drv.textBody)
+	}
+}
+
+func TestSendTeamInviteEmailHonorsRecipientLocale(t *testing.T) {
+	for _, tc := range []struct {
+		name, inviterLocale, recipientLocale, subject string
+		placeholder                                   bool
+	}{
+		{"known explicit English", "de", "en", "You've been added", false},
+		{"known explicit German", "en", "de", "Du wurdest zu", false},
+		{"known default English", "de", "", "You've been added", false},
+		{"placeholder explicit English", "de", "en", "You're invited to join", true},
+		{"placeholder inviter fallback", "de", "", "Du wurdest eingeladen", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, store, ownerID := setupUserSecurityTestEnv(t)
+			defer store.Close()
+			ctx := t.Context()
+			if err := store.UpsertUserPreferences(ctx, ownerID, api.UserPreferences{DefaultLocale: tc.inviterLocale}); err != nil {
+				t.Fatal(err)
+			}
+			var recipientID uuid.UUID
+			var err error
+			if tc.placeholder {
+				recipientID, err = h.createInviteeUser(ctx, "locale-recipient@example.test")
+			} else {
+				recipientID, err = store.CreateUserWithoutDefaultTenant(ctx, "locale-recipient@example.test", "hash")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.recipientLocale != "" {
+				if err := store.UpsertUserPreferences(ctx, recipientID, api.UserPreferences{DefaultLocale: tc.recipientLocale}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			teamID, err := store.GetActiveTenantID(ctx, ownerID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			invite, err := store.CreateTeamInvite(ctx, teamID, "locale-recipient@example.test", database.TenantRoleMember, &recipientID, ownerID, tc.placeholder)
+			if err != nil {
+				t.Fatal(err)
+			}
+			drv := &teamTestMailDriver{}
+			h.ctx.Mailer = mailer.NewWithDriver(drv, h.ctx.Config)
+			req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/user/teams/"+teamID.String()+"/members", nil), ownerID)
+			h.sendTeamInviteEmail(req, teamID, ownerID, invite)
+			if !strings.Contains(drv.subject, tc.subject) {
+				t.Fatalf("incorrect recipient locale: subject=%q", drv.subject)
+			}
+		})
 	}
 }
 
@@ -414,7 +470,11 @@ func TestSendTeamInviteEmailDoesNotLogRawMailError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get active team: %v", err)
 	}
-	invite, err := store.CreateTeamInvite(ctx, teamID, "team-mail-error@example.com", database.TenantRoleMember, nil, ownerID, true)
+	inviteeID, err := h.createInviteeUser(ctx, "team-mail-error@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invite, err := store.CreateTeamInvite(ctx, teamID, "team-mail-error@example.com", database.TenantRoleMember, &inviteeID, ownerID, true)
 	if err != nil {
 		t.Fatalf("create team invite: %v", err)
 	}
