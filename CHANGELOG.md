@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.17.0](https://github.com/HitKeep/hitkeep/compare/v2.16.1...v2.17.0) (2026-11-16)
+
+
+### Features
+
+* complete public discovery and human-approved agent registration ([#457](https://github.com/HitKeep/hitkeep/issues/457)) ([756bcf3](https://github.com/HitKeep/hitkeep/commit/756bcf39727ad0f63d4b8818534024c550203408))
+* finish native account management and update dependencies ([011443f](https://github.com/HitKeep/hitkeep/commit/011443fe0c7192ece5930c83bb49def38baf109e))
+* **wordpress:** connect native dashboards and site onboarding ([#455](https://github.com/HitKeep/hitkeep/issues/455)) ([1af1544](https://github.com/HitKeep/hitkeep/commit/1af1544dd70f559505c2c94b0228208ec02ebc31))
+
+
+### Bug Fixes
+
+* **analytics:** exclude self-referrals and preserve bounce counts ([a29592f](https://github.com/HitKeep/hitkeep/commit/a29592f1ded8be923bbfb251932e2e1d0c53157a))
+* **ci:** align database refresh test deadlines with their job budgets ([#456](https://github.com/HitKeep/hitkeep/issues/456)) ([92a8b99](https://github.com/HitKeep/hitkeep/commit/92a8b9992d001d3bd9599cc95cac8a31795f72f0))
+* **ci:** align MCP registry namespace with GitHub OIDC ([#453](https://github.com/HitKeep/hitkeep/issues/453)) ([edd00e2](https://github.com/HitKeep/hitkeep/commit/edd00e22d56141d71322707cd422709ab3215037))
+* **ci:** install Homebrew formula before metadata lookup ([#460](https://github.com/HitKeep/hitkeep/issues/460)) ([34a6d0f](https://github.com/HitKeep/hitkeep/commit/34a6d0fd053f6ba3e3e53dd1b98488c42892d416))
+* **ci:** use supported macOS runner for Homebrew validation ([84037f8](https://github.com/HitKeep/hitkeep/commit/84037f838a7d21e43634d8e1397730b9415faa0f))
+
 ## [2.16.1](https://github.com/HitKeep/hitkeep/compare/v2.16.0...v2.16.1) (2026-11-02)
 
 
