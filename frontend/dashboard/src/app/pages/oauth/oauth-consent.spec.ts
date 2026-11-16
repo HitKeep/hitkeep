@@ -75,6 +75,19 @@ describe('OAuthConsentPage', () => {
         expect(fixture.nativeElement.querySelectorAll('input[name="site_ids"]').length).toBe(0);
     });
 
+    it('hides site creation while eligible sites are selected and restores it when selection is cleared', async () => {
+        oauth.consent.mockReturnValue(of({ ...preview(), teams: [{ ...preview().teams[0], can_create_site: true }] }));
+        const controls = await create();
+        const creation = () => fixture.nativeElement.querySelector('#oauth-site-domain');
+        expect(creation()).not.toBeNull();
+        controls.site_ids().control().setValue(['site-1']);
+        await fixture.whenStable();
+        expect(creation()).toBeNull();
+        controls.site_ids().control().setValue([]);
+        await fixture.whenStable();
+        expect(creation()).not.toBeNull();
+    });
+
     it('lets a new account create its first site and then explicitly approve the connection', async () => {
         const emptyConsent = { ...preview(), suggested_domain: 'wordpress.example', teams: [{ id: 'team-1', name: 'First team', sites: [], can_create_site: true }] };
         oauth.consent.mockReturnValueOnce(of(emptyConsent)).mockReturnValueOnce(of({ ...emptyConsent, teams: [{ ...emptyConsent.teams[0], sites: [{ id: 'new-site', domain: 'wordpress.example' }] }] }));
@@ -90,6 +103,7 @@ describe('OAuthConsentPage', () => {
         expect(oauth.createSite).toHaveBeenCalledWith('team-1', 'csrf-binding', 'wordpress.example');
         expect([...fixture.nativeElement.querySelectorAll('input[name="site_ids"]')].map((input) => (input as HTMLInputElement).value)).toEqual(['new-site']);
         expect((fixture.nativeElement.querySelector('button[value="approve"]') as HTMLButtonElement).disabled).toBe(false);
+        expect(fixture.nativeElement.querySelector('#oauth-site-domain')).toBeNull();
         expect(fixture.nativeElement.querySelector('input[name="decision"]').value).toBe('');
     });
 
