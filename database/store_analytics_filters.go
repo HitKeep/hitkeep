@@ -287,9 +287,9 @@ const agentsCTE = `agents AS (
 const referrersCTE = `referrers AS (
 			SELECT
 				referrer,
-				hk_referrer(referrer) AS referrer_name,
+				hk_external_referrer(referrer, site_id) AS referrer_name,
 				hk_ai_source(referrer) AS ai_source
-			FROM (SELECT DISTINCT referrer FROM scoped)
+			FROM (SELECT DISTINCT referrer, site_id FROM scoped)
 		)`
 
 // queryAIKpis aggregates the AI traffic KPIs for one window. It mirrors the

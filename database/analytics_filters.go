@@ -49,7 +49,7 @@ func buildHitFilter(filterType, filterValue, alias string) (string, []any) {
 		if isDirectReferrer(filterValue) {
 			normalized = "(Direct)"
 		}
-		expr := fmt.Sprintf("hk_referrer(%sreferrer)", prefix)
+		expr := fmt.Sprintf("hk_external_referrer(%sreferrer, %ssite_id)", prefix, prefix)
 		return " AND " + expr + " = ?", []any{normalized}
 	case "referrer_host":
 		expr := referrerHostExpr(prefix)
@@ -162,8 +162,9 @@ func normalizeReferrerHostFilter(value string) string {
 
 func referrerHostExpr(prefix string) string {
 	return fmt.Sprintf(`CASE
+		WHEN hk_external_referrer(%sreferrer, %ssite_id) IS NULL THEN NULL
 		WHEN %sreferrer IS NULL OR NULLIF(TRIM(%sreferrer), '') IS NULL THEN '(Direct)'
 		WHEN lower(%sreferrer) LIKE 'http%%' THEN regexp_replace(regexp_extract(lower(%sreferrer), 'https?://([^/:?#]+)', 1), '^www\\.', '')
 		ELSE regexp_replace(lower(TRIM(%sreferrer)), '^www\\.', '')
-	END`, prefix, prefix, prefix, prefix, prefix)
+	END`, prefix, prefix, prefix, prefix, prefix, prefix, prefix)
 }

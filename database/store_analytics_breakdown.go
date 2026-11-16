@@ -14,7 +14,7 @@ import (
 // using the same classifications as the site overview's top lists.
 var breakdownDimensions = map[string]string{
 	"page":         "h.path",
-	"referrer":     "hk_referrer(h.referrer)",
+	"referrer":     "hk_external_referrer(h.referrer, h.site_id)",
 	"device":       "hk_device(h.viewport_width)",
 	"country":      "hk_country(h.country_code)",
 	"city":         "COALESCE(NULLIF(TRIM(h.city), ''), '(Unknown)')",

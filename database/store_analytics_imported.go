@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -47,7 +48,7 @@ func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.Analyti
 	importedDuration := float64(sqlNullInt64Value(duration))
 	nativePageviews := stats.TotalPageviews
 	nativeSessions := stats.UniqueSessions
-	nativeBounces := int((stats.BounceRate / 100) * float64(nativeSessions))
+	nativeBounces := int(math.Round((stats.BounceRate / 100) * float64(nativeSessions)))
 	nativeDuration := stats.AvgSessionDuration * float64(nativeSessions)
 
 	stats.TotalPageviews += importedPageviews
@@ -96,7 +97,7 @@ func (s *Store) augmentImportedSiteOverviewStats(ctx context.Context, params api
 	importedVisits := int(sqlNullInt64Value(visits))
 	importedBounces := int(sqlNullInt64Value(bounces))
 	nativeSessions := stats.UniqueSessions
-	nativeBounces := int((stats.BounceRate / 100) * float64(nativeSessions))
+	nativeBounces := int(math.Round((stats.BounceRate / 100) * float64(nativeSessions)))
 
 	stats.TotalPageviews += importedPageviews
 	stats.UniqueSessions += importedVisits
@@ -249,6 +250,7 @@ func (s *Store) mergeImportedTopLists(ctx context.Context, params api.AnalyticsP
 		SELECT dimension, name, SUM(pageviews) AS val
 		FROM imported_dimension_daily
 		WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
+			AND (dimension <> 'source' OR hk_external_referrer(name, site_id) IS NOT NULL)
 			AND dimension IN (
 				'page', 'entry_page', 'exit_page', 'source', 'device', 'country', 'browser', 'operating_system',
 				'city', 'provider', 'asn', 'language', 'utm_campaign', 'utm_content', 'utm_medium', 'utm_source', 'utm_term'
