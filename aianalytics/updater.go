@@ -198,6 +198,10 @@ func fetchAIRobotsTxtAgents(ctx context.Context, client agentHTTPDoer) ([]AIAgen
 	out := make([]AIAgentEntry, 0, len(raw))
 	for name, entry := range raw {
 		token := strings.ToLower(strings.TrimSpace(name))
+		// This robots policy token is not a crawler user agent.
+		if strings.EqualFold(token, "__usage_ai-training") {
+			continue
+		}
 		if !admitToken(token) {
 			continue
 		}

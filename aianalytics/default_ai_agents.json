@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T23:25:44.702368209Z",
+  "generated_at": "2026-11-16T15:56:24.163426Z",
   "sources": {
     "ai_robots_txt": "https://raw.githubusercontent.com/ai-robots-txt/ai.robots.txt/main/robots.json",
     "crawler_user_agents": "https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json",
@@ -22,16 +22,6 @@
     }
   },
   "agents": [
-    {
-      "token": "__usage_ai-training",
-      "name": "__usage_ai-training",
-      "family": "Not applicable.",
-      "category": "ai_training_crawler",
-      "respects_robots_txt": "unclear",
-      "sources": [
-        "ai_robots_txt"
-      ]
-    },
     {
       "token": "addsearchbot",
       "name": "AddSearchBot",
@@ -1311,6 +1301,17 @@
       "family": "HarkBot",
       "category": "ai_agent",
       "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "hatchfeed",
+      "name": "HatchFeed",
+      "family": "Meta",
+      "category": "ai_assistant",
+      "respects_robots_txt": "no",
+      "url": "https://agent.meta.ai",
       "sources": [
         "ai_robots_txt"
       ]
@@ -2652,8 +2653,8 @@
     },
     {
       "token": "webzio-extended",
-      "name": "webzio-extended",
-      "family": "webzio-extended",
+      "name": "Webzio-Extended",
+      "family": "Webzio-Extended",
       "category": "ai_training_crawler",
       "respects_robots_txt": "unclear",
       "url": "https://docs.webz.io/reference/how-it-works-video",

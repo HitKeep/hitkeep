@@ -206,7 +206,7 @@ func TestFetchAIAgentDataMergesAllSources(t *testing.T) {
 	}
 
 	// Non-AI entries, non-literal regexes, and denylisted tokens are dropped.
-	for _, token := range []string{"monitoring360bot", "googlebot/", "bot", "anthropic[- ]ai(?:/[0-9])?"} {
+	for _, token := range []string{"__usage_ai-training", "monitoring360bot", "googlebot/", "bot", "anthropic[- ]ai(?:/[0-9])?"} {
 		if hasAgent(data, token) {
 			t.Errorf("token %q must not be admitted", token)
 		}
