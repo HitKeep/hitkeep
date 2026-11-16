@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-01T22:56:00.580991875Z",
+  "generated_at": "2026-11-16T15:56:24.163426Z",
   "sources": {
     "ai_robots_txt": "https://raw.githubusercontent.com/ai-robots-txt/ai.robots.txt/main/robots.json",
     "crawler_user_agents": "https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json",
@@ -531,6 +531,16 @@
         "crawler_user_agents",
         "device_detector_bots",
         "hitkeep_curated"
+      ]
+    },
+    {
+      "token": "claude-agent",
+      "name": "Claude-Agent",
+      "family": "Claude-Agent",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
       ]
     },
     {
@@ -1110,6 +1120,16 @@
       ]
     },
     {
+      "token": "google-gemininotebook",
+      "name": "Google-GeminiNotebook",
+      "family": "Google-GeminiNotebook",
+      "category": "ai_assistant",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "google-notebooklm",
       "name": "Google-NotebookLM",
       "family": "Google-NotebookLM",
@@ -1266,11 +1286,32 @@
       ]
     },
     {
+      "token": "haiku-searchbot",
+      "name": "Haiku-SearchBot",
+      "family": "Haiku-SearchBot",
+      "category": "ai_assistant",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "harkbot",
       "name": "HarkBot",
       "family": "HarkBot",
       "category": "ai_agent",
       "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "hatchfeed",
+      "name": "HatchFeed",
+      "family": "Meta",
+      "category": "ai_assistant",
+      "respects_robots_txt": "no",
+      "url": "https://agent.meta.ai",
       "sources": [
         "ai_robots_txt"
       ]
@@ -1638,6 +1679,16 @@
       ]
     },
     {
+      "token": "liner-user",
+      "name": "Liner-User",
+      "family": "Liner-User",
+      "category": "ai_assistant",
+      "respects_robots_txt": "unclear",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
       "token": "linerbot",
       "name": "LinerBot",
       "family": "LinerBot",
@@ -1749,6 +1800,16 @@
       "category": "ai_assistant",
       "respects_robots_txt": "unclear",
       "url": "https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/",
+      "sources": [
+        "ai_robots_txt"
+      ]
+    },
+    {
+      "token": "minimaxagent",
+      "name": "MiniMaxAgent",
+      "family": "MiniMaxAgent",
+      "category": "ai_agent",
+      "respects_robots_txt": "unclear",
       "sources": [
         "ai_robots_txt"
       ]

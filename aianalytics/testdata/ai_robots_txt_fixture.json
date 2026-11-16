@@ -1,4 +1,11 @@
 {
+  "__usage_ai-training": {
+    "operator": "Not applicable.",
+    "respect": "Yes",
+    "function": "AI Data Scrapers",
+    "frequency": "Not applicable.",
+    "description": "A robots policy token expressing an AI training preference, not a crawler."
+  },
   "GPTBot": {
     "operator": "[OpenAI](https://openai.com)",
     "respect": "Yes",
