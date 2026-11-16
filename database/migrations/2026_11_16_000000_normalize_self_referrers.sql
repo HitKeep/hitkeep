@@ -8,6 +8,9 @@ CREATE OR REPLACE MACRO hk_external_referrer(ref, ref_site_id) AS (
             SELECT regexp_replace(lower(trim(domain)), '^www\.', '')
             FROM sites WHERE id = ref_site_id
         ) THEN NULL
-        ELSE hk_referrer(ref)
+        -- Inline hk_referrer's fallback: IMPORT may restore this macro first.
+        WHEN ref IS NULL OR ref = '' THEN '(Direct)'
+        WHEN ref LIKE 'http%' THEN regexp_extract(ref, 'https?://([^/]+)', 1)
+        ELSE ref
     END
 );
