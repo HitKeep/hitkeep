@@ -38,7 +38,7 @@ Start operations return accepted or reused state immediately. Poll `hk_dev_statu
 - Use `$hitkeep-qa` for gate selection, execution, investigation, and completion evidence.
 - Use `$hitkeep-i18n` when user-visible dashboard language or localized formatting changes.
 - Load only the relevant reference below for implementation guidance. Do not create or load area-specific HitKeep skills alongside this one.
-- Use one discovery owner per question. If Gortex has localized the exact files or symbols, do not delegate the same discovery. Use subagents only for independently executable work that can proceed in parallel or an explicitly requested independent review; do not reactivate a completed agent merely to read known text or repeat an established conclusion.
+- Use one discovery owner per question. If the exact files or symbols are already known, do not delegate the same discovery. Use subagents only for independently executable work that can proceed in parallel or an explicitly requested independent review; do not reactivate a completed agent merely to read known text or repeat an established conclusion.
 
 ## Implementation References
 
