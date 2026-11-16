@@ -1,4 +1,5 @@
 {
+  "always-update": true,
   "draft": true,
   "prerelease": false,
   "force-tag-creation": true,

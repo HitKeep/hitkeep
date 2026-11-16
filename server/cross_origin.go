@@ -13,6 +13,8 @@ func newCrossOriginProtection() *http.CrossOriginProtection {
 		"POST /ingest/web-vitals",
 		"POST /oauth/token",
 		"POST /oauth/revoke",
+		// Apple posts cross-site; receipt resume still requires the original browser cookie.
+		"POST /api/auth/social/apple/callback",
 	} {
 		protection.AddInsecureBypassPattern(pattern)
 	}

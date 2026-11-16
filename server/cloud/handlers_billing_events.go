@@ -39,6 +39,28 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 	}
 
 	tenantID, _ := tenantIDFromStripeEvent(event)
+	var references struct {
+		ID           string              `json:"id"`
+		Customer     stripeExpandableRef `json:"customer"`
+		Subscription stripeExpandableRef `json:"subscription"`
+	}
+	if event.Data != nil {
+		if err := json.Unmarshal(event.Data.Raw, &references); err != nil {
+			return fmt.Errorf("decode billing event references: %w", err)
+		}
+	}
+	subscriptionID := references.Subscription.ID
+	if strings.HasPrefix(string(event.Type), "customer.subscription.") {
+		subscriptionID = references.ID
+	}
+	removed, err := h.ctx.Store.IsRemovedCloudAccount(ctx, tenantID, references.Customer.ID, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("resolve billing closure state: %w", err)
+	}
+	if removed {
+		return nil
+	}
+
 	inserted, err := h.ctx.Store.CreateCloudBillingEvent(ctx, database.CloudBillingEvent{
 		StripeEventID: event.ID,
 		TenantID:      tenantID,
@@ -151,6 +173,13 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 	}
 
 	if tenantID != uuid.Nil {
+		removed, err := h.ctx.Store.IsRemovedCloudAccount(ctx, tenantID, "", "")
+		if err != nil {
+			return fmt.Errorf("resolve completed billing closure: %w", err)
+		}
+		if removed {
+			return nil
+		}
 		if account, err := h.ctx.Store.GetCloudBillingAccount(ctx, tenantID); err == nil && account != nil && account.SubscriptionStatus == database.CloudSubscriptionStatusActive {
 			if _, err := h.ctx.Store.RecordCloudConversionEvent(ctx, database.CloudConversionEvent{
 				TenantID:        tenantID,
@@ -306,14 +335,23 @@ func checkoutCancelURL(conf *config.Config) string {
 	return appurl.Path(conf.PublicURL, "/admin/team?checkout=canceled")
 }
 
-func issueLoginSession(w http.ResponseWriter, conf *config.Config, userID uuid.UUID) error {
+func issueLoginSession(ctx context.Context, w http.ResponseWriter, c *shared.Context, userID uuid.UUID) error {
+	user, err := c.Store.GetUserByID(ctx, userID)
+	if err != nil {
+		return errors.New("human account unavailable")
+	}
+	removing, err := c.Store.AccountRemovalStarted(ctx, userID)
+	if err != nil || user == nil || removing {
+		return errors.New("human account unavailable")
+	}
+	conf := c.Config
 	duration := conf.AuthSessionDuration()
 	token, _, err := authcore.GenerateTokenWithDuration(conf.JWTSecret, conf.PublicURL, userID, duration)
 	if err != nil {
 		return fmt.Errorf("generate auth token: %w", err)
 	}
 
-	isSecure := strings.HasPrefix(conf.PublicURL, "https://")
+	isSecure := authcore.CookieSecure(conf.PublicURL)
 	authcore.SetTokenCookieWithDuration(w, token, isSecure, duration)
 	return nil
 }

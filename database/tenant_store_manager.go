@@ -55,12 +55,19 @@ type TenantStoreManager struct {
 
 	maintenanceCtx context.Context
 
-	compaction  *CompactionOptions
-	fatalErrors chan error
+	compaction                     *CompactionOptions
+	fatalErrors                    chan error
+	accountDeletionProviderRevoker func(context.Context, uuid.UUID) []api.AccountDeletionProviderRevocation
 }
 
 // TenantStoreManagerOption configures a TenantStoreManager.
 type TenantStoreManagerOption func(*TenantStoreManager)
+
+// WithAccountDeletionProviderRevoker binds the configured provider service before
+// startup recovery or HTTP handlers can discard personal identity credentials.
+func WithAccountDeletionProviderRevoker(revoke func(context.Context, uuid.UUID) []api.AccountDeletionProviderRevocation) TenantStoreManagerOption {
+	return func(m *TenantStoreManager) { m.accountDeletionProviderRevoker = revoke }
+}
 
 // WithTenantCompaction rewrites a tenant's database file on lazy open when
 // its share of free blocks exceeds the given thresholds, returning space
@@ -320,6 +327,12 @@ func (m *TenantStoreManager) SyncAllTenants(ctx context.Context) error {
 // DeleteSite removes tenant-local analytics data first, then deletes the
 // shared control-plane records.
 func (m *TenantStoreManager) DeleteSite(ctx context.Context, siteID uuid.UUID) error {
+	m.shared.lifecycleMu.Lock()
+	defer m.shared.lifecycleMu.Unlock()
+	return m.deleteSite(ctx, siteID)
+}
+
+func (m *TenantStoreManager) deleteSite(ctx context.Context, siteID uuid.UUID) error {
 	analyticsStore, _, err := m.ResolveSiteStore(ctx, siteID)
 	if err != nil {
 		return err
@@ -338,6 +351,12 @@ func (m *TenantStoreManager) DeleteSite(ctx context.Context, siteID uuid.UUID) e
 }
 
 func (m *TenantStoreManager) DeleteSiteWithWebhookEvent(ctx context.Context, siteID uuid.UUID, event WebhookEventInput) ([]WebhookDeliveryJob, error) {
+	m.shared.lifecycleMu.Lock()
+	defer m.shared.lifecycleMu.Unlock()
+	return m.deleteSiteWithWebhookEvent(ctx, siteID, event)
+}
+
+func (m *TenantStoreManager) deleteSiteWithWebhookEvent(ctx context.Context, siteID uuid.UUID, event WebhookEventInput) ([]WebhookDeliveryJob, error) {
 	analyticsStore, _, err := m.ResolveSiteStore(ctx, siteID)
 	if err != nil {
 		return nil, err
@@ -419,6 +438,23 @@ func (m *TenantStoreManager) TransferSiteWithQuota(ctx context.Context, siteID, 
 }
 
 func (m *TenantStoreManager) transferSite(ctx context.Context, siteID, destinationTenantID uuid.UUID, maxSites int, auditEntries ...AuditEntryParams) error {
+	m.shared.lifecycleMu.Lock()
+	defer m.shared.lifecycleMu.Unlock()
+	for _, audit := range auditEntries {
+		if audit.ActorID != uuid.Nil {
+			if err := m.shared.requireAccountNotRemoving(ctx, audit.ActorID); err != nil {
+				return err
+			}
+		}
+	}
+	closed, err := m.shared.IsClosedCloudAccount(ctx, destinationTenantID, "", "")
+	if err != nil {
+		return err
+	}
+	if closed {
+		return ErrAccountDeletionBlocked
+	}
+
 	sourceTenantID, err := m.shared.GetSiteTenantID(ctx, siteID)
 	if err != nil {
 		return fmt.Errorf("resolve source tenant for site %s: %w", siteID, err)
@@ -482,7 +518,7 @@ func (m *TenantStoreManager) transferSite(ctx context.Context, siteID, destinati
 		}
 	}
 
-	if err := m.shared.TransferSiteTeamWithAudit(ctx, siteID, destinationTenantID, searchConsoleMapping != nil, auditEntries); err != nil {
+	if err := m.shared.transferSiteTeamWithAudit(ctx, siteID, destinationTenantID, searchConsoleMapping != nil, auditEntries); err != nil {
 		return fmt.Errorf("update shared site transfer records: %w", err)
 	}
 	return m.SyncSite(ctx, siteID)

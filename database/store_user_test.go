@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"hitkeep/auth"
 )
 
 func TestDeleteUserBlocksSoleOwnerDeletion(t *testing.T) {
@@ -79,6 +81,10 @@ func TestDeleteUserAllowsDeletionWhenAnotherOwnerExists(t *testing.T) {
 	site, err := store.CreateSite(ctx, ownerID, "delete-user-success.test")
 	if err != nil {
 		t.Fatalf("create site: %v", err)
+	}
+
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := store.DeleteUser(ctx, ownerID); err != nil {
@@ -159,6 +165,10 @@ func TestDeleteUserRemovesLegacyAuthStateRows(t *testing.T) {
 		t.Fatalf("insert legacy passkey row: %v", err)
 	}
 
+	if err := store.UpdateInstanceRole(ctx, coOwnerID, auth.InstanceOwner, ownerID); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := store.DeleteUser(ctx, ownerID); err != nil {
 		t.Fatalf("delete user: %v", err)
 	}
@@ -169,5 +179,168 @@ func TestDeleteUserRemovesLegacyAuthStateRows(t *testing.T) {
 	}
 	if user != nil {
 		t.Fatalf("expected user to be deleted, got %+v", user)
+	}
+}
+
+func TestDeleteUserRemovesSSOIdentitiesAndPreservesOtherAccounts(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	ownerID, err := store.CreateUser(ctx, "owner@sso-delete.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	teamID, err := store.GetActiveTenantID(ctx, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTeam, err := store.CreateTenant(ctx, ownerID, "Other SSO team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.ResolveSSOUser(ctx, ResolveSSOUserInput{
+		TeamID: teamID, IssuerURL: "https://id.example.test", Subject: "deleted",
+		Email: "deleted@sso-delete.test", PasswordHash: "hash",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.ResolveSSOUser(ctx, ResolveSSOUserInput{
+		TeamID: otherTeam.ID, IssuerURL: "https://id.example.test", Subject: "retained",
+		Email: "owner@sso-delete.test", PasswordHash: "unused",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.UserID != ownerID {
+		t.Fatal("expected existing owner identity")
+	}
+	rememberToken, err := store.CreateRememberMeToken(ctx, deleted.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteUser(ctx, deleted.UserID); err != nil {
+		t.Fatalf("delete SSO user without a partial foreign-key failure: %v", err)
+	}
+	if user, err := store.GetUserByID(ctx, deleted.UserID); err != nil || user != nil {
+		t.Fatalf("deleted user = %v, error = %v", user, err)
+	}
+	if user, err := store.GetUserByID(ctx, ownerID); err != nil || user == nil || user.Password != "hash" {
+		t.Fatalf("retained user = %v, error = %v", user, err)
+	}
+	if userID, err := store.ValidateRememberMeToken(ctx, rememberToken); err != nil || userID == deleted.UserID {
+		t.Fatalf("deleted remember credential still resolves: %v, %v", userID, err)
+	}
+	for _, check := range []struct {
+		query string
+		args  []any
+		want  int
+	}{
+		{"SELECT COUNT(*) FROM sso_identities WHERE user_id = ?", []any{deleted.UserID}, 0},
+		{"SELECT COUNT(*) FROM sso_identities WHERE user_id = ? AND tenant_id = ? AND subject = 'retained'", []any{ownerID, otherTeam.ID}, 1},
+		{"SELECT COUNT(*) FROM tenants WHERE id IN (?, ?)", []any{teamID, otherTeam.ID}, 2},
+		{"SELECT COUNT(*) FROM tenant_members WHERE user_id = ? AND tenant_id IN (?, ?) AND role = 'owner'", []any{ownerID, teamID, otherTeam.ID}, 2},
+	} {
+		var got int
+		if err := store.DB().QueryRowContext(ctx, check.query, check.args...).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != check.want {
+			t.Errorf("%s: got %d, want %d", check.query, got, check.want)
+		}
+	}
+}
+
+func TestUserProfileForeignKeyMetadataCoversLiveSchema(t *testing.T) {
+	store := setupTenantStore(t)
+	rows, err := store.DB().QueryContext(t.Context(), `SELECT table_name,unnest(constraint_column_names) FROM duckdb_constraints() WHERE constraint_type='FOREIGN KEY' AND referenced_table='users'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			t.Fatal(err)
+		}
+		covered := false
+		for _, reference := range userFKReferences {
+			if reference.table == table && reference.column == column {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("profile shadow metadata missing live user FK %s.%s", table, column)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUserProfileEmailPreservesRecoveryCodesAndAuditReferences(t *testing.T) {
+	store := setupTenantStore(t)
+	ctx := t.Context()
+	userID, err := store.CreateUser(ctx, "profile-recovery@example.test", "password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnableUserTOTP(ctx, userID, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceUserRecoveryCodes(ctx, userID, []string{"original-recovery-hash"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendInstanceAuditEntry(ctx, InstanceAuditParams{ActorID: userID, Action: "auth.login", Outcome: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateUserProfile(ctx, userID, "profile-recovery-updated@example.test", "Given", "Family"); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := store.GetRecoveryCodeStatus(ctx, userID); err != nil || status.Remaining != 1 {
+		t.Fatalf("recovery codes=%+v err=%v", status, err)
+	}
+	user, err := store.GetUserByID(ctx, userID)
+	if err != nil || user == nil || user.Email != "profile-recovery-updated@example.test" {
+		t.Fatalf("profile=%+v err=%v", user, err)
+	}
+	var audits int
+	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM instance_audit_log WHERE actor_id=? AND action='auth.login'`, userID).Scan(&audits); err != nil || audits != 1 {
+		t.Fatalf("audit actor lost: count=%d err=%v", audits, err)
+	}
+	var shadows int
+	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email LIKE '__shadow_%@hitkeep.invalid'`).Scan(&shadows); err != nil || shadows != 0 {
+		t.Fatalf("shadow users=%d err=%v", shadows, err)
+	}
+}
+
+func TestDeleteUserPreservesLastInstanceOwnerAndSites(t *testing.T) {
+	s := setupTenantStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateUser(ctx, "last-operator@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateUser(ctx, "team-only-owner@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.GetDefaultTenantID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTeamMember(ctx, team, other, TenantRoleOwner, owner); err != nil {
+		t.Fatal(err)
+	}
+	site, err := s.CreateSite(ctx, owner, "last-owner-site.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, owner); !errors.Is(err, ErrLastInstanceOwner) {
+		t.Fatalf("last owner deletion=%v", err)
+	}
+	if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil {
+		t.Fatalf("site removed before owner guard: %+v err=%v", current, err)
 	}
 }

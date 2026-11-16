@@ -14,14 +14,29 @@
     width: 1.25rem;
 }
 
-.hk-social-provider-mark--github-dark {
+.hk-social-provider-mark--github-dark,
+.hk-social-provider-mark--apple-dark {
     display: none;
 }
 
-:host-context(.p-dark) .hk-social-provider-mark--github-light {
+:host-context(.p-dark) .hk-social-provider-mark--github-light,
+:host-context(.p-dark) .hk-social-provider-mark--apple-light {
     display: none;
 }
 
-:host-context(.p-dark) .hk-social-provider-mark--github-dark {
+:host-context(.p-dark) .hk-social-provider-mark--github-dark,
+:host-context(.p-dark) .hk-social-provider-mark--apple-dark {
     display: block;
+}
+
+:host([data-provider-icon="apple"]) {
+    flex-basis: 1.875rem;
+    height: 1.875rem;
+    width: 1.875rem;
+}
+
+.hk-social-provider-mark--apple-light,
+.hk-social-provider-mark--apple-dark {
+    height: 1.875rem;
+    width: 1.875rem;
 }

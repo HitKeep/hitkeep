@@ -21,6 +21,9 @@ func TestLoadCatalogSettingSources(t *testing.T) {
 	cloudSettings := 0
 	for _, setting := range Catalog().Settings {
 		t.Run(setting.Field, func(t *testing.T) {
+			if strings.HasPrefix(setting.Field, "PasskeyAndroid") {
+				t.Skip("paired trust settings have dedicated source/validation coverage in TestLoadAndroidPasskeySources")
+			}
 			env := fixedGeneratedEnv(setting)
 			absent, _ := loadForTest(t, nil, env, "")
 			if setting.CloudOnly {

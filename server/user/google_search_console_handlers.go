@@ -52,6 +52,9 @@ func (h *handler) handleGetGoogleSearchConsoleStatus() http.HandlerFunc {
 
 func (h *handler) handleConnectGoogleSearchConsole() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(shared.NativeManagementHeader)) > 0 {
+			shared.NativeManagementHeaders(w)
+		}
 		userID := shared.GetUserIDFromContext(r)
 		if userID == uuid.Nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -76,8 +79,23 @@ func (h *handler) handleConnectGoogleSearchConsole() http.HandlerFunc {
 		if !ok {
 			return
 		}
+		management, valid := shared.NativeManagementReference(r)
+		if !valid {
+			http.Error(w, "Invalid management reference", 400)
+			return
+		}
+		if management != "" && !h.ctx.NativeManagementOperation(w, r, management, shared.NativeManagement{Action: "search_console_connect", TeamID: teamID}, "", true) {
+			return
+		}
 		state := h.ctx.AuthState.CreateGoogleSearchConsoleOAuthState(userID, teamID, returnPath, time.Now().UTC().Add(10*time.Minute))
 
+		if management != "" {
+			h.ctx.AuthState.BindGoogleSearchConsoleManagement(state, management)
+			if !h.ctx.AuthState.BindNativeManagementOperation(management, state) {
+				http.Error(w, "Management authorization unavailable", http.StatusForbidden)
+				return
+			}
+		}
 		client := h.googleSearchConsoleClient()
 		authURL, err := client.AuthCodeURL(state, h.googleSearchConsoleRedirectURL())
 		if err != nil {
@@ -445,11 +463,18 @@ func (h *handler) handleGoogleSearchConsoleCallback() http.HandlerFunc {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if !h.completeGoogleSearchConsoleConnection(w, r, state.TeamID, userID, code) {
+		if state.NativeManagement != "" && !h.ctx.NativeManagementOperation(w, r, state.NativeManagement, shared.NativeManagement{Action: "search_console_connect", TeamID: state.TeamID}, r.URL.Query().Get("state"), false) {
+			return
+		}
+		if !h.completeGoogleSearchConsoleConnection(w, r, state, code) {
 			return
 		}
 
-		http.Redirect(w, r, sanitizeGoogleSearchConsoleReturnPath(state.ReturnPath), http.StatusFound)
+		if state.NativeManagement != "" {
+			http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, shared.NativeManagementReturnPath(state.NativeManagement)), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, appurl.Path(h.ctx.Config.PublicURL, sanitizeGoogleSearchConsoleReturnPath(state.ReturnPath)), http.StatusFound)
 	}
 }
 
@@ -457,6 +482,9 @@ func (h *handler) validateGoogleSearchConsoleCallback(w http.ResponseWriter, r *
 	rawState := r.URL.Query().Get("state")
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	state, ok := h.ctx.AuthState.ConsumeGoogleSearchConsoleOAuthState(rawState)
+	if state.NativeManagement != "" {
+		shared.NativeManagementHeaders(w)
+	}
 	if !ok || state.UserID != userID || state.TeamID == uuid.Nil {
 		http.Error(w, "Invalid OAuth state", http.StatusBadRequest)
 		return shared.GoogleSearchConsoleOAuthState{}, "", false
@@ -469,7 +497,8 @@ func (h *handler) validateGoogleSearchConsoleCallback(w http.ResponseWriter, r *
 	return state, code, true
 }
 
-func (h *handler) completeGoogleSearchConsoleConnection(w http.ResponseWriter, r *http.Request, teamID, userID uuid.UUID, code string) bool {
+func (h *handler) completeGoogleSearchConsoleConnection(w http.ResponseWriter, r *http.Request, state shared.GoogleSearchConsoleOAuthState, code string) bool {
+	teamID, userID := state.TeamID, state.UserID
 	token, err := h.googleSearchConsoleClient().ExchangeCode(r.Context(), code, h.googleSearchConsoleRedirectURL())
 	if err != nil {
 		h.appendGoogleSearchConsoleAudit(r, teamID, userID, "google_search_console.connect_failed", "failure", "exchange_failed")
@@ -490,7 +519,27 @@ func (h *handler) completeGoogleSearchConsoleConnection(w http.ResponseWriter, r
 		http.Error(w, "Could not store Google Search Console connection", http.StatusInternalServerError)
 		return false
 	}
-	if err := h.ctx.Store.UpsertGoogleSearchConsoleConnectionWithAudit(r.Context(), databaseGoogleSearchConsoleConnectionInput(teamID, userID, token, time.Now().UTC()), audit); err != nil {
+	release := h.ctx.Store.SerializeGoogleSearchConsoleConnection()
+	defer release()
+	available, err := h.ctx.HumanSessionUserAvailable(r.Context(), userID)
+	role, roleErr := h.ctx.Store.GetTenantRole(r.Context(), teamID, userID)
+	if err != nil || !available || roleErr != nil || !canManageTeam(role) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	persist := func() error {
+		return h.ctx.Store.UpsertGoogleSearchConsoleConnectionWithAudit(r.Context(), databaseGoogleSearchConsoleConnectionInput(teamID, userID, token, time.Now().UTC()), audit)
+	}
+	if state.NativeManagement != "" {
+		err = h.ctx.CommitNativeManagementConnection(r, state.NativeManagement, teamID, r.URL.Query().Get("state"), persist)
+	} else {
+		err = persist()
+	}
+	if errors.Is(err, shared.ErrNativeManagementUnavailable) || errors.Is(err, shared.ErrNativeAccountMissing) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	if err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to store Google Search Console connection", "error", err, "team_id", teamID)
 		http.Error(w, "Could not store Google Search Console connection", http.StatusInternalServerError)
 		return false

@@ -165,7 +165,7 @@ export class SettingsSecurity {
             .unlinkSocial(provider, this.form.currentPassword().value())
             .pipe(finalize(() => this.socialLoading.set(null)))
             .subscribe({
-                next: () => {
+                next: (response) => {
                     this.securityStatus.update((current) =>
                         current
                             ? {
@@ -174,7 +174,7 @@ export class SettingsSecurity {
                               }
                             : current
                     );
-                    this.socialSuccess.set('settings.security.social.unlinked');
+                    this.socialSuccess.set(response && response.provider_revocations.some((entry) => entry.status === 'manual_revocation_required') ? 'settings.security.social.appleManualRevocation' : 'settings.security.social.unlinked');
                 },
                 error: (err) => {
                     this.socialError.set(err?.error?.code === 'social_last_login_method' ? 'settings.security.social.errors.lastMethod' : 'settings.security.social.errors.unlinkFailed');

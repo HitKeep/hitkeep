@@ -1231,7 +1231,8 @@
     }
   },
   "social": {
-    "continueWith": { "google": "Continuer avec Google", "github": "Continuer avec GitHub", "microsoft": "Continuer avec Microsoft" },
+    "continueWith": { "google": "Continuer avec Google", "github": "Continuer avec GitHub", "microsoft": "Continuer avec Microsoft",
+      "apple": "Continuer avec Apple" },
     "signupMethods": "Méthodes d’inscription sociale",
     "confirmEmailSubtitle": "Confirmez le compte HitKeep auquel cette identité Microsoft doit accéder.",
     "confirmEmailPrompt": "Les adresses Microsoft peuvent changer. Vérifiez l’adresse HitKeep avant l’envoi du lien de confirmation.",
@@ -1273,6 +1274,8 @@
         "title": "Connexion sociale", "description": "Associez les comptes fournisseurs utilisables pour vous connecter à HitKeep.", "empty": "Aucun fournisseur de connexion sociale n’est associé.",
         "linkedDate": "Associé", "lastUsed": "Dernière utilisation", "connectAction": "Associer {{provider}}", "unlinkAction": "Dissocier",
         "passwordConfirmationHint": "Saisissez votre mot de passe actuel dans la section mot de passe avant de dissocier votre seul fournisseur social.", "linked": "Fournisseur associé.", "unlinked": "Fournisseur dissocié.",
+        "appleManualRevocation": "Apple a été dissocié. Révoquez l’accès de HitKeep dans votre compte Apple pour supprimer complètement la connexion.",
+        "appleManageAccess": "Gérer l’accès Apple",
         "errors": { "linkFailed": "Impossible d’associer ce fournisseur.", "unlinkFailed": "Impossible de dissocier ce fournisseur.", "lastMethod": "Ajoutez un autre fournisseur social ou une clé d’accès, ou confirmez un mot de passe activé." }
       },
       "twoFactor": {
@@ -1343,6 +1346,35 @@
       }
     },
     "user": {
+      "deletion": {
+        "title": "Supprimer le compte",
+        "description": "Supprimer définitivement votre identité, vos identifiants personnels et vos rapports personnels. Cette action est irréversible.",
+        "terms": "Les équipes partagées et leurs analyses restent accessibles à leurs membres. La fermeture explicite d’une équipe Cloud utilisée uniquement par vous supprime immédiatement ses analyses et arrête le renouvellement de l’abonnement à la fin de la période payée. Les documents comptables et légaux requis sont conservés.",
+        "exportFirst": "Exporter d’abord vos analyses",
+        "reviewAction": "Examiner la suppression du compte",
+        "teamCloses": "Cette équipe et toutes ses analyses seront définitivement supprimées.",
+        "teamSurvives": "Cette équipe, ses analyses et ses identifiants d’équipe seront conservés.",
+        "successorLabel": "Propriétaire actuel de l’équipe qui conservera la propriété des sites",
+        "successorPlaceholder": "Sélectionner un propriétaire actuel",
+        "closeTeam": "Fermer {{team}} et supprimer définitivement toutes ses analyses. Arrêter les renouvellements en fin de période.",
+        "lastOperator": "Désignez un autre propriétaire de l’instance avant de supprimer votre compte.",
+        "handoverRequired": "Pour {{team}}, transférez la propriété unique dans les paramètres des membres ou choisissez explicitement la fermeture si l’équipe n’a aucun autre membre.",
+        "successorRequired": "Choisissez un propriétaire actuel de {{team}} pour conserver la propriété des sites.",
+        "invalidSuccessor": "Le successeur doit déjà être propriétaire de {{team}}.",
+        "policyBlocked": "Cette équipe ne peut pas être fermée par la suppression du compte.",
+        "manageOwnership": "Gérer la propriété de l’équipe",
+        "reauthDescription": "Reconnectez-vous avec une méthode liée et validez vos facteurs de vérification configurés. Revenir ici ne supprime rien.",
+        "reauthenticate": "S’authentifier à nouveau",
+        "finalConfirmation": "Je confirme la suppression de mon compte et la suppression immédiate de chaque équipe individuelle et de ses données explicitement sélectionnées ci-dessus. Je comprends les conditions de conservation comptable et de résiliation en fin de période.",
+        "deleteAction": "Supprimer définitivement mon compte",
+        "reauthRequired": "Reconnectez-vous pour vérifier cette suppression.",
+        "consequencesChanged": "Vos équipes ou votre facturation ont changé. Examinez à nouveau les conséquences.",
+        "unavailable": "La fermeture du compte est temporairement indisponible. Réessayez ou contactez votre opérateur si votre accès a déjà pris fin.",
+        "completedTitle": "Compte supprimé",
+        "completedDescription": "Votre compte HitKeep a été supprimé. Votre session et vos données de compte locales ont été effacées.",
+        "manualApple": "La révocation de l’autorisation Apple n’a pas pu être confirmée. Vous pouvez supprimer HitKeep dans Connexion avec Apple, dans les réglages de votre compte Apple.",
+        "manageApple": "Gérer Connexion avec Apple"
+      },
       "title": "Paramètres",
       "subtitle": "Gérez la sécurité et les préférences de votre compte.",
       "profile": {
@@ -2007,6 +2039,8 @@
       "disable2faSuccess": "La MFA a été désactivée pour {{email}}."
     },
     "confirmDisable2fa": "Désactiver toutes les méthodes MFA pour {{email}} ? Cela invalidera aussi les sessions mémorisées.",
+    "confirmForceDeleteUser": "Supprimer définitivement {{email}} et archiver ces équipes :\n{{teams}}\nSupprimer ces sites et toutes leurs données analytiques :\n{{sites}}\nCette action est irréversible.",
+    "deleteUserReviewSite": "{{domain}} — site {{site}}, équipe {{team}}, propriétaire {{owner}}",
     "confirmDeleteUser": "Supprimer l'utilisateur {{email}} ?",
     "confirmDeleteSite": "Supprimer le site {{domain}} ? Cette action est irréversible.",
     "confirmDeleteTeam": "Supprimer définitivement l'équipe \"{{name}}\" ? Cette action est irréversible.",
@@ -2403,6 +2437,7 @@
         "social_google": { "label": "Connexion Google" },
         "social_github": { "label": "Connexion GitHub" },
         "social_microsoft": { "label": "Connexion Microsoft" },
+        "social_apple": { "label": "Connexion avec Apple" },
         "social_signup": { "label": "Inscription sociale" },
         "ai": {
           "label": "Passerelle IA"
@@ -4079,5 +4114,24 @@
     "readOnly": "Statistiques en lecture seule",
     "connectionError": "Impossible de se connecter à HitKeep. Réessayez ou reconnectez HitKeep dans WordPress.",
     "analyticsNavigation": "Pages de statistiques"
+  },
+  "nativeAuth": {
+      "management": {
+          "title": "Gérer votre compte HitKeep",
+          "authority": "Continuez uniquement si vous avez demandé cette modification précise dans l’application HitKeep. La connexion seule ne l’applique pas.",
+          "passkey_register": "Enregistrer une clé d’accès",
+          "social_link": "Associer un compte social",
+          "search_console_connect": "Connecter Google Search Console",
+          "approve": "Autoriser cette action",
+          "return": "Revenir à l’application",
+          "completed": "La modification a été enregistrée. Revenez à l’application pour actualiser votre compte.",
+          "restart": "Cette action n’a pas pu être vérifiée. Revenez à l’application et actualisez son état avant de recommencer."
+      },
+      "accountDeletionPurpose": "Cette connexion prépare la suppression du compte. Vous devez vérifier les conséquences et confirmer séparément la suppression dans l’application.",
+      "title": "Se connecter à l’application HitKeep",
+      "authority": "L’application aura un accès complet à votre compte, y compris pour modifier les données et les paramètres. Vos autorisations d’équipe et les contrôles de sécurité restent applicables.",
+      "publicClient": "Le nom public ne vérifie pas l’application installée. Continuez uniquement si vous avez lancé cette connexion dans l’application HitKeep.",
+      "approve": "Se connecter à l’application",
+      "restart": "Cette demande a expiré ou n’a pas pu être vérifiée. Relancez la connexion dans l’application."
   }
 }

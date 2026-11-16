@@ -231,6 +231,8 @@ func (s *Store) GetTenant(ctx context.Context, tenantID uuid.UUID) (*api.Team, e
 }
 
 func (s *Store) UpdateTenant(ctx context.Context, tenantID uuid.UUID, name, logoURL string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("team name cannot be empty")
@@ -247,6 +249,11 @@ func (s *Store) UpdateTenant(ctx context.Context, tenantID uuid.UUID, name, logo
 }
 
 func (s *Store) CreateTenant(ctx context.Context, creatorID uuid.UUID, name, logoURL string) (*api.Team, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.requireAccountNotRemoving(ctx, creatorID); err != nil {
+		return nil, err
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("team name cannot be empty")

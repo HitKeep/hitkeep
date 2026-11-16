@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"uuid"
 
@@ -60,17 +61,23 @@ type OAuthPending struct {
 }
 
 // OAuthTransaction is one protocol operation, including its validation reads.
-type OAuthTransaction struct{ tx *sql.Tx }
+type OAuthTransaction struct {
+	tx      *sql.Tx
+	release func()
+}
 
 func (s *Store) BeginOAuth(ctx context.Context) (*OAuthTransaction, error) {
+	s.lifecycleMu.Lock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		s.lifecycleMu.Unlock()
 		return nil, oauthStoreError(err)
 	}
-	return &OAuthTransaction{tx: tx}, nil
+	return &OAuthTransaction{tx: tx, release: sync.OnceFunc(s.lifecycleMu.Unlock)}, nil
 }
-func (o *OAuthTransaction) Commit() error { return oauthStoreError(o.tx.Commit()) }
+func (o *OAuthTransaction) Commit() error { defer o.release(); return oauthStoreError(o.tx.Commit()) }
 func (o *OAuthTransaction) Rollback() error {
+	defer o.release()
 	err := o.tx.Rollback()
 	if errors.Is(err, sql.ErrTxDone) {
 		return nil

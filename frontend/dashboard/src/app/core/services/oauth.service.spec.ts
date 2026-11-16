@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import { DOCUMENT } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
+import { of, throwError } from 'rxjs';
 import { APPLICATION_ERROR_STATE_KEY } from '@services/application-error-navigation.service';
 
 import { OAuthService } from './oauth.service';
@@ -17,7 +19,10 @@ describe('OAuthService', () => {
         http = TestBed.inject(HttpTestingController);
     });
 
-    afterEach(() => http.verify());
+    afterEach(() => {
+        http.verify();
+        vi.restoreAllMocks();
+    });
 
     it('reads cookie-bound consent without OAuth parameters or credentials', () => {
         service.consent().subscribe();
@@ -58,6 +63,14 @@ describe('OAuthService', () => {
         expect(navigate).toHaveBeenCalledWith(target);
     });
 
+    it('keeps deletion proof on its frozen return without consulting delegated continuation', () => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const target = `/settings?deletion_attempt=${'a'.repeat(43)}`;
+        service.continueAfterAuthentication(target);
+        http.expectNone('/api/oauth/continuation');
+        expect(navigate).toHaveBeenCalledWith(target);
+    });
+
     it('keeps continuation outages retryable without copying backend bodies into navigation', () => {
         const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
         service.continueAfterAuthentication('/dashboard');
@@ -66,6 +79,31 @@ describe('OAuthService', () => {
         expect(TestBed.inject(Router).serializeUrl(url as never)).toBe('/error');
         expect(extras?.state?.[APPLICATION_ERROR_STATE_KEY]).toEqual({ version: 1, kind: 'server', context: 'dashboard-bootstrap', returnUrl: '/oauth/consent', status: 503 });
         expect(service.resuming()).toBe(false);
+    });
+
+    it.each([
+        ['consent', '/', 'pending'],
+        ['manage', '/prefix/', 'unavailable']
+    ])('loads the native %s document under %s despite %s delegated continuation', (page, base, mode) => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const assign = vi.fn();
+        const document = TestBed.inject(DOCUMENT);
+        vi.spyOn(document, 'defaultView', 'get').mockReturnValue({ location: { assign } } as unknown as Document['defaultView']);
+        vi.spyOn(document, 'querySelector').mockReturnValue({ getAttribute: () => base } as unknown as Element);
+        const continuation = vi.spyOn(service, 'continuation').mockReturnValue(mode === 'pending' ? of({ pending: true }) : throwError(() => ({ status: 503 })));
+        const target = `/auth/native/${page}?request=${'a'.repeat(43)}`;
+        service.continueAfterAuthentication(target);
+        expect(assign).toHaveBeenCalledWith(`${base}${target.slice(1)}`);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(continuation).not.toHaveBeenCalled();
+        expect(service.resuming()).toBe(false);
+    });
+
+    it('keeps delegated continuation checks for a forged native-looking return', () => {
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        service.continueAfterAuthentication(`/auth/native/consent?request=${'a'.repeat(43)}&other=1`);
+        http.expectOne('/api/oauth/continuation').flush({ pending: true });
+        expect(navigate).toHaveBeenCalledWith('/oauth/consent');
     });
 
     it('reads the current users grants and encodes the revoked grant ID', () => {

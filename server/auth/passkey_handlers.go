@@ -30,6 +30,7 @@ type passkeyLoginStartResponse struct {
 }
 
 type passkeyLoginFinishRequest struct {
+	ReturnURL      string                               `json:"return_url,omitempty"`
 	ChallengeToken string                               `json:"challenge_token"`
 	Credential     protocol.CredentialAssertionResponse `json:"credential"`
 	RememberMe     bool                                 `json:"remember_me"`
@@ -37,11 +38,27 @@ type passkeyLoginFinishRequest struct {
 
 func (h *handler) handlePasskeyLoginStart() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !decodeAuthJSON(w, r, &struct{}{}, true) {
+		var input struct {
+			ReturnURL string `json:"return_url,omitempty"`
+		}
+		if !decodeAuthJSON(w, r, &input, true) {
 			return
 		}
 
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		if !h.deletionAuthRequest(w, r, input.ReturnURL) {
+			return
+		}
+		if isDeletionReturnCandidate(input.ReturnURL) && shared.AccountDeletionHandle(input.ReturnURL) == "" {
+			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
+		if h.deletionReauthentication(input.ReturnURL) {
+			if _, ok := h.ctx.AuthState.AccountDeletionSubject(input.ReturnURL, shared.AccountDeletionIssuer(h.ctx.Config.PublicURL)); !ok {
+				nativeError(w, r, 400, "invalid_grant")
+				return
+			}
+		}
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey login", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -65,7 +82,7 @@ func (h *handler) handlePasskeyLoginStart() http.HandlerFunc {
 			return
 		}
 		challengeID := h.ctx.AuthState.CreatePasskeyLoginChallenge(session.Challenge, database.CreateLoginChallengeInput{
-			Flow: "passwordless",
+			Flow: "passwordless", NativeReturnPath: input.ReturnURL,
 		}, expiresAt, session)
 
 		resp := passkeyLoginStartResponse{
@@ -105,6 +122,9 @@ func (h *handler) handlePasskeyLoginFinish() http.HandlerFunc {
 			http.Error(w, "Passkey login challenge not found", http.StatusConflict)
 			return
 		}
+		if !h.deletionAuthRequest(w, r, challenge.NativeReturnPath) {
+			return
+		}
 		h.ctx.AuthState.DeletePasskeyLoginChallenge(challengeID)
 		if time.Now().UTC().After(challenge.ExpiresAt.UTC()) {
 			http.Error(w, "Passkey login challenge expired", http.StatusGone)
@@ -115,7 +135,7 @@ func (h *handler) handlePasskeyLoginFinish() http.HandlerFunc {
 			return
 		}
 
-		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config.PublicURL, r)
+		webAuthn, err := appsecurity.NewWebAuthn(h.ctx.Config, r)
 		if err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to configure passkey login validation", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -193,7 +213,21 @@ func (h *handler) handlePasskeyLoginFinish() http.HandlerFunc {
 		if flow == "mfa" {
 			rememberMe = challenge.RememberMe
 		}
-		if err := h.issueLoginSession(r.Context(), w, userID, rememberMe); err != nil {
+		returnPath := req.ReturnURL
+		if challenge.NativeReturnPath != "" {
+			returnPath = challenge.NativeReturnPath
+		}
+		if h.deletionReauthentication(req.ReturnURL) && challenge.NativeReturnPath != req.ReturnURL {
+			nativeError(w, r, 400, "invalid_grant")
+			return
+		}
+		if flow == "mfa" {
+			returnPath = challenge.NativeReturnPath
+		}
+		if !h.bindNativeLogin(r, w, returnPath, userID) {
+			return
+		}
+		if err := h.issueVerifiedLoginSession(r, w, userID, rememberMe, returnPath); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to issue login session after passkey verification", "error", err, "user_id", userID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

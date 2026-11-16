@@ -16,6 +16,7 @@ import (
 // AuthSessionContext carries the authenticated session's lifetime, set by
 // RequireAuth for handlers that report session state.
 type AuthSessionContext struct {
+	ID        string
 	ExpiresAt time.Time
 	IssuedAt  time.Time
 }
@@ -76,6 +77,8 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		var err error
 		var apiClientAuth *database.APIClientAuth
 		var sessionCtx *AuthSessionContext
+		var restoreSession bool
+		isSecure := c.Config != nil && auth.CookieSecure(c.Config.PublicURL)
 
 		// 1. Try to validate the short-lived JWT.
 		cookie, err := r.Cookie(auth.CookieName)
@@ -92,17 +95,17 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		if err != nil || userID == uuid.Nil {
 			rememberCookie, err := r.Cookie(auth.RememberMeCookieName)
 			if err == nil {
-				userID, err = c.Store.ValidateRememberMeToken(r.Context(), rememberCookie.Value)
-				if err == nil && userID != uuid.Nil {
-					// Valid remember me token! Issue a new JWT.
-					duration := c.Config.AuthSessionDuration()
-					newToken, expiresAt, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
-					if err == nil {
-						isSecure := strings.HasPrefix(c.Config.PublicURL, "https://")
-						auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
-						sessionCtx = &AuthSessionContext{ExpiresAt: expiresAt.UTC(), IssuedAt: time.Now().UTC()}
-					}
+				if c.Store == nil {
+					http.Error(w, "Service not available", http.StatusServiceUnavailable)
+					return
 				}
+				userID, err = c.Store.ValidateRememberMeToken(r.Context(), rememberCookie.Value)
+				if err != nil {
+					LoggerFromContext(r.Context()).Error("Failed to validate remember me token", "error", err)
+					http.Error(w, "Service not available", http.StatusServiceUnavailable)
+					return
+				}
+				restoreSession = userID != uuid.Nil
 			}
 		}
 
@@ -119,8 +122,38 @@ func (c *Context) RequireAuth(allowAPIKey bool, next http.HandlerFunc) http.Hand
 		}
 
 		if userID == uuid.Nil && apiClientAuth == nil {
+			auth.ClearCookies(w, isSecure)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
+		}
+
+		if apiClientAuth == nil {
+			if c.Store == nil {
+				http.Error(w, "Service not available", http.StatusServiceUnavailable)
+				return
+			}
+			available, err := c.HumanSessionUserAvailable(r.Context(), userID)
+			if err != nil {
+				LoggerFromContext(r.Context()).Error("Failed to validate session user", "error", err)
+				http.Error(w, "Service not available", http.StatusServiceUnavailable)
+				return
+			}
+			if !available {
+				auth.ClearCookies(w, isSecure)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if restoreSession {
+				duration := c.Config.AuthSessionDuration()
+				newToken, _, err := auth.GenerateTokenWithDuration(c.Config.JWTSecret, c.Config.PublicURL, userID, duration)
+				if err == nil {
+					auth.SetTokenCookieWithDuration(w, newToken, isSecure, duration)
+					claims, validationErr := auth.ValidateTokenClaims(newToken, c.Config.JWTSecret, c.Config.PublicURL)
+					if validationErr == nil {
+						sessionCtx = authSessionContextFromClaims(claims)
+					}
+				}
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
@@ -150,7 +183,7 @@ func authSessionContextFromClaims(claims *auth.Claims) *AuthSessionContext {
 		return nil
 	}
 
-	session := &AuthSessionContext{ExpiresAt: claims.ExpiresAt.UTC()}
+	session := &AuthSessionContext{ID: claims.ID, ExpiresAt: claims.ExpiresAt.UTC()}
 	if claims.IssuedAt != nil {
 		session.IssuedAt = claims.IssuedAt.UTC()
 	}
@@ -170,4 +203,41 @@ func extractAPIClientToken(r *http.Request) string {
 	}
 
 	return strings.TrimSpace(r.Header.Get("X-Api-Key"))
+}
+
+// CurrentHumanSession validates only the current ordinary JWT, without cookie restoration or issuance.
+func (c *Context) CurrentHumanSession(r *http.Request) (uuid.UUID, *AuthSessionContext, error) {
+	if c == nil || c.Config == nil || len(r.Header.Values("Authorization")) > 0 || len(r.Header.Values("X-Api-Key")) > 0 || len(r.Header.Values("X-Hitkeep-Agent")) > 0 {
+		return uuid.Nil, nil, nil
+	}
+	cookie, err := r.Cookie(auth.CookieName)
+	if err != nil {
+		return uuid.Nil, nil, nil
+	}
+	claims, err := auth.ValidateTokenClaims(cookie.Value, c.Config.JWTSecret, c.Config.PublicURL)
+	if err != nil {
+		return uuid.Nil, nil, nil
+	}
+	available, err := c.HumanSessionUserAvailable(r.Context(), claims.UserID)
+	if err != nil || !available {
+		return uuid.Nil, nil, err
+	}
+	return claims.UserID, authSessionContextFromClaims(claims), nil
+}
+
+func (c *Context) RequireCurrentHumanSession(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, session, err := c.CurrentHumanSession(r)
+		if err != nil {
+			WriteJSON(r.Context(), w, http.StatusServiceUnavailable, map[string]string{"error": "temporarily_unavailable"})
+			return
+		}
+		if id == uuid.Nil || session == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), UserIDKey, id)
+		ctx = context.WithValue(ctx, AuthSessionKey, *session)
+		next(w, r.WithContext(ctx))
+	}
 }

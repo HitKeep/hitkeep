@@ -22,6 +22,7 @@ interface AdminSettingsTestAccess {
     openAddSiteDialog(): void;
     handleDeleteUserError(err: unknown, user: { email: string }): boolean;
     resolveDeleteErrorKey(err: unknown, fallbackKey: string): string;
+    confirmDeleteUser(user: { id: string; email: string; instance_role: string; created_at: string }): void;
     confirmDeleteSite(site: { id: string; domain: string; user_id: string; created_at: string }): void;
     deleteUserBlock(): {
         email: string;
@@ -149,6 +150,8 @@ describe('AdminSettings', () => {
                     langs: {
                         en: {
                             admin: {
+                                confirmForceDeleteUser: 'Delete {{email}} and archive teams:\n{{teams}}\nDelete sites:\n{{sites}}',
+                                deleteUserReviewSite: '{{domain}} (site {{site}}, team {{team}}, owner {{owner}})',
                                 errors: {
                                     deleteUserBlockedOwnership: 'Cannot delete {{email}} until ownership is transferred for: {{teams}}.',
                                     deleteSiteFailed: 'Could not delete site {{domain}}.',
@@ -295,6 +298,49 @@ describe('AdminSettings', () => {
         });
         expect(component.deleteUserBlockMessage()).toContain('owner@example.com');
         expect(component.deleteUserBlockMessage()).toContain('Acme, Northwind Studio');
+    });
+
+    it('requires a second exact review and sends only its hash without retrying changed consequences', () => {
+        const user = { id: '11111111-1111-4111-8111-111111111111', email: 'owner@example.test', instance_role: 'user', created_at: '' };
+        const team = '22222222-2222-4222-8222-222222222222';
+        const site = '33333333-3333-4333-8333-333333333333';
+        const review = {
+            status: 'error',
+            code: 'user_owns_teams',
+            message: 'Review',
+            consequence_hash: 'a'.repeat(64),
+            can_force: true,
+            teams: [{ id: team, name: '<b>Reviewed team</b>' }],
+            sites: [{ id: site, team_id: team, user_id: user.id, domain: 'review.example.test' }]
+        };
+        component.confirmDeleteUser(user);
+        confirmationServiceMock.confirm.mock.calls.at(-1)![0].accept();
+        const initial = httpMock.expectOne(`/api/admin/users/${user.id}`);
+        expect(initial.request.body).toBeNull();
+        initial.flush(review, { status: 409, statusText: 'Conflict' });
+        expect(confirmationServiceMock.confirm).toHaveBeenCalledTimes(2);
+        const confirm = confirmationServiceMock.confirm.mock.calls.at(-1)![0];
+        expect(confirm.message).toContain('&lt;b&gt;Reviewed team&lt;/b&gt;');
+        expect(confirm.message).toContain(site);
+        expect(confirm.message).toContain('review.example.test');
+        httpMock.expectNone(`/api/admin/users/${user.id}?force=true`);
+        confirm.accept();
+        const forced = httpMock.expectOne(`/api/admin/users/${user.id}?force=true`);
+        expect(forced.request.body).toEqual({ consequence_hash: 'a'.repeat(64) });
+        forced.flush({ ...review, code: 'delete_consequences_changed', consequence_hash: 'b'.repeat(64) }, { status: 409, statusText: 'Conflict' });
+        expect(confirmationServiceMock.confirm).toHaveBeenCalledTimes(2);
+        httpMock.expectNone(`/api/admin/users/${user.id}?force=true`);
+    });
+
+    it.each([false, undefined])('does not offer force deletion without an affirmative policy and complete review (%s)', (canForce) => {
+        const user = { id: '11111111-1111-4111-8111-111111111111', email: 'owner@example.test', instance_role: 'user', created_at: '' };
+        component.confirmDeleteUser(user);
+        confirmationServiceMock.confirm.mock.calls.at(-1)![0].accept();
+        httpMock
+            .expectOne(`/api/admin/users/${user.id}`)
+            .flush({ status: 'error', code: 'user_owns_teams', teams: [{ id: 'team-1', name: 'Blocked' }], sites: [], can_force: canForce, consequence_hash: 'a'.repeat(64) }, { status: 409, statusText: 'Conflict' });
+        expect(confirmationServiceMock.confirm).toHaveBeenCalledTimes(1);
+        httpMock.expectNone(`/api/admin/users/${user.id}?force=true`);
     });
 
     it('ignores unrelated delete errors', () => {

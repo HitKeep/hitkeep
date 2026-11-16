@@ -137,6 +137,13 @@ func TestCommerceExternalOAuthLifecycle(t *testing.T) {
 			if w := call("POST", base+"/cs_test/cancel", "cancel", `{}`, token); w.Code != 200 || !strings.Contains(w.Body.String(), `"canceled"`) {
 				t.Fatalf("external cancel=%d %s", w.Code, w.Body.String())
 			}
+			remainingOwner, err := store.CreateUserWithoutDefaultTenant(t.Context(), protocol+"-remaining-owner@example.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.AddTeamMember(t.Context(), buyer.TenantID, remainingOwner, database.TenantRoleOwner, buyer.UserID); err != nil {
+				t.Fatal(err)
+			}
 			if err := store.AddTeamMember(t.Context(), buyer.TenantID, buyer.UserID, database.TenantRoleMember, buyer.UserID); err != nil {
 				t.Fatal(err)
 			}

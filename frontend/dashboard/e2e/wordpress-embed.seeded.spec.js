@@ -1,6 +1,10 @@
 const { test, expect } = require("playwright/test");
 const { login } = require("./support/auth");
 
+test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "wait" });
+});
+
 for (const width of [1440, 390]) {
     test(`WordPress embed uses native charts and read-only credentials at ${width}px`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 1000 });
