@@ -59,22 +59,22 @@ func (s *Store) ListPendingTeamInvitesByEmail(ctx context.Context, email string)
 
 func (s *Store) ListSoleOwnerTeams(ctx context.Context, userID uuid.UUID) ([]api.Team, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT t.id, t.name, COALESCE(t.logo_url, ''), tm.role, t.created_at
+		SELECT t.id, t.name, COALESCE(t.logo_url, ''), member.role, t.created_at
 		FROM tenants t
-		JOIN tenant_members tm ON tm.tenant_id = t.id
+		JOIN tenant_members member ON member.tenant_id = t.id
 		LEFT JOIN tenant_archives ta ON ta.tenant_id = t.id
-		WHERE tm.user_id = ?
-			AND tm.role = ?
+		WHERE member.user_id = ?
+			AND member.role = ?
 			AND ta.tenant_id IS NULL
 			AND NOT EXISTS (
 				SELECT 1
-				FROM tenant_members other
-				WHERE other.tenant_id = t.id
-					AND other.role = ?
-					AND other.user_id <> ?
+				FROM tenant_members tm
+				WHERE tm.tenant_id = t.id
+					AND `+liveTeamOwnerPredicate+`
+					AND tm.user_id <> ?
 			)
 		ORDER BY t.created_at ASC
-	`, userID, TenantRoleOwner, TenantRoleOwner, userID)
+	`, userID, TenantRoleOwner, userID)
 	if err != nil {
 		return nil, fmt.Errorf("could not list sole-owner teams: %w", err)
 	}
@@ -144,12 +144,8 @@ func (s *Store) AddTeamMember(ctx context.Context, tenantID, userID uuid.UUID, r
 	}
 	role = strings.TrimSpace(strings.ToLower(role))
 	if role != TenantRoleOwner {
-		var last bool
-		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner') AND (SELECT COUNT(*) FROM tenant_members WHERE tenant_id=? AND role='owner')<=1`, tenantID, userID, tenantID).Scan(&last); err != nil {
+		if err := requireAnotherTeamOwner(ctx, s.db, tenantID, userID); err != nil {
 			return err
-		}
-		if last {
-			return ErrTeamLastOwner
 		}
 	}
 
@@ -712,12 +708,8 @@ func (s *Store) RemoveTeamMember(ctx context.Context, tenantID, userID uuid.UUID
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	err := s.Transact(ctx, func(tx *sql.Tx) error {
-		var lastOwner bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner') AND NOT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id<>? AND role='owner')`, tenantID, userID, tenantID, userID).Scan(&lastOwner); err != nil {
+		if err := requireAnotherTeamOwner(ctx, tx, tenantID, userID); err != nil {
 			return err
-		}
-		if lastOwner {
-			return ErrTeamLastOwner
 		}
 
 		result, err := tx.ExecContext(ctx, "DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ?", tenantID, userID)
@@ -774,12 +766,8 @@ func (s *Store) LeaveTeam(ctx context.Context, tenantID, userID uuid.UUID) (uuid
 		}
 
 		if strings.EqualFold(strings.TrimSpace(role), TenantRoleOwner) {
-			ownerCount, err := countTeamOwnersTx(ctx, tx, tenantID)
-			if err != nil {
+			if err := requireAnotherTeamOwner(ctx, tx, tenantID, userID); err != nil {
 				return err
-			}
-			if ownerCount <= 1 {
-				return ErrTeamLastOwner
 			}
 		}
 
@@ -901,11 +889,10 @@ func (s *Store) TransferTeamOwnership(ctx context.Context, tenantID, actorID, ta
 
 func (s *Store) CountTeamOwners(ctx context.Context, tenantID uuid.UUID) (int, error) {
 	var count int
-	err := s.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM tenant_members WHERE tenant_id = ? AND role = ?",
-		tenantID, TenantRoleOwner,
-	).Scan(&count)
-	if err != nil {
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM tenant_members tm WHERE tm.tenant_id = ? AND `+liveTeamOwnerPredicate,
+		tenantID,
+	).Scan(&count); err != nil {
 		return 0, fmt.Errorf("could not count tenant owners: %w", err)
 	}
 	return count, nil

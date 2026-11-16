@@ -77,6 +77,13 @@ func (s *Store) PlanAccountDeletion(ctx context.Context, userID uuid.UUID, choic
 		validSuccessor := false
 		for _, m := range members {
 			if m.UserID != userID && m.Role == TenantRoleOwner {
+				removing, err := s.AccountRemovalStarted(ctx, m.UserID)
+				if err != nil {
+					return plan, err
+				}
+				if removing {
+					continue
+				}
 				team.EligibleSuccessors = append(team.EligibleSuccessors, api.AccountDeletionOwner{ID: m.UserID, Email: m.Email})
 				if m.UserID == team.SuccessorID {
 					validSuccessor = true

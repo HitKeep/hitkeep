@@ -265,15 +265,25 @@ func isBinderError(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "binder error")
 }
 
-func countTeamOwnersTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID) (int, error) {
-	var count int
-	if err := tx.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM tenant_members WHERE tenant_id = ? AND role = ?",
-		tenantID, TenantRoleOwner,
-	).Scan(&count); err != nil {
-		return 0, fmt.Errorf("could not count tenant owners: %w", err)
+// Removal retries retain membership rows, but those accounts cannot provide continuing ownership.
+const liveTeamOwnerPredicate = `tm.role = 'owner' AND NOT EXISTS (
+	SELECT 1 FROM account_deletion_intents d
+	WHERE d.user_id = tm.user_id AND d.phase IN ('removing', 'complete')
+)`
+
+func requireAnotherTeamOwner(ctx context.Context, q tenantRowQueryer, tenantID, userID uuid.UUID) error {
+	var last bool
+	if err := q.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id=? AND user_id=? AND role='owner')
+		AND NOT EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant_id=? AND tm.user_id<>? AND `+liveTeamOwnerPredicate+`)`,
+		tenantID, userID, tenantID, userID,
+	).Scan(&last); err != nil {
+		return err
 	}
-	return count, nil
+	if last {
+		return ErrTeamLastOwner
+	}
+	return nil
 }
 
 func scanTeamInvite(scanner interface {

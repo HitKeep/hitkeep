@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -104,6 +106,142 @@ func TestAdminUserDeletionPreflightsDefaultTeam(t *testing.T) {
 	}
 	if current, err := s.GetSiteByID(t.Context(), site.ID); err != nil || current == nil {
 		t.Errorf("default team site deleted before policy check: %+v err=%v", current, err)
+	}
+}
+
+func TestTeamOwnerSurvivesAnotherOwnersInterruptedRemoval(t *testing.T) {
+	for _, operation := range []string{"admin", "personal", "leave", "demote", "remove"} {
+		t.Run(operation, func(t *testing.T) {
+			h, s, _, _, actor, survivor := setupAdminTestEnv(t)
+			ctx := t.Context()
+			mux := adminDeletionMux(t, h, actor, survivor)
+			defaultID, err := s.GetDefaultTenantID(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, defaultID, actor, database.TenantRoleOwner, survivor); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, defaultID, survivor, database.TenantRoleMember, actor); err != nil {
+				t.Fatal(err)
+			}
+			removing, err := s.CreateUser(ctx, "interrupted-owner@example.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			team, err := s.CreateTenant(ctx, survivor, "Retained shared team", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, team.ID, removing, database.TenantRoleOwner, survivor); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AddTeamMember(ctx, team.ID, actor, database.TenantRoleMember, survivor); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SetActiveTenantID(ctx, actor, team.ID); err != nil {
+				t.Fatal(err)
+			}
+			site, err := s.CreateSite(ctx, actor, "retained-live-owner.example.test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			failingTeam, failingSite := createAdminTestTeamSite(t, s, removing, "Sync failure team", "interrupted-sync.example.test")
+			if err := s.AddTeamMember(ctx, failingTeam.ID, actor, database.TenantRoleOwner, removing); err != nil {
+				t.Fatal(err)
+			}
+			prepare := func(user uuid.UUID, choices api.AccountDeletionChoices) (string, string) {
+				t.Helper()
+				plan, err := s.PlanAccountDeletion(ctx, user, choices, false)
+				if err != nil || len(plan.Blockers) != 0 {
+					t.Fatalf("prepare=%+v err=%v", plan, err)
+				}
+				hash, err := database.AccountDeletionConsequenceHash(plan)
+				if err != nil {
+					t.Fatal(err)
+				}
+				attempt := uuid.NewString()
+				if err := s.SaveAccountDeletionIntent(ctx, database.AccountDeletionIntent{AttemptID: attempt, UserID: user, Choices: choices, Plan: plan, ConsequenceHash: hash, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+					t.Fatal(err)
+				}
+				return attempt, hash
+			}
+			survivorAttempt, survivorHash := prepare(survivor, api.AccountDeletionChoices{})
+			attempt, hash := prepare(removing, api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: failingTeam.ID, UserID: actor}}})
+			dataPath := filepath.Join(t.TempDir(), "blocked-data-directory")
+			if err := os.WriteFile(dataPath, []byte("block tenant directory creation"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			manager := database.NewTenantStoreManager(s, dataPath)
+			t.Cleanup(func() { _ = manager.Close() })
+			h.ctx.TenantStores = manager
+			if err := manager.DeleteCurrentAccount(ctx, removing, attempt, "removing-jti", hash, func() bool { return true }, nil); err == nil {
+				t.Fatal("expected real tenant sync failure")
+			}
+			if started, err := s.AccountRemovalStarted(ctx, removing); err != nil || !started {
+				t.Fatalf("removing=%v err=%v", started, err)
+			}
+			if current, err := s.GetSiteByID(ctx, failingSite.ID); err != nil || current == nil || current.UserID != actor {
+				t.Fatalf("reparenting did not precede sync failure: %+v err=%v", current, err)
+			}
+			if members, err := s.ListTeamMembers(ctx, team.ID); err != nil || len(members) != 3 {
+				t.Fatalf("pending cleanup memberships lost: %+v err=%v", members, err)
+			}
+			if owners, err := s.CountTeamOwners(ctx, team.ID); err != nil || owners != 1 {
+				t.Errorf("removing peer counted live: owners=%d err=%v", owners, err)
+			}
+			plan, err := s.PlanAccountDeletion(ctx, survivor, api.AccountDeletionChoices{Successors: []api.AccountDeletionSuccessor{{TeamID: team.ID, UserID: removing}}}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			blocked := false
+			for _, blocker := range plan.Blockers {
+				blocked = blocked || blocker.TeamID == team.ID && blocker.Code == "invalid_successor"
+			}
+			if !blocked {
+				t.Errorf("removing peer accepted as successor: %+v", plan)
+			}
+			switch operation {
+			case "admin":
+				out := httptest.NewRecorder()
+				mux.ServeHTTP(out, adminDeletionRequest(t, h, actor, survivor, false, nil))
+				var review api.AdminDeleteUserBlockedResponse
+				if err := json.Unmarshal(out.Body.Bytes(), &review); err != nil || out.Code != 409 || review.CanForce || len(review.Teams) != 1 || review.Teams[0].ID != team.ID || len(review.Sites) != 1 || review.Sites[0].ID != site.ID {
+					t.Errorf("live sole owner deletion was not blocked: status=%d body=%s err=%v", out.Code, out.Body, err)
+				}
+			case "personal":
+				if err := manager.DeleteCurrentAccount(ctx, survivor, survivorAttempt, "survivor-jti", survivorHash, func() bool { return true }, nil); !errors.Is(err, database.ErrAccountDeletionChanged) {
+					t.Errorf("prepared deletion relied on removing owner: %v", err)
+				}
+			case "leave":
+				if _, err := s.LeaveTeam(ctx, team.ID, survivor); !errors.Is(err, database.ErrTeamLastOwner) {
+					t.Errorf("last live owner left: %v", err)
+				}
+			case "demote":
+				if err := s.AddTeamMember(ctx, team.ID, survivor, database.TenantRoleMember, survivor); !errors.Is(err, database.ErrTeamLastOwner) {
+					t.Errorf("last live owner demoted: %v", err)
+				}
+			case "remove":
+				if err := s.RemoveTeamMember(ctx, team.ID, survivor); !errors.Is(err, database.ErrTeamLastOwner) {
+					t.Errorf("last live owner removed: %v", err)
+				}
+			}
+			if err := os.Remove(dataPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.ResumeAccountRemovals(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if user, err := s.GetUserByID(ctx, removing); err != nil || user != nil {
+				t.Errorf("interrupted removal did not resume: %+v err=%v", user, err)
+			}
+			if role, err := s.GetTenantRole(ctx, team.ID, survivor); err != nil || role != database.TenantRoleOwner {
+				t.Errorf("surviving team lost owner: role=%q err=%v", role, err)
+			}
+			if current, err := s.GetSiteByID(ctx, site.ID); err != nil || current == nil || current.UserID != actor {
+				t.Errorf("retained site changed: %+v err=%v", current, err)
+			}
+		})
 	}
 }
 

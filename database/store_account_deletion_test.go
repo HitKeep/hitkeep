@@ -550,8 +550,8 @@ func TestPersonalRemovalRejectsOwnershipAfterTenantSyncFailure(t *testing.T) {
 				if err := s.UpdateInstanceRole(ctx, owner, auth.InstanceUser, departing); !errors.Is(err, ErrLastInstanceOwner) {
 					t.Fatalf("removing owner authorized last live owner demotion: %v", err)
 				}
-				if err := s.DeleteUser(ctx, owner); !errors.Is(err, ErrLastInstanceOwner) {
-					t.Fatalf("removing owner counted as surviving operator: %v", err)
+				if err := s.DeleteUser(ctx, owner); !errors.Is(err, ErrUserOwnsTeams) {
+					t.Fatalf("removing owner counted as surviving team owner: %v", err)
 				}
 				otherPlan, err := s.PlanAccountDeletion(ctx, owner, api.AccountDeletionChoices{}, false)
 				if err != nil {
