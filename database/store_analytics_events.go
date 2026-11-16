@@ -247,7 +247,7 @@ func (s *Store) GetEventAudience(ctx context.Context, params api.EventAudiencePa
 		base AS (
 			SELECT
 				h.path                      AS path,
-				hk_referrer(h.referrer)     AS referrer,
+				hk_external_referrer(h.referrer, h.site_id)     AS referrer,
 				hk_device(h.viewport_width) AS device,
 				hk_country(h.country_code)  AS country,
 				COALESCE(NULLIF(TRIM(h.city), ''), '(Unknown)') AS city,
@@ -278,6 +278,7 @@ func (s *Store) GetEventAudience(ctx context.Context, params api.EventAudiencePa
 			SELECT dim, name, val,
 				ROW_NUMBER() OVER (PARTITION BY dim ORDER BY val DESC) AS rn
 			FROM agg
+			WHERE name IS NOT NULL
 		)
 		SELECT dim, name, val FROM ranked WHERE rn <= 10 ORDER BY dim, val DESC
 	`, propClause, filterSQL)
@@ -424,6 +425,7 @@ func (s *Store) getImportedEventAudienceDimensions(ctx context.Context, params a
 			FROM imported_event_dimensions_daily
 			WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
 				AND event_name = ? AND dimension IN ('path', 'referrer', 'device', 'country', 'city', 'provider', 'asn')
+				AND (dimension <> 'referrer' OR hk_external_referrer(name, site_id) IS NOT NULL)
 			GROUP BY dimension, name
 			UNION ALL
 			SELECT 'path' AS dimension, path AS name, SUM(visitors) AS val

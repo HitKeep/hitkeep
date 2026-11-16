@@ -402,7 +402,7 @@ func (s *Store) listEcommerceEvents(ctx context.Context, params api.EcommercePar
 				arg_min(COALESCE(NULLIF(TRIM(h.utm_source), ''), '(Unspecified)'), h.timestamp) AS utm_source,
 				arg_min(COALESCE(NULLIF(TRIM(h.utm_medium), ''), '(Unspecified)'), h.timestamp) AS utm_medium,
 				arg_min(COALESCE(NULLIF(TRIM(h.utm_campaign), ''), '(Unspecified)'), h.timestamp) AS utm_campaign,
-				arg_min(hk_referrer(h.referrer), h.timestamp) AS referrer,
+				arg_min(hk_external_referrer(h.referrer, h.site_id), h.timestamp) AS referrer,
 				arg_min(hk_device(h.viewport_width), h.timestamp) AS device,
 				arg_min(hk_country(h.country_code), h.timestamp) AS country,
 				arg_min(COALESCE(NULLIF(TRIM(h.city), ''), '(Unknown)'), h.timestamp) AS city,
