@@ -38,7 +38,7 @@
         "@openng/optimus-ui-locale": "^2.0.2",
         "@openng/optimus-ui-tailwindcss": "^2.0.2",
         "@openng/optimus-ui-themes": "^2.0.2",
-        "@scalar/api-reference": "^1.77.0",
+        "@scalar/api-reference": "^1.78.1",
         "@tailwindcss/postcss": "^4.3.5",
         "circle-flags": "^2.8.3",
         "echarts": "^6.1.0",
