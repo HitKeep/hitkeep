@@ -146,6 +146,72 @@ Set `enablePaidSignals: true` in `init()`, or add `data-enable-paid-signals="tru
 
 The tracker strips query strings and fragments from referrer fields. On pages with a query string, analytics requests use keepalive fetch without an HTTP `Referer` header. Add `referrerpolicy="no-referrer"` to the snippet's script tag to apply the same protection to the browser's initial script request.
 
+### Track page-not-found views
+
+Use the fixed event name `page_not_found` to count views of your 404 page. Each example uses your existing tracker installation and sends one named event with empty properties per eligible 404 view, in addition to normal pageview tracking.
+
+Choose one example for each view. In the site's **Events** report, select `page_not_found` to see its occurrence count. A server can return HTTP 404 while a client router can show its missing route after loading an HTTP 200 app shell.
+
+Use these examples only where the current and previous tracked pathnames are safe to collect. Both examples skip the event when the document's incoming referrer includes anything beyond the origin.
+
+#### Server-rendered 404 page
+
+In the template your server returns with HTTP status 404, register the listener before your existing snippet. The window's `load` event waits for the `async` tracker script. Keep the URL and any `data-*` options from your existing snippet, and add the listener only to the 404 template.
+
+```html
+<script>
+    window.addEventListener('load', () => {
+        const referrer = document.referrer;
+        if (!referrer || referrer === `${new URL(referrer).origin}/`) {
+            window.hk?.event?.('page_not_found');
+        }
+    }, { once: true });
+</script>
+<script async src="https://your-hitkeep.example.com/hk.js"></script>
+```
+
+#### Vue Router SPA
+
+Give the catch-all route a name and register the hook once in your browser entry point, before `app.use(router)` starts the initial navigation. Vue Router reports duplicate and aborted navigations through `failure`. A query or fragment change on the same missing pathname keeps the current 404 view. A different missing pathname or a later return to a missing pathname counts as a new view.
+
+```ts
+import { createApp } from 'vue';
+import { createRouter, createWebHistory } from 'vue-router';
+import { init, track } from '@hitkeep/tracker';
+import App from './App.vue';
+import Home from './Home.vue';
+import NotFound from './NotFound.vue';
+
+const router = createRouter({
+    history: createWebHistory(),
+    routes: [
+        { path: '/', component: Home },
+        { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound }
+    ]
+});
+
+init({ host: 'https://your-hitkeep.example.com' });
+
+const referrer = document.referrer;
+const hasPublicReferrer = !referrer || referrer === `${new URL(referrer).origin}/`;
+router.afterEach((to, from, failure) => {
+    if (failure || to.name !== 'not-found' || !hasPublicReferrer) return;
+    if (from.name === to.name && from.path === to.path) return;
+
+    track('page_not_found');
+});
+
+createApp(App).use(router).mount('#app');
+```
+
+#### Keep private URLs out of tracking
+
+The empty `p` object covers custom properties only. The tracker sends the current pathname as `path` and referrer context as `r`, which can be the raw `document.referrer` or a previous SPA pathname. The current URL's query string and fragment are excluded from the event body. A same-origin referring page can still expose its query string through `document.referrer`. Normal pageviews have their own collection rules and can send referrer context and recognized campaign query parameters even when the example skips the event.
+
+Set `Referrer-Policy: no-referrer` on pages that link from sensitive URLs, including same-origin pages, or use `rel="noreferrer"` on those links. Set the header on the tracked response as well to keep the current URL out of the analytics request's HTTP `Referer` header. A policy on the 404 response alone leaves its incoming `document.referrer` intact.
+
+Where a 404 pathname or incoming referrer can contain private data, serve that response without the tracker. For an SPA, keep tracking in a public shell and send visitors to a separate, untracked document for private routes, since automatic pageviews also read the URL.
+
 ### E-commerce
 
 ```ts
