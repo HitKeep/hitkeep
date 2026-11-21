@@ -978,6 +978,16 @@
     "unknown": "Sconosciuto"
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Tempo di visibilità per pagina",
+      "description": "Pagine con più visualizzazioni registrate nell’intervallo selezionato. La media include solo le visualizzazioni con una misurazione.",
+      "average": "Tempo di visibilità medio",
+      "coverage": "Visualizzazioni misurate / registrate",
+      "missing": "Nessuna misurazione",
+      "empty": "Nessuna visualizzazione di pagina registrata corrisponde alla selezione.",
+      "unavailable": "Il tempo di visibilità non è disponibile al momento.",
+      "forbidden": "Non hai accesso a questo report."
+    },
     "conversions": { "title": "Conversioni", "description": "Filtra l’intero spazio di lavoro per una coorte di obiettivo o funnel.", "filters": { "goal": "Obiettivo: {{name}}", "funnel": "Funnel: {{name}}" }, "invalidSubject": "Questo obiettivo o funnel non è più disponibile per il sito." },
     "breadcrumbOverview": "Panoramica",
     "filteredBadge": "Filtrato",
@@ -1914,6 +1924,8 @@
       "collectDntDescription": "Traccia gli utenti anche se \"Do Not Track\" è attivo nel browser.",
       "disableBeaconLabel": "Disabilita sendBeacon",
       "disableBeaconDescription": "Usa richieste fetch standard invece di navigator.sendBeacon.",
+      "visibleTimeLabel": "Misura il tempo di visibilità",
+      "visibleTimeDescription": "Aggiunge un’opzione per misurare quanto tempo ogni pagina rimane visibile nel browser.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Carica il bundle Web Vitals separato e invia campioni LCP, INP, CLS, FCP e TTFB. Disattivato per impostazione predefinita.",
       "autoTrackingTitle": "Tracciamento automatico degli eventi",

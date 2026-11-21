@@ -978,6 +978,16 @@
     }
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Zichtbare tijd per pagina",
+      "description": "Meest bekeken pagina’s op basis van geregistreerde weergaven in de gekozen periode. Het gemiddelde telt alleen gemeten weergaven mee.",
+      "average": "Gem. zichtbare tijd",
+      "coverage": "Gemeten / geregistreerde weergaven",
+      "missing": "Geen meting",
+      "empty": "Er zijn geen geregistreerde paginaweergaven voor deze selectie.",
+      "unavailable": "Zichtbare tijd is tijdelijk niet beschikbaar.",
+      "forbidden": "Je hebt geen toegang tot dit rapport."
+    },
     "conversions": { "title": "Conversies", "description": "Filter de hele werkruimte op een doel- of funnelcohort.", "filters": { "goal": "Doel: {{name}}", "funnel": "Funnel: {{name}}" }, "invalidSubject": "Dit doel of deze funnel is niet meer beschikbaar voor deze site." },
     "breadcrumbOverview": "Overzicht",
     "filteredBadge": "Gefilterd",
@@ -1905,6 +1915,8 @@
       "collectDntDescription": "Volg gebruikers, zelfs als \"Do Not Track\" is ingeschakeld in hun browser.",
       "disableBeaconLabel": "Schakel sendBeacon uit",
       "disableBeaconDescription": "Gebruik standaard ophaalverzoeken in plaats van navigator.sendBeacon.",
+      "visibleTimeLabel": "Zichtbare tijd meten",
+      "visibleTimeDescription": "Voegt een optie toe om te meten hoe lang elke pagina zichtbaar is in de browser.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Laad de aparte Web Vitals-bundel en stuur LCP-, INP-, CLS-, FCP- en TTFB-samples. Standaard uitgeschakeld.",
       "autoTrackingTitle": "Automatische tracking van gebeurtenissen",

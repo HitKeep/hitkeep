@@ -168,6 +168,11 @@ func main() {
 	}
 	stats = mergeQRSeedStats(stats, qrStats)
 
+	if err := seedVisibleTime(ctx, analyticsStore, siteID); err != nil {
+		hklog.LoggerFromContext(ctx).Error("Failed to seed visible time", "error", err)
+		os.Exit(1)
+	}
+
 	webVitals, err := seedWebVitals(ctx, analyticsStore, siteID, *days, rng)
 	if err != nil {
 		hklog.LoggerFromContext(ctx).Error("Failed to seed Web Vitals", "error", err)

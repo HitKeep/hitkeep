@@ -114,8 +114,29 @@
                 size="small"
                 data-testid="tracking-copy-assistant-prompt"
             />
-            }
+            } } @case ("npm") {
+            <p class="tracking-install__description">{{ "sites.tracking.install.npm.description" | transloco }}</p>
+            <app-code-block [code]="npmInstallCommand" [label]="'sites.tracking.install.npm.installStep' | transloco" data-testid="tracking-npm-install" />
+            <app-code-block [code]="npmInitSnippet()" [label]="'sites.tracking.install.npm.initStep' | transloco" [wrap]="true" data-testid="tracking-npm-init" />
 
+            } @case ("wordpress") {
+            <p class="tracking-install__description">{{ "sites.tracking.install.wordpress.description" | transloco }}</p>
+
+            <div class="site-settings-field">
+                <span class="tracking-install__label">{{ "sites.tracking.install.wordpress.urlLabel" | transloco }}</span>
+                <div class="tracking-install__value">
+                    <code class="tracking-install__inline-code" data-testid="tracking-wordpress-url">{{ trackerHostURL() }}</code>
+                    <app-copy-control [value]="trackerHostURL()" [text]="true" size="small" />
+                </div>
+                <span class="site-settings-field-hint">{{ "sites.tracking.install.wordpress.urlHint" | transloco }}</span>
+            </div>
+
+            } @case ("server") {
+            <p class="tracking-install__description">{{ "sites.tracking.install.server.description" | transloco }}</p>
+            <app-code-block [code]="serverIngestSnippet()" [wrap]="true" data-testid="tracking-server-snippet" />
+            <p-message severity="info" styleClass="w-full">{{ "sites.tracking.install.server.tokenHint" | transloco }}</p-message>
+
+            } @default never; } @if (currentInstallMethod === "script" || currentInstallMethod === "npm") {
             <div class="tracking-install__disclosure">
                 <p-fieldset [dt]="fieldsetDesignTokens" [toggleable]="true" [collapsed]="true" data-testid="tracking-advanced-options">
                     <ng-template #header>
@@ -127,7 +148,9 @@
                         </span>
                     </ng-template>
 
+                    @if (currentInstallMethod === "script") {
                     <p class="tracking-install__description">{{ "sites.tracking.options.description" | transloco }}</p>
+                    }
 
                     <div class="site-settings-toggle-list">
                         <div class="site-settings-subsection">
@@ -155,6 +178,7 @@
                             </div>
                         </div>
 
+                        @if (currentInstallMethod === "script") {
                         <div class="site-settings-toggle-row">
                             <div class="site-settings-toggle-row__text">
                                 <label id="collect-dnt-label" for="collect-dnt-switch" class="site-settings-toggle-row__title">{{ "sites.tracking.collectDntLabel" | transloco }}</label>
@@ -178,6 +202,7 @@
                             </div>
                             <p-toggleswitch inputId="web-vitals-switch" ariaLabelledBy="web-vitals-label" styleClass="shrink-0" [formControl]="trackingForm.enableWebVitals().control()" />
                         </div>
+                        }
 
                         <div class="site-settings-toggle-row">
                             <div class="site-settings-toggle-row__text">
@@ -187,6 +212,15 @@
                             <p-toggleswitch inputId="paid-signals-switch" ariaLabelledBy="paid-signals-label" styleClass="shrink-0" [formControl]="trackingForm.enablePaidSignals().control()" />
                         </div>
 
+                        <div class="site-settings-toggle-row">
+                            <div class="site-settings-toggle-row__text">
+                                <label id="visible-time-label" for="visible-time-switch" class="site-settings-toggle-row__title">{{ "sites.tracking.visibleTimeLabel" | transloco }}</label>
+                                <span class="site-settings-field-hint">{{ "sites.tracking.visibleTimeDescription" | transloco }}</span>
+                            </div>
+                            <p-toggleswitch inputId="visible-time-switch" ariaLabelledBy="visible-time-label" styleClass="shrink-0" [formControl]="trackingForm.enableVisibleTime().control()" />
+                        </div>
+
+                        @if (currentInstallMethod === "script") {
                         <div class="site-settings-subsection">
                             <h4>{{ "sites.tracking.autoTrackingTitle" | transloco }}</h4>
                             <p>{{ "sites.tracking.autoTrackingDescription" | transloco }}</p>
@@ -223,33 +257,11 @@
                             </div>
                             <p-toggleswitch inputId="declarative-events-switch" ariaLabelledBy="declarative-events-label" styleClass="shrink-0" [formControl]="trackingForm.enableDeclarativeEvents().control()" />
                         </div>
+                        }
                     </div>
                 </p-fieldset>
             </div>
-
-            } @case ("npm") {
-            <p class="tracking-install__description">{{ "sites.tracking.install.npm.description" | transloco }}</p>
-            <app-code-block [code]="npmInstallCommand" [label]="'sites.tracking.install.npm.installStep' | transloco" data-testid="tracking-npm-install" />
-            <app-code-block [code]="npmInitSnippet()" [label]="'sites.tracking.install.npm.initStep' | transloco" [wrap]="true" data-testid="tracking-npm-init" />
-
-            } @case ("wordpress") {
-            <p class="tracking-install__description">{{ "sites.tracking.install.wordpress.description" | transloco }}</p>
-
-            <div class="site-settings-field">
-                <span class="tracking-install__label">{{ "sites.tracking.install.wordpress.urlLabel" | transloco }}</span>
-                <div class="tracking-install__value">
-                    <code class="tracking-install__inline-code" data-testid="tracking-wordpress-url">{{ trackerHostURL() }}</code>
-                    <app-copy-control [value]="trackerHostURL()" [text]="true" size="small" />
-                </div>
-                <span class="site-settings-field-hint">{{ "sites.tracking.install.wordpress.urlHint" | transloco }}</span>
-            </div>
-
-            } @case ("server") {
-            <p class="tracking-install__description">{{ "sites.tracking.install.server.description" | transloco }}</p>
-            <app-code-block [code]="serverIngestSnippet()" [wrap]="true" data-testid="tracking-server-snippet" />
-            <p-message severity="info" styleClass="w-full">{{ "sites.tracking.install.server.tokenHint" | transloco }}</p-message>
-
-            } @default never; }
+            }
 
             <div class="tracking-install__links">
                 @for (link of installLinks[installMethod()]; track link.testId) {

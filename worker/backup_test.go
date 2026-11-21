@@ -234,15 +234,20 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 
 	// Insert a hit.
 	isUnique := true
+	pageID := uuid.New()
 	if err := store.CreateHit(ctx, &api.Hit{
 		SiteID:    siteID,
 		SessionID: uuid.New(),
-		PageID:    uuid.New(),
+		PageID:    pageID,
 		Timestamp: time.Now().UTC(),
 		Path:      "/test-roundtrip",
 		IsUnique:  &isUnique,
 	}); err != nil {
 		t.Fatalf("create hit: %v", err)
+	}
+
+	if err := store.Exec(ctx, "INSERT INTO page_visible_time VALUES (?, ?, ?)", siteID, pageID, 1200); err != nil {
+		t.Fatalf("seed page visible time: %v", err)
 	}
 
 	// Backup.
@@ -296,6 +301,12 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 	}
 	if path != "/test-roundtrip" {
 		t.Fatalf("expected path=/test-roundtrip, got %q", path)
+	}
+	var visibleMS int
+	if err := restoredStore.DB().QueryRowContext(ctx,
+		"SELECT visible_ms FROM page_visible_time WHERE site_id = ? AND page_id = ?", siteID, pageID,
+	).Scan(&visibleMS); err != nil || visibleMS != 1200 {
+		t.Fatalf("restored page visible time: ms=%d err=%v", visibleMS, err)
 	}
 }
 

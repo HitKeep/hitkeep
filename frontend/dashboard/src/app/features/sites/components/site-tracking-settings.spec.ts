@@ -26,6 +26,7 @@ type Internals = SiteTrackingSettings & {
         disableBeacon: () => Toggle;
         enableWebVitals: () => Toggle;
         enablePaidSignals: () => Toggle;
+        enableVisibleTime: () => Toggle;
         trackOutbound: () => Toggle;
         trackDownloads: () => Toggle;
         trackForms: () => Toggle;
@@ -211,6 +212,7 @@ describe('SiteTrackingSettings', () => {
         expect(defaultSnippet).toContain('/hitkeep/hk.js');
         expect(defaultSnippet).not.toContain('data-enable-declarative-events');
         expect(defaultSnippet).toContain('referrerpolicy="no-referrer"');
+        expect(defaultSnippet).not.toContain('data-enable-visible-time');
         getButton()?.click();
         expect(copy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`\n\n${defaultSnippet}\n\n`));
         expect(copy.mock.calls[0][0]).toContain('on example.com.');
@@ -224,13 +226,17 @@ describe('SiteTrackingSettings', () => {
         internals.trackingForm.trackForms().control().setValue(false);
         internals.trackingForm.enableDeclarativeEvents().control().setValue(true);
         internals.trackingForm.enablePaidSignals().control().setValue(true);
+        internals.trackingForm.enableVisibleTime().control().setValue(true);
         await fixture.whenStable();
 
         const customSnippet = getShownSnippet();
-        expect(customSnippet).toContain('src="https://analytics.example.com/hk.js" data-disable-form-tracking="true"');
+        expect(customSnippet).toContain('src="https://analytics.example.com/hk.js"');
+        expect(customSnippet).toContain('data-disable-form-tracking="true"');
         expect(customSnippet).toContain('data-enable-declarative-events="true"');
-        expect(customSnippet).toContain('data-enable-paid-signals="true" referrerpolicy="no-referrer"');
-        expect(internals.changedOptionCount()).toBe(4);
+        expect(customSnippet).toContain('data-enable-paid-signals="true"');
+        expect(customSnippet).toContain('data-enable-visible-time="true"');
+        expect(customSnippet).toContain('referrerpolicy="no-referrer"');
+        expect(internals.changedOptionCount()).toBe(5);
         getButton()?.click();
         expect(copy).toHaveBeenCalledTimes(2);
         expect(copy).toHaveBeenLastCalledWith(expect.stringContaining(`\n\n${customSnippet}\n\n`));
@@ -257,7 +263,7 @@ describe('SiteTrackingSettings', () => {
         expect(internals.serverIngestSnippet()).toContain('Authorization: Bearer $HITKEEP_API_TOKEN');
     });
 
-    it('renders the selected install method and only shows advanced options for the script tag', () => {
+    it('renders the selected install method and shows advanced options for the browser tracker', () => {
         expect(testId('tracking-snippet')).toBeTruthy();
         expect(testId('tracking-advanced-options')).toBeTruthy();
 
@@ -265,13 +271,14 @@ describe('SiteTrackingSettings', () => {
         fixture.detectChanges();
         expect(testId('tracking-snippet')).toBeNull();
         expect(testId('tracking-copy-assistant-prompt')).toBeNull();
-        expect(testId('tracking-advanced-options')).toBeNull();
+        expect(testId('tracking-advanced-options')).toBeTruthy();
         expect(testId('tracking-npm-install')).toBeTruthy();
         expect(testId('tracking-npm-registry-link')?.getAttribute('href')).toBe('https://www.npmjs.com/package/@hitkeep/tracker');
 
         internals.selectInstallMethod('wordpress');
         fixture.detectChanges();
         expect(testId('tracking-npm-install')).toBeNull();
+        expect(testId('tracking-advanced-options')).toBeNull();
         expect(testId('tracking-wordpress-url')?.textContent).toContain('/hitkeep');
         expect(testId('tracking-wordpress-directory-link')?.getAttribute('href')).toBe('https://wordpress.org/plugins/hitkeep/');
 
@@ -284,6 +291,33 @@ describe('SiteTrackingSettings', () => {
         internals.selectInstallMethod('script');
         fixture.detectChanges();
         expect(testId('tracking-snippet')).toBeTruthy();
+    });
+
+    it('keeps measurement options independent in the script and npm snippets', async () => {
+        internals.selectInstallMethod('npm');
+        await fixture.whenStable();
+        const getNpmSnippet = () => testId('tracking-npm-init')?.querySelector('pre')?.textContent;
+        expect(getNpmSnippet()).not.toMatch(/enablePaidSignals|visibleTime/);
+
+        internals.trackingForm.enableVisibleTime().control().setValue(true);
+        await fixture.whenStable();
+        expect(getNpmSnippet()).toContain('visibleTime: true');
+        expect(getNpmSnippet()).not.toContain('enablePaidSignals');
+        expect(internals.snippetCode()).toContain('data-enable-visible-time="true"');
+        expect(internals.snippetCode()).not.toContain('data-enable-paid-signals');
+        expect(internals.changedOptionCount()).toBe(1);
+
+        internals.trackingForm.enablePaidSignals().control().setValue(true);
+        await fixture.whenStable();
+        expect(getNpmSnippet()).toContain('enablePaidSignals: true, visibleTime: true');
+        expect(internals.changedOptionCount()).toBe(2);
+
+        internals.trackingForm.enableVisibleTime().control().setValue(false);
+        await fixture.whenStable();
+        expect(getNpmSnippet()).toContain('enablePaidSignals: true');
+        expect(getNpmSnippet()).not.toContain('visibleTime');
+        expect(internals.snippetCode()).toContain('data-enable-paid-signals="true"');
+        expect(internals.snippetCode()).not.toContain('data-enable-visible-time');
     });
 
     it('counts only non-default snippet options', () => {

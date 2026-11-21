@@ -11,6 +11,7 @@ func newCrossOriginProtection() *http.CrossOriginProtection {
 		"POST /ingest",
 		"POST /ingest/event",
 		"POST /ingest/web-vitals",
+		"POST /ingest/visible-time",
 		"POST /oauth/token",
 		"POST /oauth/revoke",
 		// Apple posts cross-site; receipt resume still requires the original browser cookie.

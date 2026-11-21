@@ -978,6 +978,16 @@
     "unknown": "Desconocido"
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Tiempo visible por página",
+      "description": "Páginas con más vistas registradas en el intervalo seleccionado. La media solo incluye vistas con medición.",
+      "average": "Tiempo visible medio",
+      "coverage": "Vistas medidas / registradas",
+      "missing": "Sin medición",
+      "empty": "No hay vistas de página registradas para esta selección.",
+      "unavailable": "El tiempo visible no está disponible temporalmente.",
+      "forbidden": "No tienes acceso a este informe."
+    },
     "conversions": {
       "title": "Conversiones",
       "description": "Filtra todo el espacio de trabajo por una cohorte de objetivo o embudo.",
@@ -2123,6 +2133,8 @@
       "collectDntDescription": "Rastrear usuarios incluso si \"Do Not Track\" está habilitado en su navegador.",
       "disableBeaconLabel": "Desactivar sendBeacon",
       "disableBeaconDescription": "Usar solicitudes fetch estándar en lugar de navigator.sendBeacon.",
+      "visibleTimeLabel": "Medir el tiempo visible",
+      "visibleTimeDescription": "Añade una opción para medir cuánto tiempo permanece visible cada página en el navegador.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Carga el bundle separado de Web Vitals y envía muestras de LCP, INP, CLS, FCP y TTFB. Desactivado de forma predeterminada.",
       "autoTrackingTitle": "Seguimiento automático de eventos",

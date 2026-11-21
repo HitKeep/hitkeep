@@ -56,10 +56,15 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.IngestLimiter,
 	}, h.handleIngestWebVitals())))
 
+	ingestRoutes.HandleFunc("POST "+visibleTimePath, dropSpeculativeBrowserIngest(ctx.Handler(shared.HandlerConfig{
+		RateLimiter: ctx.IngestLimiter,
+	}, h.handleVisibleTime(newVisibleTimeQuota()))))
+
 	corsHandler := newIngestCORS().Handler(ingestRoutes)
 	mux.Handle("/ingest", corsHandler)
 	mux.Handle("/ingest/event", corsHandler)
 	mux.Handle("/ingest/web-vitals", corsHandler)
+	mux.Handle(visibleTimePath, corsHandler)
 }
 
 func dropSpeculativeBrowserIngest(next http.HandlerFunc) http.HandlerFunc {
@@ -741,6 +746,15 @@ func (h *handler) forwardToLeader(w http.ResponseWriter, r *http.Request, target
 			proxyReq.Out.Host = proxyReq.In.Host
 			proxyReq.Out.Header.Set("X-Forwarded-Host", proxyReq.In.Host)
 		},
+		ModifyResponse: func(response *http.Response) error {
+			// The follower already handled CORS before forwarding the POST.
+			for _, name := range []string{"Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"} {
+				if w.Header().Get(name) != "" {
+					response.Header.Del(name)
+				}
+			}
+			return nil
+		},
 		Transport: leaderForwardTransport,
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
 			shared.LoggerFromContext(r.Context()).Error("Follower failed to forward request", "error_kind", leaderForwardErrorKind(proxyErr), "target_path", targetPath)
@@ -1087,7 +1101,7 @@ func (h *handler) recordRejection() {
 
 func buildForwardURL(leaderAddr, httpAddr, targetPath string) (*url.URL, error) {
 	switch targetPath {
-	case "/ingest", "/ingest/event", "/ingest/web-vitals", "/api/ingest/server/pageview", "/api/ingest/server/event":
+	case "/ingest", "/ingest/event", "/ingest/web-vitals", visibleTimePath, "/api/ingest/server/pageview", "/api/ingest/server/event":
 	default:
 		return nil, fmt.Errorf("invalid forward target")
 	}

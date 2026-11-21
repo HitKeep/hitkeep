@@ -1697,3 +1697,15 @@ func TestOpenAPISpecV1DocumentsSiteSetupState(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAPISpecV1VisibleTimeIngestDocumentsTrackerMediaType(t *testing.T) {
+	paths := requireMap(t, openAPISpecV1("http://localhost:8080"), "paths")
+	route := requireMap(t, paths, "/ingest/visible-time")
+	post := requireMap(t, route, "post")
+	content := requireMap(t, requireMap(t, post, "requestBody"), "content")
+	plain := requireMap(t, requireMap(t, content, "text/plain"), "schema")
+	schema := requireMap(t, requireMap(t, content, "application/json"), "schema")
+	if plain["contentMediaType"] != "application/json" || schema["additionalProperties"] != false {
+		t.Fatalf("unexpected visible time wire contract: plain=%v json=%v", plain, schema)
+	}
+}

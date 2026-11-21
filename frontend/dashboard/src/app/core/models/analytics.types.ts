@@ -295,6 +295,13 @@ export interface WebVitalSeriesPoint {
     poor: number;
 }
 
+export interface VisibleTimePage {
+    path: string;
+    avg_visible_ms: number | null;
+    measured_views: number;
+    tracked_views: number;
+}
+
 export interface WebVitalPageRow {
     path: string;
     p75: number;

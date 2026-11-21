@@ -113,7 +113,11 @@ func importRetentionArchiveFile(ctx context.Context, db *sql.DB, catalog, file s
 			members[source] = struct{}{}
 		}
 	}
-	ordered, err := orderChildrenFirst(members, edges)
+	// Visible time depends on the site's archived pageview, whose page ID
+	// is not a physical foreign key.
+	ordered, err := orderChildrenFirst(members, append(slices.Clone(edges), fkEdge{
+		table: "page_visible_time", referencedTable: "hits",
+	}))
 	if err != nil {
 		return err
 	}
@@ -190,6 +194,14 @@ func importArchiveTable(ctx context.Context, db *sql.DB, file, table string, col
 		return nil
 	}
 
+	var conflictClause string
+	if table == "page_visible_time" {
+		guards = append(guards, "EXISTS (SELECT 1 FROM hits h WHERE h.site_id = CAST(src.site_id AS UUID) AND h.page_id = CAST(src.page_id AS UUID))")
+		conflictClause = `
+			ON CONFLICT (site_id, page_id) DO UPDATE SET visible_ms = excluded.visible_ms
+			WHERE excluded.visible_ms > page_visible_time.visible_ms
+		`
+	}
 	columnList := strings.Join(names, ", ")
 	// EXCEPT ALL keeps the import idempotent without assuming primary keys.
 	// #nosec G201 -- identifiers come from validated catalog metadata and the path is escaped.
@@ -199,10 +211,10 @@ func importArchiveTable(ctx context.Context, db *sql.DB, file, table string, col
 			SELECT %s FROM read_parquet('%s') src WHERE %s
 			EXCEPT ALL
 			SELECT %s FROM %s
-		)`,
+		) %s`,
 		quoteDuckDBIdentifier(table), columnList,
 		strings.Join(selects, ", "), escapeSQLString(file), strings.Join(guards, " AND "),
-		columnList, quoteDuckDBIdentifier(table),
+		columnList, quoteDuckDBIdentifier(table), conflictClause,
 	)
 	result, err := db.ExecContext(ctx, insertQuery)
 	if err != nil {

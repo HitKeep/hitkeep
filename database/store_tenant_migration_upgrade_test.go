@@ -2,19 +2,19 @@ package database
 
 import (
 	"context"
-	"path/filepath"
-	"sort"
-	"strings"
+	"io/fs"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"hitkeep/api"
 	"hitkeep/database/migrations"
+	tenantmigrations "hitkeep/database/migrations/tenant"
 )
 
 func TestTenantMigrationUpgradeWithExistingSiteReferences(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	store := NewStore(":memory:")
 	if err := store.Connect(); err != nil {
@@ -65,6 +65,11 @@ func TestTenantMigrationUpgradeWithExistingSiteReferences(t *testing.T) {
 		t.Fatal("expected legacy hit to remain unmeasured")
 	}
 
+	matched, err := store.applyPageVisibleTime(ctx, []api.PageVisibleTimeSample{{SiteID: siteID, PageID: pageID, VisibleMS: 1200}})
+	if err != nil || len(matched) != 1 || !matched[0] {
+		t.Fatalf("write visible time for an upgraded hit: matched=%v err=%v", matched, err)
+	}
+
 	var tenantMappingCount int
 	if err := store.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM site_tenants WHERE site_id = ?",
@@ -85,6 +90,66 @@ func TestTenantMigrationUpgradeWithExistingSiteReferences(t *testing.T) {
 	}
 	if tenantMemberCount != 1 {
 		t.Fatalf("expected 1 tenant_members row for user, got %d", tenantMemberCount)
+	}
+}
+
+func TestVisibleTimeMigrationAfterPaidClick(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		schema  fs.FS
+		paid    string
+		visible string
+		migrate func(*Store, context.Context) error
+	}{
+		{"shared", migrations.Fs, "2026_11_21_030000_add_paid_click.sql", "2026_11_21_020000_create_page_visible_time.sql", (*Store).Migrate},
+		{"tenant", tenantmigrations.Fs, "0021_add_paid_click.sql", "0020_create_page_visible_time.sql", (*Store).MigrateTenant},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			store := NewStore(":memory:")
+			if err := store.Connect(); err != nil {
+				t.Fatalf("connect store: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			if err := applyMigrationBaseline(t, store, tc.schema, tc.paid, tc.visible); err != nil {
+				t.Fatalf("apply paid-only migrations: %v", err)
+			}
+
+			siteID := uuid.New()
+			if tc.name == "shared" {
+				userID, err := store.CreateUser(ctx, "paid-upgrade@example.com", "hash")
+				if err != nil {
+					t.Fatal(err)
+				}
+				site, err := store.CreateSite(ctx, userID, "paid-upgrade.example.com")
+				if err != nil {
+					t.Fatal(err)
+				}
+				siteID = site.ID
+			} else if err := store.UpsertSiteMirror(ctx, &api.Site{ID: siteID, Domain: "paid-upgrade.example.com"}); err != nil {
+				t.Fatal(err)
+			}
+			pageID := uuid.New()
+			if err := store.Exec(ctx, `INSERT INTO hits (site_id, session_id, page_id, timestamp, path, paid_click) VALUES (?, ?, ?, now(), '/', true)`, siteID, uuid.New(), pageID); err != nil {
+				t.Fatalf("insert measured paid click: %v", err)
+			}
+
+			if err := tc.migrate(store, ctx); err != nil {
+				t.Fatalf("upgrade paid-only database: %v", err)
+			}
+			matched, err := store.applyPageVisibleTime(ctx, []api.PageVisibleTimeSample{{SiteID: siteID, PageID: pageID, VisibleMS: 1200}})
+			if err != nil || len(matched) != 1 || !matched[0] {
+				t.Fatalf("write visible time for paid hit: matched=%v err=%v", matched, err)
+			}
+			var paid bool
+			var visibleMS int
+			if err := store.DB().QueryRowContext(ctx, `
+				SELECT h.paid_click, v.visible_ms FROM hits h JOIN page_visible_time v USING (site_id, page_id)
+				WHERE h.site_id = ? AND h.page_id = ?
+			`, siteID, pageID).Scan(&paid, &visibleMS); err != nil || !paid || visibleMS != 1200 {
+				t.Fatalf("paid=%v visible_ms=%d, want true and 1200: %v", paid, visibleMS, err)
+			}
+		})
 	}
 }
 
@@ -158,48 +223,33 @@ func TestCentralAuditMigrationBackfillsTeamAuditView(t *testing.T) {
 
 func applyMigrationsThrough(t *testing.T, store *Store, maxFileName string) error {
 	t.Helper()
+	return applyMigrationBaseline(t, store, migrations.Fs, maxFileName, "")
+}
 
-	ctx := context.Background()
-	migrationTableSQL, err := migrations.Fs.ReadFile("0000_00_00_000000_create_migrations_table.sql")
+func applyMigrationBaseline(t *testing.T, store *Store, schema fs.FS, maxFileName, skip string) error {
+	t.Helper()
+
+	ctx := t.Context()
+	files, err := fs.Glob(schema, "*.sql")
 	if err != nil {
 		return err
 	}
-	if _, err := store.DB().ExecContext(ctx, string(migrationTableSQL)); err != nil {
-		return err
-	}
-
-	entries, err := migrations.Fs.ReadDir(".")
-	if err != nil {
-		return err
-	}
-
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".sql") {
-			continue
-		}
-		if name == "0000_00_00_000000_create_migrations_table.sql" {
-			continue
-		}
-		files = append(files, name)
-	}
-	sort.Strings(files)
-
 	for _, name := range files {
 		if name > maxFileName {
 			break
 		}
-		path := filepath.Join(".", name)
-		contents, err := migrations.Fs.ReadFile(path)
+		if name == skip {
+			continue
+		}
+		contents, err := fs.ReadFile(schema, name)
 		if err != nil {
 			return err
 		}
 		if _, err := store.DB().ExecContext(ctx, string(contents)); err != nil {
 			return err
+		}
+		if name == "0000_00_00_000000_create_migrations_table.sql" {
+			continue
 		}
 		if _, err := store.DB().ExecContext(ctx, "INSERT INTO migrations (migration, applied_at) VALUES (?, ?)", name, time.Now().UTC()); err != nil {
 			return err

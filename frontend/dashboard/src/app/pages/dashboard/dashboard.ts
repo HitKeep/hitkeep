@@ -21,6 +21,7 @@ import { REALTIME_ALL_ANALYTICS_KINDS } from '@services/realtime.service';
 import { TrafficChart } from '@features/analytics/components/traffic-chart';
 import { MetricCardGroup, MetricCardGroupAction, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SearchConsoleDrilldown } from '@features/analytics/components/search-console-drilldown';
+import { VisibleTimeReport } from '@features/analytics/components/visible-time-report';
 import type { Funnel, GoalStats, MetricStat } from '@models/analytics.types';
 import type { ConversionSubject } from '@features/analytics/models/conversion-subject';
 import { WorkflowProgress, type WorkflowProgressStep } from '@components/workflow-progress/workflow-progress';
@@ -84,6 +85,7 @@ interface KpiCardData extends KpiCardModel {
         TrafficChart,
         MetricCardGroup,
         SearchConsoleDrilldown,
+        VisibleTimeReport,
         AddSiteDialog,
         TrafficRecordsCard
     ],
@@ -166,6 +168,11 @@ export class Dashboard {
         },
         { equal: (a, b) => JSON.stringify(a) === JSON.stringify(b) }
     );
+    protected readonly visibleTimeRequest = computed(() => {
+        if (this.isShareMode()) return null;
+        const request = this.reportRequest();
+        return request && this.access.canSite(request.siteId, SITE_CAPABILITIES.view) ? request : null;
+    });
     protected hasFilters = computed(() => this.activeFilters().length > 0 || this.selectedConversion() !== null);
     protected canManageConversions = computed(() => {
         const site = this.siteService.activeSite();

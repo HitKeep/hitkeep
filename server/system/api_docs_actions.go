@@ -7,6 +7,7 @@ func addOAuthActionSecurity(paths map[string]any) {
 	scopes := map[string]string{
 		"GET /api/sites":                                      "sites:read",
 		"GET /api/sites/{id}/stats":                           "analytics:read",
+		"GET /api/sites/{id}/visible-time":                    "analytics:read",
 		"GET /api/sites/{id}/setup-state":                     "analytics:read",
 		"GET /api/sites/{id}/tracking/status":                 "analytics:read",
 		"GET /api/sites/{id}/tracking-domain-options":         "analytics:read",

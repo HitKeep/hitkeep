@@ -63,6 +63,7 @@ var siteStatsResetAnalyticsSteps = []siteStatsResetStep{
 	{table: "hit_rollups_monthly", family: "rollups", query: "DELETE FROM hit_rollups_monthly WHERE site_id = ?"},
 	{table: "events", family: "native", query: "DELETE FROM events WHERE site_id = ?"},
 	{table: "hits", family: "native", query: "DELETE FROM hits WHERE site_id = ?"},
+	{table: "page_visible_time", family: "native", query: "DELETE FROM page_visible_time WHERE site_id = ?"},
 	{table: "web_vitals", family: "web_vitals", query: "DELETE FROM web_vitals WHERE site_id = ?"},
 	{table: "ai_fetches", family: "ai", query: "DELETE FROM ai_fetches WHERE site_id = ?"},
 	{table: "qr_code_opens", family: "qr", query: "DELETE FROM qr_code_opens WHERE site_id = ?"},
@@ -144,6 +145,8 @@ func (s *Store) ResetSiteStats(ctx context.Context, siteID uuid.UUID) (api.SiteS
 }
 
 func (s *Store) resetSiteAnalyticsMeasurements(ctx context.Context, siteID uuid.UUID) (api.SiteStatsResetResponse, error) {
+	s.visibleTimeMu.Lock()
+	defer s.visibleTimeMu.Unlock()
 	return s.resetSiteStatsWithSteps(ctx, siteID, siteStatsResetAnalyticsSteps, false)
 }
 

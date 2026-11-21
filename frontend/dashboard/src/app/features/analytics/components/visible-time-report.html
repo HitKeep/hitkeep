@@ -1,0 +1,41 @@
+<details #details data-testid="visible-time-report" class="mb-6 rounded-lg border border-surface-200 px-4 py-2 dark:border-surface-700" (toggle)="open.set(details.open)">
+    <summary class="cursor-pointer py-1 text-sm font-medium">{{ 'dashboard.visibleTime.title' | transloco }}</summary>
+    @if (open()) {
+    <div class="space-y-2 pb-2 pt-1 text-sm">
+        <p class="text-muted-color">{{ 'dashboard.visibleTime.description' | transloco }}</p>
+        @if (report.isLoading()) {
+        <p role="status">{{ 'common.loadingSiteData' | transloco }}</p>
+        } @else if (forbidden()) {
+        <p role="alert">{{ 'dashboard.visibleTime.forbidden' | transloco }}</p>
+        } @else if (report.error()) {
+        <p role="alert">{{ 'dashboard.visibleTime.unavailable' | transloco }}</p>
+        <p-button [label]="'common.retry' | transloco" [outlined]="true" size="small" (onClick)="report.reload()" />
+        } @else if (report.hasValue()) { @let pages = report.value(); @if (pages.length) {
+        <table class="w-full tabular-nums">
+            <thead>
+                <tr class="border-b border-surface-200 dark:border-surface-700">
+                    <th scope="col" class="py-1 text-start">{{ 'common.columns.path' | transloco }}</th>
+                    <th scope="col" class="px-2 py-1 text-end">{{ 'dashboard.visibleTime.average' | transloco }}</th>
+                    <th scope="col" class="py-1 text-end">{{ 'dashboard.visibleTime.coverage' | transloco }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (page of pages; track page.path) {
+                <tr>
+                    <th scope="row" class="py-1 text-start font-medium wrap-anywhere">{{ page.path }}</th>
+                    <td class="px-2 py-1 text-end">
+                        @if (page.avg_visible_ms === null) {
+                        <span class="text-muted-color">{{ 'dashboard.visibleTime.missing' | transloco }}</span>
+                        } @else { {{ seconds().format(page.avg_visible_ms / 1000) }} }
+                    </td>
+                    <td class="py-1 text-end whitespace-nowrap">{{ counts().format(page.measured_views) }} / {{ counts().format(page.tracked_views) }}</td>
+                </tr>
+                }
+            </tbody>
+        </table>
+        } @else {
+        <p>{{ 'dashboard.visibleTime.empty' | transloco }}</p>
+        } }
+    </div>
+    }
+</details>

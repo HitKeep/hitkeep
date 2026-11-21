@@ -21,6 +21,7 @@ export interface TrackerOptions {
     enableDeclarativeEvents: boolean;
     enablePaidSignals: boolean;
     enableWebVitals: boolean;
+    enableVisibleTime: boolean;
     trackerSource: string;
     trackerVersion: string;
 }
@@ -29,6 +30,7 @@ export interface TrackerEndpoints {
     pageEndpoint: string;
     eventEndpoint: string;
     webVitalsEndpoint: string;
+    visibleTimeEndpoint: string | null;
     /** Resolved only when Web Vitals are enabled; `null` keeps the split bundle unloaded. */
     webVitalsBundleUrl: string | null;
 }
@@ -49,6 +51,13 @@ interface PendingRequest {
     endpoint: string;
     body: string;
     respectOptOut?: boolean;
+}
+
+interface VisibleTimeView {
+    startedAt: number | null;
+    elapsedMs: number;
+    sentMs: number;
+    checkpoints: number;
 }
 
 interface EventPayload {
@@ -111,6 +120,7 @@ const MAX_PENDING_REQUESTS = 10;
 const MAX_PENDING_ACTIVATION_REQUESTS = 32;
 const RETRY_DELAY_MS = 2000;
 const DUPLICATE_PAGEVIEW_WINDOW_MS = 1500;
+const MAX_VISIBLE_TIME_MS = 24 * 60 * 60 * 1000;
 const OPT_OUT_KEY = 'hk_ignore';
 const DOWNLOAD_EXTENSIONS = new Set([
     '7z',
@@ -168,6 +178,7 @@ export function readTrackerOptions(scriptEl: Element): TrackerOptions {
         enableDeclarativeEvents: scriptEl.getAttribute('data-enable-declarative-events') === 'true',
         enablePaidSignals: scriptEl.getAttribute('data-enable-paid-signals') === 'true',
         enableWebVitals: scriptEl.getAttribute('data-enable-web-vitals') === 'true',
+        enableVisibleTime: scriptEl.getAttribute('data-enable-visible-time') === 'true',
         trackerSource: source,
         trackerVersion: version
     };
@@ -232,11 +243,12 @@ export function resolveWebVitalsBundleUrl(scriptUrl: URL, bundleName = 'hk-vital
  * Single source of truth for the tracker's wire paths, shared by the `hk.js` snippet
  * (resolving against its own script URL) and the npm package (resolving against `host`).
  */
-export function resolveTrackerEndpoints(baseUrl: URL, enableWebVitals: boolean): TrackerEndpoints {
+export function resolveTrackerEndpoints(baseUrl: URL, enableWebVitals: boolean, enableVisibleTime: boolean): TrackerEndpoints {
     return {
         pageEndpoint: resolveTrackerUrl(baseUrl, 'ingest'),
         eventEndpoint: resolveTrackerUrl(baseUrl, 'ingest/event'),
         webVitalsEndpoint: resolveTrackerUrl(baseUrl, 'ingest/web-vitals'),
+        visibleTimeEndpoint: enableVisibleTime ? resolveTrackerUrl(baseUrl, 'ingest/visible-time') : null,
         webVitalsBundleUrl: enableWebVitals ? resolveWebVitalsBundleUrl(baseUrl) : null
     };
 }
@@ -433,6 +445,51 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     let lastPageviewAt = 0;
     let currentPageId = generateUUID();
     let pendingPageview = false;
+    const visibleTimeEndpoint = config.visibleTimeEndpoint;
+    let visibleTimeView: VisibleTimeView | null = null;
+    let pageFrozen = false;
+
+    const canMeasureVisibleTime = () => !isTrackingOptedOut(win) && (config.collectDnt || navigator.doNotTrack !== '1');
+
+    // Beacon cannot prevent the browser from putting the current query in Referer.
+    const canSendBeacon = () => typeof navigator.sendBeacon === 'function' && !config.disableBeacon && !location.search;
+
+    const resumeVisibleTime = () => {
+        if (visibleTimeView && !pageFrozen && document.visibilityState === 'visible') {
+            visibleTimeView.startedAt ??= win.performance.now();
+        }
+    };
+
+    const checkpointVisibleTime = (final: boolean) => {
+        const view = visibleTimeView;
+        if (!view || !visibleTimeEndpoint) {
+            return;
+        }
+        if (!canMeasureVisibleTime()) {
+            visibleTimeView = null;
+            return;
+        }
+        if (view.startedAt !== null) {
+            view.elapsedMs += win.performance.now() - view.startedAt;
+            view.startedAt = null;
+        }
+        if (final) {
+            visibleTimeView = null;
+        }
+        const ms = Math.min(MAX_VISIBLE_TIME_MS, Math.floor(view.elapsedMs));
+        if (ms === view.sentMs || (!final && view.checkpoints >= 2)) {
+            return;
+        }
+        view.sentMs = ms;
+        view.checkpoints++;
+
+        // A string body sends JSON as CORS-safelisted plain text without a preflight.
+        const body = JSON.stringify({ pid: currentPageId, ms });
+        if (canSendBeacon() && navigator.sendBeacon(visibleTimeEndpoint, body)) {
+            return;
+        }
+        fetch(visibleTimeEndpoint, { method: 'POST', body, keepalive: true, credentials: 'omit', referrerPolicy: 'no-referrer' }).catch(ignoreError);
+    };
 
     const queueActivationRequest = (request: PendingActivationRequest) => {
         pendingActivationRequests.push(request);
@@ -481,8 +538,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         }
         const headers = { 'Content-Type': 'application/json' };
 
-        // Beacon cannot prevent the browser from putting the current query in Referer.
-        if (navigator.sendBeacon && !config.disableBeacon && !location.search) {
+        if (canSendBeacon()) {
             const blob = new Blob([request.body], { type: 'application/json' });
             if (navigator.sendBeacon(request.endpoint, blob)) {
                 return;
@@ -574,7 +630,6 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     const sendPageViewNow = () => {
         const currentPath = location.pathname;
         const now = Date.now();
-        currentPageId = generateUUID();
 
         try {
             sessionStorage.setItem(SESSION_KEY, `${sessionId}|${now}`);
@@ -593,6 +648,8 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             initialAttribution = readAttribution();
         }
 
+        checkpointVisibleTime(true);
+        currentPageId = generateUUID();
         const payload = {
             path: currentPath,
             referrer: referrer || null,
@@ -610,6 +667,10 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             tv: config.trackerVersion
         };
         sendJson(config.pageEndpoint, payload, config.enablePaidSignals);
+        if (visibleTimeEndpoint && canMeasureVisibleTime()) {
+            visibleTimeView = { startedAt: null, elapsedMs: 0, sentMs: -1, checkpoints: 0 };
+            resumeVisibleTime();
+        }
 
         lastPageviewPath = currentPath;
         lastPageviewAt = now;
@@ -617,6 +678,9 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     };
 
     const sendPageView = () => {
+        if (!active) {
+            return;
+        }
         if (awaitingActivation) {
             pendingPageview = true;
             return;
@@ -706,6 +770,26 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     on(win, 'pagehide', flushQueue);
     on(document, 'visibilitychange', handleVisibilityFlush);
 
+    if (visibleTimeEndpoint) {
+        on(document, 'visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                resumeVisibleTime();
+            } else {
+                checkpointVisibleTime(false);
+            }
+        });
+        on(win, 'pagehide', (event) => {
+            pageFrozen = true;
+            checkpointVisibleTime(!(event as PageTransitionEvent).persisted);
+        });
+        on(win, 'pageshow', (event) => {
+            if ((event as PageTransitionEvent).persisted) {
+                pageFrozen = false;
+                resumeVisibleTime();
+            }
+        });
+    }
+
     if (config.capturePageviews) {
         sendPageView();
     }
@@ -724,6 +808,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             return;
         }
         active = false;
+        visibleTimeView = null;
         pendingPageview = false;
         pendingActivationRequests.length = 0;
         if (retryTimer !== null) {
@@ -761,7 +846,7 @@ export function bootstrapTracker(win: HitKeepWindow = window): void {
     const scriptUrl = new URL(scriptEl.src, win.location.href);
     createTracker(win, {
         ...options,
-        ...resolveTrackerEndpoints(scriptUrl, options.enableWebVitals),
+        ...resolveTrackerEndpoints(scriptUrl, options.enableWebVitals, options.enableVisibleTime),
         capturePageviews: true,
         captureOnLocalhost: false,
         bindToWindow: true

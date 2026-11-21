@@ -1,5 +1,7 @@
 package system
 
+import "hitkeep/api"
+
 func openAPIV1Paths() map[string]any {
 	return mergeOpenAPIPathMaps(
 		openAPIV1CorePaths(),
@@ -90,6 +92,12 @@ func openAPIV1CorePaths() map[string]any {
 			"post": op([]string{"Ingest"}, "Ingest Web Vital", "Ingests one compact opt-in Web Vital sample from hk-vitals.js. The server resolves the site from Origin, derives the rating from standard thresholds, and strips browser-provided query strings or hashes from the path.", nil, nil,
 				jsonBody(map[string]any{"$ref": "#/components/schemas/WebVitalIngestPayload"}),
 				map[string]any{"202": desc("Accepted"), "400": errResp("Invalid request")}),
+		},
+		"/ingest/visible-time": map[string]any{
+			"options": op([]string{"Ingest"}, "Preflight visible time ingest", "CORS preflight for opt-in visible time ingest.", nil, nil, nil, map[string]any{"204": desc("Preflight response")}),
+			"post": op([]string{"Ingest"}, "Ingest page visible time", "Accepts cumulative visible milliseconds for a tracked pageview. Origin resolves the site. HitKeep retains the greatest accepted value for each matching site and page ID. An accepted request may be dropped if its pageview is unavailable.", nil, nil,
+				pageVisibleTimeIngestBody(),
+				map[string]any{"202": desc("Accepted"), "400": errResp("Invalid request"), "413": errResp("Body too large"), "429": errResp("Too many requests")}),
 		},
 		"/api/ingest/server/pageview": map[string]any{
 			"post": op([]string{"Ingest"}, "Ingest server-side pageview", "Accepts one trusted server-side pageview from an API client. Use this endpoint for backend forwarding, CMS plugins, reverse proxy forwarding, edge workers, and historical pageview replay. It does not require browser Origin or Referer headers. HitKeep resolves the site from the submitted URL hostname, requires site.manage_data for that resolved site, and uses visitor_ip for ingest-time exclusions, spam filtering, and country, region, city, provider, and ASN lookup. UTM values and hk_qr QR attribution are read from the query string in url, for example utm_source, utm_campaign, and hk_qr on the visitor-facing URL, not from top-level JSON fields. Stored analytics records contain derived country, region, city, provider, and ASN context. HitKeep does not store the raw visitor IP. This endpoint uses the ingest rate limiter. OAuth requires an API-resource token with ingest:write, a nonzero site_id matching the URL-resolved site, an explicit site grant, and current site.manage_data authority. Existing API-client payloads remain supported without site_id.", append(secAPIClient(), map[string]any{"oauth2": []string{"ingest:write"}}), nil,
@@ -834,4 +842,20 @@ func serverEventIngestSchema() map[string]any {
 		"required":          []string{"url", "timestamp", "name"},
 		"dependentRequired": map[string]any{"visitor_ip": []string{"user_agent"}, "user_agent": []string{"visitor_ip"}},
 	}
+}
+
+func pageVisibleTimeIngestBody() map[string]any {
+	schema := map[string]any{
+		"type": "object", "required": []string{"pid", "ms"}, "additionalProperties": false,
+		"properties": map[string]any{
+			"pid": map[string]any{"type": "string", "format": "uuid", "description": "Page ID sent with the pageview."},
+			"ms":  map[string]any{"type": "integer", "minimum": 0, "maximum": api.MaxPageVisibleTimeMS},
+		},
+	}
+	return map[string]any{"required": true, "content": map[string]any{
+		"application/json": map[string]any{"schema": schema},
+		"text/plain": map[string]any{"schema": map[string]any{
+			"type": "string", "contentMediaType": "application/json", "contentSchema": schema,
+		}, "example": `{"pid":"41440da4-8320-4476-83cf-3d8e3241a4a7","ms":1200}`},
+	}}
 }

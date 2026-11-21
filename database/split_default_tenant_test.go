@@ -42,6 +42,7 @@ var defaultTenantSplitFixtureTables = []string{
 	"imported_event_dimensions_daily",
 	"imported_event_properties_daily",
 	"imported_traffic_daily",
+	"page_visible_time",
 	"qr_code_opens",
 	"rollup_dirty_buckets",
 	"search_console_facts",
@@ -577,6 +578,15 @@ func seedSplitFixtureTables(t *testing.T, ctx context.Context, store *Store, sit
 			t.Fatalf("count existing split fixture table %s: %v", table, err)
 		}
 		if existing > 0 {
+			continue
+		}
+		if table == "page_visible_time" {
+			if _, err := store.DB().ExecContext(ctx, `
+				INSERT INTO page_visible_time
+				SELECT site_id, page_id, 1200 FROM hits WHERE site_id = ? LIMIT 1
+			`, siteID); err != nil {
+				t.Fatalf("seed visible time split fixture: %v", err)
+			}
 			continue
 		}
 		columns, err := splitFixtureColumns(ctx, store, table)

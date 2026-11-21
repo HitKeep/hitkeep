@@ -506,6 +506,12 @@ func (m *TenantStoreManager) transferSite(ctx context.Context, siteID, destinati
 	}
 
 	if sourceStore != destinationStore {
+		// Retention can archive and prune the same hits while a site is moving.
+		sourceStore.visibleTimeMu.Lock()
+		defer sourceStore.visibleTimeMu.Unlock()
+		destinationStore.visibleTimeMu.Lock()
+		defer destinationStore.visibleTimeMu.Unlock()
+
 		if err := m.shared.AppendAuditEntry(ctx, siteTransferDataMovePreparedAudit(site, sourceTenantID, destinationTenantID, auditEntries)); err != nil {
 			return fmt.Errorf("append site transfer data move audit: %w", err)
 		}

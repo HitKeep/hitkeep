@@ -72,6 +72,16 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 	paidSignalSessions := map[string]any{"type": "integer", "description": "Distinct sessions with a paid-click signal on at least one matching native hit."}
 	paidSignalMeasuredSessions := map[string]any{"type": "integer", "description": "Distinct sessions with a measured paid-click signal (true or false) on at least one matching native hit."}
 	return map[string]any{
+		"VisibleTimePage": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path":           map[string]any{"type": "string"},
+				"avg_visible_ms": map[string]any{"type": []string{"number", "null"}, "minimum": 0, "description": "Mean visible milliseconds across measured pageviews. Null when no pageview on this path has a sample."},
+				"measured_views": map[string]any{"type": "integer", "minimum": 0, "description": "Tracked pageviews with a stored sample."},
+				"tracked_views":  map[string]any{"type": "integer", "minimum": 1, "description": "All tracked pageviews for this path in the selected scope."},
+			},
+			"required": []string{"path", "avg_visible_ms", "measured_views", "tracked_views"},
+		},
 		"Error": map[string]any{
 			"type": "object",
 			"properties": map[string]any{

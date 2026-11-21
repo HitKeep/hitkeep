@@ -90,6 +90,7 @@ export class SiteTrackingSettings {
         disableBeacon: new FormControl(false, { nonNullable: true }),
         enableWebVitals: new FormControl(false, { nonNullable: true }),
         enablePaidSignals: new FormControl(false, { nonNullable: true }),
+        enableVisibleTime: new FormControl(false, { nonNullable: true }),
         trackOutbound: new FormControl(true, { nonNullable: true }),
         trackDownloads: new FormControl(true, { nonNullable: true }),
         trackForms: new FormControl(true, { nonNullable: true }),
@@ -169,13 +170,19 @@ export class SiteTrackingSettings {
         if (!this.trackingForm.trackDownloads().value()) attrs += ' data-disable-download-tracking="true"';
         if (!this.trackingForm.trackForms().value()) attrs += ' data-disable-form-tracking="true"';
         if (this.trackingForm.enableDeclarativeEvents().value()) attrs += ' data-enable-declarative-events="true"';
+        if (this.trackingForm.enableVisibleTime().value()) attrs += ' data-enable-visible-time="true"';
 
         return `<script async src="${scriptURL}"${attrs} referrerpolicy="no-referrer"></script>`;
     });
 
     protected readonly npmInstallCommand = `npm install ${NPM_PACKAGE_NAME}`;
 
-    protected readonly npmInitSnippet = computed(() => `import { init } from '${NPM_PACKAGE_NAME}';\n\ninit({ host: '${this.trackerHostURL()}' });`);
+    protected readonly npmInitSnippet = computed(() => {
+        const options = [`host: '${this.trackerHostURL()}'`];
+        if (this.trackingForm.enablePaidSignals().value()) options.push('enablePaidSignals: true');
+        if (this.trackingForm.enableVisibleTime().value()) options.push('visibleTime: true');
+        return `import { init } from '${NPM_PACKAGE_NAME}';\n\ninit({ ${options.join(', ')} });`;
+    });
 
     protected readonly serverIngestSnippet = computed(() => {
         const domain = this.site()?.domain || 'example.com';
@@ -193,20 +200,21 @@ export class SiteTrackingSettings {
     });
 
     /** How many snippet options differ from their defaults, shown on the collapsed fieldset. */
-    protected readonly changedOptionCount = computed(
-        () =>
-            [
+    protected readonly changedOptionCount = computed(() => {
+        const options = [this.trackingForm.enablePaidSignals().value(), this.trackingForm.enableVisibleTime().value(), this.selectedSnippetTrackingDomain() !== null];
+        if (this.installMethod() === 'script') {
+            options.push(
                 this.trackingForm.collectDnt().value(),
                 this.trackingForm.disableBeacon().value(),
                 this.trackingForm.enableWebVitals().value(),
-                this.trackingForm.enablePaidSignals().value(),
                 !this.trackingForm.trackOutbound().value(),
                 !this.trackingForm.trackDownloads().value(),
                 !this.trackingForm.trackForms().value(),
-                this.trackingForm.enableDeclarativeEvents().value(),
-                this.selectedSnippetTrackingDomain() !== null
-            ].filter(Boolean).length
-    );
+                this.trackingForm.enableDeclarativeEvents().value()
+            );
+        }
+        return options.filter(Boolean).length;
+    });
 
     constructor() {
         effect((onCleanup) => {

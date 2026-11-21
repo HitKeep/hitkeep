@@ -978,6 +978,16 @@
     "unknown": "Inconnu"
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Temps visible par page",
+      "description": "Pages les plus consultées selon les vues enregistrées sur la période sélectionnée. Seules les vues mesurées entrent dans la moyenne.",
+      "average": "Temps visible moyen",
+      "coverage": "Vues mesurées / enregistrées",
+      "missing": "Aucune mesure",
+      "empty": "Aucune vue de page enregistrée ne correspond à cette sélection.",
+      "unavailable": "Le temps visible est temporairement indisponible.",
+      "forbidden": "Vous n’avez pas accès à ce rapport."
+    },
     "conversions": { "title": "Conversions", "description": "Filtrez tout l’espace de travail par cohorte d’objectif ou d’entonnoir.", "filters": { "goal": "Objectif : {{name}}", "funnel": "Entonnoir : {{name}}" }, "invalidSubject": "Cet objectif ou cet entonnoir n’est plus disponible pour ce site." },
     "breadcrumbOverview": "Aperçu",
     "filteredBadge": "Filtré",
@@ -1917,6 +1927,8 @@
       "collectDntDescription": "Suivre les utilisateurs même si \"Do Not Track\" est activé dans leur navigateur.",
       "disableBeaconLabel": "Désactiver sendBeacon",
       "disableBeaconDescription": "Utiliser des requêtes fetch standard au lieu de navigator.sendBeacon.",
+      "visibleTimeLabel": "Mesurer le temps visible",
+      "visibleTimeDescription": "Ajoute une option pour mesurer combien de temps chaque page reste visible dans le navigateur.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Charge le bundle Web Vitals séparé et envoie des échantillons LCP, INP, CLS, FCP et TTFB. Désactivé par défaut.",
       "autoTrackingTitle": "Suivi automatique des événements",

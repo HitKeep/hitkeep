@@ -971,6 +971,16 @@
     }
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Tempo visível por página",
+      "description": "Páginas com mais visualizações registradas no período selecionado. A média inclui apenas visualizações com medição.",
+      "average": "Tempo visível médio",
+      "coverage": "Visualizações medidas / registradas",
+      "missing": "Sem medição",
+      "empty": "Não há visualizações de página registradas para essa seleção.",
+      "unavailable": "O tempo visível está temporariamente indisponível.",
+      "forbidden": "Você não tem acesso a esse relatório."
+    },
     "conversions": { "title": "Conversões", "description": "Filtre todo o espaço de trabalho por uma coorte de meta ou funil.", "filters": { "goal": "Meta: {{name}}", "funnel": "Funil: {{name}}" }, "invalidSubject": "Essa meta ou funil não está mais disponível para este site." },
     "breadcrumbOverview": "Visão geral",
     "filteredBadge": "Filtrado",
@@ -1907,6 +1917,8 @@
       "collectDntDescription": "Rastrear usuários mesmo se o \"Do Not Track\" estiver ativado no navegador.",
       "disableBeaconLabel": "Desativar sendBeacon",
       "disableBeaconDescription": "Usar requisições fetch padrão em vez de navigator.sendBeacon.",
+      "visibleTimeLabel": "Medir o tempo visível",
+      "visibleTimeDescription": "Adiciona uma opção para medir quanto tempo cada página permanece visível no navegador.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Carregar o pacote separado Web Vitals e enviar amostras de LCP, INP, CLS, FCP e TTFB. Desativado por padrão.",
       "autoTrackingTitle": "Rastreamento automático de eventos",

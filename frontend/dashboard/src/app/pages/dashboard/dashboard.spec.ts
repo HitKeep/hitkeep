@@ -18,6 +18,8 @@ import { OnboardingService } from '@services/onboarding.service';
 import { RealtimeEvent, RealtimeService } from '@services/realtime.service';
 import { GoogleSearchConsoleService } from '@services/google-search-console.service';
 import { ReportRangePreferencesService } from '@services/report-range-preferences.service';
+import { AccessService } from '@services/access.service';
+import { ShareService } from '@services/share.service';
 import type { SiteStats } from '@models/analytics.types';
 import { emptySiteStats } from '@testing/empty-site-stats';
 
@@ -126,6 +128,25 @@ describe('Dashboard', () => {
 
     it('should create', () => {
         expect(component).toBeTruthy();
+    });
+
+    it('shows the visible time disclosure only in an authorized private dashboard', () => {
+        vi.spyOn(TestBed.inject(HitService), 'loadHits').mockImplementation(() => undefined);
+        const access = vi.spyOn(TestBed.inject(AccessService), 'canSite').mockReturnValue(false);
+        const disclosure = () => fixture.nativeElement.querySelector('[data-testid="visible-time-report"]');
+        const siteService = TestBed.inject(SiteService);
+        siteService.activeSite.set({ id: 'site-1', user_id: 'user-1', domain: 'example.com', created_at: '2026-01-01T00:00:00Z' });
+        fixture.detectChanges();
+        expect(disclosure()).toBeNull();
+
+        access.mockReturnValue(true);
+        siteService.activeSite.set({ id: 'site-2', user_id: 'user-1', domain: 'other.example.com', created_at: '2026-01-01T00:00:00Z' });
+        fixture.detectChanges();
+        expect(disclosure()?.open).toBe(false);
+
+        TestBed.inject(ShareService).setToken('read-only');
+        fixture.detectChanges();
+        expect(disclosure()).toBeNull();
     });
 
     it('opens an accessible comparison with distinct loading, zero and missing baselines', async () => {

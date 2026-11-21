@@ -55,6 +55,11 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		SitePerm:    authcore.PermSiteView,
 		RateLimiter: ctx.ApiLimiter,
 	}, h.handleGetSiteStats()))
+	mux.HandleFunc("GET /api/sites/{id}/visible-time", ctx.Handler(shared.HandlerConfig{
+		OAuthScope:  "analytics:read",
+		SitePerm:    authcore.PermSiteView,
+		RateLimiter: ctx.ApiLimiter,
+	}, h.handleGetSiteVisibleTime()))
 	mux.HandleFunc("POST /api/sites/{id}/stats/reset", ctx.Handler(shared.HandlerConfig{
 		SitePerm:    authcore.PermSiteDelete,
 		RateLimiter: ctx.ApiLimiter,

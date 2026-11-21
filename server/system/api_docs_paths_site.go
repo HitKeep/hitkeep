@@ -296,6 +296,18 @@ func openAPIV1AdminSitePaths() map[string]any {
 				paramRef("#/components/parameters/goalIDQuery"), paramRef("#/components/parameters/funnelIDQuery"),
 			}, nil, map[string]any{"200": jsonRefResp("Site stats", "#/components/schemas/SiteStats")}),
 		},
+		"/api/sites/{id}/visible-time": map[string]any{
+			"get": op([]string{"Sites"}, "Get visible time by page", "Returns up to ten paths ranked by tracked pageviews in the selected range and filters. The average uses views with a visible-time sample, including zero values. Requires site.view.", secAnyAuth(), []any{
+				paramRef("#/components/parameters/siteID"), paramRef("#/components/parameters/from"), paramRef("#/components/parameters/to"),
+				paramRef("#/components/parameters/filter"), paramRef("#/components/parameters/filterType"), paramRef("#/components/parameters/filterValue"),
+				paramRef("#/components/parameters/goalIDQuery"), paramRef("#/components/parameters/funnelIDQuery"),
+			}, nil, map[string]any{
+				"200": jsonSchemaResp("Visible time by page", map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/VisibleTimePage"}}),
+				"400": errResp("Invalid report parameters"),
+				"401": errResp("Authentication required"),
+				"403": errResp("Site access denied"),
+			}),
+		},
 		"/api/sites/{id}/stats/reset": map[string]any{
 			"post": op([]string{"Sites"}, "Reset site stats", "Irreversibly clears currently stored measured stats for a site while preserving the site configuration. Requires a human dashboard session with site.delete; API client bearer tokens are rejected.", secCookie(), []any{paramRef("#/components/parameters/siteID")},
 				jsonBody(map[string]any{"$ref": "#/components/schemas/SiteStatsResetRequest"}),

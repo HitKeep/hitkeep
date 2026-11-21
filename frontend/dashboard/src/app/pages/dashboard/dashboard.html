@@ -159,7 +159,9 @@
     }
     <app-metric-card-group class="mb-6" [tabs]="metricCardTabs()" (rowClicked)="onMetricCardClick($event)" (actionClicked)="onMetricCardAction($event)" />
 
-    @if (!embed.isEmbedMode()) {
+    @if (visibleTimeRequest(); as request) {
+    <app-visible-time-report [scope]="request" [refreshKey]="trafficRefreshKey()" />
+    } @if (!embed.isEmbedMode()) {
     <app-traffic-records-card
         [siteId]="siteService.activeSite()?.id || null"
         [siteDomain]="siteDomain()"

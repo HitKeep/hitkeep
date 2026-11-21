@@ -13,7 +13,7 @@ This is the official browser SDK for [HitKeep](https://hitkeep.com), a self-host
 - **Framework-native** — no `<script>` tag, no `window.hk` casts, full TypeScript types
 - **Automatic tracking** — pageviews, SPA route changes, outbound links, file downloads, form submits
 - **Typed e-commerce events** — `view_item`, `add_to_cart`, `begin_checkout`, `purchase`
-- **Tiny and self-contained** — ~3.7 kB gzipped, zero runtime dependencies, ESM + CJS
+- **Self-contained** — zero runtime dependencies, ESM + CJS
 
 ## Install
 
@@ -112,6 +112,7 @@ init({
     declarativeEvents: false, // named clicks and submits from HTML attributes
     enablePaidSignals: false, // report the presence of a paid click signal on pageviews
     webVitals: false, // load the Web Vitals bundle from `${host}/hk-vitals.js`
+    visibleTime: false, // measure time the page is visible
     useBeacon: true, // prefer navigator.sendBeacon
     respectDoNotTrack: true, // drop tracking when DNT is enabled
     captureOnLocalhost: false, // localhost is blocked by default
@@ -120,6 +121,12 @@ init({
 ```
 
 Each option maps to a `hk.js` data attribute where one exists — see the [tracker architecture guide](https://hitkeep.com/guides/tracking/tracker-architecture/) for the delivery, retry, and storage behavior shared by both.
+
+### Visible time
+
+Set `visibleTime: true` in `init()`, or add `data-enable-visible-time="true"` to your `hk.js` script tag. HitKeep measures how long each tracked pageview is visible, up to 24 hours. Timing pauses when the page is hidden, and a back/forward cache restore continues the original pageview.
+
+Each pageview can send up to two checkpoints when the page is hidden or cached, plus a final sample when navigation ends the view. Each sample contains the pageview ID and cumulative milliseconds. Unchanged values are skipped, and SDK `cleanup()` discards any pending measurement. An interrupted exit or failed request can leave a pageview with a partial measurement or no measurement.
 
 ### Named clicks and submits in HTML
 
@@ -156,7 +163,7 @@ Use these examples only where the current and previous tracked pathnames are saf
 
 #### Server-rendered 404 page
 
-In the template your server returns with HTTP status 404, register the listener before your existing snippet. The window's `load` event waits for the `async` tracker script. Keep the URL and any `data-*` options from your existing snippet, and add the listener only to the 404 template.
+In the template your server returns with HTTP status 404, register the listener before your existing snippet. The window's `load` event waits for the `async` tracker script. Keep the URL and any `data-*` options from your existing snippet, and add the listener only to the 404 template. The `referrerpolicy` attribute keeps the current URL out of the request for `hk.js`.
 
 ```html
 <script>
@@ -167,7 +174,7 @@ In the template your server returns with HTTP status 404, register the listener 
         }
     }, { once: true });
 </script>
-<script async src="https://your-hitkeep.example.com/hk.js"></script>
+<script async src="https://your-hitkeep.example.com/hk.js" referrerpolicy="no-referrer"></script>
 ```
 
 #### Vue Router SPA
@@ -206,7 +213,7 @@ createApp(App).use(router).mount('#app');
 
 #### Keep private URLs out of tracking
 
-The empty `p` object covers custom properties only. The tracker sends the current pathname as `path` and referrer context as `r`, which can be the raw `document.referrer` or a previous SPA pathname. The current URL's query string and fragment are excluded from the event body. A same-origin referring page can still expose its query string through `document.referrer`. Normal pageviews have their own collection rules and can send referrer context and recognized campaign query parameters even when the example skips the event.
+The example checks the incoming `document.referrer` before calling the tracker. The tracker sends the current pathname as `path` and the previous SPA URL or incoming referrer as `r`, with query strings and fragments removed. The `p` object for custom properties is empty. Normal pageviews can still send referrer context and recognized campaign parameters when the example skips the event.
 
 Set `Referrer-Policy: no-referrer` on pages that link from sensitive URLs, including same-origin pages, or use `rel="noreferrer"` on those links. Set the header on the tracked response as well to keep the current URL out of the analytics request's HTTP `Referer` header. A policy on the 404 response alone leaves its incoming `document.referrer` intact.
 

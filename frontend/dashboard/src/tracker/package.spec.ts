@@ -64,6 +64,7 @@ function packageHarness(path = '/pricing') {
             sendBeacon
         },
         screen: { width: 1440, height: 900 },
+        performance: { now: () => 0 },
         history: {
             pushState: vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
                 if (url) currentUrl = new URL(url, currentUrl.href);
@@ -149,6 +150,29 @@ describe('@hitkeep/tracker package entry', () => {
         handle.track('signup_clicked');
 
         expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://www.example.net/hitkeep/ingest', 'https://www.example.net/hitkeep/ingest/event']);
+    });
+
+    it('measures manual pageviews through a prefix-relative keepalive POST when beacons are disabled', () => {
+        const harness = packageHarness();
+        const fetch = vi.fn((_url: string, _init: RequestInit) => Promise.resolve(new Response(null, { status: 202 })));
+        vi.stubGlobal('fetch', fetch);
+        const handle = init({ host: 'https://www.example.net/hitkeep', autoCapturePageviews: false, visibleTime: true, useBeacon: false }, harness.win);
+        const hide = () => {
+            for (const listener of harness.windowListeners['pagehide'] ?? []) {
+                listener(new PageTransitionEvent('pagehide'));
+            }
+        };
+        expect(fetch).not.toHaveBeenCalled();
+        handle.trackPageview();
+        hide();
+
+        expect(fetch).toHaveBeenCalledTimes(2);
+        const { page_id: pid } = JSON.parse(fetch.mock.calls[0]![1].body as string);
+        const [url, request] = fetch.mock.calls[1]!;
+        expect(url).toBe('https://www.example.net/hitkeep/ingest/visible-time');
+        expect(request).toMatchObject({ method: 'POST', keepalive: true, credentials: 'omit' });
+        expect(request.headers).toBeUndefined();
+        expect(JSON.parse(request.body as string)).toEqual({ pid, ms: 0 });
     });
 
     it('tracks marked interactions with automatic events disabled and removes their listeners on cleanup', async () => {

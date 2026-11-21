@@ -18,17 +18,19 @@ import (
 )
 
 type Consumer struct {
-	tenantMgr      *database.TenantStoreManager
-	hitsConsumer   *nsq.Consumer
-	eventConsumer  *nsq.Consumer
-	vitalConsumer  *nsq.Consumer
-	hitBatcher     *storeBatcher[*api.Hit]
-	eventBatcher   *storeBatcher[*api.Event]
-	vitalBatcher   *storeBatcher[*api.WebVital]
-	realtime       *realtime.Broker
-	logger         *slog.Logger
-	logLevel       slog.Level
-	webhookEmitter webhooks.EventEmitter
+	tenantMgr           *database.TenantStoreManager
+	hitsConsumer        *nsq.Consumer
+	eventConsumer       *nsq.Consumer
+	vitalConsumer       *nsq.Consumer
+	visibleTimeConsumer *nsq.Consumer
+	hitBatcher          *storeBatcher[*api.Hit]
+	eventBatcher        *storeBatcher[*api.Event]
+	vitalBatcher        *storeBatcher[*api.WebVital]
+	visibleTimeBatcher  *storeBatcher[*visibleTimeDelivery]
+	realtime            *realtime.Broker
+	logger              *slog.Logger
+	logLevel            slog.Level
+	webhookEmitter      webhooks.EventEmitter
 }
 
 func NewConsumer(tenantMgr *database.TenantStoreManager, logger *slog.Logger, level slog.Level, realtimeBroker *realtime.Broker) *Consumer {
@@ -80,6 +82,7 @@ func NewConsumer(tenantMgr *database.TenantStoreManager, logger *slog.Logger, le
 		consumer.publishWebVitalsChanged(vitals)
 		return nil
 	})
+	consumer.visibleTimeBatcher = newStoreBatcher("page_visible_time", logger, ingestBatchSize, ingestBatchFlushInterval, ingestPersistTimeout, consumer.writeVisibleTimeBatch)
 	return consumer
 }
 
@@ -251,6 +254,19 @@ func (c *Consumer) Connect(addr string) error {
 	}
 	c.vitalConsumer = vitalConsumer
 
+	visibleTimeConfig := newIngestConsumerConfig()
+	visibleTimeConfig.MaxAttempts = visibleTimeAttempts
+	visibleTimeConsumer, err := nsq.NewConsumer(VisibleTimeTopic, visibleTimeChannel, visibleTimeConfig)
+	if err != nil {
+		return err
+	}
+	visibleTimeConsumer.SetLogger(hklog.GoNSQLogger{Logger: c.logger}, hklog.NSQGoLevel(c.logLevel))
+	visibleTimeConsumer.AddConcurrentHandlers(nsq.HandlerFunc(c.handleVisibleTime), ingestConsumerConcurrency)
+	if err := visibleTimeConsumer.ConnectToNSQD(addr); err != nil {
+		return err
+	}
+	c.visibleTimeConsumer = visibleTimeConsumer
+
 	return nil
 }
 
@@ -266,6 +282,13 @@ func (c *Consumer) Stop() {
 	if c.vitalConsumer != nil {
 		c.vitalConsumer.Stop()
 		<-c.vitalConsumer.StopChan
+	}
+	if c.visibleTimeConsumer != nil {
+		c.visibleTimeConsumer.Stop()
+		<-c.visibleTimeConsumer.StopChan
+	}
+	if c.visibleTimeBatcher != nil {
+		c.visibleTimeBatcher.Stop()
 	}
 	if c.hitBatcher != nil {
 		c.hitBatcher.Stop()

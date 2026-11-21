@@ -978,6 +978,16 @@
     }
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Visible time by page",
+      "description": "Top pages by tracked views in the selected range. Averages use only views with a measurement.",
+      "average": "Avg. visible time",
+      "coverage": "Measured / tracked views",
+      "missing": "No sample",
+      "empty": "No tracked pageviews match this selection.",
+      "unavailable": "Visible time is temporarily unavailable.",
+      "forbidden": "You don’t have access to this report."
+    },
     "conversions": {
       "title": "Conversions",
       "description": "Filter the entire workspace by a goal or funnel cohort.",
@@ -1991,6 +2001,8 @@
       "collectDntDescription": "Track users even if \"Do Not Track\" is enabled in their browser.",
       "disableBeaconLabel": "Disable sendBeacon",
       "disableBeaconDescription": "Use standard fetch requests instead of navigator.sendBeacon.",
+      "visibleTimeLabel": "Measure visible time",
+      "visibleTimeDescription": "Add an option to measure how long each page is visible in the browser.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Load the separate Web Vitals bundle and send LCP, INP, CLS, FCP, and TTFB samples. Off by default.",
       "autoTrackingTitle": "Automatic event tracking",

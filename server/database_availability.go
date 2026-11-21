@@ -48,7 +48,8 @@ func databaseIndependentRoute(path string) bool {
 	return !strings.HasPrefix(path, "/api/") &&
 		path != "/ingest" &&
 		path != "/ingest/event" &&
-		path != "/ingest/web-vitals"
+		path != "/ingest/web-vitals" &&
+		path != "/ingest/visible-time"
 }
 
 func writeDatabaseUnavailable(ctx context.Context, w http.ResponseWriter, state string) {

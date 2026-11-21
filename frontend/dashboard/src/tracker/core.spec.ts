@@ -71,6 +71,7 @@ function trackerHarness(path = '/signup', scriptSrc = 'https://analytics.example
     const documentListeners: ListenerMap = {};
     let visibilityState = 'visible';
     let prerendering = false;
+    let monotonicTime = 0;
     const stored = new Map<string, string>();
     const sessionStorage = {
         getItem: vi.fn((key: string) => stored.get(key) ?? null),
@@ -140,6 +141,7 @@ function trackerHarness(path = '/signup', scriptSrc = 'https://analytics.example
         },
         screen: { width: 1440, height: 900 },
         history,
+        performance: { now: () => monotonicTime },
         sessionStorage,
         localStorage,
         crypto: {
@@ -166,6 +168,9 @@ function trackerHarness(path = '/signup', scriptSrc = 'https://analytics.example
         script,
         sendBeacon,
         sessionStorage,
+        setTime: (next: number) => {
+            monotonicTime = next;
+        },
         setVisibilityState: (next: string) => {
             visibilityState = next;
         },
@@ -197,6 +202,25 @@ function dispatchInteraction(harness: ReturnType<typeof trackerHarness>, target:
 
 function recordedEvents(harness: ReturnType<typeof trackerHarness>) {
     return Promise.all(harness.sendBeacon.mock.calls.filter(([url]) => String(url).endsWith('/ingest/event')).map(async ([, body]) => JSON.parse(await (body as Blob).text()) as { n: string; p: Record<string, unknown>; path: string }));
+}
+
+function visibility(harness: ReturnType<typeof trackerHarness>, state: string, at: number) {
+    harness.setTime(at);
+    harness.setVisibilityState(state);
+    for (const listener of harness.documentListeners['visibilitychange'] ?? []) {
+        listener(new Event('visibilitychange'));
+    }
+}
+
+function pageLifecycle(harness: ReturnType<typeof trackerHarness>, type: 'pagehide' | 'pageshow', persisted: boolean, at: number) {
+    harness.setTime(at);
+    for (const listener of harness.windowListeners[type] ?? []) {
+        listener(new PageTransitionEvent(type, { persisted }));
+    }
+}
+
+function visibleSamples(harness: ReturnType<typeof trackerHarness>) {
+    return harness.sendBeacon.mock.calls.filter(([url]) => String(url).endsWith('/ingest/visible-time')).map(([, body]) => JSON.parse(body as string));
 }
 
 describe('tracker core', () => {
@@ -535,6 +559,7 @@ describe('tracker core', () => {
             enableDeclarativeEvents: true,
             enablePaidSignals: true,
             enableWebVitals: true,
+            enableVisibleTime: false,
             trackerSource: 'hk.js',
             trackerVersion: ''
         });
@@ -976,11 +1001,13 @@ describe('tracker core', () => {
             enableDeclarativeEvents: false,
             enablePaidSignals: false,
             enableWebVitals: false,
+            enableVisibleTime: false,
             trackerSource: '@hitkeep/tracker',
             trackerVersion: '2.12.0',
             pageEndpoint: 'https://stats.example.com/ingest',
             eventEndpoint: 'https://stats.example.com/ingest/event',
             webVitalsEndpoint: 'https://stats.example.com/ingest/web-vitals',
+            visibleTimeEndpoint: null,
             webVitalsBundleUrl: 'https://stats.example.com/hk-vitals.js',
             capturePageviews: true,
             captureOnLocalhost: false,
@@ -988,6 +1015,165 @@ describe('tracker core', () => {
             ...overrides
         };
     }
+
+    it('counts visible intervals across BFCache and reserves a third attempt for the final sample', async () => {
+        const harness = trackerHarness('/signup', 'https://stats.example.com/prefix/hk.js');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.script.setAttribute('data-enable-web-vitals', 'true');
+        let nextId = 0;
+        vi.mocked(harness.win.crypto.randomUUID).mockImplementation(() => `10000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}`);
+        bootstrapTracker(harness.win);
+        const { page_id: pid } = JSON.parse(await (harness.sendBeacon.mock.calls[0]?.[1] as Blob).text());
+
+        pageLifecycle(harness, 'pagehide', true, 14.7);
+        visibility(harness, 'hidden', 20);
+        visibility(harness, 'visible', 100);
+        pageLifecycle(harness, 'pageshow', true, 150);
+        visibility(harness, 'hidden', 155.5);
+        visibility(harness, 'visible', 160);
+        visibility(harness, 'hidden', 170);
+        harness.history.replaceState({}, '', '/signup?duplicate=true');
+        expect((harness.win as HitKeepWindow).hk?._webVitals?.pageId()).toBe(pid);
+        visibility(harness, 'visible', 1000);
+        harness.setTime(1007);
+        harness.history.pushState({}, '', '/next');
+
+        expect(visibleSamples(harness)).toEqual([
+            { pid, ms: 14 },
+            { pid, ms: 20 },
+            { pid, ms: 37 }
+        ]);
+        expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual([
+            'https://stats.example.com/prefix/ingest',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest'
+        ]);
+        const next = JSON.parse(await (harness.sendBeacon.mock.calls[4]?.[1] as Blob).text());
+        expect(next.page_id).not.toBe(pid);
+        expect((harness.win as HitKeepWindow).hk?._webVitals?.pageId()).toBe(next.page_id);
+    });
+
+    it('emits zero for a hidden-born view and suppresses equal checkpoints and final samples', () => {
+        const harness = trackerHarness('/signup');
+        harness.setVisibilityState('hidden');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(harness.win);
+
+        pageLifecycle(harness, 'pagehide', true, 500);
+        pageLifecycle(harness, 'pageshow', true, 700);
+        visibility(harness, 'hidden', 900);
+        pageLifecycle(harness, 'pagehide', false, 1000);
+
+        expect(visibleSamples(harness)).toEqual([{ pid: '10000000-0000-4000-8000-000000000001', ms: 0 }]);
+    });
+
+    it('starts timing at prerender activation and caps cumulative milliseconds', () => {
+        const harness = trackerHarness('/signup');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.setPrerendering(true);
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 20);
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+
+        visibility(harness, 'visible', 1000);
+        harness.setPrerendering(false);
+        harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
+        visibility(harness, 'hidden', 1020);
+        visibility(harness, 'visible', 2000);
+        pageLifecycle(harness, 'pagehide', false, 86403000);
+
+        expect(visibleSamples(harness).map(({ ms }) => ms)).toEqual([20, 86400000]);
+    });
+
+    it('checks opt-out at emission and clears timing listeners on cleanup', () => {
+        const harness = trackerHarness('/signup');
+        const handle = createTracker(harness.win as HitKeepWindow, runtimeConfig({ visibleTimeEndpoint: 'https://stats.example.com/ingest/visible-time' }));
+        setTrackingOptOut(harness.win, true);
+        visibility(harness, 'hidden', 20);
+        setTrackingOptOut(harness.win, false);
+        visibility(harness, 'visible', 100);
+        visibility(harness, 'hidden', 110);
+        expect(visibleSamples(harness)).toEqual([]);
+
+        const listeners = harness.windowListeners['pageshow'];
+        expect(listeners).toHaveLength(1);
+        handle?.cleanup();
+        handle?.trackPageview();
+        pageLifecycle(harness, 'pageshow', true, 200);
+        visibility(harness, 'hidden', 300);
+        expect(harness.windowListeners['pageshow']).toHaveLength(0);
+        expect(harness.documentListeners['visibilitychange']).toHaveLength(0);
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
+    });
+
+    it('honors Do Not Track for visible time unless the tracker is configured to collect it', () => {
+        const blocked = trackerHarness('/signup');
+        Object.defineProperty(blocked.win.navigator, 'doNotTrack', { value: '1' });
+        blocked.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(blocked.win);
+        visibility(blocked, 'hidden', 10);
+        expect(blocked.sendBeacon).not.toHaveBeenCalled();
+
+        const allowed = trackerHarness('/signup');
+        Object.defineProperty(allowed.win.navigator, 'doNotTrack', { value: '1' });
+        allowed.script.setAttribute('data-enable-visible-time', 'true');
+        allowed.script.setAttribute('data-collect-dnt', 'true');
+        bootstrapTracker(allowed.win);
+        visibility(allowed, 'hidden', 10);
+        expect(visibleSamples(allowed).map(({ ms }) => ms)).toEqual([10]);
+    });
+
+    it('falls back to keepalive fetch once when a visible-time beacon is rejected', () => {
+        const harness = trackerHarness('/signup');
+        const fetch = fetchMockOk();
+        vi.stubGlobal('fetch', fetch);
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.sendBeacon.mockReturnValueOnce(true).mockReturnValue(false);
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 10);
+        pageLifecycle(harness, 'pagehide', false, 20);
+        for (const listener of harness.windowListeners['online'] ?? []) {
+            listener(new Event('online'));
+        }
+
+        expect(visibleSamples(harness)).toHaveLength(1);
+        expect(fetch).toHaveBeenCalledExactlyOnceWith('https://analytics.example.com/ingest/visible-time', {
+            method: 'POST',
+            body: JSON.stringify(visibleSamples(harness)[0]),
+            keepalive: true,
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer'
+        });
+    });
+
+    it('keeps paid landing URLs and referrers private when also sending visible time', () => {
+        const harness = trackerHarness('/signup?gclid=private#fragment', 'https://stats.example.com/prefix/hk.js');
+        const fetch = fetchMockOk();
+        vi.stubGlobal('fetch', fetch);
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 25);
+
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(2);
+        const [[pageURL, pageRequest], [sampleURL, sampleRequest]] = fetch.mock.calls;
+        expect(pageURL).toBe('https://stats.example.com/prefix/ingest');
+        expect(pageRequest?.referrerPolicy).toBe('no-referrer');
+        const page = JSON.parse(String(pageRequest?.body));
+        expect(page).toMatchObject({ pc: true, path: '/signup', referrer: 'https://referrer.example.com/article' });
+        expect(String(pageRequest?.body)).not.toMatch(/gclid|private|secret|fragment/);
+        expect(sampleURL).toBe('https://stats.example.com/prefix/ingest/visible-time');
+        expect(sampleRequest).toEqual({
+            method: 'POST',
+            body: JSON.stringify({ pid: page.page_id, ms: 25 }),
+            keepalive: true,
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer'
+        });
+    });
 
     it('creates a tracker from explicit endpoints without a script element', async () => {
         const harness = trackerHarness('/signup');

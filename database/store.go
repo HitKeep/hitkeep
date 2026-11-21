@@ -53,6 +53,7 @@ type Store struct {
 	closeMu                         sync.Mutex
 	closed                          bool
 	analyticsMu                     sync.Mutex
+	visibleTimeMu                   sync.Mutex
 	aiBudgetMu                      sync.Mutex
 	siteQuotaMu                     sync.Mutex
 	primaryAuthMu                   sync.Mutex

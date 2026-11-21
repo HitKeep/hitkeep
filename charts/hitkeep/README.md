@@ -140,7 +140,7 @@ customTrackingDomains:
         secretName: hitkeep-tracking-tls
 ```
 
-The tracking Ingress only routes `/hk.js`, `/hk-vitals.js`, `/ingest`, `/ingest/event`, and `/ingest/web-vitals` to HitKeep. Other paths have no chart-generated rule, and HitKeep still returns `404` for dashboard/API routes on tracking hosts if a controller forwards them.
+The tracking Ingress only routes `/hk.js`, `/hk-vitals.js`, `/ingest`, `/ingest/event`, `/ingest/web-vitals`, and `/ingest/visible-time` to HitKeep. Other paths have no chart-generated rule, and HitKeep still returns `404` for dashboard/API routes on tracking hosts if a controller forwards them.
 
 Use Caddy mode only when an external Caddy deployment handles on-demand TLS and calls HitKeep's ask endpoint:
 
