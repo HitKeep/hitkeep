@@ -10,7 +10,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 
 	json "hitkeep/jsonapi"
@@ -129,18 +131,23 @@ func (a *App) RunRaceShard(ctx context.Context, shard string, writer io.Writer) 
 	if len(packages) == 0 {
 		return result, fmt.Errorf("race shard %q selected no packages", shard)
 	}
-	args := raceTestArgs(packages)
+	args := raceTestArgs(shard, packages)
 	if err := a.runCommand(ctx, writer, commandSpec{Args: args, Env: []string{"GOFLAGS=" + goFlagsForTags(common.BuildTags)}, Display: fmt.Sprintf("go test -race [%s shard: %d packages]", shard, len(packages))}); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func raceTestArgs(packages []string) []string {
+func raceTestArgs(shard string, packages []string) []string {
 	// Keep the package timeout below the enclosing 30-minute gate timeout so a
 	// genuine hang still emits a Go stack dump while normal slower race runs are
 	// not constrained by Go's 10-minute default.
-	return append([]string{"go", "test", "-race", "-count=1", "-timeout", "20m"}, packages...)
+	args := []string{"go", "test", "-race", "-count=1", "-timeout", "20m"}
+	if shard == "rest" {
+		// Give race-instrumented application startup CPU headroom.
+		args = append(args, "-p="+strconv.Itoa(min(2, maxParallelism(), runtime.GOMAXPROCS(0))))
+	}
+	return append(args, packages...)
 }
 
 func (a *App) RunCloudTests(ctx context.Context, writer io.Writer) (GoTestResult, error) {
