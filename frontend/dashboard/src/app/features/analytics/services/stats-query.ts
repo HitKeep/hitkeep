@@ -1,6 +1,7 @@
-import { inject, Injector, signal } from '@angular/core';
+import { computed, inject, Injector, signal, untracked } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
 import { finalize, tap } from 'rxjs';
+import { previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import type { SiteStats } from '@models/analytics.types';
 import { StatsService } from '@features/analytics/services/stats.service';
 
@@ -23,10 +24,12 @@ export interface StatsQueryResult {
 }
 
 export class StatsQuery {
-    readonly stats = signal<SiteStats | null>(null);
+    private readonly loaded = signal<{ siteId: string; stats: SiteStats; period: ComparisonPeriod; comparison: ComparisonPeriod | null } | null>(null);
+    readonly stats = computed(() => this.loaded()?.stats ?? null);
+    readonly currentRange = computed(() => this.loaded()?.period ?? null);
+    readonly comparisonRange = computed(() => this.loaded()?.comparison ?? null);
     readonly isLoading = signal(false);
     readonly isBackgroundRefreshing = signal(false);
-    readonly comparisonRange = signal<{ from: string; to: string } | null>(null);
     readonly lastResult = signal<StatsQueryResult | null>(null);
 
     private readonly request = signal<StatsQueryRequest | undefined>(undefined);
@@ -43,8 +46,10 @@ export class StatsQuery {
                 this.statsService.fetchStats(params.siteId, params.from, params.to, params.filters ?? [], params.goalIds ?? [], params.funnelIds ?? []).pipe(
                     tap({
                         next: (stats) => {
+                            if (this.request() !== params) return;
                             const result = { mode: params.mode ?? 'blocking', sequence: ++this.resultSequence };
-                            this.stats.set(stats);
+                            const period = { from: params.from, to: params.to };
+                            this.loaded.set({ siteId: params.siteId, stats, period, comparison: stats.comparison ? previousPeriod(period.from, period.to) : null });
                             this.lastResult.set(result);
                             params.onSuccess?.(stats, result);
                         },
@@ -64,8 +69,9 @@ export class StatsQuery {
     }
 
     load(request: StatsQueryRequest): void {
+        const loaded = untracked(this.loaded);
+        if (loaded && loaded.siteId !== request.siteId) this.loaded.set(null);
         const mode = request.mode ?? 'blocking';
-        this.comparisonRange.set(this.statsService.comparisonRange(request.from, request.to));
         if (mode === 'background') {
             this.isLoading.set(false);
             this.isBackgroundRefreshing.set(true);

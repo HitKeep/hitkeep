@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { TranslocoTestingModule } from '@jsverse/transloco';
+import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { SeriesChart } from '@features/analytics/components/series-chart';
 import { ReportSubjectService } from '@services/report-subject.service';
@@ -43,9 +43,13 @@ describe('SeriesChart', () => {
             imports: [
                 SeriesChart,
                 TranslocoTestingModule.forRoot({
-                    langs: { en: {} },
+                    langs: {
+                        en: { comparison: { seriesLabel: '{{metric}} (previous)', bucketOrder: 'Paired by bucket order', gridMismatch: 'Different bucket grids' } },
+                        de: { comparison: { seriesLabel: '{{metric}} (vorher)' } }
+                    },
                     translocoConfig: {
-                        availableLangs: ['en'],
+                        availableLangs: ['en', 'de'],
+                        reRenderOnLangChange: true,
                         defaultLang: 'en'
                     },
                     preloadLangs: true
@@ -125,10 +129,54 @@ describe('SeriesChart', () => {
         const frame = inspectable.chartFrameOptions();
         const merge = inspectable.chartMergeOptions();
         expect(merge.series.find((series) => series.name === 'Events')?.type).toBe('bar');
-        expect(merge.series.find((series) => series.name === 'Events (prev.)')?.lineStyle?.type).toBe('dashed');
+        expect(merge.series.find((series) => series.name === 'Events (previous)')?.lineStyle?.type).toBe('dashed');
         expect(frame.series.find((series) => series.data.length > 0)).toBeUndefined();
         expect(merge.xAxis.data.length).toBe(2);
         expect(merge.series.find((series) => series.name === 'Events')?.data).toEqual([5, 9]);
+    });
+
+    it('renders a prior-only series on a valid zero-filled current grid and localizes the label', () => {
+        fixture.componentRef.setInput('data', [
+            { time: '2026-07-01T00:00:00Z', count: 0 },
+            { time: '2026-07-02T00:00:00Z', count: 0 }
+        ]);
+        fixture.componentRef.setInput('comparisonData', [
+            { time: '2026-06-28T00:00:00Z', count: 5 },
+            { time: '2026-06-29T00:00:00Z', count: 0 }
+        ]);
+        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
+        fixture.detectChanges();
+
+        const options = (component as unknown as { chartMergeOptions: () => { series: { name: string; data: number[] }[] } }).chartMergeOptions;
+        expect(fixture.debugElement.query(By.css('[echarts]'))).toBeTruthy();
+        expect(fixture.nativeElement.textContent).toContain('Paired by bucket order');
+        expect(options().series[1]).toMatchObject({ name: 'Events (previous)', data: [5, 0] });
+
+        TestBed.inject(TranslocoService).setActiveLang('de');
+        fixture.detectChanges();
+        expect(options().series[1].name).toBe('Events (vorher)');
+    });
+
+    it.each([
+        { previous: [{ time: '2026-06-28T00:00:00Z', count: 5 }] },
+        {
+            previous: [
+                { time: '2026-06-28T00:00:00Z', count: 5 },
+                { time: '2026-06-28T01:00:00Z', count: 8 }
+            ]
+        }
+    ])('omits an incompatible previous grid (%j)', ({ previous }) => {
+        fixture.componentRef.setInput('data', [
+            { time: '2026-07-01T00:00:00Z', count: 7 },
+            { time: '2026-07-02T00:00:00Z', count: 9 }
+        ]);
+        fixture.componentRef.setInput('comparisonData', previous);
+        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
+        fixture.detectChanges();
+
+        const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions();
+        expect(merge.series.map((series) => series.name)).toEqual(['Events']);
+        expect(fixture.nativeElement.textContent).toContain('Different bucket grids');
     });
 
     it('patches a live chart with replaceMerge so dropped series cannot linger', async () => {
@@ -145,7 +193,7 @@ describe('SeriesChart', () => {
 
         const firstPatch = setOption.mock.lastCall as [{ series: { name: string }[] }, { replaceMerge: string[] }];
         expect(firstPatch[1]).toEqual({ replaceMerge: ['series'] });
-        expect(firstPatch[0].series.map((series) => series.name)).toContain('Events (prev.)');
+        expect(firstPatch[0].series.map((series) => series.name)).toContain('Events (previous)');
 
         fixture.componentRef.setInput('comparisonData', []);
         fixture.detectChanges();

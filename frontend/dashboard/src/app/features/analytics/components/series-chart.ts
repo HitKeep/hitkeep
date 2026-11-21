@@ -28,7 +28,7 @@ export interface SeriesDefinition {
     design?: HitkeepChartDesign;
     dashed?: boolean;
     smooth?: boolean;
-    /** Translated label for the comparison twin; falls back to "<label> (prev.)". */
+    /** Translated label for the comparison twin; falls back to the translated previous-period label. */
     comparisonLabel?: string;
     /** Set false for derived series (e.g. trend lines) that must not get a comparison twin. */
     includeInComparison?: boolean;
@@ -67,8 +67,20 @@ export interface SeriesDefinition {
                 </div>
             }
         </div>
-        @if (comparisonLabel()) {
-            <p class="text-xs text-[var(--p-text-muted-color)] text-right mt-2">{{ 'comparison.vsLabel' | transloco }} {{ comparisonLabel() }}</p>
+        @if (currentPeriodLabel() || comparisonLabel() || comparisonData().length) {
+            <div class="text-xs text-[var(--p-text-muted-color)] text-right mt-2 space-y-1">
+                @if (currentPeriodLabel()) {
+                    <p>{{ 'comparison.currentPeriod' | transloco }} · {{ currentPeriodLabel() }}</p>
+                }
+                @if (comparisonLabel()) {
+                    <p>{{ 'comparison.previousPeriod' | transloco }} · {{ comparisonLabel() }}</p>
+                }
+                @if (pairedComparison().length && hasData()) {
+                    <p>{{ 'comparison.bucketOrder' | transloco }}</p>
+                } @else if (comparisonData().length && !pairedComparison().length) {
+                    <p>{{ 'comparison.gridMismatch' | transloco }}</p>
+                }
+            </div>
         }
         @if (!showSkeleton() && hasData()) {
             <app-annotation-strip [annotations]="markers().visible" [granularity]="granularity()" (selected)="notes.openExisting($event, granularity())" />
@@ -83,6 +95,7 @@ export class SeriesChart {
     isShortRange = input<boolean>(false);
     emptyTitle = input<string>('');
     emptyDescription = input<string>('');
+    currentPeriodLabel = input<string>('');
     comparisonLabel = input<string>('');
     design = input<HitkeepChartDesign>('area');
     showDesignSelector = input<boolean>(true);
@@ -115,11 +128,26 @@ export class SeriesChart {
         };
     });
 
+    protected readonly pairedComparison = computed(() => {
+        const current = this.data();
+        const previous = this.comparisonData();
+        if (!previous.length || current.length !== previous.length) return [];
+
+        const currentTimes = current.map((point) => Date.parse(point.time));
+        const previousTimes = previous.map((point) => Date.parse(point.time));
+        const offset = currentTimes[0] - previousTimes[0];
+        if (!Number.isFinite(offset)) return [];
+
+        const hasSameIntervals = currentTimes.every((time, index) => time - previousTimes[index] === offset && (index === 0 || time > currentTimes[index - 1]));
+        return hasSameIntervals || (isMonthlyGrid(currentTimes) && isMonthlyGrid(previousTimes)) ? previous : [];
+    });
+
+    private readonly hasPairedComparison = computed(() => this.pairedComparison().length > 0);
+
     protected hasData = computed(() => {
-        const data = this.data() || [];
-        const series = this.series() || [];
-        if (data.length === 0 || series.length === 0) return false;
-        return data.some((point) => series.some((s) => Number(point[s.key] ?? 0) > 0));
+        const series = this.series();
+        const currentHasData = this.data().some((point) => series.some((s) => Number(point[s.key] ?? 0) > 0));
+        return currentHasData || this.pairedComparison().some((point) => series.some((s) => s.includeInComparison !== false && Number(point[s.key] ?? 0) > 0));
     });
 
     protected readonly showSkeleton = injectSkeletonGate(this.isLoading, this.hasData);
@@ -140,7 +168,7 @@ export class SeriesChart {
             design: this.effectiveDesign(),
             labels: [],
             locale: this.transloco.getActiveLang(),
-            series: this.chartSeries([], [], this.comparisonLabel().trim().length > 0),
+            series: this.chartSeries([], [], this.hasPairedComparison()),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())
         });
     });
@@ -149,7 +177,7 @@ export class SeriesChart {
         this.activeLanguage();
         this.themeManager.version();
         const raw = this.data() || [];
-        const cmp = this.comparisonData() || [];
+        const cmp = this.pairedComparison();
         const bucketLabel = this.bucketLabelFormatter();
         return buildHitkeepChartMergeOptions({
             ariaLabel: this.accessibilityLabel(),
@@ -250,7 +278,7 @@ export class SeriesChart {
                 }
                 chartSeries.push({
                     id: `${s.key}-comparison`,
-                    label: s.comparisonLabel ?? `${s.label} (prev.)`,
+                    label: s.comparisonLabel ?? this.transloco.translate('comparison.seriesLabel', { metric: s.label }),
                     data: cmp.map((d) => Number(d[s.key] ?? 0)),
                     color: withChartAlpha(s.color, 0.4),
                     muted: true,
@@ -271,4 +299,15 @@ export class SeriesChart {
         const options: Intl.DateTimeFormatOptions = this.isShortRange() ? { hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric' };
         return new Intl.DateTimeFormat(this.localeService.getLocale(), options);
     }
+}
+
+// UTC month buckets are consecutive calendar months and can differ in elapsed days.
+function isMonthlyGrid(times: number[]): boolean {
+    const start = new Date(times[0]);
+    if (start.getUTCDate() !== 1 || times[0] % 86_400_000 !== 0) return false;
+    return times.every((time, index) => {
+        const month = new Date(start);
+        month.setUTCMonth(start.getUTCMonth() + index);
+        return month.getTime() === time;
+    });
 }

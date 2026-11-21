@@ -21,6 +21,7 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [comparisonData]="comparisonPoints()"
             [isLoading]="isLoading()"
             [isShortRange]="isShortRange()"
+            [currentPeriodLabel]="currentPeriodLabel()"
             [comparisonLabel]="comparisonLabel()"
             [design]="design()"
             [showDesignSelector]="showDesignSelector()"
@@ -40,6 +41,7 @@ export class TrafficChart {
     comparisonData = input<ChartDataPoint[]>([]);
     isLoading = input<boolean>(false);
     isShortRange = input<boolean>(false);
+    currentPeriodLabel = input<string>('');
     comparisonLabel = input<string>('');
     design = input<HitkeepChartDesign>('area');
     showDesignSelector = input<boolean>(true);

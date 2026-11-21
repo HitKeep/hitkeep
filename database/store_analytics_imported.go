@@ -12,15 +12,19 @@ import (
 	"hitkeep/api"
 )
 
-func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.AnalyticsParams, truncUnit string, sections SiteStatsSections, stats *api.SiteStats) error {
-	if stats == nil {
-		return nil
-	}
-	if !canIncludeImportedTruncUnit(truncUnit) {
-		return s.addImportedSiteStatsExclusion(ctx, params, stats, "daily_grain", "Imported aggregate data is stored at daily grain and is excluded from sub-day views.")
-	}
-	if len(params.Filters) > 0 {
+func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.AnalyticsParams, truncUnit string, sections SiteStatsSections, stats *api.SiteStats, reportExclusions bool) error {
+	if !canIncludeImportedSiteAggregates(params, truncUnit) {
+		if !reportExclusions {
+			return nil
+		}
+		if !canIncludeImportedTruncUnit(truncUnit) {
+			return s.addImportedSiteStatsExclusion(ctx, params, stats, "daily_grain", "Imported aggregate data is stored at daily grain and is excluded from sub-day views.")
+		}
 		return s.addImportedSiteStatsExclusion(ctx, params, stats, "aggregate_filter", "The active filters require relationships aggregate imports cannot prove.")
+	}
+	params.Start, params.End = fullImportedDates(params.Start, params.End)
+	if params.End.Before(params.Start) {
+		return nil
 	}
 
 	var (
@@ -115,20 +119,36 @@ func (s *Store) augmentImportedSiteOverviewStats(ctx context.Context, params api
 }
 
 func canIncludeImportedSiteAggregates(params api.AnalyticsParams, truncUnit string) bool {
-	return canIncludeImportedTruncUnit(truncUnit) && len(params.Filters) == 0
+	return canIncludeImportedTruncUnit(truncUnit) && len(params.Filters) == 0 && len(params.GoalIDs) == 0 && len(params.FunnelIDs) == 0
 }
 
 func canIncludeImportedTruncUnit(truncUnit string) bool {
 	return truncUnit == "day" || truncUnit == "month"
 }
 
+// fullImportedDates keeps only complete UTC dates within the inclusive window.
+// Dashboard endpoints have millisecond precision. A partial day cannot be
+// attributed to either side of an adjacent comparison.
+func fullImportedDates(start, end time.Time) (time.Time, time.Time) {
+	first := dateOnly(start.UTC())
+	if start.After(first) {
+		first = first.AddDate(0, 0, 1)
+	}
+	last := dateOnly(end.UTC())
+	if end.Before(last.AddDate(0, 0, 1).Add(-time.Millisecond)) {
+		last = last.AddDate(0, 0, -1)
+	}
+	return first, last
+}
+
 func (s *Store) queryImportedEventGoalConversions(ctx context.Context, params api.AnalyticsParams, eventName string) (int, error) {
+	start, end := fullImportedDates(params.Start, params.End)
 	var conversions sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT SUM(visitors)
 		FROM imported_event_daily
 		WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE) AND event_name = ?
-	`, params.SiteID, params.Start, params.End, eventName).Scan(&conversions); err != nil {
+	`, params.SiteID, start, end, eventName).Scan(&conversions); err != nil {
 		return 0, fmt.Errorf("query imported event goal conversions: %w", err)
 	}
 	return int(sqlNullInt64Value(conversions)), nil
@@ -140,7 +160,8 @@ func (s *Store) queryImportedEventGoalSeries(ctx context.Context, params api.Ana
 		return result, nil
 	}
 	args := make([]any, 0, 3+len(eventNames))
-	args = append(args, params.SiteID, params.Start, params.End)
+	start, end := fullImportedDates(params.Start, params.End)
+	args = append(args, params.SiteID, start, end)
 	for _, name := range eventNames {
 		args = append(args, name)
 	}

@@ -1856,7 +1856,13 @@
         },
         "script": {
           "description": "Copie e cole o código abaixo no HTML do seu site. O rastreamento automático é ativado por padrão para cliques de saída, downloads e envios de formulários.",
-          "docsAction": "Guia do rastreador"
+          "docsAction": "Guia do rastreador",
+          "declarativeEventsLabel": "Rastrear cliques e envios de formulários marcados",
+          "declarativeEventsDescription": "Envia eventos personalizados ao clicar em elementos marcados ou enviar formulários marcados. Use data-hk-event ou data-hitkeep-event para marcá-los."
+        },
+        "assistant": {
+          "copyAction": "Copiar prompt para o assistente de código",
+          "prompt": "Instale o rastreador do HitKeep em {{ domain }}. Verifique primeiro se o projeto já tem uma integração com o HitKeep. Se tiver, atualize-a apenas se for necessário. Caso contrário, adicione o script a seguir uma única vez no modelo compartilhado das páginas. Mantenha o URL e todos os atributos do script como estão e preserve o funcionamento do consentimento no site.\n\n{{ snippet }}\n\nAbra uma página no nome de host previsto. No painel Rede do navegador, confirme que o script do rastreador carrega e que a solicitação de visualização de página é bem-sucedida. Teste os eventos automáticos ativados executando as ações correspondentes e verificando as solicitações de evento. No HitKeep, use “{{ verifier }}” para confirmar que um acesso recente foi aceito. Informe o que você verificou e o que ainda precisa ser conferido."
         },
         "npm": {
           "description": "Inclua o rastreador tipado em um app React, Vue, Angular ou Astro. Sem tag de script, com tipos TypeScript completos e sem filtragem por bloqueadores de conteúdo.",
@@ -3113,6 +3119,19 @@
     }
   },
   "comparison": {
+    "details": "Comparação de períodos",
+    "metric": "Métrica",
+    "currentPeriod": "Período atual",
+    "previousPeriod": "Período anterior",
+    "relativeChange": "Variação relativa",
+    "unavailable": "Indisponível",
+    "zeroBaseline": "Indefinida (o valor anterior é zero)",
+    "elapsedRule": "O período anterior termina imediatamente antes do atual e tem a mesma duração. A variação relativa é calculada em relação ao valor anterior.",
+    "liveOnly": "Os visitantes em tempo real abrangem os últimos cinco minutos e não têm comparação.",
+    "currentOnlyBreakdowns": "Os detalhamentos e os registros de tráfego mostram apenas o período atual.",
+    "seriesLabel": "{{metric}} (anterior)",
+    "bucketOrder": "As séries são alinhadas pela ordem dos intervalos. O eixo mostra as datas do período atual.",
+    "gridMismatch": "O período anterior usa intervalos diferentes e a série correspondente fica oculta.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Visualizações de página (ant.)",
     "visitorsLabel": "Visitantes (ant.)"

@@ -109,6 +109,7 @@ init({
     outboundLinks: true, // outbound_click events
     fileDownloads: true, // file_download events
     formSubmissions: true, // form_submit events
+    declarativeEvents: false, // named clicks and submits from HTML attributes
     webVitals: false, // load the Web Vitals bundle from `${host}/hk-vitals.js`
     useBeacon: true, // prefer navigator.sendBeacon
     respectDoNotTrack: true, // drop tracking when DNT is enabled
@@ -118,6 +119,25 @@ init({
 ```
 
 Each option maps to a `hk.js` data attribute where one exists — see the [tracker architecture guide](https://hitkeep.com/guides/tracking/tracker-architecture/) for the delivery, retry, and storage behavior shared by both.
+
+### Named clicks and submits in HTML
+
+Set `declarativeEvents: true` in `init()`, or add `data-enable-declarative-events="true"` to your `hk.js` script tag. Then add `data-hk-event` to a clickable element, form, or submit button. `data-hitkeep-event` is also supported.
+
+```html
+<a href="/pricing" data-hk-event="pricing_clicked">See pricing</a>
+<form action="/subscribe" method="post" data-hk-event="newsletter_submitted">
+    <button type="submit">Subscribe</button>
+</form>
+```
+
+Use a fixed event name of 1–64 characters. Start with an ASCII letter or digit and use only ASCII letters, digits, underscores, and hyphens. The closest marker wins. On submit, the submit button's marker takes precedence over the form's marker. A marked submit button records its event when the browser dispatches the submit event, so a single click that submits a form generates one event. Marked links also support modifier and middle clicks.
+
+When a label forwards a click to an associated control with a marker, the control handles the event.
+
+HitKeep sends the name with the usual custom-event context and empty properties. Element text, link destinations, form fields, and other element metadata are excluded.
+
+By default, the attributes only suppress automatic events so existing manual handlers can keep calling `track()` or `hk.event()`. When opting in, remove manual calls for interactions you want the markup to track. Named events take precedence over outbound, download, and form classification.
 
 ### E-commerce
 

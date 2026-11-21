@@ -7,6 +7,8 @@ interface HitKeepEvent {
 
 type EventSender = (name: string, properties?: EventProperties) => void;
 
+type InteractionEventSender = (name: string, properties?: EventProperties, declarative?: true) => void;
+
 type HistoryMethod = 'pushState' | 'replaceState';
 
 export interface TrackerOptions {
@@ -16,6 +18,7 @@ export interface TrackerOptions {
     disableOutboundTracking: boolean;
     disableDownloadTracking: boolean;
     disableFormTracking: boolean;
+    enableDeclarativeEvents: boolean;
     enableWebVitals: boolean;
     trackerSource: string;
     trackerVersion: string;
@@ -44,6 +47,7 @@ export interface TrackerHandle {
 interface PendingRequest {
     endpoint: string;
     body: string;
+    declarative?: boolean;
 }
 
 interface EventPayload {
@@ -57,7 +61,7 @@ interface EventPayload {
     tv: string;
 }
 
-type PendingActivationRequest = { kind: 'event'; endpoint: string; payload: EventPayload } | { kind: 'web-vital'; endpoint: string; payload: WebVitalsPayload };
+type PendingActivationRequest = { kind: 'event'; endpoint: string; payload: EventPayload; declarative?: boolean } | { kind: 'web-vital'; endpoint: string; payload: WebVitalsPayload };
 
 /** Registers a listener and records its matching teardown on the owning tracker. */
 type ListenerRegistrar = (target: EventTarget, type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => void;
@@ -139,7 +143,9 @@ const DOWNLOAD_EXTENSIONS = new Set([
     'xml',
     'zip'
 ]);
-const EXPLICIT_TRACKING_SELECTORS = ['[data-hk-event]', '[data-hitkeep-event]'].join(', ');
+const EXPLICIT_TRACKING_SELECTORS = '[data-hk-event], [data-hitkeep-event]';
+const LINK_SELECTORS = 'a[href], area[href]';
+const CLICK_CONTROL_SELECTORS = `${LINK_SELECTORS}, button, input, label, select, textarea`;
 const noop = () => undefined;
 const TRACKER_SOURCE = 'hk.js';
 
@@ -158,6 +164,7 @@ export function readTrackerOptions(scriptEl: Element): TrackerOptions {
         disableOutboundTracking: scriptEl.getAttribute('data-disable-outbound-tracking') === 'true',
         disableDownloadTracking: scriptEl.getAttribute('data-disable-download-tracking') === 'true',
         disableFormTracking: scriptEl.getAttribute('data-disable-form-tracking') === 'true',
+        enableDeclarativeEvents: scriptEl.getAttribute('data-enable-declarative-events') === 'true',
         enableWebVitals: scriptEl.getAttribute('data-enable-web-vitals') === 'true',
         trackerSource: source,
         trackerVersion: version
@@ -256,12 +263,7 @@ export function extractDownloadExtension(url: URL): string | null {
 }
 
 export function hasExplicitTrackingTag(element: Element | null): boolean {
-    for (let current = element; current; current = current.parentElement) {
-        if (current.matches(EXPLICIT_TRACKING_SELECTORS)) {
-            return true;
-        }
-    }
-    return false;
+    return Boolean(element?.closest(EXPLICIT_TRACKING_SELECTORS));
 }
 
 export function classifyLinkEvent(link: HTMLAnchorElement | HTMLAreaElement, currentUrl: URL): HitKeepEvent | null {
@@ -306,10 +308,10 @@ export function classifyLinkEvent(link: HTMLAnchorElement | HTMLAreaElement, cur
 }
 
 export function classifyFormSubmit(form: HTMLFormElement, currentUrl: URL, submitter?: Element | null): HitKeepEvent | null {
-    if (hasExplicitTrackingTag(submitter ?? null) || hasExplicitTrackingTag(form)) {
-        return null;
-    }
+    return findFormMarker(form, submitter) ? null : formSubmitEvent(form, currentUrl);
+}
 
+function formSubmitEvent(form: HTMLFormElement, currentUrl: URL): HitKeepEvent | null {
     const rawAction = form.getAttribute('action')?.trim() || currentUrl.toString();
     const actionUrl = sanitizeTrackedUrl(rawAction, currentUrl);
     if (!actionUrl) {
@@ -470,7 +472,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     };
 
     const sendRequest = (request: PendingRequest, fromQueue = false) => {
-        if (!active) {
+        if (!active || (request.declarative && isTrackingOptedOut(win))) {
             return;
         }
         const headers = { 'Content-Type': 'application/json' };
@@ -508,10 +510,11 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             });
     };
 
-    const sendJson = (endpoint: string, payload: object) => {
+    const sendJson = (endpoint: string, payload: object, declarative?: boolean) => {
         sendRequest({
             endpoint,
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            declarative
         });
     };
 
@@ -522,7 +525,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         return initialReferrer || null;
     };
 
-    const emitEvent = (name: string, properties: EventProperties = {}) => {
+    const emitEvent = (name: string, properties: EventProperties = {}, declarative?: boolean) => {
         const payload: EventPayload = {
             n: name,
             p: properties,
@@ -534,10 +537,13 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             tv: config.trackerVersion
         };
         if (awaitingActivation) {
-            queueActivationRequest({ kind: 'event', endpoint: config.eventEndpoint, payload: JSON.parse(JSON.stringify(payload)) as EventPayload });
+            if (declarative && isTrackingOptedOut(win)) {
+                return;
+            }
+            queueActivationRequest({ kind: 'event', endpoint: config.eventEndpoint, payload: JSON.parse(JSON.stringify(payload)) as EventPayload, declarative });
             return;
         }
-        sendJson(config.eventEndpoint, payload);
+        sendJson(config.eventEndpoint, payload, declarative);
     };
 
     if (config.webVitalsBundleUrl) {
@@ -625,11 +631,15 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         const requests = pendingActivationRequests.splice(0, pendingActivationRequests.length);
         for (const request of requests) {
             if (request.kind === 'event') {
-                sendJson(request.endpoint, {
-                    ...request.payload,
-                    r: currentReferrer(),
-                    path: location.pathname || '/'
-                });
+                sendJson(
+                    request.endpoint,
+                    {
+                        ...request.payload,
+                        r: currentReferrer(),
+                        path: location.pathname || '/'
+                    },
+                    request.declarative
+                );
                 continue;
             }
             sendJson(request.endpoint, {
@@ -761,8 +771,38 @@ function resolveTrackerScript(document: Document): HTMLScriptElement | null {
     return script instanceof HTMLScriptElement ? script : null;
 }
 
-function bindAutoTracking(document: Document, getCurrentUrl: () => URL, options: TrackerOptions, emitEvent: EventSender, on: ListenerRegistrar): void {
-    if (!options.disableOutboundTracking || !options.disableDownloadTracking) {
+function emitMarkedEvent(marker: Element, emit: InteractionEventSender): void {
+    const name = marker.getAttribute('data-hk-event') ?? marker.getAttribute('data-hitkeep-event');
+    if (name && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name)) {
+        emit(name, undefined, true);
+    }
+}
+
+function findFormMarker(form: HTMLFormElement, submitter?: Element | null): Element | null {
+    return submitter?.closest(EXPLICIT_TRACKING_SELECTORS) ?? form.closest(EXPLICIT_TRACKING_SELECTORS);
+}
+
+function findClickMarker(target: Element): Element | null {
+    const marker = target.closest(EXPLICIT_TRACKING_SELECTORS);
+    return marker?.contains(target.closest('form')) ? null : marker;
+}
+
+function shouldDeferNamedClick(target: Element): boolean {
+    const clicked = target.closest(CLICK_CONTROL_SELECTORS);
+    const label = clicked instanceof HTMLLabelElement ? clicked : null;
+    const control = label ? label.control : clicked;
+    // A submit button's event comes from submission, even when activated by a label.
+    if ((control instanceof HTMLButtonElement || control instanceof HTMLInputElement) && control.form !== null && (control.type === 'submit' || control.type === 'image')) {
+        return true;
+    }
+    // A label forwards a second click to its control, which can already record the event.
+    return label !== null && control !== null && !control.matches(':disabled') && findClickMarker(control) !== null;
+}
+
+function bindAutoTracking(document: Document, getCurrentUrl: () => URL, options: TrackerOptions, emitEvent: InteractionEventSender, on: ListenerRegistrar): void {
+    const { enableDeclarativeEvents, disableFormTracking } = options;
+    const trackLinks = !options.disableOutboundTracking || !options.disableDownloadTracking;
+    if (trackLinks || enableDeclarativeEvents) {
         const handleLinkInteraction = (event: MouseEvent) => {
             if ((event.type === 'click' && event.button !== 0) || (event.type === 'auxclick' && event.button !== 1)) {
                 return;
@@ -773,7 +813,20 @@ function bindAutoTracking(document: Document, getCurrentUrl: () => URL, options:
                 return;
             }
 
-            const link = target.closest('a[href], area[href]');
+            if (enableDeclarativeEvents) {
+                const marker = findClickMarker(target);
+                if (marker) {
+                    if (event.type === 'click' ? !shouldDeferNamedClick(target) : target.closest(LINK_SELECTORS)) {
+                        emitMarkedEvent(marker, emitEvent);
+                    }
+                    return;
+                }
+                if (!trackLinks) {
+                    return;
+                }
+            }
+
+            const link = target.closest(LINK_SELECTORS);
             if (!(link instanceof HTMLAnchorElement || link instanceof HTMLAreaElement)) {
                 return;
             }
@@ -798,15 +851,26 @@ function bindAutoTracking(document: Document, getCurrentUrl: () => URL, options:
         on(document, 'auxclick', handleLinkInteraction as EventListener, true);
     }
 
-    if (!options.disableFormTracking) {
+    if (!disableFormTracking || enableDeclarativeEvents) {
         const handleFormSubmit = (event: Event) => {
             const target = event.target;
             if (!(target instanceof HTMLFormElement)) {
                 return;
             }
 
-            const submitter = event instanceof SubmitEvent && event.submitter instanceof Element ? event.submitter : null;
-            const trackedEvent = classifyFormSubmit(target, getCurrentUrl(), submitter);
+            const candidate = (event as SubmitEvent).submitter;
+            const submitter = candidate instanceof Element ? candidate : null;
+            const marker = findFormMarker(target, submitter);
+            if (marker) {
+                if (enableDeclarativeEvents) {
+                    emitMarkedEvent(marker, emitEvent);
+                }
+                return;
+            }
+            if (disableFormTracking) {
+                return;
+            }
+            const trackedEvent = formSubmitEvent(target, getCurrentUrl());
             if (!trackedEvent) {
                 return;
             }

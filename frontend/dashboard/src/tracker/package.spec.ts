@@ -150,6 +150,44 @@ describe('@hitkeep/tracker package entry', () => {
         expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://www.example.net/hitkeep/ingest', 'https://www.example.net/hitkeep/ingest/event']);
     });
 
+    it('tracks marked interactions with automatic events disabled and removes their listeners on cleanup', async () => {
+        const harness = packageHarness();
+        const handle = init(
+            {
+                host: 'https://stats.example.com',
+                autoCapturePageviews: false,
+                declarativeEvents: true,
+                outboundLinks: false,
+                fileDownloads: false,
+                formSubmissions: false
+            },
+            harness.win
+        );
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        const form = document.createElement('form');
+        form.setAttribute('data-hk-event', 'named_submit');
+        for (const [event, target] of [
+            [new MouseEvent('click'), button],
+            [new SubmitEvent('submit'), form]
+        ] as const) {
+            for (const listener of harness.documentListeners[event.type] ?? []) {
+                target.addEventListener(event.type, listener, { once: true });
+            }
+            target.dispatchEvent(event);
+        }
+
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(2);
+        expect(await beaconPayload(harness.sendBeacon, 0)).toMatchObject({ n: 'named_click', p: {} });
+        expect(await beaconPayload(harness.sendBeacon, 1)).toMatchObject({ n: 'named_submit', p: {} });
+
+        handle.cleanup();
+        expect(harness.documentListeners['click']).toHaveLength(0);
+        expect(harness.documentListeners['auxclick']).toHaveLength(0);
+        expect(harness.documentListeners['submit']).toHaveLength(0);
+    });
+
     it('binds window.hk.event by default and skips it when disabled', () => {
         const bound = packageHarness();
         init({ host: 'https://stats.example.com' }, bound.win);

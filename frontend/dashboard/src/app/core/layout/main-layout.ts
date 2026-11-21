@@ -1,4 +1,4 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, ViewEncapsulation } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, Renderer2, signal, ViewEncapsulation } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
@@ -31,6 +31,7 @@ export class MainLayout {
     protected readonly navigationNotice = inject(NavigationNoticeService);
     private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
     private readonly destroyRef = inject(DestroyRef);
+    private readonly renderer = inject(Renderer2);
     private readonly containerWidth = signal(window.innerWidth);
     protected readonly desktop = computed(() => this.containerWidth() > 768);
     protected readonly sidebarHidden = computed(() => !this.desktop() || this.context.isSidebarCollapsed());
@@ -48,12 +49,28 @@ export class MainLayout {
                 this.containerWidth.set(width);
                 if (width > 768) this.context.isMobileDrawerOpen.set(false);
             });
-            observer.observe(this.element.nativeElement);
+            const host = this.element.nativeElement;
+            observer.observe(host);
             this.destroyRef.onDestroy(() => observer.disconnect());
+
+            // Capture both events because the splitter cancels its delayed resize on keyup.
+            this.destroyRef.onDestroy(this.renderer.listen(host, 'keydown', this.onSidebarResizeKey, { capture: true }));
+            this.destroyRef.onDestroy(this.renderer.listen(host, 'keyup', this.onSidebarResizeKey, { capture: true }));
         });
     }
 
     onSidebarResize(event: SplitterResizeEndEvent): void {
         if (!this.sidebarHidden()) this.context.setSidebarWidthPx((Number(event.sizes[0]) * this.containerWidth()) / 100 - 4);
     }
+
+    private readonly onSidebarResizeKey = (event: KeyboardEvent): void => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        if (!(event.target instanceof HTMLElement) || !event.target.matches('.focus-shell > .p-splitter-gutter > .p-splitter-gutter-handle')) return;
+
+        event.stopPropagation();
+        if (event.type !== 'keydown' || this.sidebarHidden()) return;
+
+        event.preventDefault();
+        this.context.setSidebarWidthPx(this.context.sidebarWidthPx() + (event.key === 'ArrowRight' ? 8 : -8));
+    };
 }

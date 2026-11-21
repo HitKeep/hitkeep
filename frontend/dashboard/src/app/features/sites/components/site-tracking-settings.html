@@ -104,6 +104,17 @@
             @let currentInstallMethod = installMethod(); @switch (currentInstallMethod) { @case ("script") {
             <p class="tracking-install__description">{{ "sites.tracking.install.script.description" | transloco }}</p>
             <app-code-block [code]="snippetCode()" [wrap]="true" data-testid="tracking-snippet" />
+            @if (site(); as installSite) {
+            <app-copy-control
+                class="justify-self-start"
+                [value]="'sites.tracking.install.assistant.prompt' | transloco: { domain: installSite.domain, snippet: snippetCode(), verifier: ('sites.tracking.verifier.title' | transloco) }"
+                labelKey="sites.tracking.install.assistant.copyAction"
+                ariaLabelKey="sites.tracking.install.assistant.copyAction"
+                [text]="true"
+                size="small"
+                data-testid="tracking-copy-assistant-prompt"
+            />
+            }
 
             <div class="tracking-install__disclosure">
                 <p-fieldset [dt]="fieldsetDesignTokens" [toggleable]="true" [collapsed]="true" data-testid="tracking-advanced-options">
@@ -195,6 +206,14 @@
                                 <span class="site-settings-field-hint">{{ "sites.tracking.formTrackingDescription" | transloco }}</span>
                             </div>
                             <p-toggleswitch inputId="form-tracking-switch" ariaLabelledBy="form-tracking-label" styleClass="shrink-0" [formControl]="trackingForm.trackForms().control()" />
+                        </div>
+
+                        <div class="site-settings-toggle-row">
+                            <div class="site-settings-toggle-row__text">
+                                <label id="declarative-events-label" for="declarative-events-switch" class="site-settings-toggle-row__title">{{ "sites.tracking.install.script.declarativeEventsLabel" | transloco }}</label>
+                                <span class="site-settings-field-hint">{{ "sites.tracking.install.script.declarativeEventsDescription" | transloco }}</span>
+                            </div>
+                            <p-toggleswitch inputId="declarative-events-switch" ariaLabelledBy="declarative-events-label" styleClass="shrink-0" [formControl]="trackingForm.enableDeclarativeEvents().control()" />
                         </div>
                     </div>
                 </p-fieldset>

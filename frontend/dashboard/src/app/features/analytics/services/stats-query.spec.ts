@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
 
+import { previousPeriod } from '@core/analytics/comparison-period';
 import type { SiteStats } from '@models/analytics.types';
 import { StatsQuery, type StatsQueryRequest } from '@features/analytics/services/stats-query';
 import { StatsService } from '@features/analytics/services/stats.service';
@@ -30,10 +31,6 @@ describe('StatsQuery', () => {
             return response.asObservable();
         });
         const statsService = {
-            comparisonRange: vi.fn(() => ({
-                from: '2026-05-31T00:00:00.000Z',
-                to: '2026-06-01T00:00:00.000Z'
-            })),
             fetchStats
         } as unknown as StatsService;
 
@@ -100,6 +97,28 @@ describe('StatsQuery', () => {
         expect(query.lastResult()).toEqual({ mode: 'blocking', sequence: 1 });
         expect(onSuccess).not.toHaveBeenCalled();
         expect(query.isBackgroundRefreshing()).toBe(false);
+    });
+
+    it('keeps loaded endpoints with the visible response while a different range is pending', () => {
+        const { query, responses } = createQuery();
+        load(query, request);
+        expect(query.currentRange()).toBeNull();
+        expect(query.comparisonRange()).toBeNull();
+
+        const previous = { ...emptySiteStats(), total_conversions: 0 };
+        const loaded = emptySiteStats({ comparison: previous, total_pageviews: 7 });
+        responses[0].next(loaded);
+        responses[0].complete();
+
+        const changed = { ...request, to: '2026-06-03T00:00:00.000Z' };
+        load(query, changed);
+        expect(query.stats()).toBe(loaded);
+        expect(query.currentRange()).toEqual({ from: request.from, to: request.to });
+        expect(query.comparisonRange()).toEqual(previousPeriod(request.from, request.to));
+
+        responses[1].next(emptySiteStats());
+        expect(query.currentRange()).toEqual({ from: changed.from, to: changed.to });
+        expect(query.comparisonRange()).toBeNull();
     });
 
     it('keeps loading flags aligned when the refresh mode changes mid-flight', () => {

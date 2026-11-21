@@ -28,13 +28,9 @@ func (s *Store) queryHybridChartData(ctx context.Context, params api.AnalyticsPa
 	}
 
 	if window.Leading != nil {
-		edgeEnd := *window.Leading
-		if edgeEnd.After(params.Start) {
-			edgeEnd = edgeEnd.Add(-time.Nanosecond)
-		}
 		edgeParams := params
 		edgeParams.Start = params.Start
-		edgeParams.End = edgeEnd
+		edgeParams.End = *window.Leading
 		rawCounts, err := s.queryHitSeriesCounts(ctx, edgeParams, truncUnit)
 		if err != nil {
 			return nil, err

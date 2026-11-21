@@ -19,6 +19,8 @@ export interface TrackerConfig {
     fileDownloads?: boolean;
     /** Track form submissions as `form_submit`. Default `true`. */
     formSubmissions?: boolean;
+    /** Track named clicks and submissions marked with `data-hk-event` or `data-hitkeep-event`. Default `false`. */
+    declarativeEvents?: boolean;
     /** Load the Web Vitals bundle from `${host}/hk-vitals.js`. Default `false`. */
     webVitals?: boolean;
     /** Prefer `navigator.sendBeacon` over keepalive fetch. Default `true`. */
@@ -97,6 +99,7 @@ function resolveRuntimeConfig(config: TrackerConfig): TrackerRuntimeConfig {
         disableOutboundTracking: config.outboundLinks === false,
         disableDownloadTracking: config.fileDownloads === false,
         disableFormTracking: config.formSubmissions === false,
+        enableDeclarativeEvents: config.declarativeEvents === true,
         enableWebVitals,
         trackerSource: (config.trackerSource || DEFAULT_TRACKER_SOURCE).trim().slice(0, 64) || DEFAULT_TRACKER_SOURCE,
         trackerVersion: TRACKER_VERSION,

@@ -18,6 +18,7 @@ import { OnboardingService } from '@services/onboarding.service';
 import { RealtimeEvent, RealtimeService } from '@services/realtime.service';
 import { GoogleSearchConsoleService } from '@services/google-search-console.service';
 import { ReportRangePreferencesService } from '@services/report-range-preferences.service';
+import type { SiteStats } from '@models/analytics.types';
 import { emptySiteStats } from '@testing/empty-site-stats';
 
 describe('Dashboard', () => {
@@ -29,11 +30,12 @@ describe('Dashboard', () => {
 
     const setDashboardStats = (value: unknown): void => {
         const dashboard = component as unknown as {
-            stats: { set: (value: unknown) => void };
+            statsQuery: { loaded: { set: (value: unknown) => void } };
             isStatsLoading: { set: (value: boolean) => void };
         };
 
-        dashboard.stats.set(value);
+        const period = { from: '2026-02-01T00:00:00.000Z', to: '2026-02-07T23:59:59.999Z' };
+        dashboard.statsQuery.loaded.set({ siteId: 'site-1', stats: value, period });
         dashboard.isStatsLoading.set(false);
     };
 
@@ -52,7 +54,18 @@ describe('Dashboard', () => {
             imports: [
                 Dashboard,
                 TranslocoTestingModule.forRoot({
-                    langs: { en: {} },
+                    langs: {
+                        en: {
+                            common: { loadingSiteData: 'Loading site data' },
+                            comparison: {
+                                details: 'Period comparison',
+                                unavailable: 'Unavailable',
+                                zeroBaseline: 'Undefined (previous value is zero)',
+                                relativeChange: 'Relative change',
+                                liveOnly: 'Live visitors covers the last five minutes'
+                            }
+                        }
+                    },
                     translocoConfig: {
                         availableLangs: ['en'],
                         defaultLang: 'en'
@@ -113,6 +126,48 @@ describe('Dashboard', () => {
 
     it('should create', () => {
         expect(component).toBeTruthy();
+    });
+
+    it('opens an accessible comparison with distinct loading, zero and missing baselines', async () => {
+        const stats = new Subject<SiteStats>();
+        vi.mocked(TestBed.inject(StatsService).fetchStats).mockReturnValue(stats);
+        vi.spyOn(TestBed.inject(HitService), 'loadHits').mockImplementation(() => undefined);
+        TestBed.inject(SiteService).activeSite.set({ id: 'site-1', user_id: 'user-1', domain: 'example.com', created_at: '2026-01-01T00:00:00Z' });
+        fixture.detectChanges();
+
+        const details: HTMLDetailsElement = fixture.nativeElement.querySelector('[data-testid="period-comparison"]');
+        const summary = details.querySelector('summary')!;
+        expect(summary.textContent).toContain('Period comparison');
+        expect(details.open).toBe(false);
+        summary.click();
+        expect(details.open).toBe(true);
+        expect(details.querySelector('[role="status"]')?.textContent).toContain('Loading site data');
+        expect(details.querySelector('table')).toBeNull();
+
+        const previous = { ...emptySiteStats({ bounce_rate: 40, unique_sessions: 10 }), total_conversions: 0 };
+        stats.next(emptySiteStats({ bounce_rate: 50, total_pageviews: 12, comparison: previous }));
+        await fixture.whenStable();
+
+        const valueLabel = (cell: HTMLTableCellElement) => (cell.querySelector('number-flow-ng') as (HTMLElement & { _internals?: ElementInternals }) | null)?._internals?.ariaLabel;
+        const rows = Array.from(details.querySelectorAll<HTMLTableRowElement>('tbody tr'));
+        expect(rows).toHaveLength(5);
+        expect(details.querySelector('th[scope="col"]:last-child')?.textContent).toContain('Relative change');
+        expect(valueLabel(rows[0].cells[1])).toBe('12');
+        expect(valueLabel(rows[0].cells[2])).toBe('0');
+        expect(rows[0].cells[3].textContent).toContain('Undefined (previous value is zero)');
+        expect(valueLabel(rows[1].cells[3])).toBe('-100.0%');
+        expect(valueLabel(rows[2].cells[3])).toBe('+25.0%');
+        expect(details.querySelectorAll('dd')).toHaveLength(2);
+        expect(details.textContent).toContain('Live visitors covers the last five minutes');
+
+        stats.next(emptySiteStats({ total_pageviews: 12 }));
+        await fixture.whenStable();
+
+        expect(details.querySelectorAll('dd')[1].textContent).toContain('Unavailable');
+        expect(valueLabel(rows[0].cells[2])).toBeUndefined();
+        expect(rows[0].cells[2].textContent).toContain('Unavailable');
+        expect(rows[0].cells[3].textContent).not.toContain('previous value is zero');
+        stats.complete();
     });
 
     it('presents dashboard conversions as one card with goal and funnel tabs', () => {

@@ -1854,7 +1854,13 @@
         },
         "script": {
           "description": "Kopieer en plak de onderstaande code in de HTML van je website. Automatische tracking is standaard ingeschakeld voor uitgaande klikken, downloads en formulierinzendingen.",
-          "docsAction": "Trackerhandleiding"
+          "docsAction": "Trackerhandleiding",
+          "declarativeEventsLabel": "Gemarkeerde klikken en formulierinzendingen meten",
+          "declarativeEventsDescription": "Verstuurt aangepaste gebeurtenissen bij klikken op gemarkeerde elementen en bij inzendingen van gemarkeerde formulieren. Markeer ze met data-hk-event of data-hitkeep-event."
+        },
+        "assistant": {
+          "copyAction": "Prompt voor codeassistent kopiëren",
+          "prompt": "Installeer de HitKeep-tracker op {{ domain }}. Controleer eerst of het project al een HitKeep-integratie heeft. Werk die alleen bij als dat nodig is. Voeg anders het volgende script één keer toe aan de gedeelde paginasjabloon. Neem de script-URL en alle attributen exact over en behoud de manier waarop de site toestemming verwerkt.\n\n{{ snippet }}\n\nOpen een pagina op de bedoelde hostnaam. Controleer op het tabblad Netwerk van de browser of het trackerscript wordt geladen en het verzoek voor de paginaweergave slaagt. Test ingeschakelde automatische gebeurtenissen door de bijbehorende acties uit te voeren en de gebeurtenisverzoeken te controleren. Bevestig in HitKeep via ‘{{ verifier }}’ dat er recent een hit is geaccepteerd. Meld wat je hebt gecontroleerd en wat nog moet worden nagegaan."
         },
         "npm": {
           "description": "Bundel de getypeerde tracker in een React-, Vue-, Angular- of Astro-app. Geen scripttag, volledige TypeScript-typen en contentblockers filteren hem niet.",
@@ -3123,6 +3129,19 @@
     }
   },
   "comparison": {
+    "details": "Periodes vergelijken",
+    "metric": "Metriek",
+    "currentPeriod": "Huidige periode",
+    "previousPeriod": "Vorige periode",
+    "relativeChange": "Relatieve verandering",
+    "unavailable": "Niet beschikbaar",
+    "zeroBaseline": "Niet gedefinieerd (vorige waarde is nul)",
+    "elapsedRule": "De vorige periode eindigt direct vóór de huidige periode en duurt even lang. De relatieve verandering is berekend ten opzichte van de vorige waarde.",
+    "liveOnly": "Livebezoekers telt de afgelopen vijf minuten en heeft geen vergelijking.",
+    "currentOnlyBreakdowns": "Uitsplitsingen en verkeersrecords tonen alleen de huidige periode.",
+    "seriesLabel": "{{metric}} (vorige)",
+    "bucketOrder": "De reeksen zijn uitgelijnd op de volgorde van de tijdvakken. De as toont de datums van de huidige periode.",
+    "gridMismatch": "De vorige periode heeft een andere indeling in tijdvakken. Die reeks is daarom verborgen.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Pageviews (vorige periode)",
     "visitorsLabel": "Bezoekers (vorige periode)"

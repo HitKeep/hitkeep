@@ -59,12 +59,76 @@
         }
     </div>
 
+    <details data-testid="period-comparison" class="mb-6 rounded-lg border border-surface-200 px-4 py-2 dark:border-surface-700">
+        <summary class="cursor-pointer py-1 text-sm font-medium">{{ 'comparison.details' | transloco }}</summary>
+        <div class="space-y-2 pb-2 pt-1 text-sm">
+            @if (stats()) {
+            <p class="text-muted-color">{{ 'comparison.elapsedRule' | transloco }}</p>
+            <dl class="grid gap-x-2 gap-y-1 sm:grid-cols-[auto_1fr]">
+                <dt class="font-medium">{{ 'comparison.currentPeriod' | transloco }}</dt>
+                <dd>{{ currentPeriodLabel() }}</dd>
+                <dt class="font-medium">{{ 'comparison.previousPeriod' | transloco }}</dt>
+                <dd>{{ comparisonLabel() || ('comparison.unavailable' | transloco) }}</dd>
+            </dl>
+            <div class="overflow-x-auto">
+                <table class="w-full text-start tabular-nums">
+                    <thead>
+                        <tr class="border-b border-surface-200 dark:border-surface-700">
+                            <th scope="col" class="py-1 text-start">{{ 'comparison.metric' | transloco }}</th>
+                            <th scope="col" class="px-2 py-1 text-end">{{ 'comparison.currentPeriod' | transloco }}</th>
+                            <th scope="col" class="px-2 py-1 text-end">{{ 'comparison.previousPeriod' | transloco }}</th>
+                            <th scope="col" class="py-1 text-end">{{ 'comparison.relativeChange' | transloco }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (card of kpiCards(); track card.id) { @if (card.id !== 'live_visitors') {
+                        <tr>
+                            <th scope="row" class="py-1 text-start font-medium">{{ card.label }}</th>
+                            <td class="px-2 py-1 text-end">
+                                @if (card.duration) {
+                                <app-animated-duration [value]="+card.value" />
+                                } @else {
+                                <app-animated-number [value]="+card.value" [format]="card.format" [suffix]="card.suffix" />
+                                }
+                            </td>
+                            <td class="px-2 py-1 text-end">
+                                @if (card.previousValue !== undefined) { @if (card.duration) {
+                                <app-animated-duration [value]="card.previousValue" />
+                                } @else {
+                                <app-animated-number [value]="card.previousValue" [format]="card.format" [suffix]="card.suffix" />
+                                } } @else {
+                                <span aria-hidden="true">—</span>
+                                <span class="sr-only">{{ 'comparison.unavailable' | transloco }}</span>
+                                }
+                            </td>
+                            <td class="py-1 text-end">
+                                @if (card.delta !== null && card.delta !== undefined) {
+                                <app-animated-number [value]="card.delta / 100" [format]="comparisonDeltaFormat" />
+                                } @else if (card.previousValue === 0) { {{ 'comparison.zeroBaseline' | transloco }} } @else {
+                                <span aria-hidden="true">—</span>
+                                <span class="sr-only">{{ 'comparison.unavailable' | transloco }}</span>
+                                }
+                            </td>
+                        </tr>
+                        } }
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted-color">{{ 'comparison.liveOnly' | transloco }}</p>
+            } @else if (isStatsLoading()) {
+            <p role="status">{{ 'common.loadingSiteData' | transloco }}</p>
+            } @else {
+            <p>{{ 'comparison.unavailable' | transloco }}</p>
+            }
+        </div>
+    </details>
+
     <!-- Traffic Chart -->
     <div class="mb-6">
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
-                    <h3 class="text-lg font-semibold">{{ chartTitle() }}</h3>
+                    <h3 class="text-lg font-semibold">{{ "dashboard.chartTitleOverview" | transloco }}</h3>
                     @if (hasFilters()) {
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[var(--p-primary-color)] text-xs font-medium"> {{ "dashboard.filteredBadge" | transloco }} </span>
                     }
@@ -75,6 +139,7 @@
                 [comparisonData]="stats()?.comparison?.chart_data || []"
                 [isLoading]="isStatsLoading()"
                 [isShortRange]="isShortRange()"
+                [currentPeriodLabel]="currentPeriodLabel()"
                 [comparisonLabel]="comparisonLabel()"
                 (snippetClicked)="openTrackingSettings()"
             />
@@ -89,6 +154,9 @@
     </div>
     <app-export-status-banner [state]="filteredExportState()" successKey="dashboard.exportStatus.success" errorKey="dashboard.exportStatus.error" />
 
+    @if (stats()) {
+    <p class="mb-2 text-sm text-muted-color">{{ 'comparison.currentOnlyBreakdowns' | transloco }}</p>
+    }
     <app-metric-card-group class="mb-6" [tabs]="metricCardTabs()" (rowClicked)="onMetricCardClick($event)" (actionClicked)="onMetricCardAction($event)" />
 
     @if (!embed.isEmbedMode()) {

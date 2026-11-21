@@ -2072,7 +2072,13 @@
         },
         "script": {
           "description": "Copia y pega el siguiente código en el HTML de tu sitio web. El seguimiento automático de clics salientes, descargas y envíos de formularios está activado por defecto.",
-          "docsAction": "Guía del tracker"
+          "docsAction": "Guía del tracker",
+          "declarativeEventsLabel": "Registrar clics y envíos de formularios marcados",
+          "declarativeEventsDescription": "Envía eventos personalizados al hacer clic en elementos marcados o enviar formularios marcados. Usa data-hk-event o data-hitkeep-event para marcarlos."
+        },
+        "assistant": {
+          "copyAction": "Copiar prompt para el asistente de código",
+          "prompt": "Instala el tracker de HitKeep en {{ domain }}. Revisa si el proyecto ya tiene una integración con HitKeep. Si existe, actualízala solo si es necesario. Si no, añade el siguiente script una sola vez en la plantilla compartida de las páginas. Conserva la URL del script y todos sus atributos tal como se muestran, y respeta la configuración de consentimiento del sitio.\n\n{{ snippet }}\n\nAbre una página en el nombre de host previsto. En el panel Red del navegador, confirma que se carga el script y que se completa correctamente la solicitud de vista de página. Prueba los eventos automáticos habilitados realizando las acciones correspondientes y comprobando sus solicitudes. En HitKeep, usa «{{ verifier }}» para confirmar que se ha aceptado un hit reciente. Indica qué has verificado y qué queda por comprobar."
         },
         "npm": {
           "description": "Incluye el tracker tipado en una app de React, Vue, Angular o Astro. Sin etiqueta de script, con tipos TypeScript completos y sin filtrado por bloqueadores de contenido.",
@@ -3374,6 +3380,19 @@
     }
   },
   "comparison": {
+    "details": "Comparación de periodos",
+    "metric": "Métrica",
+    "currentPeriod": "Periodo actual",
+    "previousPeriod": "Periodo anterior",
+    "relativeChange": "Cambio relativo",
+    "unavailable": "No disponible",
+    "zeroBaseline": "Sin definir (el valor anterior es cero)",
+    "elapsedRule": "El periodo anterior termina justo antes del actual y dura lo mismo. El cambio relativo se calcula respecto al valor anterior.",
+    "liveOnly": "Los visitantes en directo corresponden a los últimos cinco minutos y no tienen comparación.",
+    "currentOnlyBreakdowns": "Los desgloses y los registros de tráfico solo muestran el periodo actual.",
+    "seriesLabel": "{{metric}} (anterior)",
+    "bucketOrder": "Las series se alinean por orden de los intervalos. El eje muestra las fechas del periodo actual.",
+    "gridMismatch": "Los intervalos del periodo anterior son distintos y su serie se oculta.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Páginas vistas (ant.)",
     "visitorsLabel": "Visitantes (ant.)"

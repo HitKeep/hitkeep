@@ -330,13 +330,24 @@ describe('MainLayout', () => {
         expect(layoutContext.isAddSiteVisible()).toBe(false);
     });
 
-    it('exposes the resize handle as a named keyboard separator with pixel bounds', async () => {
+    it('exposes the named separator and resizes on arrow taps', async () => {
+        const host: HTMLElement = fixture.nativeElement;
+        host.style.width = '1024px';
         await fixture.whenStable();
-        const handle = fixture.nativeElement.querySelector('[role="separator"][aria-label="Resize sidebar"]');
+        const handle = host.querySelector<HTMLElement>('[role="separator"][aria-label="Resize sidebar"]')!;
         expect(handle).toBeTruthy();
-        expect(handle?.getAttribute('aria-valuemin')).toBe('220');
-        expect(handle?.getAttribute('aria-valuemax')).toBe('320');
-        expect(handle?.getAttribute('aria-orientation')).toBe('vertical');
+        await expect.poll(() => handle.closest('.focus-shell')?.classList.contains('sidebar-hidden')).toBe(false);
+        expect(handle.getAttribute('aria-valuemin')).toBe('220');
+        expect(handle.getAttribute('aria-valuemax')).toBe('320');
+        expect(handle.getAttribute('aria-orientation')).toBe('vertical');
+
+        handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true }));
+        handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true }));
+        expect(layoutContext.sidebarWidthPx()).toBe(248);
+
+        handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', bubbles: true }));
+        handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft', code: 'ArrowLeft', bubbles: true }));
+        expect(layoutContext.sidebarWidthPx()).toBe(240);
     });
 
     it('should create', () => {

@@ -1,16 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TranslocoDecimalPipe, TranslocoLocaleService } from '@jsverse/transloco-locale';
+import { TranslocoDecimalPipe } from '@jsverse/transloco-locale';
 import { ConfirmationService } from '@openng/optimus-ui/api';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { CardModule } from '@openng/optimus-ui/card';
 import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 import { TagModule } from '@openng/optimus-ui/tag';
-import { finalize, Subscription } from 'rxjs';
+import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
+import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { injectActiveLang } from '@core/i18n/active-lang';
@@ -53,7 +54,6 @@ export class Funnels {
     private route = inject(ActivatedRoute);
     private router = inject(Router);
     private transloco = inject(TranslocoService);
-    private locale = inject(TranslocoLocaleService);
     private confirmation = inject(ConfirmationService);
     private destroyRef = inject(DestroyRef);
     private realtime = inject(RealtimeRefreshCoordinator);
@@ -92,7 +92,11 @@ export class Funnels {
     protected funnelStats = signal<FunnelStats | null>(null);
     protected funnelStatsLoading = signal(false);
     protected trafficRefreshKey = signal(0);
-    protected isShortRange = this.reportRange.isShortRange;
+    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
+    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
+    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
     protected stats = this.statsQuery.stats;
     protected isStatsLoading = this.statsQuery.isLoading;
     protected isRefreshing = computed(() => this.loading() || this.seriesLoading() || this.funnelStatsLoading());
@@ -156,17 +160,6 @@ export class Funnels {
                 color: HITKEEP_CHART_PALETTE.secondary
             }
         ];
-    });
-    protected comparisonLabel = computed(() => {
-        this.activeLanguage();
-        const range = this.statsQuery.comparisonRange();
-        if (!range) return '';
-        const format = (value: string) =>
-            this.locale.localizeDate(new Date(value), undefined, {
-                month: 'short',
-                day: 'numeric'
-            });
-        return `${format(range.from)} – ${format(range.to)}`;
     });
     protected kpis = computed<KpiCardModel[]>(() => {
         this.activeLanguage();
@@ -356,20 +349,28 @@ export class Funnels {
         this.statsQuery.load({ siteId, from, to, funnelIds, mode });
         const blocking = mode === 'blocking';
         if (blocking) this.seriesLoading.set(true);
+        const comparison = previousPeriod(from, to);
         request.add(
-            this.analytics
-                .getFunnelTimeseries(siteId, from, to, funnelIds)
-                .pipe(finalize(() => sequence === this.reportingSequence && blocking && this.seriesLoading.set(false)))
-                .subscribe({ next: (series) => sequence === this.reportingSequence && this.funnelSeries.set(series ?? []) })
-        );
-        const comparison = untracked(() => this.statsQuery.comparisonRange());
-        if (comparison) {
-            request.add(
-                this.analytics.getFunnelTimeseries(siteId, comparison.from, comparison.to, funnelIds).subscribe({
-                    next: (series) => sequence === this.reportingSequence && this.comparisonFunnelSeries.set(series ?? [])
+            forkJoin({
+                current: this.analytics.getFunnelTimeseries(siteId, from, to, funnelIds),
+                previous: this.analytics.getFunnelTimeseries(siteId, comparison.from, comparison.to, funnelIds).pipe(catchError(() => of(null)))
+            })
+                .pipe(finalize(() => sequence === this.reportingSequence && this.seriesLoading.set(false)))
+                .subscribe({
+                    next: ({ current, previous }) => {
+                        this.funnelSeries.set(current ?? []);
+                        this.comparisonFunnelSeries.set(previous ?? []);
+                        this.seriesRange.set({ from, to });
+                        this.comparisonRange.set(previous ? comparison : null);
+                    },
+                    error: () => {
+                        this.funnelSeries.set([]);
+                        this.comparisonFunnelSeries.set([]);
+                        this.seriesRange.set(null);
+                        this.comparisonRange.set(null);
+                    }
                 })
-            );
-        }
+        );
     }
     private loadFunnelStats(siteId: string, funnelId: string, from: string, to: string) {
         const sequence = ++this.funnelStatsSequence;

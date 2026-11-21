@@ -1866,7 +1866,13 @@
         },
         "script": {
           "description": "Copiez et collez le code ci-dessous dans le HTML de votre site. Le suivi automatique des clics sortants, téléchargements et soumissions de formulaires est activé par défaut.",
-          "docsAction": "Guide du tracker"
+          "docsAction": "Guide du tracker",
+          "declarativeEventsLabel": "Suivre les clics et envois de formulaires marqués",
+          "declarativeEventsDescription": "Envoie des événements personnalisés lors de clics sur des éléments marqués ou d’envois de formulaires marqués. Utilisez data-hk-event ou data-hitkeep-event pour les marquer."
+        },
+        "assistant": {
+          "copyAction": "Copier le prompt pour l’assistant de code",
+          "prompt": "Installez le tracker HitKeep sur {{ domain }}. Vérifiez d’abord si le projet utilise déjà HitKeep. Si une intégration existe, mettez-la à jour uniquement si nécessaire. Sinon, ajoutez le script suivant une seule fois dans le modèle de page partagé. Conservez l’URL et tous les attributs du script tels qu’ils figurent ci-dessous, ainsi que le fonctionnement du consentement sur le site.\n\n{{ snippet }}\n\nOuvrez une page sur le nom d’hôte prévu. Dans l’onglet Réseau du navigateur, vérifiez que le script se charge et que la requête de vue de page aboutit. Pour tester les événements automatiques activés, effectuez les actions correspondantes et vérifiez leurs requêtes. Dans HitKeep, ouvrez « {{ verifier }} » pour confirmer qu’un hit récent a été accepté. Indiquez ce que vous avez vérifié et les vérifications qui restent à faire."
         },
         "npm": {
           "description": "Intégrez le tracker typé dans une application React, Vue, Angular ou Astro. Sans balise script, avec des types TypeScript complets, et sans filtrage par les bloqueurs de contenu.",
@@ -3140,6 +3146,19 @@
     }
   },
   "comparison": {
+    "details": "Comparaison des périodes",
+    "metric": "Indicateur",
+    "currentPeriod": "Période actuelle",
+    "previousPeriod": "Période précédente",
+    "relativeChange": "Variation relative",
+    "unavailable": "Indisponible",
+    "zeroBaseline": "Indéfinie (la valeur précédente est nulle)",
+    "elapsedRule": "La période précédente se termine juste avant la période actuelle et couvre la même durée. La variation relative est calculée par rapport à la valeur précédente.",
+    "liveOnly": "Les visiteurs en direct couvrent les cinq dernières minutes, sans comparaison.",
+    "currentOnlyBreakdowns": "Les ventilations et les journaux de trafic portent uniquement sur la période actuelle.",
+    "seriesLabel": "{{metric}} (période précédente)",
+    "bucketOrder": "Les séries sont alignées selon l’ordre des intervalles. L’axe affiche les dates de la période actuelle.",
+    "gridMismatch": "La période précédente utilise des intervalles différents. Sa série est masquée.",
     "vsLabel": "c/a",
     "pageviewsLabel": "Pages vues (préc.)",
     "visitorsLabel": "Visiteurs (préc.)"

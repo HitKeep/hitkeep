@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
 import { injectActiveLang } from '@core/i18n/active-lang';
+import { injectPeriodLabel, isIntradayPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SiteService } from '@features/sites/services/site.service';
 import { injectStatsQuery, type StatsQueryMode } from '@features/analytics/services/stats-query';
@@ -32,7 +32,6 @@ interface MetricFilter {
 })
 export class UtmAnalytics {
     protected siteService = inject(SiteService);
-    private localeService = inject(TranslocoLocaleService);
     private transloco = inject(TranslocoService);
     private destroyRef = inject(DestroyRef);
     private realtimeRefresh = inject(RealtimeRefreshCoordinator);
@@ -42,24 +41,16 @@ export class UtmAnalytics {
 
     protected stats = this.statsQuery.stats;
     protected isStatsLoading = this.statsQuery.isLoading;
-    protected currentComparisonRange = this.statsQuery.comparisonRange;
+    protected readonly currentPeriodLabel = injectPeriodLabel(this.statsQuery.currentRange);
+    protected readonly comparisonLabel = injectPeriodLabel(this.statsQuery.comparisonRange);
     protected readonly kpiUpdateKey = signal(0);
     protected isRefreshing = computed(() => this.isStatsLoading());
-    protected readonly isShortRange = this.reportRange.isShortRange;
+    protected readonly isShortRange = computed(() => isIntradayPeriod(this.statsQuery.currentRange()));
     protected activeFilters = signal<MetricFilter[]>([]);
     protected hasFilters = computed(() => this.activeFilters().length > 0);
     protected filterChips = computed(() => {
         this.activeLanguage();
         return this.activeFilters().map((filter) => ({ ...filter, label: this.filterLabel(filter) }));
-    });
-    protected comparisonLabel = computed(() => {
-        this.activeLanguage();
-        const r = this.currentComparisonRange();
-        if (!r) return '';
-        const showYear = new Date(r.from).getFullYear() !== new Date().getFullYear();
-        const opts = showYear ? ({ month: 'short', day: 'numeric', year: 'numeric' } as const) : ({ month: 'short', day: 'numeric' } as const);
-        const fmt = (d: string) => this.localeService.localizeDate(new Date(d), undefined, opts);
-        return `${fmt(r.from)} – ${fmt(r.to)}`;
     });
 
     protected readonly utmSeriesData = computed<SeriesChartPoint[]>(() => {

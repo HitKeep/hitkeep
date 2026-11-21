@@ -582,6 +582,7 @@ func (s *Store) GetEventTimeseries(ctx context.Context, params api.EventTimeseri
 }
 
 func (s *Store) mergeImportedEventTimeseries(ctx context.Context, params api.EventTimeseriesParams, truncUnit string, counts map[time.Time]int) error {
+	start, end := fullImportedDates(params.Start, params.End)
 	var (
 		rows *sql.Rows
 		err  error
@@ -595,7 +596,7 @@ func (s *Store) mergeImportedEventTimeseries(ctx context.Context, params api.Eve
 				AND event_name = ? AND property_key = ? AND property_value = ?
 			GROUP BY bucket
 		`, truncUnit)
-		rows, err = s.db.QueryContext(ctx, query, params.SiteID, params.Start, params.End, params.EventName, params.PropertyKey, params.PropertyValue)
+		rows, err = s.db.QueryContext(ctx, query, params.SiteID, start, end, params.EventName, params.PropertyKey, params.PropertyValue)
 	} else {
 		//nolint:gosec // truncUnit is chosen from the event bucket allowlist before this helper is called.
 		query := fmt.Sprintf(`
@@ -605,7 +606,7 @@ func (s *Store) mergeImportedEventTimeseries(ctx context.Context, params api.Eve
 				AND event_name = ?
 			GROUP BY bucket
 		`, truncUnit)
-		rows, err = s.db.QueryContext(ctx, query, params.SiteID, params.Start, params.End, params.EventName)
+		rows, err = s.db.QueryContext(ctx, query, params.SiteID, start, end, params.EventName)
 	}
 	if err != nil {
 		return fmt.Errorf("query imported event timeseries: %w", err)

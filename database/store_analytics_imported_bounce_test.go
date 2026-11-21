@@ -30,7 +30,7 @@ func TestImportedStatsPreserveNativeBounceCount(t *testing.T) {
 			}
 		}
 	}
-	params := api.AnalyticsParams{SiteID: site.ID, Start: at.AddDate(0, 0, -1), End: at.AddDate(0, 0, 1)}
+	params := api.AnalyticsParams{SiteID: site.ID, Start: dateOnly(at.AddDate(0, 0, -1)), End: at.AddDate(0, 0, 1)}
 	for _, imported := range []bool{false, true} {
 		if imported {
 			sink, err := NewImportedDataSink(ctx, store, site.ID, uuid.New())

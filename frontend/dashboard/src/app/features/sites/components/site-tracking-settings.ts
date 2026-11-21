@@ -91,7 +91,8 @@ export class SiteTrackingSettings {
         enableWebVitals: new FormControl(false, { nonNullable: true }),
         trackOutbound: new FormControl(true, { nonNullable: true }),
         trackDownloads: new FormControl(true, { nonNullable: true }),
-        trackForms: new FormControl(true, { nonNullable: true })
+        trackForms: new FormControl(true, { nonNullable: true }),
+        enableDeclarativeEvents: new FormControl(false, { nonNullable: true })
     });
     protected readonly trackingForm = compatForm(this.trackingFormModel);
 
@@ -165,6 +166,7 @@ export class SiteTrackingSettings {
         if (!this.trackingForm.trackOutbound().value()) attrs += ' data-disable-outbound-tracking="true"';
         if (!this.trackingForm.trackDownloads().value()) attrs += ' data-disable-download-tracking="true"';
         if (!this.trackingForm.trackForms().value()) attrs += ' data-disable-form-tracking="true"';
+        if (this.trackingForm.enableDeclarativeEvents().value()) attrs += ' data-enable-declarative-events="true"';
 
         return `<script async src="${scriptURL}"${attrs}></script>`;
     });
@@ -198,6 +200,7 @@ export class SiteTrackingSettings {
                 !this.trackingForm.trackOutbound().value(),
                 !this.trackingForm.trackDownloads().value(),
                 !this.trackingForm.trackForms().value(),
+                this.trackingForm.enableDeclarativeEvents().value(),
                 this.selectedSnippetTrackingDomain() !== null
             ].filter(Boolean).length
     );

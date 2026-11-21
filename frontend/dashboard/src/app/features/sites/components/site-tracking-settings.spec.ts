@@ -1,9 +1,12 @@
+import { Clipboard } from '@angular/cdk/clipboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslocoTestingModule } from '@jsverse/transloco';
+import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
 import { SiteService } from '@features/sites/services/site.service';
+import de from '../../../../../public/i18n/de.json';
+import en from '../../../../../public/i18n/en.json';
 import { InstallMethod, SiteTrackingSettings } from './site-tracking-settings';
 
 interface Toggle {
@@ -25,6 +28,7 @@ type Internals = SiteTrackingSettings & {
         trackOutbound: () => Toggle;
         trackDownloads: () => Toggle;
         trackForms: () => Toggle;
+        enableDeclarativeEvents: () => Toggle;
     };
 };
 
@@ -110,10 +114,11 @@ describe('SiteTrackingSettings', () => {
             imports: [
                 SiteTrackingSettings,
                 TranslocoTestingModule.forRoot({
-                    langs: { en: {} },
+                    langs: { en, de },
                     translocoConfig: {
-                        availableLangs: ['en'],
-                        defaultLang: 'en'
+                        availableLangs: ['en', 'de'],
+                        defaultLang: 'en',
+                        reRenderOnLangChange: true
                     },
                     preloadLangs: true
                 })
@@ -128,6 +133,7 @@ describe('SiteTrackingSettings', () => {
         fixture.detectChanges();
     });
     afterEach(() => {
+        vi.restoreAllMocks();
         base.remove();
         previousBases.forEach((entry) => window.document.head.append(entry));
     });
@@ -169,6 +175,46 @@ describe('SiteTrackingSettings', () => {
         expect(internals.snippetCode()).toContain('src="https://analytics.example.com/hk.js"');
     });
 
+    it('copies the current script and localized verification instructions on demand', async () => {
+        const copy = vi.spyOn(TestBed.inject(Clipboard), 'copy').mockReturnValue(true);
+        const getButton = () => testId('tracking-copy-assistant-prompt')?.querySelector('button');
+        const getShownSnippet = () => testId('tracking-snippet')?.querySelector('pre')?.textContent;
+
+        expect(getButton()).toBeUndefined();
+        siteServiceMock.getTrackingDomainOptions.mockReturnValue(of(customDomainOptions));
+        fixture.componentRef.setInput('site', site);
+        await fixture.whenStable();
+
+        expect(getButton()?.getAttribute('aria-label')).toBe(en.sites.tracking.install.assistant.copyAction);
+        expect(copy).not.toHaveBeenCalled();
+        const defaultSnippet = getShownSnippet();
+        expect(defaultSnippet).toContain('/hitkeep/hk.js');
+        expect(defaultSnippet).not.toContain('data-enable-declarative-events');
+        getButton()?.click();
+        expect(copy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`\n\n${defaultSnippet}\n\n`));
+        expect(copy.mock.calls[0][0]).toContain('on example.com.');
+        expect(copy.mock.calls[0][0]).toContain(en.sites.tracking.verifier.title);
+
+        TestBed.inject(TranslocoService).setActiveLang('de');
+        await fixture.whenStable();
+        expect(getButton()?.getAttribute('aria-label')).toBe(de.sites.tracking.install.assistant.copyAction);
+
+        internals.trackingDomainControl.setValue('domain-1');
+        internals.trackingForm.trackForms().control().setValue(false);
+        internals.trackingForm.enableDeclarativeEvents().control().setValue(true);
+        await fixture.whenStable();
+
+        const customSnippet = getShownSnippet();
+        expect(customSnippet).toContain('src="https://analytics.example.com/hk.js" data-disable-form-tracking="true"');
+        expect(customSnippet).toContain('data-enable-declarative-events="true"');
+        expect(internals.changedOptionCount()).toBe(3);
+        getButton()?.click();
+        expect(copy).toHaveBeenCalledTimes(2);
+        expect(copy).toHaveBeenLastCalledWith(expect.stringContaining(`\n\n${customSnippet}\n\n`));
+        expect(copy.mock.calls[1][0]).toContain(de.sites.tracking.verifier.title);
+        expect(copy.mock.calls[1][0]).not.toMatch(/site-1|team-1|domain-1|user-1|hitkeep-domain-verification|HITKEEP_API_TOKEN/);
+    });
+
     it('derives the instance host by stripping the script filename, keeping the base path prefix', () => {
         expect(internals.trackerHostURL()).toMatch(/\/hitkeep$/);
         expect(internals.trackerHostURL()).not.toContain('hk.js');
@@ -195,6 +241,7 @@ describe('SiteTrackingSettings', () => {
         internals.selectInstallMethod('npm');
         fixture.detectChanges();
         expect(testId('tracking-snippet')).toBeNull();
+        expect(testId('tracking-copy-assistant-prompt')).toBeNull();
         expect(testId('tracking-advanced-options')).toBeNull();
         expect(testId('tracking-npm-install')).toBeTruthy();
         expect(testId('tracking-npm-registry-link')?.getAttribute('href')).toBe('https://www.npmjs.com/package/@hitkeep/tracker');

@@ -1940,7 +1940,13 @@
         },
         "script": {
           "description": "Copy and paste the code below into your website's HTML. Automatic tracking is enabled by default for outbound clicks, downloads, and form submissions.",
-          "docsAction": "Tracker guide"
+          "docsAction": "Tracker guide",
+          "declarativeEventsLabel": "Track marked clicks and form submissions",
+          "declarativeEventsDescription": "Send custom events for clicks on marked elements and submissions of marked forms. Mark them with data-hk-event or data-hitkeep-event."
+        },
+        "assistant": {
+          "copyAction": "Copy coding assistant prompt",
+          "prompt": "Install the HitKeep tracker on {{ domain }}. Inspect the project for an existing HitKeep integration. If one exists, update it only as needed. Otherwise, add the following script once in the shared page template. Keep the script URL and all attributes exactly as shown, and preserve the site's consent behavior.\n\n{{ snippet }}\n\nOpen a page on the intended hostname. In the browser's Network panel, confirm that the tracker script loads and the pageview request succeeds. Test any enabled automatic events by performing the corresponding actions and checking the event requests. In HitKeep, use “{{ verifier }}” to confirm a recent accepted hit. Report what you verified and what still needs checking."
         },
         "npm": {
           "description": "Bundle the typed tracker into a React, Vue, Angular, or Astro app. No script tag, full TypeScript types, and content blockers do not filter it.",
@@ -3242,6 +3248,19 @@
     }
   },
   "comparison": {
+    "details": "Period comparison",
+    "metric": "Metric",
+    "currentPeriod": "Current period",
+    "previousPeriod": "Previous period",
+    "relativeChange": "Relative change",
+    "unavailable": "Unavailable",
+    "zeroBaseline": "Undefined (previous value is zero)",
+    "elapsedRule": "The previous period ends immediately before the current period and covers the same elapsed time. Relative change is measured against the previous value.",
+    "liveOnly": "Live visitors covers the last five minutes and has no comparison.",
+    "currentOnlyBreakdowns": "Breakdowns and traffic records show the current period only.",
+    "seriesLabel": "{{metric}} (previous)",
+    "bucketOrder": "The lines are aligned by bucket order. The axis shows current-period dates.",
+    "gridMismatch": "The previous period uses a different bucket grid, so its series is hidden.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Pageviews (prev.)",
     "visitorsLabel": "Visitors (prev.)"

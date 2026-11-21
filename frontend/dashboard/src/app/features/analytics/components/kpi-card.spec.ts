@@ -71,15 +71,20 @@ describe('KpiCard', () => {
         expect(badge.className).toContain('bg-green-100');
     });
 
-    it('marks negative deltas as good when invertDelta is true', async () => {
-        fixture.componentRef.setInput('delta', -10);
-        fixture.componentRef.setInput('invertDelta', true);
+    it.each([
+        [-10, true, '-10.0%', 'bg-green-100'],
+        [25, true, '+25.0%', 'bg-red-100'],
+        [0, true, '0.0%', 'bg-surface-100'],
+        [-100, false, '-100.0%', 'bg-red-100']
+    ])('keeps the arithmetic sign for %s and colors the direction by favorability', async (delta, inverted, label, color) => {
+        fixture.componentRef.setInput('delta', delta);
+        fixture.componentRef.setInput('invertDelta', inverted);
         await fixture.whenStable();
 
         const badge = fixture.nativeElement.querySelector('span.text-xs');
         const flow = badge.querySelector('number-flow-ng') as HTMLElement & { _internals?: ElementInternals };
-        expect(flow._internals?.ariaLabel).toBe('+10.0%');
-        expect(badge.className).toContain('bg-green-100');
+        expect(flow._internals?.ariaLabel).toBe(label);
+        expect(badge.className).toContain(color);
     });
 
     it('formats deltas with the active locale', async () => {

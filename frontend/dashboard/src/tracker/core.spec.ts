@@ -177,6 +177,28 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
     };
 }
 
+function dispatchInteraction(harness: ReturnType<typeof trackerHarness>, target: Element, event: Event): boolean {
+    const root = target.closest('form') ?? target;
+    for (const listener of harness.documentListeners[event.type] ?? []) {
+        root.addEventListener(event.type, listener, { capture: true, once: true });
+    }
+    let trackerPreventedDefault = false;
+    target.addEventListener(
+        event.type,
+        (event) => {
+            trackerPreventedDefault = event.defaultPrevented;
+            event.preventDefault();
+        },
+        { once: true }
+    );
+    target.dispatchEvent(event);
+    return trackerPreventedDefault;
+}
+
+function recordedEvents(harness: ReturnType<typeof trackerHarness>) {
+    return Promise.all(harness.sendBeacon.mock.calls.filter(([url]) => String(url).endsWith('/ingest/event')).map(async ([, body]) => JSON.parse(await (body as Blob).text()) as { n: string; p: Record<string, unknown>; path: string }));
+}
+
 describe('tracker core', () => {
     afterEach(() => {
         vi.unstubAllGlobals();
@@ -285,6 +307,209 @@ describe('tracker core', () => {
         expect(trackedEvent).toBeNull();
     });
 
+    it('leaves legacy markers available for manual tracking by default', async () => {
+        const harness = trackerHarness();
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/';
+        link.setAttribute('data-hk-event', 'clicked');
+        dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+
+        const form = document.createElement('form');
+        form.setAttribute('data-hitkeep-event', 'submitted');
+        dispatchInteraction(harness, form, new SubmitEvent('submit'));
+
+        (harness.win as HitKeepWindow).hk?.event?.('clicked', { manual: true });
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'clicked', p: { manual: true } })]);
+    });
+
+    it('tracks the nearest marked click in dynamic content and leaves default navigation intact', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/private?token=secret';
+        link.setAttribute('data-hitkeep-event', 'link_click');
+        const child = document.createElement('span');
+        child.textContent = 'Private text';
+        child.setAttribute('data-hk-event', 'Pricing-CTA_2');
+        link.append(child);
+        for (const event of [
+            new MouseEvent('click', { bubbles: true, cancelable: true }),
+            new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }),
+            new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }),
+            new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 })
+        ]) {
+            expect(dispatchInteraction(harness, child, event)).toBe(false);
+            // A marker on the clicked descendant also replaces link classification on its own.
+            link.removeAttribute('data-hitkeep-event');
+        }
+        expect(await recordedEvents(harness)).toEqual(Array(3).fill(expect.objectContaining({ n: 'Pricing-CTA_2', p: {} })));
+    });
+
+    it('ignores malformed and oversized marker names without sending classified link metadata', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/private';
+        for (const name of ['', ' spaced ', 'person@example.com', 'line\nbreak', 'a'.repeat(65)]) {
+            link.setAttribute('data-hk-event', name);
+            dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+        }
+        const maxLengthName = 'a'.repeat(64);
+        link.setAttribute('data-hk-event', maxLengthName);
+        dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: maxLengthName, p: {} })]);
+    });
+
+    it('records a native form interaction at submit and prefers the submitter marker', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const form = document.createElement('form');
+        form.id = 'private-form';
+        form.action = 'https://forms.example.com/private';
+        form.setAttribute('data-hitkeep-event', 'form_sent');
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'button_sent');
+        button.value = 'private value';
+        const icon = document.createElement('span');
+        button.append(icon);
+        form.append(button);
+        dispatchInteraction(harness, icon, new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(await recordedEvents(harness)).toEqual([]);
+
+        dispatchInteraction(harness, form, new SubmitEvent('submit', { submitter: button }));
+        dispatchInteraction(harness, form, new SubmitEvent('submit'));
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'button_sent', p: {} }), expect.objectContaining({ n: 'form_sent', p: {} })]);
+    });
+
+    it('defers clicks on labels and submit controls associated with a form by id', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const fixture = document.createElement('div');
+        fixture.innerHTML = `
+            <form id="external-submitter-form" data-hk-event="form_sent"></form>
+            <label for="external-submitter" data-hk-event="label_clicked">Send</label>
+            <button id="external-submitter" form="external-submitter-form" data-hk-event="button_sent">Send</button>
+        `;
+        document.body.append(fixture);
+        try {
+            const form = fixture.querySelector('form')!;
+            const label = fixture.querySelector('label')!;
+            const button = fixture.querySelector('button')!;
+            dispatchInteraction(harness, label, new MouseEvent('click', { cancelable: true }));
+            dispatchInteraction(harness, button, new MouseEvent('click', { cancelable: true }));
+            dispatchInteraction(harness, form, new SubmitEvent('submit', { submitter: button }));
+        } finally {
+            fixture.remove();
+        }
+
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'button_sent', p: {} })]);
+    });
+
+    it('tracks label activation once and preserves the native checkbox action', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const fixture = document.createElement('div');
+        fixture.innerHTML = `
+            <label data-hk-event="nested_checkbox"><input type="checkbox"><span>Nested</span></label>
+            <label for="external-checkbox" data-hk-event="external_label">External</label>
+            <input id="external-checkbox" type="checkbox">
+            <label for="marked-checkbox" data-hk-event="second_label">Marked</label>
+            <input id="marked-checkbox" type="checkbox" data-hk-event="external_control">
+        `;
+        for (const listener of harness.documentListeners['click'] ?? []) {
+            fixture.addEventListener('click', listener, true);
+        }
+        document.body.append(fixture);
+        try {
+            fixture.querySelector('span')?.click();
+            fixture.querySelector<HTMLLabelElement>('label[for="external-checkbox"]')?.click();
+            fixture.querySelector<HTMLLabelElement>('label[for="marked-checkbox"]')?.click();
+            expect(Array.from(fixture.querySelectorAll('input'), (input) => input.checked)).toEqual([true, true, true]);
+        } finally {
+            fixture.remove();
+        }
+
+        expect((await recordedEvents(harness)).map(({ n }) => n)).toEqual(['nested_checkbox', 'external_label', 'external_control']);
+    });
+
+    it('honors opt-out before replaying a declarative event queued during prerender', async () => {
+        const harness = trackerHarness('/prerender');
+        harness.setPrerendering(true);
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+
+        setTrackingOptOut(harness.win, true);
+        harness.setPrerendering(false);
+        harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(await recordedEvents(harness)).toEqual([]);
+
+        setTrackingOptOut(harness.win, false);
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'named_click', p: {}, path: '/prerender' })]);
+    });
+
+    it('drops a queued declarative retry after opt-out while preserving manual delivery', async () => {
+        const fetchMock = fetchMockOk();
+        fetchMock.mockRejectedValueOnce(new Error('offline'));
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness();
+        const handle = createTracker(harness.win, runtimeConfig({ disableBeacon: true, enableDeclarativeEvents: true, capturePageviews: false }));
+
+        try {
+            const button = document.createElement('button');
+            button.setAttribute('data-hk-event', 'named_click');
+            dispatchInteraction(harness, button, new MouseEvent('click'));
+            await flushPromises();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            setTrackingOptOut(harness.win, true);
+            harness.windowListeners['pagehide']?.[0]?.(new Event('pagehide'));
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            handle?.track('manual_event');
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        } finally {
+            handle?.cleanup();
+        }
+    });
+
+    it.each(['DNT', 'bot', 'opt-out'])('keeps declarative tracking inactive when blocked by %s', (reason) => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        if (reason === 'DNT') {
+            Object.defineProperty(harness.win.navigator, 'doNotTrack', { value: '1' });
+        } else if (reason === 'bot') {
+            Object.defineProperty(harness.win.navigator, 'userAgent', { value: 'Googlebot' });
+        } else {
+            setTrackingOptOut(harness.win, true);
+        }
+        bootstrapTracker(harness.win);
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+    });
+
     it('reads auto-tracking opt-out flags from the snippet element', () => {
         const script = document.createElement('script');
         script.setAttribute('data-collect-dnt', 'true');
@@ -293,6 +518,7 @@ describe('tracker core', () => {
         script.setAttribute('data-disable-outbound-tracking', 'true');
         script.setAttribute('data-disable-download-tracking', 'true');
         script.setAttribute('data-disable-form-tracking', 'true');
+        script.setAttribute('data-enable-declarative-events', 'true');
         script.setAttribute('data-enable-web-vitals', 'true');
 
         expect(readTrackerOptions(script)).toEqual({
@@ -302,6 +528,7 @@ describe('tracker core', () => {
             disableOutboundTracking: true,
             disableDownloadTracking: true,
             disableFormTracking: true,
+            enableDeclarativeEvents: true,
             enableWebVitals: true,
             trackerSource: 'hk.js',
             trackerVersion: ''
@@ -651,6 +878,7 @@ describe('tracker core', () => {
             disableOutboundTracking: false,
             disableDownloadTracking: false,
             disableFormTracking: false,
+            enableDeclarativeEvents: false,
             enableWebVitals: false,
             trackerSource: '@hitkeep/tracker',
             trackerVersion: '2.12.0',
