@@ -154,7 +154,7 @@ describe('@hitkeep/tracker package entry', () => {
 
     it('measures manual pageviews through a prefix-relative keepalive POST when beacons are disabled', () => {
         const harness = packageHarness();
-        const fetch = vi.fn((_url: string, _init: RequestInit) => Promise.resolve(new Response(null, { status: 202 })));
+        const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 202 }));
         vi.stubGlobal('fetch', fetch);
         const handle = init({ host: 'https://www.example.net/hitkeep', autoCapturePageviews: false, visibleTime: true, useBeacon: false }, harness.win);
         const hide = () => {
@@ -242,7 +242,7 @@ describe('@hitkeep/tracker package entry', () => {
     });
 
     it('replays pre-init, ecommerce, and live events only after prerender activation', () => {
-        const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response(null, { status: 204 })));
+        const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 204 }));
         vi.stubGlobal('fetch', fetchMock);
         const harness = packageHarness('/checkout?utm_source=speculative');
         harness.setPrerendering(true);
