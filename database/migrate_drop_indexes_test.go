@@ -13,6 +13,7 @@ import (
 )
 
 const dropIndexesMigrationFile = "2026_07_08_000000_drop_analytics_art_indexes.sql"
+const preAnalyticsIndexDropMigrationFile = "2026_06_05_000000_create_custom_tracking_domains.sql"
 const dropMutableControlIndexesMigrationFile = "2026_07_17_000000_drop_mutable_control_art_indexes.sql"
 
 var rebuiltAnalyticsTables = []string{"hits", "events", "web_vitals"}
@@ -82,24 +83,19 @@ func TestOpenDefaultSplitControlStoreDefersLegacyEventsRebuildUntilSplitMarker(t
 }
 
 func TestOpenMigratedStoreCheckpointsEachHeavySectionAndTerminates(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "heavy-sections.db")
 	recoveryPath := filepath.Join(dir, "recovery")
 
-	seed, err := OpenMigratedStore(ctx, dbPath, WithCheckpointInterval(0))
-	if err != nil {
-		t.Fatalf("create migrated seed: %v", err)
+	seed := NewStore(dbPath, WithCheckpointInterval(0))
+	if err := seed.Connect(); err != nil {
+		t.Fatalf("connect heavy migration seed: %v", err)
 	}
-	if _, err := seed.DB().ExecContext(ctx,
-		"DELETE FROM migrations WHERE migration IN (?, ?, ?)",
-		dropAnalyticsIndexMigrationFiles[0],
-		dropAnalyticsIndexMigrationFiles[1],
-		dropAnalyticsIndexMigrationFiles[2],
-	); err != nil {
+	if err := applyMigrationsThrough(t, seed, preAnalyticsIndexDropMigrationFile); err != nil {
 		_ = seed.Close()
-		t.Fatalf("release heavy migrations: %v", err)
+		t.Fatalf("prepare schema before heavy migrations: %v", err)
 	}
 	if err := seed.Close(); err != nil {
 		t.Fatalf("close heavy migration seed: %v", err)
@@ -184,29 +180,18 @@ func countArtIndexState(t *testing.T, store *Store, table string) (indexes int, 
 }
 
 // TestDropAnalyticsIndexesMigrationPreservesData replays the upgrade path: it
-// migrates a database to the state just before the index-drop migration,
-// writes traffic, then applies only the new migration and verifies the data,
+// migrates a database to the state just before the index-drop migrations,
+// writes traffic, then applies the remaining migrations and verifies the data,
 // defaults, and NOT NULL constraints survive while every ART index is gone.
 func TestDropAnalyticsIndexesMigrationPreservesData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	store := NewStore(filepath.Join(t.TempDir(), "upgrade.db"))
 	if err := store.Connect(); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	// Hold the new migration back so Migrate() reproduces the pre-upgrade schema.
-	if _, err := store.DB().ExecContext(ctx,
-		"CREATE TABLE IF NOT EXISTS migrations (migration VARCHAR PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL)"); err != nil {
-		t.Fatalf("create migrations table: %v", err)
-	}
-	for _, migrationFile := range dropAnalyticsIndexMigrationFiles {
-		if _, err := store.DB().ExecContext(ctx,
-			"INSERT INTO migrations (migration, applied_at) VALUES (?, ?)", migrationFile, time.Now().UTC()); err != nil {
-			t.Fatalf("hold back migration %s: %v", migrationFile, err)
-		}
-	}
-	if err := store.Migrate(ctx); err != nil {
+	if err := applyMigrationsThrough(t, store, preAnalyticsIndexDropMigrationFile); err != nil {
 		t.Fatalf("migrate to pre-upgrade state: %v", err)
 	}
 
@@ -217,42 +202,29 @@ func TestDropAnalyticsIndexesMigrationPreservesData(t *testing.T) {
 		}
 	}
 
-	userID, err := store.CreateUser(ctx, "upgrade@test.com", "hash")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+	userID, siteID, sessionID, pageID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	if err := store.Exec(ctx, "INSERT INTO users (id, email, password, created_at) VALUES (?, 'upgrade@test.com', 'hash', now())", userID); err != nil {
+		t.Fatalf("seed historical user: %v", err)
 	}
-	site, err := store.CreateSite(ctx, userID, "upgrade.test")
-	if err != nil {
-		t.Fatalf("create site: %v", err)
+	if err := store.Exec(ctx, "INSERT INTO sites (id, user_id, domain, created_at) VALUES (?, ?, 'upgrade.test', now())", siteID, userID); err != nil {
+		t.Fatalf("seed historical site: %v", err)
 	}
-	sessionID := uuid.New()
-	pageID := uuid.New()
-	if err := store.CreateHitsBulk(ctx, []*api.Hit{
-		{ID: uuid.New(), SiteID: site.ID, SessionID: sessionID, PageID: pageID, Timestamp: time.Now().UTC(), Path: "/a"},
-		{ID: uuid.New(), SiteID: site.ID, SessionID: sessionID, PageID: uuid.New(), Timestamp: time.Now().UTC(), Path: "/b"},
-	}); err != nil {
+	if err := store.Exec(ctx, `
+		INSERT INTO hits (site_id, session_id, page_id, timestamp, path)
+		VALUES (?, ?, ?, now(), '/a'), (?, ?, uuid(), now(), '/b')`, siteID, sessionID, pageID, siteID, sessionID); err != nil {
 		t.Fatalf("insert hits pre-upgrade: %v", err)
 	}
-	if err := store.CreateEvent(ctx, &api.Event{
-		ID: uuid.New(), SiteID: site.ID, SessionID: sessionID, Name: "signup",
-		Properties: map[string]any{"plan": "pro"}, Timestamp: time.Now().UTC(),
-	}); err != nil {
+	if err := store.Exec(ctx, `
+		INSERT INTO events (site_id, session_id, name, properties, timestamp)
+		VALUES (?, ?, 'signup', '{"plan":"pro"}', now())`, siteID, sessionID); err != nil {
 		t.Fatalf("insert event pre-upgrade: %v", err)
 	}
-	if err := store.CreateWebVital(ctx, &api.WebVital{
-		ID: uuid.New(), SiteID: site.ID, SessionID: sessionID, PageID: pageID,
-		Metric: api.WebVitalLCP, Value: 1200, Rating: api.WebVitalRatingGood,
-		Path: "/a", Timestamp: time.Now().UTC(),
-	}); err != nil {
+	if err := store.Exec(ctx, `
+		INSERT INTO web_vitals (site_id, session_id, page_id, metric, value, rating, path, timestamp)
+		VALUES (?, ?, ?, 'LCP', 1200, 'good', '/a', now())`, siteID, sessionID, pageID); err != nil {
 		t.Fatalf("insert web vital pre-upgrade: %v", err)
 	}
 
-	// Release the held-back migration and apply it against populated tables.
-	if _, err := store.DB().ExecContext(ctx,
-		"DELETE FROM migrations WHERE migration IN (?, ?, ?)",
-		dropAnalyticsIndexMigrationFiles[0], dropAnalyticsIndexMigrationFiles[1], dropAnalyticsIndexMigrationFiles[2]); err != nil {
-		t.Fatalf("release migration: %v", err)
-	}
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatalf("apply index-drop migration: %v", err)
 	}
@@ -283,7 +255,7 @@ func TestDropAnalyticsIndexesMigrationPreservesData(t *testing.T) {
 	if err := store.DB().QueryRowContext(ctx, `
 		INSERT INTO hits (site_id, session_id, page_id, timestamp, path)
 		VALUES (?, ?, ?, now(), '/default-check') RETURNING id`,
-		site.ID, uuid.New(), uuid.New()).Scan(&generatedID); err != nil {
+		siteID, uuid.New(), uuid.New()).Scan(&generatedID); err != nil {
 		t.Fatalf("insert relying on id default: %v", err)
 	}
 	if generatedID == uuid.Nil {
@@ -293,15 +265,19 @@ func TestDropAnalyticsIndexesMigrationPreservesData(t *testing.T) {
 	// NOT NULL constraints must survive the rebuild.
 	if _, err := store.DB().ExecContext(ctx,
 		"INSERT INTO hits (id, site_id, session_id, page_id, timestamp) VALUES (?, ?, ?, ?, now())",
-		uuid.New(), site.ID, uuid.New(), uuid.New()); err == nil {
+		uuid.New(), siteID, uuid.New(), uuid.New()); err == nil {
 		t.Fatal("expected NOT NULL on hits.path to survive the rebuild")
 	}
 
 	// The appender ingest path must keep working against the rebuilt tables.
 	if err := store.CreateHitsBulk(ctx, []*api.Hit{
-		{ID: uuid.New(), SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: time.Now().UTC(), Path: "/post-upgrade"},
+		{ID: uuid.New(), SiteID: siteID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: time.Now().UTC(), Path: "/post-upgrade", PaidClick: new(true)},
 	}); err != nil {
 		t.Fatalf("insert hits post-upgrade: %v", err)
+	}
+	var paidClick bool
+	if err := store.DB().QueryRowContext(ctx, "SELECT paid_click FROM hits WHERE path = '/post-upgrade'").Scan(&paidClick); err != nil || !paidClick {
+		t.Fatalf("read post-upgrade paid click: paid=%v err=%v", paidClick, err)
 	}
 }
 

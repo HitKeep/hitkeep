@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	tenantmigrations "hitkeep/database/migrations/tenant"
 )
 
 func indexMutationTestError(tables ...string) error {
@@ -610,12 +612,15 @@ func TestGuardedTenantMigrationSurvivesAbruptRestart(t *testing.T) {
 		if err := store.Connect(); err != nil {
 			t.Fatalf("connect abrupt migration helper: %v", err)
 		}
-		committedHeavyMigrations := 0
-		if err := store.migrateTenant(context.Background(), migrationRunOptions{
+		ctx := t.Context()
+		if err := store.migrateTenant(ctx, migrationRunOptions{
 			guarded: true,
 			afterCommit: func() {
-				committedHeavyMigrations++
-				if committedHeavyMigrations < 4 {
+				var searchApplied bool
+				if err := store.DB().QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM migrations WHERE migration = ?)", searchMigration).Scan(&searchApplied); err != nil {
+					t.Fatalf("inspect committed search migration: %v", err)
+				}
+				if !searchApplied {
 					return
 				}
 				// Deliberately skip the post-migration checkpoint and clean close so
@@ -628,7 +633,7 @@ func TestGuardedTenantMigrationSurvivesAbruptRestart(t *testing.T) {
 		t.Fatal("abrupt migration hook did not exit")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "tenant-migration-replay.db")
 	recoveryRoot := filepath.Join(dir, "recovery")
@@ -637,13 +642,7 @@ func TestGuardedTenantMigrationSurvivesAbruptRestart(t *testing.T) {
 	if err := seed.Connect(); err != nil {
 		t.Fatalf("connect migration seed: %v", err)
 	}
-	if _, err := seed.DB().ExecContext(ctx, `
-		CREATE TABLE migrations (migration VARCHAR NOT NULL, applied_at TIMESTAMPTZ NOT NULL);
-		INSERT INTO migrations (migration, applied_at) VALUES (?, now()), (?, now()), (?, now()), (?, now())`,
-		migrationFile, eventsMigration, vitalsMigration, searchMigration); err != nil {
-		t.Fatalf("hold back replay migration: %v", err)
-	}
-	if err := seed.MigrateTenant(ctx); err != nil {
+	if err := applyMigrationBaseline(t, seed, tenantmigrations.Fs, "0012_create_qr_campaign_analytics.sql", ""); err != nil {
 		t.Fatalf("prepare pre-migration tenant schema: %v", err)
 	}
 	if _, err := seed.DB().ExecContext(ctx, `
@@ -651,8 +650,7 @@ func TestGuardedTenantMigrationSurvivesAbruptRestart(t *testing.T) {
 		INSERT INTO hits (id, site_id, session_id, page_id, timestamp, path)
 		SELECT uuid(), id, uuid(), uuid(), now(), '/before-migration' FROM sites;
 		INSERT INTO search_console_facts (site_id, property_uri, date, query, clicks, imported_at)
-		SELECT id, 'sc-domain:migration.test', current_date, 'before migration', 7, now() FROM sites;
-		DELETE FROM migrations WHERE migration IN (?, ?, ?, ?)`, migrationFile, eventsMigration, vitalsMigration, searchMigration); err != nil {
+		SELECT id, 'sc-domain:migration.test', current_date, 'before migration', 7, now() FROM sites`); err != nil {
 		t.Fatalf("seed checkpointed tenant data: %v", err)
 	}
 	if err := seed.Close(); err != nil {
