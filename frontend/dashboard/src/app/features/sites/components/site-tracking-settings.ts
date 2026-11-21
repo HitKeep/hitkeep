@@ -89,6 +89,7 @@ export class SiteTrackingSettings {
         collectDnt: new FormControl(false, { nonNullable: true }),
         disableBeacon: new FormControl(false, { nonNullable: true }),
         enableWebVitals: new FormControl(false, { nonNullable: true }),
+        enablePaidSignals: new FormControl(false, { nonNullable: true }),
         trackOutbound: new FormControl(true, { nonNullable: true }),
         trackDownloads: new FormControl(true, { nonNullable: true }),
         trackForms: new FormControl(true, { nonNullable: true }),
@@ -163,12 +164,13 @@ export class SiteTrackingSettings {
         if (this.trackingForm.collectDnt().value()) attrs += ' data-collect-dnt="true"';
         if (this.trackingForm.disableBeacon().value()) attrs += ' data-disable-beacon="true"';
         if (this.trackingForm.enableWebVitals().value()) attrs += ' data-enable-web-vitals="true"';
+        if (this.trackingForm.enablePaidSignals().value()) attrs += ' data-enable-paid-signals="true"';
         if (!this.trackingForm.trackOutbound().value()) attrs += ' data-disable-outbound-tracking="true"';
         if (!this.trackingForm.trackDownloads().value()) attrs += ' data-disable-download-tracking="true"';
         if (!this.trackingForm.trackForms().value()) attrs += ' data-disable-form-tracking="true"';
         if (this.trackingForm.enableDeclarativeEvents().value()) attrs += ' data-enable-declarative-events="true"';
 
-        return `<script async src="${scriptURL}"${attrs}></script>`;
+        return `<script async src="${scriptURL}"${attrs} referrerpolicy="no-referrer"></script>`;
     });
 
     protected readonly npmInstallCommand = `npm install ${NPM_PACKAGE_NAME}`;
@@ -197,6 +199,7 @@ export class SiteTrackingSettings {
                 this.trackingForm.collectDnt().value(),
                 this.trackingForm.disableBeacon().value(),
                 this.trackingForm.enableWebVitals().value(),
+                this.trackingForm.enablePaidSignals().value(),
                 !this.trackingForm.trackOutbound().value(),
                 !this.trackingForm.trackDownloads().value(),
                 !this.trackingForm.trackForms().value(),

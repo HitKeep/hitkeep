@@ -1162,6 +1162,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Signalen voor betaald verkeer",
+      "scope": "De aantallen gelden voor overeenkomende sessies die HitKeep rechtstreeks heeft gemeten met signaalmeting ingeschakeld, met of zonder UTM-tags. Sessies met tags kunnen ook in de UTM-statistieken voorkomen.",
+      "observed": "Signaal voor betaald verkeer waargenomen",
+      "count": "{{ observed }} van {{ measured }} gemeten sessies",
+      "unobserved": "Geen signaal voor betaald verkeer waargenomen",
+      "unobservedHint": "Sessies zonder waargenomen signaal kunnen afkomstig zijn van betaald of organisch verkeer.",
+      "noMeasurement": "Er zijn geen gemeten sessies die overeenkomen met deze periode en filters.",
+      "unavailable": "De aantallen voor signalen voor betaald verkeer konden niet worden geladen."
+    },
     "noSiteDescription": "Selecteer of maak een site om UTM-statistieken te bekijken.",
     "series": {
       "title": "UTM-prestaties",
@@ -1889,6 +1899,8 @@
         "badge": "{{ count }} gewijzigd",
         "deliveryTitle": "Levering en privacy"
       },
+      "paidSignalsLabel": "Signalen voor betaald verkeer",
+      "paidSignalsDescription": "Detecteert ondersteunde advertentieklik-ID’s op bijgehouden pagina’s. De tracker geeft alleen door of er een ID aanwezig is.",
       "collectDntLabel": "VerzamelDNT",
       "collectDntDescription": "Volg gebruikers, zelfs als \"Do Not Track\" is ingeschakeld in hun browser.",
       "disableBeaconLabel": "Schakel sendBeacon uit",

@@ -19,6 +19,7 @@ export interface TrackerOptions {
     disableDownloadTracking: boolean;
     disableFormTracking: boolean;
     enableDeclarativeEvents: boolean;
+    enablePaidSignals: boolean;
     enableWebVitals: boolean;
     trackerSource: string;
     trackerVersion: string;
@@ -47,7 +48,7 @@ export interface TrackerHandle {
 interface PendingRequest {
     endpoint: string;
     body: string;
-    declarative?: boolean;
+    respectOptOut?: boolean;
 }
 
 interface EventPayload {
@@ -165,6 +166,7 @@ export function readTrackerOptions(scriptEl: Element): TrackerOptions {
         disableDownloadTracking: scriptEl.getAttribute('data-disable-download-tracking') === 'true',
         disableFormTracking: scriptEl.getAttribute('data-disable-form-tracking') === 'true',
         enableDeclarativeEvents: scriptEl.getAttribute('data-enable-declarative-events') === 'true',
+        enablePaidSignals: scriptEl.getAttribute('data-enable-paid-signals') === 'true',
         enableWebVitals: scriptEl.getAttribute('data-enable-web-vitals') === 'true',
         trackerSource: source,
         trackerVersion: version
@@ -245,6 +247,7 @@ function loadWebVitalsBundle(win: HitKeepWindow, bundleUrl: string): void {
     }
     const script = win.document.createElement('script');
     script.async = true;
+    script.referrerPolicy = 'no-referrer';
     script.src = bundleUrl;
     win.hk = win.hk || {};
     win.hk._webVitalsLoaded = true;
@@ -392,7 +395,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     };
 
     const sessionId = getSessionId();
-    const initialReferrer = document.referrer;
+    const initialReferrer = document.referrer.split(/[?#]/, 1)[0];
     const initialHost = location.hostname;
     let awaitingActivation = prerenderDocument.prerendering === true || (document.visibilityState as string) === 'prerender';
     const readUtmValue = (params: URLSearchParams, key: string) => {
@@ -411,7 +414,8 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             u_cmp: readUtmValue(params, 'utm_campaign'),
             u_trm: readUtmValue(params, 'utm_term'),
             u_cnt: readUtmValue(params, 'utm_content'),
-            qr: readUtmValue(params, 'hk_qr')
+            qr: readUtmValue(params, 'hk_qr'),
+            pc: config.enablePaidSignals ? params.getAll('gclid').some(Boolean) || params.getAll('msclkid').some(Boolean) : undefined
         };
     };
     let initialAttribution = awaitingActivation ? null : readAttribution();
@@ -472,12 +476,13 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     };
 
     const sendRequest = (request: PendingRequest, fromQueue = false) => {
-        if (!active || (request.declarative && isTrackingOptedOut(win))) {
+        if (!active || (request.respectOptOut && isTrackingOptedOut(win))) {
             return;
         }
         const headers = { 'Content-Type': 'application/json' };
 
-        if (navigator.sendBeacon && !config.disableBeacon) {
+        // Beacon cannot prevent the browser from putting the current query in Referer.
+        if (navigator.sendBeacon && !config.disableBeacon && !location.search) {
             const blob = new Blob([request.body], { type: 'application/json' });
             if (navigator.sendBeacon(request.endpoint, blob)) {
                 return;
@@ -489,7 +494,8 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             body: request.body,
             headers,
             keepalive: true,
-            credentials: 'omit'
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer'
         })
             .then((response) => {
                 if (!response.ok) {
@@ -510,11 +516,11 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             });
     };
 
-    const sendJson = (endpoint: string, payload: object, declarative?: boolean) => {
+    const sendJson = (endpoint: string, payload: object, respectOptOut?: boolean) => {
         sendRequest({
             endpoint,
             body: JSON.stringify(payload),
-            declarative
+            respectOptOut
         });
     };
 
@@ -587,7 +593,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             initialAttribution = readAttribution();
         }
 
-        sendJson(config.pageEndpoint, {
+        const payload = {
             path: currentPath,
             referrer: referrer || null,
             ua: navigator.userAgent,
@@ -602,7 +608,8 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             page_id: currentPageId,
             tsrc: config.trackerSource,
             tv: config.trackerVersion
-        });
+        };
+        sendJson(config.pageEndpoint, payload, config.enablePaidSignals);
 
         lastPageviewPath = currentPath;
         lastPageviewAt = now;

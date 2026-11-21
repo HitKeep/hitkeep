@@ -9,6 +9,7 @@ import (
 
 	"hitkeep/aianalytics"
 	"hitkeep/api"
+	"hitkeep/importables"
 )
 
 func setupComparisonStore(t *testing.T) (*Store, uuid.UUID) {
@@ -20,6 +21,91 @@ func setupComparisonStore(t *testing.T) (*Store, uuid.UUID) {
 		t.Fatalf("create user: %v", err)
 	}
 	return store, userID
+}
+
+func TestSiteStatsPaidSignalSessions(t *testing.T) {
+	store, userID := setupComparisonStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "paid-signal.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSite, err := store.CreateSite(ctx, userID, "other-paid-signal.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal := &api.Goal{ID: uuid.New(), SiteID: site.ID, Name: "Only landing", Type: "path", Value: "/landing"}
+	if err := store.CreateGoal(ctx, goal); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC)
+	current := start.Add(time.Hour)
+	previous := start.Add(-2 * time.Hour)
+	untagged, tagged, measured := uuid.New(), uuid.New(), uuid.New()
+	hits := []*api.Hit{
+		{SiteID: site.ID, SessionID: untagged, PageID: uuid.New(), Timestamp: current, Path: "/landing", PaidClick: new(true)},
+		{SiteID: site.ID, SessionID: untagged, PageID: uuid.New(), Timestamp: current, Path: "/landing", PaidClick: new(true)},
+		{SiteID: site.ID, SessionID: untagged, PageID: uuid.New(), Timestamp: current, Path: "/filtered", PaidClick: new(false)},
+		{SiteID: site.ID, SessionID: tagged, PageID: uuid.New(), Timestamp: current, Path: "/filtered", PaidClick: new(true), UTMSource: new("search"), UTMCampaign: new("promotion")},
+		{SiteID: site.ID, SessionID: measured, PageID: uuid.New(), Timestamp: current, Path: "/filtered", PaidClick: new(false)},
+		{SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: current, Path: "/landing"},
+		{SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: previous, Path: "/filtered", UTMSource: new("legacy")},
+		{SiteID: otherSite.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: current, Path: "/filtered", PaidClick: new(true)},
+	}
+	if err := store.CreateHitsBulk(ctx, hits); err != nil {
+		t.Fatal(err)
+	}
+	importDate := start.AddDate(0, 0, -3)
+	sink, err := NewImportedDataSink(ctx, store, site.ID, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.PutTraffic(ctx, importables.TrafficRow{Date: importDate, Visits: 3, Pageviews: 8, SourceFile: "imported_visitors.csv"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	params := api.AnalyticsParams{
+		SiteID: site.ID, Start: start, End: start.AddDate(0, 0, 7).Add(-time.Second),
+		CompareStart: start.AddDate(0, 0, -7), CompareEnd: start.Add(-time.Second),
+	}
+	for _, tc := range []struct {
+		name         string
+		filters      []api.Filter
+		goalIDs      []uuid.UUID
+		wantPaid     int
+		wantMeasured int
+		wantUTM      int
+	}{
+		{name: "all matching hits including those without UTM", wantPaid: 2, wantMeasured: 3, wantUTM: 1},
+		{name: "path", filters: []api.Filter{{Type: "path", Value: "/filtered"}}, wantPaid: 1, wantMeasured: 3, wantUTM: 1},
+		{name: "UTM", filters: []api.Filter{{Type: "utm_source", Value: "search"}}, wantPaid: 1, wantMeasured: 1, wantUTM: 1},
+		{name: "goal session cohort", goalIDs: []uuid.UUID{goal.ID}, wantPaid: 1, wantMeasured: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params.Filters, params.GoalIDs = tc.filters, tc.goalIDs
+			stats, err := store.GetSiteStatsSections(t.Context(), params, SiteStatsSections{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stats.PaidSignalSessions != tc.wantPaid || stats.PaidSignalMeasuredSessions != tc.wantMeasured || stats.UTMSourceHits != tc.wantUTM {
+				t.Fatalf("paid=%d measured=%d UTM source=%d, want %d, %d, %d", stats.PaidSignalSessions, stats.PaidSignalMeasuredSessions, stats.UTMSourceHits, tc.wantPaid, tc.wantMeasured, tc.wantUTM)
+			}
+			if len(stats.ChartData) != 0 || len(stats.TopUTMSources) != 0 {
+				t.Fatal("KPI-only request returned optional sections")
+			}
+			comparison := stats.Comparison
+			if comparison == nil || comparison.PaidSignalSessions != 0 || comparison.PaidSignalMeasuredSessions != 0 {
+				t.Fatalf("expected comparison period with zero coverage, got %+v", comparison)
+			}
+			if tc.filters == nil && tc.goalIDs == nil && (comparison.TotalPageviews != 9 || comparison.UTMSourceHits != 1) {
+				t.Fatalf("comparison should include historical and imported traffic: %+v", comparison)
+			}
+		})
+	}
 }
 
 func TestGetSiteStatsComparison(t *testing.T) {
@@ -46,6 +132,7 @@ func TestGetSiteStatsComparison(t *testing.T) {
 		PageID:    uuid.New(),
 		Timestamp: now.AddDate(0, 0, -3),
 		Path:      "/current",
+		PaidClick: new(false),
 	}); err != nil {
 		t.Fatalf("create current hit: %v", err)
 	}
@@ -56,6 +143,7 @@ func TestGetSiteStatsComparison(t *testing.T) {
 		PageID:    uuid.New(),
 		Timestamp: now.AddDate(0, 0, -10),
 		Path:      "/previous",
+		PaidClick: new(true),
 	}); err != nil {
 		t.Fatalf("create previous hit: %v", err)
 	}
@@ -82,6 +170,10 @@ func TestGetSiteStatsComparison(t *testing.T) {
 	}
 	if result.Comparison.TotalPageviews != 1 {
 		t.Errorf("expected 1 comparison pageview, got %d", result.Comparison.TotalPageviews)
+	}
+	if result.PaidSignalSessions != 0 || result.PaidSignalMeasuredSessions != 1 ||
+		result.Comparison.PaidSignalSessions != 1 || result.Comparison.PaidSignalMeasuredSessions != 1 {
+		t.Errorf("unexpected paid signal counts in current or comparison window: %+v", result)
 	}
 }
 

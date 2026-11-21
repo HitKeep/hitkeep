@@ -3,33 +3,19 @@ import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocaleService } from '@jsverse/transloco-locale';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { StatsService } from '@features/analytics/services/stats.service';
 import { SiteService } from '@features/sites/services/site.service';
+import { emptySiteStats } from '@testing/empty-site-stats';
+import type { SiteStats } from '@models/analytics.types';
+import en from '../../../../public/i18n/en.json';
 import { UtmAnalytics } from './utm-analytics';
 
 describe('UtmAnalytics', () => {
     let fixture: ComponentFixture<UtmAnalytics>;
-    const stats = signal({
-        live_visitors: 0,
-        total_pageviews: 0,
-        unique_sessions: 0,
-        bounce_rate: 0,
-        avg_session_duration: 0,
-        pages_per_session: 0,
-        chart_data: [],
-        top_pages: [],
-        top_landing_pages: [],
-        top_exit_pages: [],
-        top_referrers: [],
-        top_devices: [],
-        top_countries: [],
-        top_cities: [],
-        top_providers: [],
-        top_asns: [],
-        top_languages: [],
+    const stats = emptySiteStats({
         top_utm_campaigns: [{ name: 'launch', value: 12 }],
         top_utm_contents: [{ name: 'hero', value: 7 }],
         top_utm_mediums: [{ name: 'cpc', value: 8 }],
@@ -40,21 +26,16 @@ describe('UtmAnalytics', () => {
         utm_medium_hits: 8,
         utm_source_hits: 10,
         utm_term_hits: 4,
-        goals: [],
-        funnels: []
+        paid_signal_sessions: 4,
+        paid_signal_measured_sessions: 15
     });
     const statsServiceStub = {
-        stats,
-        isLoading: signal(false),
-        currentComparisonRange: signal(null),
-        comparisonRange: vi.fn(() => ({ from: '2026-04-01T00:00:00Z', to: '2026-04-30T00:00:00Z' })),
-        fetchStats: vi.fn(() => of(stats())),
-        loadStats: vi.fn()
+        fetchStats: vi.fn(() => of(stats))
     };
+    const paidSignalsCard = () => fixture.nativeElement.querySelector('[data-testid="utm-paid-signals"]') as HTMLElement;
 
     beforeEach(async () => {
-        statsServiceStub.loadStats.mockClear();
-        statsServiceStub.fetchStats.mockClear();
+        statsServiceStub.fetchStats.mockReset();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -64,6 +45,7 @@ describe('UtmAnalytics', () => {
                         en: {
                             nav: { utm: 'UTM' },
                             common: {
+                                loading: 'Loading...',
                                 loadingSiteData: 'Loading site data...',
                                 noSiteSelected: 'No site selected',
                                 noActiveFilter: 'No active filter',
@@ -77,6 +59,7 @@ describe('UtmAnalytics', () => {
                                 traffic: { visitors: 'Visitors' }
                             },
                             utm: {
+                                paidSignals: en.utm.paidSignals,
                                 kpis: {
                                     campaign: 'Campaign',
                                     content: 'Content',
@@ -141,7 +124,7 @@ describe('UtmAnalytics', () => {
         await fixture.whenStable();
     });
 
-    it('keeps UTM metric cards acquisition-only and preserves metric filter clicks', () => {
+    it('keeps the UTM metric cards and uses their filters to reload paid signal counts', async () => {
         const component = fixture.componentInstance as unknown as {
             metricCardTabs: () => { id: string; cards: { id: string; linkMode?: string }[] }[];
             onMetricCardClick: (event: { tabId: string; cardId: string; filterType: string; metric: { name: string; value: number } }) => void;
@@ -154,15 +137,50 @@ describe('UtmAnalytics', () => {
         expect(tabs.map((tab) => tab.id)).toEqual(['acquisition']);
         expect(tabs[0]?.cards.map((card) => card.id)).toEqual(['campaigns', 'sources', 'mediums', 'contents', 'terms']);
         expect(tabs[0]?.cards.find((card) => card.id === 'sources')?.linkMode).toBeUndefined();
+        expect(paidSignalsCard().textContent).toContain('4 of 15 measured');
+        expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.scope);
 
-        component.onMetricCardClick({
-            tabId: 'acquisition',
-            cardId: 'sources',
-            filterType: 'utm_source',
-            metric: { name: 'google', value: 10 }
-        });
+        const response = new Subject<SiteStats>();
+        statsServiceStub.fetchStats.mockReturnValueOnce(response);
+        component.onMetricCardClick({ tabId: 'acquisition', cardId: 'sources', filterType: 'utm_source', metric: { name: 'google', value: 10 } });
+        TestBed.tick();
 
         expect(component.activeFilters()).toEqual([{ type: 'utm_source', value: 'google' }]);
         expect(component.activeFilterValue('utm_source')).toBe('google');
+        expect(statsServiceStub.fetchStats).toHaveBeenLastCalledWith('site-1', expect.any(String), expect.any(String), [{ type: 'utm_source', value: 'google' }], [], []);
+        expect(paidSignalsCard().textContent).toContain('Loading...');
+        expect(paidSignalsCard().textContent).not.toContain('4 of 15 measured');
+
+        response.next(emptySiteStats({ paid_signal_sessions: 0, paid_signal_measured_sessions: 3 }));
+        response.complete();
+        await fixture.whenStable();
+
+        expect(paidSignalsCard().textContent).toContain('0 of 3 measured');
+        expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobserved);
+        expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobservedHint);
+        expect(paidSignalsCard().querySelectorAll('dd')[1]?.textContent?.trim()).toBe('3');
+    });
+
+    it('distinguishes zero measured sessions from unavailable stats', async () => {
+        const component = fixture.componentInstance as unknown as { refreshStats: () => void };
+        statsServiceStub.fetchStats.mockReturnValueOnce(of(emptySiteStats({ paid_signal_sessions: 0, paid_signal_measured_sessions: 0 })));
+        component.refreshStats();
+        await fixture.whenStable();
+
+        expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.noMeasurement);
+        expect(paidSignalsCard().querySelector('dl')).toBeNull();
+
+        const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        statsServiceStub.fetchStats.mockReturnValueOnce(throwError(() => new Error('unavailable')));
+        component.refreshStats();
+        await fixture.whenStable();
+
+        expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unavailable);
+        expect(paidSignalsCard().textContent).not.toContain(en.utm.paidSignals.noMeasurement);
+        log.mockRestore();
+
+        component.refreshStats();
+        await fixture.whenStable();
+        expect(paidSignalsCard().textContent).toContain('4 of 15 measured');
     });
 });

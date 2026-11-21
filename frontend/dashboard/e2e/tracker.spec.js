@@ -165,6 +165,50 @@ test("defers pageviews, events, and web vitals until prerender activation", asyn
     expect(requests[2].payload.pid).toBe(requests[0].payload.page_id);
 });
 
+test("keeps current and referring queries out of same-origin tracker requests", async ({ page, baseURL }) => {
+    const target = new URL("paid.html?gclid=&gclid=private-click-id&utm_medium=cpc", trackerFixtureUrl(baseURL));
+    const source = new URL("external-target.html?private-referring-query=1", target);
+    await page.route(target.href, (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            headers: { "referrer-policy": "unsafe-url" },
+            body: `<script async src="/hk.js" referrerpolicy="no-referrer" data-enable-paid-signals="true" data-enable-declarative-events="true" data-enable-web-vitals="true"></script>
+                <button type="button" data-hk-event="named_click">Named click</button>`
+        })
+    );
+    await page.goto(source.href);
+    const requests = collectTrackerRequests(page);
+    const waitForPath = (path) => page.waitForRequest((request) => new URL(request.url()).pathname === path);
+
+    const landing = waitForPath("/ingest");
+    const vitalsBundle = waitForPath("/hk-vitals.js");
+    await page.evaluate((url) => {
+        window.location.href = url;
+    }, target.href);
+    const landingRequest = await landing;
+
+    const named = waitForPath("/ingest/event");
+    await page.getByRole("button", { name: "Named click" }).click();
+    const namedRequest = await named;
+
+    const vital = waitForPath("/ingest/web-vitals");
+    await page.evaluate(() => {
+        const context = window.hk._webVitals;
+        context.emit({ n: "LCP", v: 100, p: context.getPath(), sid: context.sessionId, pid: context.pageId(), tsrc: context.trackerSource, tv: context.trackerVersion });
+    });
+    const vitalRequest = await vital;
+
+    for (const request of [landingRequest, namedRequest, vitalRequest, await vitalsBundle]) {
+        expect(await request.headerValue("referer")).toBeNull();
+        expect(request.postData() ?? "").not.toMatch(/private-click-id|private-referring-query|gclid/);
+    }
+    expect(requests).toHaveLength(3);
+    expect(requests[0].payload).toMatchObject({ pc: true, u_med: "cpc", referrer: `${source.origin}${source.pathname}` });
+    expect(requests[1].payload).toMatchObject({ n: "named_click", p: {}, r: `${source.origin}${source.pathname}` });
+    expect(requests[1].payload).not.toHaveProperty("pc");
+    expect(requests[2].payload).not.toHaveProperty("pc");
+});
+
 test("tracks middle-click outbound links without hijacking the current tab", async ({ page, baseURL, context }) => {
     await gotoTrackerFixture(page, baseURL);
 

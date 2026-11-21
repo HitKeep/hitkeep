@@ -110,6 +110,7 @@ init({
     fileDownloads: true, // file_download events
     formSubmissions: true, // form_submit events
     declarativeEvents: false, // named clicks and submits from HTML attributes
+    enablePaidSignals: false, // report the presence of a paid click signal on pageviews
     webVitals: false, // load the Web Vitals bundle from `${host}/hk-vitals.js`
     useBeacon: true, // prefer navigator.sendBeacon
     respectDoNotTrack: true, // drop tracking when DNT is enabled
@@ -138,6 +139,12 @@ When a label forwards a click to an associated control with a marker, the contro
 HitKeep sends the name with the usual custom-event context and empty properties. Element text, link destinations, form fields, and other element metadata are excluded.
 
 By default, the attributes only suppress automatic events so existing manual handlers can keep calling `track()` or `hk.event()`. When opting in, remove manual calls for interactions you want the markup to track. Named events take precedence over outbound, download, and form classification.
+
+### Paid click signals
+
+Set `enablePaidSignals: true` in `init()`, or add `data-enable-paid-signals="true"` to your `hk.js` script tag. Pageviews then include a boolean indicating whether the landing URL contains a nonempty `gclid` or `msclkid` parameter. Parameter names are case-sensitive. The tracker sends only the boolean and keeps it in memory across SPA pageviews, alongside existing UTM attribution.
+
+The tracker strips query strings and fragments from referrer fields. On pages with a query string, analytics requests use keepalive fetch without an HTTP `Referer` header. Add `referrerpolicy="no-referrer"` to the snippet's script tag to apply the same protection to the browser's initial script request.
 
 ### E-commerce
 

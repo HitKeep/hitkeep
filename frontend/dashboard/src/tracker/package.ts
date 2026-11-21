@@ -21,6 +21,8 @@ export interface TrackerConfig {
     formSubmissions?: boolean;
     /** Track named clicks and submissions marked with `data-hk-event` or `data-hitkeep-event`. Default `false`. */
     declarativeEvents?: boolean;
+    /** Report whether the landing URL has a paid click signal. Default `false`. */
+    enablePaidSignals?: boolean;
     /** Load the Web Vitals bundle from `${host}/hk-vitals.js`. Default `false`. */
     webVitals?: boolean;
     /** Prefer `navigator.sendBeacon` over keepalive fetch. Default `true`. */
@@ -100,6 +102,7 @@ function resolveRuntimeConfig(config: TrackerConfig): TrackerRuntimeConfig {
         disableDownloadTracking: config.fileDownloads === false,
         disableFormTracking: config.formSubmissions === false,
         enableDeclarativeEvents: config.declarativeEvents === true,
+        enablePaidSignals: config.enablePaidSignals === true,
         enableWebVitals,
         trackerSource: (config.trackerSource || DEFAULT_TRACKER_SOURCE).trim().slice(0, 64) || DEFAULT_TRACKER_SOURCE,
         trackerVersion: TRACKER_VERSION,

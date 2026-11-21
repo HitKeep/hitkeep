@@ -1194,6 +1194,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Paid traffic signals",
+      "scope": "Counts cover matching native HitKeep sessions measured with paid signals enabled, with or without UTM tags. Tagged sessions can also appear in the UTM metrics.",
+      "observed": "Paid signal observed",
+      "count": "{{ observed }} of {{ measured }} measured",
+      "unobserved": "No paid signal observed",
+      "unobservedHint": "Sessions with no observed signal may include paid and organic traffic.",
+      "noMeasurement": "No measured sessions match this date range and filters.",
+      "unavailable": "Paid signal counts could not be loaded."
+    },
     "noSiteDescription": "Select or create a site to view UTM metrics.",
     "series": {
       "title": "UTM performance",
@@ -1975,6 +1985,8 @@
         "badge": "{{ count }} changed",
         "deliveryTitle": "Delivery and privacy"
       },
+      "paidSignalsLabel": "Paid traffic signals",
+      "paidSignalsDescription": "Detect supported ad click IDs on tracked pages. The tracker sends only the presence signal.",
       "collectDntLabel": "Collect DNT",
       "collectDntDescription": "Track users even if \"Do Not Track\" is enabled in their browser.",
       "disableBeaconLabel": "Disable sendBeacon",

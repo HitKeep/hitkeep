@@ -45,6 +45,7 @@ var hitAppenderColumns = []string{
 	"utm_term",
 	"utm_content",
 	"qr_code_id",
+	"paid_click",
 }
 
 type hitAppenderValueFunc func(*api.Hit) driver.Value
@@ -77,6 +78,7 @@ var hitAppenderValueFns = map[string]hitAppenderValueFunc{
 	"utm_term":        func(hit *api.Hit) driver.Value { return nullableStringPtr(hit.UTMTerm) },
 	"utm_content":     func(hit *api.Hit) driver.Value { return nullableStringPtr(hit.UTMContent) },
 	"qr_code_id":      func(hit *api.Hit) driver.Value { return nullableDuckDBUUIDPtr(hit.QRCodeID) },
+	"paid_click":      func(hit *api.Hit) driver.Value { return nullableBoolPtr(hit.PaidClick) },
 }
 
 // availableHitAppenderColumns reports the intersection of hitAppenderColumns
@@ -295,7 +297,7 @@ func (s *Store) GetHits(ctx context.Context, params api.HitQueryParams) (*api.Pa
             h.id, h.site_id, h.session_id, h.page_id, h.timestamp, h.path, h.hostname, h.referrer, h.user_agent,
             h.viewport_width, h.viewport_height, h.screen_width, h.screen_height, h.language, h.country_code,
             h.region, h.city, h.provider, h.asn, h.asn_org,
-            h.utm_source, h.utm_medium, h.utm_campaign, h.utm_term, h.utm_content, h.qr_code_id, h.is_unique
+            h.utm_source, h.utm_medium, h.utm_campaign, h.utm_term, h.utm_content, h.qr_code_id, h.is_unique, h.paid_click
 	` + baseQuery // whitelisted
 
 	rows, err := s.db.QueryContext(ctx, selectQuery, args...)
@@ -310,7 +312,7 @@ func (s *Store) GetHits(ctx context.Context, params api.HitQueryParams) (*api.Pa
 		if err := rows.Scan(
 			&hit.ID, &hit.SiteID, &hit.SessionID, &hit.PageID, &hit.Timestamp, &hit.Path, &hit.Hostname, &hit.Referrer,
 			&hit.UserAgent, &hit.ViewportWidth, &hit.ViewportHeight, &hit.ScreenWidth,
-			&hit.ScreenHeight, &hit.Language, &hit.CountryCode, &hit.Region, &hit.City, &hit.Provider, &hit.ASN, &hit.ASNOrg, &hit.UTMSource, &hit.UTMMedium, &hit.UTMCampaign, &hit.UTMTerm, &hit.UTMContent, &hit.QRCodeID, &hit.IsUnique,
+			&hit.ScreenHeight, &hit.Language, &hit.CountryCode, &hit.Region, &hit.City, &hit.Provider, &hit.ASN, &hit.ASNOrg, &hit.UTMSource, &hit.UTMMedium, &hit.UTMCampaign, &hit.UTMTerm, &hit.UTMContent, &hit.QRCodeID, &hit.IsUnique, &hit.PaidClick,
 		); err != nil {
 			return nil, err
 		}
@@ -385,6 +387,7 @@ func (s *Store) ExportHitsCSV(ctx context.Context, params api.HitQueryParams, w 
 		"utm_content",
 		"qr_code_id",
 		"is_unique",
+		"paid_click",
 	}); err != nil {
 		return fmt.Errorf("failed to write csv header: %w", err)
 	}
@@ -402,7 +405,7 @@ func (s *Store) ExportHitsCSV(ctx context.Context, params api.HitQueryParams, w 
 			viewportWidth, viewportHeight                        sql.NullInt32
 			screenWidth, screenHeight                            sql.NullInt32
 			asn                                                  sql.NullInt32
-			isUnique                                             sql.NullBool
+			isUnique, paidClick                                  sql.NullBool
 		)
 		if err := rows.Scan(
 			&id,
@@ -432,6 +435,7 @@ func (s *Store) ExportHitsCSV(ctx context.Context, params api.HitQueryParams, w 
 			&utmContent,
 			&qrCodeID,
 			&isUnique,
+			&paidClick,
 		); err != nil {
 			return fmt.Errorf("failed to scan export row: %w", err)
 		}
@@ -464,6 +468,7 @@ func (s *Store) ExportHitsCSV(ctx context.Context, params api.HitQueryParams, w 
 			nullString(utmContent),
 			nullUUID(qrCodeID),
 			nullBool(isUnique),
+			nullBool(paidClick),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write csv record: %w", err)
@@ -570,7 +575,7 @@ func (s *Store) buildHitExportQuery(ctx context.Context, params api.HitQueryPara
             h.id, h.site_id, h.session_id, h.page_id, h.timestamp, h.path, h.hostname, h.referrer, h.user_agent,
             h.viewport_width, h.viewport_height, h.screen_width, h.screen_height, h.language, h.country_code,
             h.region, h.city, h.provider, h.asn, h.asn_org,
-            h.utm_source, h.utm_medium, h.utm_campaign, h.utm_term, h.utm_content, h.qr_code_id, h.is_unique
+            h.utm_source, h.utm_medium, h.utm_campaign, h.utm_term, h.utm_content, h.qr_code_id, h.is_unique, h.paid_click
 	` + baseQuery
 
 	return selectQuery, args, nil

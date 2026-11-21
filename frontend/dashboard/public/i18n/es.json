@@ -1244,6 +1244,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Señales de tráfico de pago",
+      "scope": "Los recuentos incluyen las sesiones coincidentes registradas directamente por HitKeep con la medición de señales activada, lleven o no etiquetas UTM. Las sesiones etiquetadas también pueden aparecer en las métricas UTM.",
+      "observed": "Señal de tráfico de pago detectada",
+      "count": "{{ observed }} de {{ measured }} sesiones medidas",
+      "unobserved": "Sin señal de tráfico de pago detectada",
+      "unobservedHint": "Las sesiones sin una señal detectada pueden proceder de tráfico de pago u orgánico.",
+      "noMeasurement": "No hay sesiones medidas que coincidan con este intervalo de fechas y estos filtros.",
+      "unavailable": "No se pudieron cargar los recuentos de señales de tráfico de pago."
+    },
     "noSiteDescription": "Selecciona o crea un sitio para ver métricas UTM.",
     "series": {
       "title": "Rendimiento UTM",
@@ -2107,6 +2117,8 @@
         "badge": "{{ count }} cambiadas",
         "deliveryTitle": "Entrega y privacidad"
       },
+      "paidSignalsLabel": "Señales de tráfico de pago",
+      "paidSignalsDescription": "Detecta identificadores de clics en anuncios compatibles en las páginas monitorizadas. El rastreador solo indica si hay un identificador.",
       "collectDntLabel": "Recopilar DNT",
       "collectDntDescription": "Rastrear usuarios incluso si \"Do Not Track\" está habilitado en su navegador.",
       "disableBeaconLabel": "Desactivar sendBeacon",

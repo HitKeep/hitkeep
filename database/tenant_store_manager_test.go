@@ -625,6 +625,7 @@ func TestTransferSiteMovesAnalyticsToDestinationTenant(t *testing.T) {
 		PageID:    pageID,
 		Timestamp: time.Now().UTC(),
 		Path:      "/pricing",
+		PaidClick: new(true),
 	}); err != nil {
 		t.Fatalf("create hit in shared store: %v", err)
 	}
@@ -722,11 +723,15 @@ func TestTransferSiteMovesAnalyticsToDestinationTenant(t *testing.T) {
 	}
 
 	var hitCount int
-	if err := tenantStore.DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM hits WHERE site_id = ?", site.ID).Scan(&hitCount); err != nil {
+	var paidHitCount int
+	if err := tenantStore.DB().QueryRowContext(ctx, "SELECT COUNT(*), COUNT(*) FILTER (WHERE paid_click IS TRUE) FROM hits WHERE site_id = ?", site.ID).Scan(&hitCount, &paidHitCount); err != nil {
 		t.Fatalf("count transferred hits in destination store: %v", err)
 	}
 	if hitCount != 1 {
 		t.Fatalf("expected 1 transferred hit in destination tenant store, got %d", hitCount)
+	}
+	if paidHitCount != 1 {
+		t.Fatalf("expected transferred hit to preserve paid click, got %d paid hits", paidHitCount)
 	}
 
 	var webVitalCount int

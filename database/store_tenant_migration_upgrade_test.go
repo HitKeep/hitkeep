@@ -57,6 +57,14 @@ func TestTenantMigrationUpgradeWithExistingSiteReferences(t *testing.T) {
 		t.Fatalf("migrate store with tenant migrations: %v", err)
 	}
 
+	var paidClick *bool
+	if err := store.DB().QueryRowContext(ctx, "SELECT paid_click FROM hits WHERE id = ?", hitID).Scan(&paidClick); err != nil {
+		t.Fatalf("query legacy hit after migration: %v", err)
+	}
+	if paidClick != nil {
+		t.Fatal("expected legacy hit to remain unmeasured")
+	}
+
 	var tenantMappingCount int
 	if err := store.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM site_tenants WHERE site_id = ?",

@@ -128,19 +128,9 @@ func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsPa
 	if err != nil {
 		return nil, fmt.Errorf("failed to calc KPIs: %w", err)
 	}
-	err = s.queryUTMKpis(
-		ctx,
-		params,
-		filterSQL,
-		filterArgs,
-		&stats.UTMCampaignHits,
-		&stats.UTMContentHits,
-		&stats.UTMMediumHits,
-		&stats.UTMSourceHits,
-		&stats.UTMTermHits,
-	)
+	err = s.queryUTMKpis(ctx, params, filterSQL, filterArgs, stats)
 	if err != nil {
-		return nil, fmt.Errorf("failed to calc UTM KPIs: %w", err)
+		return nil, fmt.Errorf("failed to calc UTM and paid signal KPIs: %w", err)
 	}
 
 	if sections.Chart && useRollups {

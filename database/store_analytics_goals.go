@@ -426,6 +426,9 @@ func (s *Store) GetComparisonStats(ctx context.Context, params api.AnalyticsPara
 		UTMMediumHits:      window.UTMMediumHits,
 		UTMSourceHits:      window.UTMSourceHits,
 		UTMTermHits:        window.UTMTermHits,
+
+		PaidSignalSessions:         window.PaidSignalSessions,
+		PaidSignalMeasuredSessions: window.PaidSignalMeasuredSessions,
 	}
 	for _, goal := range window.Goals {
 		stats.Goals = append(stats.Goals, goal)

@@ -25,6 +25,7 @@ type Internals = SiteTrackingSettings & {
         collectDnt: () => Toggle;
         disableBeacon: () => Toggle;
         enableWebVitals: () => Toggle;
+        enablePaidSignals: () => Toggle;
         trackOutbound: () => Toggle;
         trackDownloads: () => Toggle;
         trackForms: () => Toggle;
@@ -175,6 +176,25 @@ describe('SiteTrackingSettings', () => {
         expect(internals.snippetCode()).toContain('src="https://analytics.example.com/hk.js"');
     });
 
+    it('suppresses the referrer on the script request and keeps paid signals opt-in', async () => {
+        const defaultSnippet = internals.snippetCode();
+        expect(defaultSnippet).not.toContain('data-enable-paid-signals');
+        expect(defaultSnippet).toContain('referrerpolicy="no-referrer"');
+        expect(internals.changedOptionCount()).toBe(0);
+
+        internals.trackingForm.enablePaidSignals().control().setValue(true);
+        await fixture.whenStable();
+
+        const renderedSnippet = testId('tracking-snippet')?.querySelector('pre')?.textContent;
+        expect(renderedSnippet).toContain('data-enable-paid-signals="true"');
+        expect(renderedSnippet).toContain('referrerpolicy="no-referrer"');
+        expect(internals.changedOptionCount()).toBe(1);
+
+        internals.trackingForm.enablePaidSignals().control().setValue(false);
+        await fixture.whenStable();
+        expect(internals.snippetCode()).toBe(defaultSnippet);
+    });
+
     it('copies the current script and localized verification instructions on demand', async () => {
         const copy = vi.spyOn(TestBed.inject(Clipboard), 'copy').mockReturnValue(true);
         const getButton = () => testId('tracking-copy-assistant-prompt')?.querySelector('button');
@@ -190,6 +210,7 @@ describe('SiteTrackingSettings', () => {
         const defaultSnippet = getShownSnippet();
         expect(defaultSnippet).toContain('/hitkeep/hk.js');
         expect(defaultSnippet).not.toContain('data-enable-declarative-events');
+        expect(defaultSnippet).toContain('referrerpolicy="no-referrer"');
         getButton()?.click();
         expect(copy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`\n\n${defaultSnippet}\n\n`));
         expect(copy.mock.calls[0][0]).toContain('on example.com.');
@@ -202,12 +223,14 @@ describe('SiteTrackingSettings', () => {
         internals.trackingDomainControl.setValue('domain-1');
         internals.trackingForm.trackForms().control().setValue(false);
         internals.trackingForm.enableDeclarativeEvents().control().setValue(true);
+        internals.trackingForm.enablePaidSignals().control().setValue(true);
         await fixture.whenStable();
 
         const customSnippet = getShownSnippet();
         expect(customSnippet).toContain('src="https://analytics.example.com/hk.js" data-disable-form-tracking="true"');
         expect(customSnippet).toContain('data-enable-declarative-events="true"');
-        expect(internals.changedOptionCount()).toBe(3);
+        expect(customSnippet).toContain('data-enable-paid-signals="true" referrerpolicy="no-referrer"');
+        expect(internals.changedOptionCount()).toBe(4);
         getButton()?.click();
         expect(copy).toHaveBeenCalledTimes(2);
         expect(copy).toHaveBeenLastCalledWith(expect.stringContaining(`\n\n${customSnippet}\n\n`));

@@ -16,7 +16,7 @@ import (
 	"hitkeep/exportfmt"
 )
 
-func TestExportHitsCSVIncludesUTMFields(t *testing.T) {
+func TestExportHitsCSVIncludesAttributionFields(t *testing.T) {
 	ctx := context.Background()
 	store := newSharedTestFixtureStore(t)
 
@@ -43,6 +43,7 @@ func TestExportHitsCSVIncludesUTMFields(t *testing.T) {
 		UTMTerm:     new("privacy analytics"),
 		UTMContent:  new("hero-cta"),
 		IsUnique:    &isUnique,
+		PaidClick:   new(false),
 	}
 	if err := store.CreateHit(ctx, hit); err != nil {
 		t.Fatalf("create hit: %v", err)
@@ -77,7 +78,7 @@ func TestExportHitsCSVIncludesUTMFields(t *testing.T) {
 		index[name] = i
 	}
 
-	for _, col := range []string{"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"} {
+	for _, col := range []string{"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "paid_click"} {
 		if _, ok := index[col]; !ok {
 			t.Fatalf("expected header column %q to exist", col)
 		}
@@ -97,6 +98,9 @@ func TestExportHitsCSVIncludesUTMFields(t *testing.T) {
 	}
 	if got := row[index["utm_content"]]; got != "hero-cta" {
 		t.Fatalf("expected utm_content=hero-cta, got %q", got)
+	}
+	if got := row[index["paid_click"]]; got != "false" {
+		t.Fatalf("expected paid_click=false, got %q", got)
 	}
 }
 

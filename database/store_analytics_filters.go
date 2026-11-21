@@ -237,11 +237,7 @@ func (s *Store) queryUTMKpis(
 	params api.AnalyticsParams,
 	filterSQL string,
 	filterArgs []any,
-	utmCampaignHits *int,
-	utmContentHits *int,
-	utmMediumHits *int,
-	utmSourceHits *int,
-	utmTermHits *int,
+	stats *api.SiteStats,
 ) error {
 	//nolint:gosec // filterSQL is derived from a fixed allowlist
 	query := fmt.Sprintf(`
@@ -250,17 +246,21 @@ func (s *Store) queryUTMKpis(
 			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_content), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_content_hits,
 			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_medium), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_medium_hits,
 			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_source), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_source_hits,
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_term), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_term_hits
+			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_term), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_term_hits,
+			COUNT(DISTINCT h.session_id) FILTER (WHERE h.paid_click IS TRUE) AS paid_signal_sessions,
+			COUNT(DISTINCT h.session_id) FILTER (WHERE h.paid_click IS NOT NULL) AS paid_signal_measured_sessions
 		FROM hits h
 		WHERE h.site_id = ? AND h.timestamp >= ? AND h.timestamp <= ?%s
 	`, filterSQL)
 
 	return s.db.QueryRowContext(ctx, query, append([]any{params.SiteID, params.Start, params.End}, filterArgs...)...).Scan(
-		utmCampaignHits,
-		utmContentHits,
-		utmMediumHits,
-		utmSourceHits,
-		utmTermHits,
+		&stats.UTMCampaignHits,
+		&stats.UTMContentHits,
+		&stats.UTMMediumHits,
+		&stats.UTMSourceHits,
+		&stats.UTMTermHits,
+		&stats.PaidSignalSessions,
+		&stats.PaidSignalMeasuredSessions,
 	)
 }
 

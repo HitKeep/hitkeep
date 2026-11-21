@@ -179,6 +179,14 @@
                             <p-toggleswitch inputId="web-vitals-switch" ariaLabelledBy="web-vitals-label" styleClass="shrink-0" [formControl]="trackingForm.enableWebVitals().control()" />
                         </div>
 
+                        <div class="site-settings-toggle-row">
+                            <div class="site-settings-toggle-row__text">
+                                <label id="paid-signals-label" for="paid-signals-switch" class="site-settings-toggle-row__title">{{ "sites.tracking.paidSignalsLabel" | transloco }}</label>
+                                <span class="site-settings-field-hint">{{ "sites.tracking.paidSignalsDescription" | transloco }}</span>
+                            </div>
+                            <p-toggleswitch inputId="paid-signals-switch" ariaLabelledBy="paid-signals-label" styleClass="shrink-0" [formControl]="trackingForm.enablePaidSignals().control()" />
+                        </div>
+
                         <div class="site-settings-subsection">
                             <h4>{{ "sites.tracking.autoTrackingTitle" | transloco }}</h4>
                             <p>{{ "sites.tracking.autoTrackingDescription" | transloco }}</p>

@@ -4,6 +4,7 @@ import { injectActiveLang } from '@core/i18n/active-lang';
 import { injectPeriodLabel, isIntradayPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDecimalPipe } from '@jsverse/transloco-locale';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SiteService } from '@features/sites/services/site.service';
 import { injectStatsQuery, type StatsQueryMode } from '@features/analytics/services/stats-query';
@@ -25,7 +26,7 @@ interface MetricFilter {
 @Component({
     selector: 'app-utm-analytics',
     standalone: true,
-    imports: [TranslocoPipe, CardModule, PageState, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart],
+    imports: [TranslocoPipe, TranslocoDecimalPipe, CardModule, PageState, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart],
     templateUrl: './utm-analytics.html',
     styleUrl: './utm-analytics.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -41,6 +42,13 @@ export class UtmAnalytics {
 
     protected stats = this.statsQuery.stats;
     protected isStatsLoading = this.statsQuery.isLoading;
+    protected readonly paidSignals = computed(() => {
+        const stats = this.stats();
+        const measured = stats?.paid_signal_measured_sessions;
+        const observed = stats?.paid_signal_sessions;
+        if (this.statsQuery.blockingFailed() || measured == null || observed == null) return null;
+        return { measured, observed, unobserved: measured - observed };
+    });
     protected readonly currentPeriodLabel = injectPeriodLabel(this.statsQuery.currentRange);
     protected readonly comparisonLabel = injectPeriodLabel(this.statsQuery.comparisonRange);
     protected readonly kpiUpdateKey = signal(0);

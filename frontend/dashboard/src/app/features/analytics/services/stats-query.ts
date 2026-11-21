@@ -30,6 +30,7 @@ export class StatsQuery {
     readonly comparisonRange = computed(() => this.loaded()?.comparison ?? null);
     readonly isLoading = signal(false);
     readonly isBackgroundRefreshing = signal(false);
+    readonly blockingFailed = signal(false);
     readonly lastResult = signal<StatsQueryResult | null>(null);
 
     private readonly request = signal<StatsQueryRequest | undefined>(undefined);
@@ -49,11 +50,15 @@ export class StatsQuery {
                             if (this.request() !== params) return;
                             const result = { mode: params.mode ?? 'blocking', sequence: ++this.resultSequence };
                             const period = { from: params.from, to: params.to };
+                            this.blockingFailed.set(false);
                             this.loaded.set({ siteId: params.siteId, stats, period, comparison: stats.comparison ? previousPeriod(period.from, period.to) : null });
                             this.lastResult.set(result);
                             params.onSuccess?.(stats, result);
                         },
-                        error: (error) => console.error(error)
+                        error: (error) => {
+                            if (this.request() === params && params.mode === 'blocking') this.blockingFailed.set(true);
+                            console.error(error);
+                        }
                     }),
                     finalize(() => {
                         if (this.request() !== params) return;

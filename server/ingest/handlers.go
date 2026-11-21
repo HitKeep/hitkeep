@@ -121,6 +121,7 @@ type browserIngestPayload struct {
 	UTMTerm        *string    `json:"u_trm"`
 	UTMCont        *string    `json:"u_cnt"`
 	QRCodeID       *uuid.UUID `json:"qr"`
+	PaidClick      *bool      `json:"pc"`
 	TrackerSource  string     `json:"tsrc"`
 	TrackerVersion string     `json:"tv"`
 	IsUnique       bool       `json:"unique"`
@@ -586,6 +587,13 @@ func intPtrIfPositive(value int) *int {
 	return &value
 }
 
+func stripQueryAndFragment(value string) string {
+	if end := strings.IndexAny(value, "?#"); end >= 0 {
+		return value[:end]
+	}
+	return value
+}
+
 func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -634,6 +642,10 @@ func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 		h.recordRejection()
 		http.Error(w, "Bad request body", http.StatusBadRequest)
 		return
+	}
+	payload.Path = stripQueryAndFragment(payload.Path)
+	if payload.Referrer != nil {
+		payload.Referrer = stringPtrIfNotEmpty(stripQueryAndFragment(*payload.Referrer))
 	}
 	if h.ctx.IPFilter != nil && h.ctx.IPFilter.EvaluateTraffic(site.ID, blocking.TrafficExclusionContext{
 		IP:          userIP,
@@ -688,6 +700,7 @@ func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 		UTMTerm:        payload.UTMTerm,
 		UTMContent:     payload.UTMCont,
 		QRCodeID:       payload.QRCodeID,
+		PaidClick:      payload.PaidClick,
 		IsUnique:       &payload.IsUnique,
 		TrackerSource:  payload.TrackerSource,
 		TrackerVersion: payload.TrackerVersion,
