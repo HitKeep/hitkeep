@@ -1,5 +1,29 @@
 # Changelog
 
+## Pending 2.18.0
+
+### Tracker and installation
+
+- Measure how long a page is visible with `data-enable-visible-time="true"` in `hk.js` or `visibleTime: true` in `@hitkeep/tracker`. Timing pauses while the page is hidden and resumes for the same pageview after a back/forward cache restore. Each view can send up to two checkpoints and a final cumulative sample, capped at 24 hours. Interrupted exits or failed requests can leave partial or missing measurements.
+- Enable paid click signals with `data-enable-paid-signals="true"` or `enablePaidSignals: true`. The tracker sends a boolean for a nonempty `gclid` or `msclkid` and keeps the signal in memory across SPA navigation. Raw click IDs are excluded. Tracker referrer fields omit query strings and fragments, and analytics requests from pages with query strings use keepalive fetch with no HTTP `Referer`. Use `referrerpolicy="no-referrer"` on the snippet to cover the script request as well.
+- Opt in to named clicks and form submissions with `data-enable-declarative-events="true"` or `declarativeEvents: true`, and mark elements with `data-hk-event` or `data-hitkeep-event`. Events use a fixed name of up to 64 characters and empty properties. Remove manual calls that record the same interaction when converting to markup. The tracker README also includes examples for counting `page_not_found` views on public routes.
+- Tracking settings generate the snippet and a copyable coding-assistant installation prompt. First-hit verification gives separate guidance for browser and server installs and checks for accepted hits automatically for up to two minutes. Manual refresh remains available.
+
+### Analytics and dashboard
+
+- Period comparisons show the exact current and preceding equal-elapsed-time windows, relative change against the previous value, and a distinct state for a zero baseline. Previous chart series align by bucket order when the bucket grids match. Live visitors covers the last five minutes. Breakdowns and traffic records show the selected current period.
+- **Visible time by page** reports the top 10 paths by tracked views in the selected range and filters. Averages use measured views, and the report shows measured and tracked counts alongside them. Historical native views can contribute to the tracked count, with no duration backfill. Imported analytics are excluded from this report.
+- **Paid traffic signals** in UTM Analytics shows observed and measured native sessions. Sessions without an observed signal may include both paid and organic traffic, and some measured sessions also appear in UTM metrics. Historical and imported analytics have no paid-signal backfill. Explicit imported UTM dimensions now contribute tagged pageviews to the current and previous KPIs before top-list truncation. Dashboard and overview use the same complete UTC days for daily imports.
+- Goals with no definitions show an empty conversion cohort, and grouped goal queries preserve distinct session counts, filters, imports, and comparison windows. Events cancels superseded requests and avoids refetching selector options for their own selection changes. Hidden onboarding checklists avoid realtime refreshes and revalidate on a team change. Dashboard and overview reads leave session rollup repair to the background worker.
+
+### Self-hosted upgrade
+
+- Before starting the new version, stop HitKeep cleanly and take a restorable backup of the full persistent data directory or volume, including shared and team databases. Keep the previous version and test restoring the backup. If you need to roll back, stop the new version and restore the pre-upgrade backup to a separate data directory or volume before starting the previous version. Verify existing sites and analytics after the upgrade. [Backups and restore](https://hitkeep.com/guides/data/backups-and-restore/)
+- Startup applies the database migrations. Older databases replaying the analytics index-removal migration copy `hits` by column name, including schemas that appended `hostname` later. That migration rebuilds the hits table on databases that still need it, so leave room for the rebuild and checkpoint. The new shared and tenant migrations add page-level visible time and a nullable paid-click flag. Takeout includes measured duration on hit records, and retention archives preserve it alongside matching pageviews for restore.
+- New measurements and declarative events are off by default. Upgrade the server before enabling the new tracker options. If you bundle `@hitkeep/tracker`, upgrade the package and redeploy your site. For a custom tracking proxy, allow `/ingest/visible-time` before enabling visible time. The bundled proxy examples and Helm custom tracking Ingress include this route.
+
+Changes from [#488](https://github.com/HitKeep/hitkeep/pull/488), [#489](https://github.com/HitKeep/hitkeep/pull/489), and [#490](https://github.com/HitKeep/hitkeep/pull/490).
+
 ## [2.17.0](https://github.com/HitKeep/hitkeep/compare/v2.16.1...v2.17.0) (2026-11-16)
 
 
