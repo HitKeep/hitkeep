@@ -44,6 +44,8 @@ describe('TrafficChart', () => {
     });
 
     it('A11Y: container should have img role and accessible label', () => {
+        fixture.componentRef.setInput('data', [{ time: '2026-11-12T00:00:00Z', pageviews: 1, visitors: 1 }]);
+        fixture.detectChanges();
         const container = fixture.debugElement.query(By.css('div[role="img"]'));
         expect(container).toBeTruthy();
         expect(container.nativeElement.getAttribute('aria-label')).toBeTruthy();

@@ -36,7 +36,7 @@ export function resolveChartColor(color: string): string {
 
 export const HITKEEP_CHART_PALETTE = {
     get primary() {
-        return resolveChartColor('#10b981');
+        return resolveChartColor('#6366f1');
     },
     get secondary() {
         return resolveChartColor('#14b8a6');
