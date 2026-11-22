@@ -1953,7 +1953,10 @@
           "dormant": "Dormant",
           "domain_mismatch": "Domaine différent"
         },
-        "waitingHint": "En attente du premier hit accepté. Ce panneau s’actualise automatiquement pendant deux minutes.",
+        "waitingBrowser": "Déployez le traqueur, puis ouvrez une page publiée sur {{ domain }} où le suivi est autorisé. Si le statut reste en attente, vérifiez que le traqueur se charge et contrôlez les réglages Do Not Track, le consentement et les exclusions.",
+        "waitingServer": "Envoyez une vue de page issue d’une visite réelle sur {{ domain }} via votre intégration serveur. Si le statut reste en attente, vérifiez la réponse de l’intégration et son accès au site.",
+        "waitingHint": "Le statut est vérifié automatiquement pendant deux minutes au maximum. Vous pouvez l’actualiser à tout moment.",
+        "unavailable": "Le statut du suivi est indisponible. Utilisez le bouton d’actualisation pour réessayer.",
         "mismatchHint": "Le dernier nom d’hôte détecté ne correspond pas au domaine configuré pour ce site.",
         "fields": {
           "firstHit": "Premier hit",

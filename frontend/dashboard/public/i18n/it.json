@@ -1950,7 +1950,10 @@
           "dormant": "Dormiente",
           "domain_mismatch": "Dominio diverso"
         },
-        "waitingHint": "In attesa del primo hit accettato. Questo pannello si aggiorna automaticamente per due minuti.",
+        "waitingBrowser": "Distribuisci il tracker, poi apri una pagina pubblicata su {{ domain }} dove il tracciamento è consentito. Se lo stato resta in attesa, verifica che il tracker si carichi e controlla Do Not Track, il consenso e le esclusioni.",
+        "waitingServer": "Invia tramite l’integrazione server una visualizzazione di pagina relativa a una visita reale su {{ domain }}. Se lo stato resta in attesa, controlla la risposta dell’integrazione e il suo accesso al sito.",
+        "waitingHint": "La verifica avviene automaticamente per un massimo di due minuti. Puoi aggiornarla in qualsiasi momento.",
+        "unavailable": "Lo stato del tracking non è disponibile. Usa il pulsante di aggiornamento per riprovare.",
         "mismatchHint": "L’ultimo hostname rilevato non corrisponde al dominio configurato per questo sito.",
         "fields": {
           "firstHit": "Primo hit",

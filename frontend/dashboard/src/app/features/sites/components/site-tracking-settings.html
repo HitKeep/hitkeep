@@ -13,10 +13,10 @@
                     <span>{{ "sites.tracking.verifier.empty" | transloco }}</span>
                     }
                 </span>
+                } @else if (statusResult() === "unavailable") {
+                <span class="tracking-verifier__meta" role="status">{{ "sites.tracking.verifier.unavailable" | transloco }}</span>
                 } @else if (isLoadingStatus()) {
                 <span class="tracking-verifier__meta"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i>{{ "common.loading" | transloco }}</span>
-                } @else {
-                <span class="tracking-verifier__meta">{{ "sites.tracking.verifier.empty" | transloco }}</span>
                 }
             </div>
             <div class="tracking-verifier__actions">
@@ -34,7 +34,17 @@
                     data-testid="tracking-verifier-toggle"
                 />
                 }
-                <p-button [ariaLabel]="'common.actions.refresh' | transloco" icon="pi pi-refresh" [text]="true" [rounded]="true" [loading]="isLoadingStatus()" type="button" size="small" (onClick)="refreshStatus()" />
+                <p-button
+                    [ariaLabel]="'common.actions.refresh' | transloco"
+                    icon="pi pi-refresh"
+                    [text]="true"
+                    [rounded]="true"
+                    [loading]="isLoadingStatus()"
+                    type="button"
+                    size="small"
+                    (onClick)="refreshStatus()"
+                    data-testid="tracking-verifier-refresh"
+                />
             </div>
         </div>
 
@@ -80,7 +90,10 @@
         } @if (status.status === "domain_mismatch") {
         <p-message severity="warn" styleClass="w-full">{{ "sites.tracking.verifier.mismatchHint" | transloco }}</p-message>
         } @else if (status.status === "waiting") {
-        <p-message severity="info" styleClass="w-full">{{ "sites.tracking.verifier.waitingHint" | transloco }}</p-message>
+        <p-message severity="info" styleClass="w-full" data-testid="tracking-verifier-waiting">
+            <span class="block">{{ (installMethod() === "server" ? "sites.tracking.verifier.waitingServer" : "sites.tracking.verifier.waitingBrowser") | transloco: { domain: status.configured_domain } }}</span>
+            <span class="block">{{ "sites.tracking.verifier.waitingHint" | transloco }}</span>
+        </p-message>
         } }
     </section>
 

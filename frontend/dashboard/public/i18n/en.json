@@ -2027,7 +2027,10 @@
           "dormant": "Dormant",
           "domain_mismatch": "Domain mismatch"
         },
-        "waitingHint": "Waiting for the first accepted hit. This panel refreshes automatically for two minutes.",
+        "waitingBrowser": "Deploy the tracker, then open a published page on {{ domain }} where tracking is permitted. If it stays on Waiting, check that the tracker loads and review Do Not Track, consent, and exclusions.",
+        "waitingServer": "Send a pageview for a real visit on {{ domain }} through your server integration. If it stays on Waiting, check the integration’s response and its access to this site.",
+        "waitingHint": "The verifier checks automatically for up to two minutes. You can refresh it at any time.",
+        "unavailable": "Tracking status unavailable. Use Refresh to retry.",
         "mismatchHint": "The latest detected hostname does not match this site's configured domain.",
         "fields": {
           "firstHit": "First hit",

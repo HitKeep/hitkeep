@@ -1992,7 +1992,10 @@
           "dormant": "Inaktiv",
           "domain_mismatch": "Domain-Abweichung"
         },
-        "waitingHint": "Wartet auf den ersten akzeptierten Hit. Dieses Panel aktualisiert sich zwei Minuten lang automatisch.",
+        "waitingBrowser": "Stelle den Tracker bereit und öffne dann eine veröffentlichte Seite auf {{ domain }}, auf der Tracking zulässig ist. Wenn die Prüfung weiterhin „Wartet“ anzeigt, prüfe, ob der Tracker geladen wird, sowie die Einstellungen für Do Not Track, Einwilligung und Ausschlüsse.",
+        "waitingServer": "Sende über deine Serverintegration einen Seitenaufruf für einen echten Besuch auf {{ domain }}. Wenn die Prüfung weiterhin „Wartet“ anzeigt, prüfe die Antwort der Integration und ihren Zugriff auf diese Website.",
+        "waitingHint": "Die Prüfung läuft bis zu zwei Minuten automatisch. Du kannst sie jederzeit manuell aktualisieren.",
+        "unavailable": "Der Tracking-Status ist nicht verfügbar. Versuche es über „Aktualisieren“ erneut.",
         "mismatchHint": "Der zuletzt erkannte Hostname passt nicht zur konfigurierten Domain dieser Seite.",
         "fields": {
           "firstHit": "Erster Hit",
