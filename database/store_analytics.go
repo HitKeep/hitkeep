@@ -118,13 +118,7 @@ func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsPa
 		useRollups = false
 	}
 
-	if !comparison && useRollups {
-		if err := s.refreshDirtyRollupsInRange(ctx, params.SiteID, dirtyRollupSession, rollupKind, gridStart, gridEnd); err != nil {
-			return nil, fmt.Errorf("failed to refresh session rollups: %w", err)
-		}
-	}
-
-	err = s.queryKpis(ctx, params, filterSQL, filterArgs, useRollups, rollupKind, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &stats.AvgSessionDuration, &stats.PagesPerSession)
+	err = s.queryKpis(ctx, params, filterSQL, filterArgs, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &stats.AvgSessionDuration, &stats.PagesPerSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calc KPIs: %w", err)
 	}
@@ -502,20 +496,27 @@ func (s *Store) querySiteGoals(ctx context.Context, params api.AnalyticsParams, 
 		return fmt.Errorf("failed to fetch goals: %w", err)
 	}
 
+	pathCounts, eventCounts := map[string]int{}, map[string]int{}
+	countsByType := map[string]map[string]int{"path": pathCounts, "event": eventCounts}
 	for _, goal := range goals {
-		conversions, err := s.queryGoalConversions(ctx, params, goal, filterSQL, filterArgs)
-		if goal.Type == "event" && err == nil && canIncludeImportedSiteAggregates(params, truncUnit) {
-			importedConversions, importErr := s.queryImportedEventGoalConversions(ctx, params, goal.Value)
-			if importErr != nil {
-				return importErr
-			}
-			conversions += importedConversions
+		if counts := countsByType[goal.Type]; counts != nil {
+			counts[goal.Value] = 0
 		}
-
-		if err != nil {
-			return fmt.Errorf("failed to calc goal conversions: %w", err)
+	}
+	if err := s.queryGoalConversions(ctx, params, "hits", "path", pathCounts, filterSQL, filterArgs); err != nil {
+		return fmt.Errorf("failed to calc path goal conversions: %w", err)
+	}
+	if err := s.queryGoalConversions(ctx, params, "events", "name", eventCounts, filterSQL, filterArgs); err != nil {
+		return fmt.Errorf("failed to calc event goal conversions: %w", err)
+	}
+	if canIncludeImportedSiteAggregates(params, truncUnit) {
+		if err := s.queryImportedEventGoalConversions(ctx, params, eventCounts); err != nil {
+			return err
 		}
+	}
 
+	for _, goal := range goals {
+		conversions := countsByType[goal.Type][goal.Value]
 		rate := 0.0
 		if stats.UniqueSessions > 0 {
 			rate = (float64(conversions) / float64(stats.UniqueSessions)) * 100

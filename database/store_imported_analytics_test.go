@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -141,6 +142,113 @@ func TestEventGoalsIncludeImportedAggregateVisitors(t *testing.T) {
 	}
 }
 
+func TestSiteStatsMixedGoalConversions(t *testing.T) {
+	store, userID := setupEventBreakdownStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "mixed-goals.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstDay := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	goals := []api.Goal{
+		{Name: "Signup", Type: "event", Value: "signup"},
+		{Name: "Signup page", Type: "path", Value: "/signup"},
+		{Name: "Checkout", Type: "event", Value: "check'out"},
+		{Name: "Signup duplicate", Type: "event", Value: "signup"},
+		{Name: "Signup page duplicate", Type: "path", Value: "/signup"},
+		{Name: "Missing page", Type: "path", Value: "/missing"},
+		{Name: "Missing event", Type: "event", Value: "missing"},
+	}
+	for i := range goals {
+		goals[i].SiteID = site.ID
+		goals[i].CreatedAt = firstDay.Add(-time.Duration(i) * time.Second)
+		if err := store.CreateGoal(ctx, &goals[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// June 2 and 4 are complete comparison days. June 6 and 7 are complete current days.
+	for _, offset := range []int{0, 1, 3, 4, 5, 6, 7} {
+		putImportedComparisonRows(t, ctx, store, site.ID, firstDay.AddDate(0, 0, offset))
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO imported_event_daily (site_id, import_id, date, event_name, visitors, source_file)
+		SELECT ?, uuid(), DATE '2026-06-07', ?, visitors, 'fixture' FROM (VALUES (1), (2)) AS rows(visitors)`,
+		site.ID, "check'out"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, visit := range []struct {
+		offset int
+		paths  []string
+		events []string
+	}{
+		{2, []string{"/pricing", "/signup", "/signup"}, []string{"signup", "signup"}},
+		{2, []string{"/other"}, []string{"check'out"}},
+		{4, []string{"/pricing", "/signup", "/signup"}, []string{"signup", "signup"}},
+		{4, []string{"/signup"}, []string{"signup"}},
+		{4, []string{"/pricing"}, []string{"check'out"}},
+	} {
+		session, at := uuid.New(), firstDay.AddDate(0, 0, visit.offset).Add(13*time.Hour)
+		for i, path := range visit.paths {
+			hit := api.Hit{SiteID: site.ID, SessionID: session, PageID: uuid.New(), Timestamp: at.Add(time.Duration(i) * time.Minute), Path: path}
+			if err := store.CreateHit(ctx, &hit); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i, name := range visit.events {
+			event := api.Event{SiteID: site.ID, SessionID: session, Timestamp: at.Add(time.Duration(i) * time.Minute), Name: name}
+			if err := store.CreateEvent(ctx, &event); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	params := api.AnalyticsParams{
+		SiteID:       site.ID,
+		Start:        firstDay.AddDate(0, 0, 4).Add(12 * time.Hour),
+		End:          firstDay.AddDate(0, 0, 7).Add(12 * time.Hour),
+		CompareStart: firstDay.Add(12 * time.Hour),
+		CompareEnd:   firstDay.AddDate(0, 0, 4).Add(-time.Millisecond),
+	}
+	assertGoals := func(t *testing.T, got []api.GoalStats, counts []int, sessions int) {
+		t.Helper()
+		want := make([]api.GoalStats, len(goals))
+		for i, goal := range goals {
+			want[i] = api.GoalStats{GoalID: goal.ID, Name: goal.Name, Conversions: counts[i], ConversionRate: (float64(counts[i]) / float64(sessions)) * 100}
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("goals = %+v, want %+v", got, want)
+		}
+	}
+	for _, tc := range []struct {
+		name                          string
+		filters                       []api.Filter
+		current, previous             []int
+		currentSessions, prevSessions int
+		previousTotal                 int
+	}{
+		{"with complete imported days", nil, []int{10, 2, 4, 10, 2, 0, 0}, []int{9, 1, 1, 9, 1, 0, 0}, 23, 22, 21},
+		{"filtered session cohort", []api.Filter{{Type: "path", Value: "/pricing"}}, []int{1, 1, 1, 1, 1, 0, 0}, []int{1, 1, 0, 1, 1, 0, 0}, 2, 1, 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params.Filters = tc.filters
+			stats := getComparisonDashboardStats(t, t.Context(), store, params)
+			if stats.Comparison == nil {
+				t.Fatal("missing comparison")
+			}
+			if stats.UniqueSessions != tc.currentSessions || stats.Comparison.UniqueSessions != tc.prevSessions {
+				t.Errorf("sessions = %d current and %d previous, want %d and %d", stats.UniqueSessions, stats.Comparison.UniqueSessions, tc.currentSessions, tc.prevSessions)
+			}
+			assertGoals(t, stats.Goals, tc.current, tc.currentSessions)
+			assertGoals(t, stats.Comparison.Goals, tc.previous, tc.prevSessions)
+			if stats.Comparison.TotalConversions != tc.previousTotal {
+				t.Errorf("previous total conversions = %d, want %d", stats.Comparison.TotalConversions, tc.previousTotal)
+			}
+		})
+	}
+}
+
 func TestImportedAggregatesIncludedWithComparisonRequest(t *testing.T) {
 	store, userID := setupEventBreakdownStore(t)
 	ctx := t.Context()
@@ -246,6 +354,95 @@ func TestSiteStatsChartIncludesHitsAtInclusivePeriodEnds(t *testing.T) {
 	})
 	if stats.Comparison == nil || totalChartPageviews(stats.ChartData) != 1 || totalChartPageviews(stats.Comparison.ChartData) != 1 {
 		t.Fatalf("expected one chart hit in each period: current %+v, previous %+v", stats.ChartData, stats.Comparison)
+	}
+}
+
+func TestSiteOverviewAndDashboardIncludeOnlyCompleteUTCImportDates(t *testing.T) {
+	store, userID := setupEventBreakdownStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "imported-overview.example.com")
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+
+	first := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+	last := first.AddDate(0, 0, 3)
+	end := last.AddDate(0, 0, 1).Add(-time.Millisecond)
+	partialStart, partialEnd := first.Add(12*time.Hour), last.Add(12*time.Hour)
+	sink, err := NewImportedDataSink(ctx, store, site.ID, uuid.New())
+	if err != nil {
+		t.Fatalf("new sink: %v", err)
+	}
+	for i := range 4 {
+		if err := sink.PutTraffic(ctx, importables.TrafficRow{
+			Date: first.AddDate(0, 0, i), Pageviews: 10 * int64(i+1), Visits: 2 * int64(i+1),
+			Visitors: int64(i + 1), Bounces: int64(i + 1), SourceFile: "datapoints.csv",
+		}); err != nil {
+			t.Fatalf("put imported traffic: %v", err)
+		}
+	}
+	if err := sink.Flush(ctx); err != nil {
+		t.Fatalf("flush imports: %v", err)
+	}
+	for _, at := range []time.Time{
+		first.Add(-time.Millisecond), partialStart.Add(-time.Millisecond), partialStart,
+		partialEnd, partialEnd.Add(time.Millisecond), end.Add(time.Millisecond),
+	} {
+		if err := store.CreateHit(ctx, &api.Hit{
+			SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: at, Path: "/",
+		}); err != nil {
+			t.Fatalf("create native hit: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name                         string
+		start, end                   time.Time
+		pageviews, sessions, bounces int
+		bucketPageviews              [4]int
+		bucketVisitors               [4]int
+	}{
+		{"partial days", partialStart, partialEnd, 52, 12, 7, [4]int{1, 20, 30, 1}, [4]int{1, 2, 3, 1}},
+		{"whole days", first, end, 104, 24, 14, [4]int{12, 20, 30, 42}, [4]int{3, 2, 3, 6}},
+		{"before cutoff", first, end.Add(-time.Millisecond), 64, 16, 10, [4]int{12, 20, 30, 2}, [4]int{3, 2, 3, 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			params := api.AnalyticsParams{SiteID: site.ID, UserID: userID, Start: tc.start, End: tc.end}
+			dashboard, err := store.GetSiteStats(ctx, params)
+			if err != nil {
+				t.Fatalf("get dashboard stats: %v", err)
+			}
+			overview, err := store.GetSiteOverviewStats(ctx, params)
+			if err != nil {
+				t.Fatalf("get overview stats: %v", err)
+			}
+			wantBounceRate := float64(tc.bounces) / float64(tc.sessions) * 100
+			if dashboard.TotalPageviews != tc.pageviews || dashboard.UniqueSessions != tc.sessions || dashboard.BounceRate != wantBounceRate {
+				t.Errorf("dashboard KPIs = %d/%d/%v, want %d/%d/%v",
+					dashboard.TotalPageviews, dashboard.UniqueSessions, dashboard.BounceRate, tc.pageviews, tc.sessions, wantBounceRate)
+			}
+			if overview.TotalPageviews != tc.pageviews || overview.UniqueSessions != tc.sessions || overview.BounceRate != wantBounceRate {
+				t.Errorf("overview KPIs = %d/%d/%v, want %d/%d/%v",
+					overview.TotalPageviews, overview.UniqueSessions, overview.BounceRate, tc.pageviews, tc.sessions, wantBounceRate)
+			}
+			for _, result := range []struct {
+				name  string
+				chart []api.ChartDataPoint
+			}{{"dashboard", dashboard.ChartData}, {"overview", overview.ChartData}} {
+				if len(result.chart) != len(tc.bucketPageviews) {
+					t.Errorf("%s chart has %d points, want %d", result.name, len(result.chart), len(tc.bucketPageviews))
+					continue
+				}
+				for i, point := range result.chart {
+					wantDay := first.AddDate(0, 0, i)
+					if !point.Time.Equal(wantDay) || point.Pageviews != tc.bucketPageviews[i] || point.Visitors != tc.bucketVisitors[i] {
+						t.Errorf("%s chart point = %+v, want %s with %d pageviews and %d visitors",
+							result.name, point, wantDay, tc.bucketPageviews[i], tc.bucketVisitors[i])
+					}
+				}
+			}
+		})
 	}
 }
 

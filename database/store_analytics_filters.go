@@ -159,17 +159,12 @@ func (s *Store) queryKpis(
 	params api.AnalyticsParams,
 	filterSQL string,
 	filterArgs []any,
-	useRollups bool,
-	kind rollupKind,
 	totalPageviews *int,
 	uniqueSessions *int,
 	bounceRate *float64,
 	avgDuration *float64,
 	pagesPerSession *float64,
 ) error {
-	_ = useRollups
-	_ = kind
-
 	totals, err := s.queryRawSessionKpis(ctx, params, filterSQL, filterArgs)
 	if err != nil {
 		return err

@@ -2,19 +2,35 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { By } from '@angular/platform-browser';
 import { NumberFlowComponent } from 'ng-number-flow';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
+import { vi } from 'vitest';
 
 import { Events } from '@pages/events/events';
 import { AnalyticsService } from '@core/services/analytics.service';
 import { SiteService } from '@features/sites/services/site.service';
+import type { EventAudience, MetricStat, Site } from '@models/analytics.types';
 import type { SiteSetupState } from '@services/setup-state.service';
 import { flushAnnotations } from '@testing/annotations';
 import { flushSetupState } from '@testing/setup-state';
+
+interface EventsReport {
+    selectedEvent: WritableSignal<string | null>;
+    selectedPropertyKey: WritableSignal<string | null>;
+    realtimeRefreshKey: WritableSignal<number>;
+    eventNames: () => string[];
+    propertyKeys: () => string[];
+    breakdown: () => MetricStat[];
+    audience: () => EventAudience | null;
+    isLoadingNames: () => boolean;
+    isLoadingKeys: () => boolean;
+    isLoadingBreakdown: () => boolean;
+    isLoadingAudience: () => boolean;
+}
 
 describe('Events', () => {
     let component: Events;
@@ -22,14 +38,13 @@ describe('Events', () => {
     let httpMock: HttpTestingController;
     /** Custom event names the site reported for the selected range. */
     let reportedEventNames: string[];
-    const siteServiceStub = {
-        activeSite: signal({
-            id: 'site-1',
-            user_id: 'user-1',
-            domain: 'acme-analytics.io',
-            created_at: new Date().toISOString()
-        })
+    const site: Site = {
+        id: 'site-1',
+        user_id: 'user-1',
+        domain: 'acme-analytics.io',
+        created_at: new Date().toISOString()
     };
+    const siteServiceStub = { activeSite: signal<Site | null>(site) };
     const analyticsServiceStub = {
         getEventNames: () => of(reportedEventNames),
         getEventPropertyKeys: () => of(['target_host']),
@@ -45,6 +60,7 @@ describe('Events', () => {
     };
 
     beforeEach(async () => {
+        siteServiceStub.activeSite.set(site);
         reportedEventNames = ['outbound_click', 'newsletter_signup'];
         await TestBed.configureTestingModule({
             imports: [
@@ -153,6 +169,7 @@ describe('Events', () => {
     });
 
     afterEach(() => {
+        vi.restoreAllMocks();
         // Drain the shared setup-state and chart-notes lookups for the tests that do not assert on them.
         flushSetupState(httpMock, 'site-1');
         flushAnnotations(httpMock);
@@ -228,6 +245,92 @@ describe('Events', () => {
         expect(optionValues).toContain('file_download');
         expect(optionValues).toContain('form_submit');
         expect(optionValues).toContain('newsletter_signup');
+    });
+
+    it('does not reload event names on event choice or property keys on property choice', () => {
+        const names = vi.spyOn(analyticsServiceStub, 'getEventNames');
+        const keys = vi.spyOn(analyticsServiceStub, 'getEventPropertyKeys');
+        const breakdown = vi.spyOn(analyticsServiceStub, 'getEventPropertyBreakdown');
+        const report = component as unknown as EventsReport;
+
+        report.selectedEvent.set('newsletter_signup');
+        TestBed.tick();
+        expect(names).not.toHaveBeenCalled();
+        expect(keys).toHaveBeenCalledTimes(1);
+
+        report.selectedPropertyKey.set('target_host');
+        TestBed.tick();
+        expect(keys).toHaveBeenCalledTimes(1);
+        expect(breakdown).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the newer site options and panels when the previous site responds last', () => {
+        const oldNames = new Subject<string[]>();
+        const newNames = new Subject<string[]>();
+        const oldKeys = new Subject<string[]>();
+        const newKeys = new Subject<string[]>();
+        const oldBreakdown = new Subject<MetricStat[]>();
+        const newBreakdown = new Subject<MetricStat[]>();
+        const oldAudience = new Subject<EventAudience>();
+        const newAudience = new Subject<EventAudience>();
+        vi.spyOn(analyticsServiceStub, 'getEventNames').mockReturnValueOnce(oldNames).mockReturnValueOnce(newNames);
+        vi.spyOn(analyticsServiceStub, 'getEventPropertyKeys').mockReturnValueOnce(oldKeys).mockReturnValueOnce(newKeys);
+        vi.spyOn(analyticsServiceStub, 'getEventPropertyBreakdown').mockReturnValueOnce(oldBreakdown).mockReturnValueOnce(newBreakdown);
+        vi.spyOn(analyticsServiceStub, 'getEventAudience').mockReturnValueOnce(oldAudience).mockReturnValueOnce(newAudience);
+
+        const report = component as unknown as EventsReport;
+        report.selectedEvent.set('newsletter_signup');
+        report.selectedPropertyKey.set('target_host');
+        report.realtimeRefreshKey.update((key) => key + 1);
+        TestBed.tick();
+        const oldRequests = [oldNames, oldKeys, oldBreakdown, oldAudience];
+        expect(oldRequests.map((request) => request.observed)).toEqual([true, true, true, true]);
+
+        siteServiceStub.activeSite.set({ ...site, id: 'site-2', domain: 'second.example' });
+        TestBed.tick();
+        const oldSubscriptions = oldRequests.map((request) => request.observed);
+        const latestValue = { name: 'second.example', value: 20 };
+        const latestAudience = { top_pages: [{ name: '/second', value: 20 }], top_referrers: [], top_devices: [], top_countries: [] };
+        newNames.next(['newsletter_signup', 'second_event']);
+        newKeys.next(['target_host', 'second_key']);
+        newBreakdown.next([latestValue]);
+        newAudience.next(latestAudience);
+        for (const request of [newNames, newKeys, newBreakdown, newAudience]) request.complete();
+
+        oldNames.next(['first_event']);
+        oldKeys.next(['first_key']);
+        oldBreakdown.next([{ name: 'first.example', value: 12 }]);
+        oldAudience.next({ ...latestAudience, top_pages: [{ name: '/first', value: 12 }] });
+        for (const request of oldRequests) request.complete();
+        TestBed.tick();
+
+        expect(report.eventNames()).toContain('second_event');
+        expect(report.eventNames()).not.toContain('first_event');
+        expect(report.selectedEvent()).toBe('newsletter_signup');
+        expect(report.propertyKeys()).toEqual(['target_host', 'second_key']);
+        expect(report.selectedPropertyKey()).toBe('target_host');
+        expect(report.breakdown()).toEqual([latestValue]);
+        expect(report.audience()).toEqual(latestAudience);
+        expect(oldSubscriptions).toEqual([false, false, false, false]);
+    });
+
+    it('clears loading flags when the site stops being applicable', () => {
+        vi.spyOn(analyticsServiceStub, 'getEventNames').mockReturnValue(new Subject<string[]>());
+        vi.spyOn(analyticsServiceStub, 'getEventPropertyKeys').mockReturnValue(new Subject<string[]>());
+        vi.spyOn(analyticsServiceStub, 'getEventPropertyBreakdown').mockReturnValue(new Subject<MetricStat[]>());
+        vi.spyOn(analyticsServiceStub, 'getEventAudience').mockReturnValue(new Subject<EventAudience>());
+        const report = component as unknown as EventsReport;
+        const loading = () => [report.isLoadingNames(), report.isLoadingKeys(), report.isLoadingBreakdown(), report.isLoadingAudience()];
+
+        report.selectedEvent.set('newsletter_signup');
+        report.selectedPropertyKey.set('target_host');
+        report.realtimeRefreshKey.update((key) => key + 1);
+        TestBed.tick();
+        expect(loading()).toEqual([true, true, true, true]);
+
+        siteServiceStub.activeSite.set(null);
+        TestBed.tick();
+        expect(loading()).toEqual([false, false, false, false]);
     });
 
     it('renders the chart total through the animated number facade', async () => {

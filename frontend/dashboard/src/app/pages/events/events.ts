@@ -14,7 +14,7 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { SeriesChart, SeriesDefinition, SeriesChartPoint } from '@features/analytics/components/series-chart';
 import { MetricStat, EventSeriesPoint, EventAudience } from '@models/analytics.types';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
+import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
@@ -309,19 +309,20 @@ export class Events {
     });
 
     constructor() {
-        // Load event names when site/range changes; reset selection
-        effect(() => {
+        // Load event names when site/range changes; reconcile selection
+        effect((onCleanup) => {
             const site = this.activeSite();
             this.reportRange.selectedRange();
             this.realtimeRefreshKey();
             if (!site) return;
             const dates = this.getCurrentDateRange();
             if (!dates) return;
-            this.loadEventNames(site.id, dates.from, dates.to);
+            const request = this.loadEventNames(site.id, dates.from, dates.to);
+            onCleanup(() => request.unsubscribe());
         });
 
-        // Load property keys when selected event or range changes; reset property selection
-        effect(() => {
+        // Load property keys when selected event or range changes; reconcile selection
+        effect((onCleanup) => {
             const site = this.activeSite();
             const eventName = this.selectedEvent();
             this.reportRange.selectedRange();
@@ -336,7 +337,8 @@ export class Events {
             }
             const dates = this.getCurrentDateRange();
             if (!dates) return;
-            this.loadPropertyKeys(site.id, dates.from, dates.to, eventName);
+            const request = this.loadPropertyKeys(site.id, dates.from, dates.to, eventName);
+            onCleanup(() => request.unsubscribe());
         });
 
         // Reset property value filter when property key changes
@@ -378,7 +380,7 @@ export class Events {
         });
 
         // Load breakdown when event/propertyKey/range changes
-        effect(() => {
+        effect((onCleanup) => {
             const site = this.activeSite();
             const eventName = this.selectedEvent();
             const propertyKey = this.selectedPropertyKey();
@@ -390,11 +392,12 @@ export class Events {
             }
             const dates = this.getCurrentDateRange();
             if (!dates) return;
-            this.loadBreakdown(site.id, dates.from, dates.to, eventName, propertyKey);
+            const request = this.loadBreakdown(site.id, dates.from, dates.to, eventName, propertyKey);
+            onCleanup(() => request.unsubscribe());
         });
 
         // Load audience panels when event/property filter/dimension filter/range changes
-        effect(() => {
+        effect((onCleanup) => {
             const site = this.activeSite();
             const eventName = this.selectedEvent();
             const propKey = this.selectedPropertyKey();
@@ -412,7 +415,8 @@ export class Events {
 
             const filterKey = propKey && propValue ? propKey : undefined;
             const filterVal = propKey && propValue ? propValue : undefined;
-            this.loadAudience(site.id, dates.from, dates.to, eventName, filterKey, filterVal, dimFilters);
+            const request = this.loadAudience(site.id, dates.from, dates.to, eventName, filterKey, filterVal, dimFilters);
+            onCleanup(() => request.unsubscribe());
         });
         this.realtimeRefresh.registerSignalUntilDestroyed(this.destroyRef, {
             siteId: () => this.activeSite()?.id ?? null,
@@ -487,17 +491,19 @@ export class Events {
 
     private loadEventNames(siteId: string, from: string, to: string) {
         this.isLoadingNames.set(true);
-        const currentSelection = this.selectedEvent();
-        this.analyticsService.getEventNames(siteId, from, to).subscribe({
-            next: (names) => {
+        return this.analyticsService
+            .getEventNames(siteId, from, to)
+            .pipe(
+                catchError(() => EMPTY),
+                finalize(() => this.isLoadingNames.set(false))
+            )
+            .subscribe((names) => {
                 this.reportedEventNames.set(names);
                 const mergedNames = this.mergeAutomaticEventNames(names);
                 this.eventNames.set(mergedNames);
+                const currentSelection = untracked(this.selectedEvent);
                 this.selectedEvent.set(currentSelection && mergedNames.includes(currentSelection) ? currentSelection : null);
-                this.isLoadingNames.set(false);
-            },
-            error: () => this.isLoadingNames.set(false)
-        });
+            });
     }
 
     private mergeAutomaticEventNames(names: string[]): string[] {
@@ -507,26 +513,28 @@ export class Events {
 
     private loadPropertyKeys(siteId: string, from: string, to: string, eventName: string) {
         this.isLoadingKeys.set(true);
-        const currentPropertyKey = this.selectedPropertyKey();
-        this.analyticsService.getEventPropertyKeys(siteId, from, to, eventName).subscribe({
-            next: (keys) => {
+        return this.analyticsService
+            .getEventPropertyKeys(siteId, from, to, eventName)
+            .pipe(
+                catchError(() => EMPTY),
+                finalize(() => this.isLoadingKeys.set(false))
+            )
+            .subscribe((keys) => {
                 this.propertyKeys.set(keys);
+                const currentPropertyKey = untracked(this.selectedPropertyKey);
                 this.selectedPropertyKey.set(currentPropertyKey && keys.includes(currentPropertyKey) ? currentPropertyKey : null);
-                this.isLoadingKeys.set(false);
-            },
-            error: () => this.isLoadingKeys.set(false)
-        });
+            });
     }
 
     private loadBreakdown(siteId: string, from: string, to: string, eventName: string, propertyKey: string) {
         this.isLoadingBreakdown.set(true);
-        this.analyticsService.getEventPropertyBreakdown(siteId, from, to, eventName, propertyKey).subscribe({
-            next: (data) => {
-                this.breakdown.set(data);
-                this.isLoadingBreakdown.set(false);
-            },
-            error: () => this.isLoadingBreakdown.set(false)
-        });
+        return this.analyticsService
+            .getEventPropertyBreakdown(siteId, from, to, eventName, propertyKey)
+            .pipe(
+                catchError(() => EMPTY),
+                finalize(() => this.isLoadingBreakdown.set(false))
+            )
+            .subscribe((data) => this.breakdown.set(data));
     }
 
     private loadEventTimeseries(siteId: string, from: string, to: string, eventName: string, propertyKey?: string, propertyValue?: string, filters: EventDimensionFilter[] = []) {
@@ -559,7 +567,7 @@ export class Events {
 
     private loadAudience(siteId: string, from: string, to: string, eventName: string, propertyKey?: string, propertyValue?: string, filters: EventDimensionFilter[] = []) {
         this.isLoadingAudience.set(true);
-        this.analyticsService
+        return this.analyticsService
             .getEventAudience(siteId, from, to, eventName, propertyKey, propertyValue, filters)
             .pipe(finalize(() => this.isLoadingAudience.set(false)))
             .subscribe({

@@ -9,7 +9,7 @@ import { ButtonModule } from '@openng/optimus-ui/button';
 import { CardModule } from '@openng/optimus-ui/card';
 import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 import { MessageModule } from '@openng/optimus-ui/message';
-import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
+import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
 import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
@@ -228,7 +228,7 @@ export class Goals {
             const dates = this.reportRange.currentDateRange();
             const goals = this.goals();
             const selected = this.selectedGoalId();
-            if (!site || !dates || this.goalsLoading()) return;
+            if (!site || !dates || this.goalsLoading() || this.goalsError()) return;
             if (this.createRequested && this.canManage()) {
                 this.createRequested = false;
                 this.openCreate();
@@ -318,8 +318,13 @@ export class Goals {
     }
     protected refresh(mode: StatsQueryMode = 'blocking') {
         const site = this.siteService.activeSite();
+        if (!site || this.goalsLoading()) return;
+        if (this.goalsError()) {
+            if (mode === 'blocking') this.loadGoals(site.id);
+            return;
+        }
         const dates = this.reportRange.currentDateRange();
-        if (!site || !dates) return;
+        if (!dates) return;
         this.trafficRefreshKey.update((key) => key + 1);
         const selected = this.selectedGoalId();
         this.loadReporting(site.id, dates.from, dates.to, selected ? [selected] : this.goals().map((goal) => goal.id), selected ? [selected] : [], mode);
@@ -346,6 +351,21 @@ export class Goals {
     private loadReporting(siteId: string, from: string, to: string, cohortIds: string[], seriesIds: string[], mode: StatsQueryMode = 'blocking') {
         this.reportingRequest?.unsubscribe();
         this.seriesLoading.set(mode === 'blocking');
+        if (cohortIds.length === 0) {
+            this.stats.set(null);
+            this.goalSeries.set([]);
+            this.comparisonGoalSeries.set([]);
+            this.seriesRange.set(null);
+            this.comparisonRange.set(null);
+            this.reportingRequest = this.statsService
+                .fetchStats(siteId, from, to)
+                .pipe(
+                    catchError(() => EMPTY),
+                    finalize(() => this.seriesLoading.set(false))
+                )
+                .subscribe((baseline) => this.baselineStats.set(baseline));
+            return;
+        }
         const comparison = previousPeriod(from, to);
         this.reportingRequest = forkJoin({
             cohort: this.statsService.fetchStats(siteId, from, to, [], cohortIds),

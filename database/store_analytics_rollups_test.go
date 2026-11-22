@@ -75,9 +75,9 @@ func TestCreateHitsBulkMarksDirtyRollupBuckets(t *testing.T) {
 	}
 }
 
-func TestGetSiteStatsRefreshesStaleDailyRollups(t *testing.T) {
+func TestAnalyticsReadsRefreshOnlyHitRollups(t *testing.T) {
 	store, userID := setupComparisonStore(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	site, err := store.CreateSite(ctx, userID, "daily-rollups.example.com")
 	if err != nil {
@@ -99,6 +99,15 @@ func TestGetSiteStatsRefreshesStaleDailyRollups(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("create hit %d: %v", i, err)
 		}
+	}
+	if err := store.CreateHit(ctx, &api.Hit{
+		SiteID:    site.ID,
+		SessionID: sessions[0],
+		PageID:    uuid.New(),
+		Timestamp: dayBucket.AddDate(0, 0, 1),
+		Path:      "/",
+	}); err != nil {
+		t.Fatalf("create hit in a second bucket for the same session: %v", err)
 	}
 
 	mustExec := func(query string, args ...any) {
@@ -125,22 +134,50 @@ func TestGetSiteStatsRefreshesStaleDailyRollups(t *testing.T) {
 		2,
 	)
 
-	stats, err := store.GetSiteStats(ctx, api.AnalyticsParams{
+	params := api.AnalyticsParams{
 		SiteID: site.ID,
 		UserID: userID,
 		Start:  queryEnd.AddDate(0, 0, -7),
 		End:    queryEnd,
-	})
+	}
+	checkSessionRollup := func(wantSessions, wantPageviews, wantDirty int) {
+		t.Helper()
+		var sessions, pageviews, dirty int
+		if err := store.db.QueryRowContext(ctx, `
+			SELECT sessions, pageviews FROM session_rollups_daily WHERE site_id = ? AND bucket = ?
+		`, site.ID, dayBucket).Scan(&sessions, &pageviews); err != nil {
+			t.Fatalf("query session rollup: %v", err)
+		}
+		if err := store.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM rollup_dirty_buckets
+			WHERE site_id = ? AND rollup_type = 'session' AND bucket_unit = 'day'
+		`, site.ID).Scan(&dirty); err != nil {
+			t.Fatalf("query session rollup dirty state: %v", err)
+		}
+		if sessions != wantSessions || pageviews != wantPageviews || dirty != wantDirty {
+			t.Fatalf("daily session rollup = %d sessions, %d pageviews, %d dirty buckets, want %d/%d/%d",
+				sessions, pageviews, dirty, wantSessions, wantPageviews, wantDirty)
+		}
+	}
+
+	stats, err := store.GetSiteStats(ctx, params)
 	if err != nil {
 		t.Fatalf("GetSiteStats: %v", err)
 	}
+	if stats.TotalPageviews != 19 || stats.UniqueSessions != 3 {
+		t.Fatalf("dashboard KPIs = %d pageviews, %d sessions, want 19/3", stats.TotalPageviews, stats.UniqueSessions)
+	}
+	checkSessionRollup(1, 2, 2)
 
-	if stats.TotalPageviews != 18 {
-		t.Fatalf("expected 18 pageviews, got %d", stats.TotalPageviews)
+	overview, err := store.GetSiteOverviewStats(ctx, params)
+	if err != nil {
+		t.Fatalf("GetSiteOverviewStats: %v", err)
 	}
-	if stats.UniqueSessions != 3 {
-		t.Fatalf("expected 3 sessions, got %d", stats.UniqueSessions)
+	if overview.TotalPageviews != 19 || overview.UniqueSessions != 3 || overview.BounceRate != stats.BounceRate {
+		t.Fatalf("overview KPIs = %d pageviews, %d sessions, %v bounce rate, want 19/3/%v",
+			overview.TotalPageviews, overview.UniqueSessions, overview.BounceRate, stats.BounceRate)
 	}
+	checkSessionRollup(1, 2, 2)
 
 	var mar30 api.ChartDataPoint
 	found := false
@@ -157,6 +194,9 @@ func TestGetSiteStatsRefreshesStaleDailyRollups(t *testing.T) {
 	if mar30.Pageviews != 18 || mar30.Visitors != 3 {
 		t.Fatalf("expected refreshed chart bucket to be 18/3, got %d/%d", mar30.Pageviews, mar30.Visitors)
 	}
+	if totalChartPageviews(stats.ChartData) != 19 || totalChartPageviews(overview.ChartData) != 19 {
+		t.Fatalf("expected 19 pageviews in both charts, got dashboard %+v, overview %+v", stats.ChartData, overview.ChartData)
+	}
 
 	var pageviews int
 	var visitors int
@@ -172,19 +212,11 @@ func TestGetSiteStatsRefreshesStaleDailyRollups(t *testing.T) {
 		t.Fatalf("expected daily hit rollup to refresh to 18/3, got %d/%d", pageviews, visitors)
 	}
 
-	var sessionsCount int
-	var rollupPageviews int
-	if err := store.db.QueryRowContext(
-		ctx,
-		"SELECT sessions, pageviews FROM session_rollups_daily WHERE site_id = ? AND bucket = ?",
-		site.ID,
-		dayBucket,
-	).Scan(&sessionsCount, &rollupPageviews); err != nil {
-		t.Fatalf("query refreshed session rollup: %v", err)
+	// The backfill worker uses this path on every dirty tick.
+	if err := store.ProcessDirtyRollups(ctx, site.ID); err != nil {
+		t.Fatalf("ProcessDirtyRollups: %v", err)
 	}
-	if sessionsCount != 3 || rollupPageviews != 18 {
-		t.Fatalf("expected daily session rollup to refresh to 3/18, got %d/%d", sessionsCount, rollupPageviews)
-	}
+	checkSessionRollup(3, 18, 0)
 }
 
 func TestGetSiteStatsLast24HoursAcrossMonthBoundary(t *testing.T) {

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocaleService } from '@jsverse/transloco-locale';
-import { Observable, of, Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { provideRouter } from '@angular/router';
 
@@ -12,58 +12,41 @@ import { SiteService } from '@features/sites/services/site.service';
 import { Goals } from './goals';
 import { AccessService } from '@services/access.service';
 import { ConfirmationService } from '@openng/optimus-ui/api';
-import { GoalSeriesPoint } from '@models/analytics.types';
+import { Goal, GoalSeriesPoint, SiteStats } from '@models/analytics.types';
+import { emptySiteStats } from '@testing/empty-site-stats';
+
+interface GoalsReporting {
+    kpis: () => { value: number }[];
+    pathSuggestions: () => string[];
+    goalsError: () => boolean;
+    goalSeries: () => GoalSeriesPoint[];
+    comparisonGoalSeries: () => GoalSeriesPoint[];
+    refresh: (mode?: 'blocking' | 'background') => void;
+    deleteGoal: (goal: Goal) => void;
+    onDefinitionsChanged: () => void;
+}
 
 describe('Goals', () => {
-    const stats = signal({
-        live_visitors: 0,
-        total_pageviews: 0,
+    const stats = emptySiteStats({
         unique_sessions: 4,
-        bounce_rate: 0,
-        avg_session_duration: 0,
-        pages_per_session: 0,
-        chart_data: [],
-        top_pages: [{ name: '/pricing', value: 8 }],
-        top_landing_pages: [],
-        top_exit_pages: [],
-        top_referrers: [{ name: 'https://google.com', value: 5 }],
-        top_devices: [{ name: 'Desktop', value: 7 }],
-        top_countries: [{ name: 'US', value: 4 }],
-        top_cities: [{ name: 'Berlin', value: 3 }],
-        top_providers: [{ name: 'Hetzner Online GmbH', value: 2 }],
-        top_asns: [{ name: 'AS24940 Hetzner Online GmbH', value: 2 }],
-        top_languages: [],
-        top_utm_campaigns: [],
-        top_utm_contents: [],
-        top_utm_mediums: [],
-        top_utm_sources: [],
-        top_utm_terms: [],
-        utm_campaign_hits: 0,
-        utm_content_hits: 0,
-        utm_medium_hits: 0,
-        utm_source_hits: 0,
-        utm_term_hits: 0,
-        goals: [],
-        funnels: []
+        top_pages: [{ name: '/pricing', value: 8 }]
     });
     const statsServiceStub = {
-        stats,
-        isLoading: signal(false),
-        currentComparisonRange: signal(null),
-        comparisonRange: () => null,
-        loadStats: vi.fn(),
-        fetchStats: vi.fn(() => of(stats()))
+        fetchStats: vi.fn<StatsService['fetchStats']>(() => of(stats))
     };
     const analyticsServiceStub = {
-        getGoals: vi.fn(() => of([])),
-        getGoalTimeseries: vi.fn<() => Observable<GoalSeriesPoint[]>>(() => of<GoalSeriesPoint[]>([]))
+        getGoals: vi.fn<AnalyticsService['getGoals']>(() => of([])),
+        getGoalTimeseries: vi.fn<AnalyticsService['getGoalTimeseries']>(() => of([])),
+        deleteGoal: vi.fn<AnalyticsService['deleteGoal']>(() => of(undefined))
     };
+    const goal: Goal = { id: 'goal-1', site_id: 'site-1', name: 'Pricing', type: 'path', value: '/pricing', created_at: '2026-01-01T00:00:00Z' };
+    const createReporting = () => TestBed.runInInjectionContext(() => new Goals()) as unknown as GoalsReporting;
 
     beforeEach(async () => {
-        statsServiceStub.loadStats.mockClear();
-        statsServiceStub.fetchStats.mockClear();
-        analyticsServiceStub.getGoals.mockClear();
-        analyticsServiceStub.getGoalTimeseries.mockClear();
+        statsServiceStub.fetchStats.mockReset();
+        analyticsServiceStub.getGoals.mockReset();
+        analyticsServiceStub.getGoalTimeseries.mockReset();
+        analyticsServiceStub.deleteGoal.mockClear();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -179,7 +162,7 @@ describe('Goals', () => {
         };
         const first = new Subject<GoalSeriesPoint[]>();
         const second = new Subject<GoalSeriesPoint[]>();
-        analyticsServiceStub.getGoalTimeseries.mockReset().mockReturnValue(of<GoalSeriesPoint[]>([])).mockReturnValueOnce(first).mockReturnValueOnce(of([])).mockReturnValueOnce(second);
+        analyticsServiceStub.getGoalTimeseries.mockReturnValueOnce(first).mockReturnValueOnce(of([])).mockReturnValueOnce(second);
 
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['goal-1'], ['goal-1']);
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['goal-2'], ['goal-2']);
@@ -188,5 +171,95 @@ describe('Goals', () => {
         second.complete();
 
         expect(component.goalSeries()).toEqual([{ time: '2026-07-01', conversions: 2 }]);
+    });
+
+    it('loads only baseline suggestions for an empty goal cohort on entry and refresh', () => {
+        const component = createReporting();
+        TestBed.tick();
+
+        expect(component.kpis().map((kpi) => kpi.value)).toEqual([0, 0, 0]);
+        expect(component.pathSuggestions()).toEqual(['/pricing']);
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(1);
+
+        component.refresh();
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(2);
+        component.refresh('background');
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(3);
+        expect(statsServiceStub.fetchStats.mock.calls.every((args) => args.length === 3)).toBe(true);
+        expect(analyticsServiceStub.getGoalTimeseries).not.toHaveBeenCalled();
+    });
+
+    it('preserves the definitions error without loading an empty report', () => {
+        const definitions = new Subject<Goal[]>();
+        analyticsServiceStub.getGoals.mockReturnValueOnce(definitions);
+        const component = createReporting();
+        TestBed.tick();
+
+        component.refresh('background');
+        expect(statsServiceStub.fetchStats).not.toHaveBeenCalled();
+        definitions.error(new Error('Definitions unavailable'));
+        TestBed.tick();
+        component.refresh('background');
+
+        expect(component.goalsError()).toBe(true);
+        expect(statsServiceStub.fetchStats).not.toHaveBeenCalled();
+        expect(analyticsServiceStub.getGoalTimeseries).not.toHaveBeenCalled();
+
+        component.refresh();
+        TestBed.tick();
+        expect(component.goalsError()).toBe(false);
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the report and cancels the in-flight cohort after deleting the last goal', () => {
+        analyticsServiceStub.getGoals.mockReturnValueOnce(of([goal]));
+        const conversion = { time: '2026-07-01', conversions: 2 };
+        analyticsServiceStub.getGoalTimeseries.mockReturnValue(of([conversion]));
+        statsServiceStub.fetchStats.mockReturnValueOnce(of({ ...stats, unique_sessions: 2 }));
+        const component = createReporting();
+        TestBed.tick();
+        expect(component.kpis().map((kpi) => kpi.value)).toEqual([2, 2, 50]);
+
+        const staleCohort = new Subject<SiteStats>();
+        statsServiceStub.fetchStats.mockReturnValueOnce(staleCohort);
+        component.refresh();
+        expect(staleCohort.observed).toBe(true);
+        const baseline = new Subject<SiteStats>();
+        statsServiceStub.fetchStats.mockReturnValueOnce(baseline);
+        component.deleteGoal(goal);
+        TestBed.tick();
+        const staleSubscribed = staleCohort.observed;
+        staleCohort.next(stats);
+        staleCohort.complete();
+
+        expect(analyticsServiceStub.deleteGoal).toHaveBeenCalledWith('site-1', goal.id);
+        expect(staleSubscribed).toBe(false);
+        expect(component.kpis().map((kpi) => kpi.value)).toEqual([0, 0, 0]);
+        expect(component.goalSeries()).toEqual([]);
+        expect(component.comparisonGoalSeries()).toEqual([]);
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(5);
+        expect(analyticsServiceStub.getGoalTimeseries).toHaveBeenCalledTimes(4);
+
+        baseline.next({ ...stats, top_pages: [{ name: '/docs', value: 6 }] });
+        baseline.complete();
+        expect(component.pathSuggestions()).toEqual(['/docs']);
+    });
+
+    it('loads the cohort and both series after creating the first goal', () => {
+        const component = createReporting();
+        TestBed.tick();
+        statsServiceStub.fetchStats.mockClear();
+        analyticsServiceStub.getGoalTimeseries.mockClear();
+
+        analyticsServiceStub.getGoals.mockReturnValueOnce(of([goal]));
+        analyticsServiceStub.getGoalTimeseries.mockReturnValueOnce(of([{ time: '2026-07-01', conversions: 2 }]));
+        statsServiceStub.fetchStats.mockReturnValueOnce(of({ ...stats, unique_sessions: 2 }));
+        component.onDefinitionsChanged();
+        TestBed.tick();
+
+        expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(2);
+        expect(statsServiceStub.fetchStats).toHaveBeenNthCalledWith(1, 'site-1', expect.any(String), expect.any(String), [], [goal.id]);
+        expect(analyticsServiceStub.getGoalTimeseries).toHaveBeenCalledTimes(2);
+        expect(component.kpis().map((kpi) => kpi.value)).toEqual([2, 2, 50]);
     });
 });
