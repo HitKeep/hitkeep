@@ -80,10 +80,17 @@ try {
             ""
         ].join("\n")
     );
+    const readme = readFileSync(join(packageDir, "README.md"), "utf8");
+    const angularExample = readme.match(/^### Angular\s+```ts\n([\s\S]*?)\n```/m);
+    check(angularExample, "README is missing the Angular quick start");
+    if (angularExample) {
+        symlinkSync(join(dashboardDir, "node_modules", "@angular"), join(consumerDir, "node_modules", "@angular"), "dir");
+        writeFileSync(join(consumerDir, "angular.ts"), angularExample[1]);
+    }
     const tscBin = resolve(dashboardDir, "node_modules", "typescript", "bin", "tsc");
     for (const moduleResolution of ["nodenext", "bundler"]) {
         const moduleKind = moduleResolution === "nodenext" ? "nodenext" : "esnext";
-        writeFileSync(join(consumerDir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: "ES2022", module: moduleKind, moduleResolution, skipLibCheck: false }, include: ["check.ts"] }));
+        writeFileSync(join(consumerDir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: "ES2022", module: moduleKind, moduleResolution, skipLibCheck: false }, include: ["*.ts"] }));
         const typecheck = spawnSync(process.execPath, [tscBin, "-p", join(consumerDir, "tsconfig.json")], { encoding: "utf8" });
         check(typecheck.status === 0, `consumer type-check failed with moduleResolution=${moduleResolution}:\n${typecheck.stdout}${typecheck.stderr}`);
     }
