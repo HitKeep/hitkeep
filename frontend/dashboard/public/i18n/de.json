@@ -922,8 +922,7 @@
     "selectDateRange": "Datumsbereich auswählen",
     "seriesChartAria": "Zeitreihendiagramm mit Daten für die letzten {{count}} Intervalle",
     "chartDesign": {
-      "options": "Diagrammoptionen",
-      "overlays": "Zusätzliche Datenreihen",
+      "series": "Datenreihen",
       "label": "Diagrammtyp",
       "area": "Fläche",
       "line": "Linie",

@@ -84,8 +84,12 @@ interface InspectedPeriod {
         </div>
         @if (inspectable) {
             <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
-            <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" [toolsAvailable]="notes.canWrite() || showDesignSelector()">
-                <div class="mt-2 flex flex-wrap items-center justify-end gap-2">
+            <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" />
+            @if (showDesignSelector() || notes.canWrite()) {
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-x-3 border-t border-[var(--p-content-border-color)] pt-1">
+                    @if (showDesignSelector()) {
+                        <app-chart-design-toggle [value]="effectiveDesign()" (valueChange)="setSelectedDesign($event)" />
+                    }
                     @if (notes.canWrite()) {
                         <p-button
                             class="chart-note-button"
@@ -99,11 +103,8 @@ interface InspectedPeriod {
                             (onClick)="addNote()"
                         />
                     }
-                    @if (showDesignSelector()) {
-                        <app-chart-design-toggle [value]="effectiveDesign()" (valueChange)="setSelectedDesign($event)" />
-                    }
                 </div>
-            </app-chart-legend>
+            }
             <app-annotation-strip [annotations]="markers().visible" [granularity]="granularity()" (selected)="notes.openExisting($event, granularity())" />
         }
     `
@@ -447,8 +448,7 @@ export class SeriesChart {
     }
 
     private noteTrigger(): HTMLElement | null {
-        const button = this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button');
-        return button?.checkVisibility() ? button : this.host.nativeElement.querySelector<HTMLElement>('[aria-keyshortcuts]');
+        return this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button') ?? this.host.nativeElement.querySelector<HTMLElement>('[aria-keyshortcuts]');
     }
 
     private openNewNote(start: number, end: number | null): void {

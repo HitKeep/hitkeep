@@ -927,8 +927,7 @@
     "selectDateRange": "Select date range",
     "seriesChartAria": "Time series chart with data for the last {{count}} intervals",
     "chartDesign": {
-      "options": "Chart options",
-      "overlays": "Chart overlays",
+      "series": "Chart series",
       "label": "Chart style",
       "area": "Area",
       "line": "Line",

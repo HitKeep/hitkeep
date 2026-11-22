@@ -466,6 +466,14 @@ export class Dashboard {
         const liveVisitors = stats?.live_visitors ?? 0;
         return [
             {
+                id: 'live_visitors',
+                label: this.transloco.translate('dashboard.kpis.liveVisitors'),
+                value: stats ? liveVisitors : '—',
+                loading,
+                updateKey,
+                valueClass: liveVisitors > 0 ? `${baseClass} text-green-600 dark:text-green-400` : baseClass
+            },
+            {
                 id: 'total_pageviews',
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
                 value: stats?.total_pageviews ?? '—',
@@ -482,15 +490,6 @@ export class Dashboard {
                 loading,
                 updateKey,
                 valueClass: baseClass
-            },
-            {
-                id: 'live_visitors',
-                label: this.transloco.translate('dashboard.kpis.liveVisitors'),
-                value: stats ? liveVisitors : '—',
-                loading,
-                updateKey,
-                valueClass: liveVisitors > 0 ? `${baseClass} text-green-600 dark:text-green-400` : baseClass,
-                description: stats ? this.transloco.translate('comparison.liveOnly') : ''
             },
             {
                 id: 'bounce_rate',

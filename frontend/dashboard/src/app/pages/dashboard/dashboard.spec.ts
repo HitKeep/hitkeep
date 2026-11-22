@@ -284,6 +284,7 @@ describe('Dashboard', () => {
         const duration = cards.find((card) => card.id === 'avg_session_duration');
         const pages = cards.find((card) => card.id === 'pages_per_session');
 
+        expect(cards[0]?.id).toBe('live_visitors');
         expect(live?.value).toBe(3);
         expect(live?.valueClass).not.toContain('animate-pulse');
         expect(bounce?.value).toBe(41.25);

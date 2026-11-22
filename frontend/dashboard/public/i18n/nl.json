@@ -927,8 +927,7 @@
     "selectDateRange": "Selecteer een datumbereik",
     "seriesChartAria": "Tijdreeksgrafiek met gegevens voor de laatste {{count}}-intervallen",
     "chartDesign": {
-      "options": "Grafiekopties",
-      "overlays": "Extra gegevensreeksen",
+      "series": "Gegevensreeksen",
       "label": "Grafiekstijl",
       "area": "Vlak",
       "line": "Lijn",

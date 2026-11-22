@@ -922,8 +922,7 @@
     "selectDateRange": "Sélectionner une plage de dates",
     "seriesChartAria": "Graphique de série temporelle avec les données des {{count}} derniers intervalles",
     "chartDesign": {
-      "options": "Options du graphique",
-      "overlays": "Séries supplémentaires",
+      "series": "Séries du graphique",
       "label": "Style du graphique",
       "area": "Aire",
       "line": "Ligne",
