@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { finalize, forkJoin } from 'rxjs';
+import { finalize, forkJoin, Subscription } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { ButtonModule } from '@openng/optimus-ui/button';
@@ -86,9 +87,10 @@ export class WebVitalsPage {
     private readonly realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
     private readonly reportRange = injectReportRange();
+    private reportRequest: Subscription | null = null;
 
     protected readonly summary = signal<WebVitalSummaryMetric[]>([]);
-    protected readonly series = signal<WebVitalSeriesPoint[]>([]);
+    private readonly metricSeries = signal<{ metric: WebVitalMetric; points: WebVitalSeriesPoint[] } | null>(null);
     protected readonly pages = signal<WebVitalPageRow[]>([]);
     protected readonly dimensionRows = signal<WebVitalDimensionRow[]>([]);
     protected readonly isLoading = signal(false);
@@ -242,15 +244,14 @@ export class WebVitalsPage {
             rating: this.selectedRatingLabel()
         });
     });
-    protected readonly chartData = computed<SeriesChartPoint[]>(() =>
-        this.series().map((point) => ({
+    protected readonly chartData = computed<SeriesChartPoint[]>(() => {
+        const series = this.metricSeries();
+        if (series?.metric !== this.selectedMetric()) return [];
+        return series.points.map((point) => ({
             time: point.time,
-            p75: point.p75,
-            good: point.good,
-            needs_improvement: point.needs_improvement,
-            poor: point.poor
-        }))
-    );
+            p75: point.samples > 0 ? point.p75 : null
+        }));
+    });
     protected readonly chartConfig = computed<SeriesDefinition[]>(() => {
         this.activeLanguage();
         return [
@@ -262,6 +263,11 @@ export class WebVitalsPage {
                 gradientTo: 'rgba(37, 99, 235, 0)'
             }
         ];
+    });
+    protected readonly chartValueFormatter = computed(() => {
+        this.activeLanguage();
+        const metric = this.selectedMetric();
+        return (value: number) => this.formatMetricValue(metric, value);
     });
     protected readonly filterChips = computed<FilterChip[]>(() => {
         this.activeLanguage();
@@ -295,8 +301,9 @@ export class WebVitalsPage {
             this.activeBreakdownTab();
             this.realtimeRefreshKey();
             if (!site || !dates) {
+                this.reportRequest?.unsubscribe();
                 this.summary.set([]);
-                this.series.set([]);
+                this.metricSeries.set(null);
                 this.pages.set([]);
                 this.dimensionRows.set([]);
                 return;
@@ -466,22 +473,26 @@ export class WebVitalsPage {
     }
 
     private loadData(siteId: string, from: string, to: string, metric: WebVitalMetric, path: string | null, rating: WebVitalRating | null) {
+        this.reportRequest?.unsubscribe();
         this.isLoading.set(true);
         this.errorKey.set(null);
         const activeTab = this.activeBreakdownTab();
         const dimension: WebVitalDimension = activeTab === 'pages' ? 'country' : activeTab;
-        forkJoin({
+        this.reportRequest = forkJoin({
             summary: this.analyticsService.getWebVitalsSummary(siteId, from, to, null, null, null),
             series: this.analyticsService.getWebVitalsTimeseries(siteId, from, to, metric, path, rating),
             pages: this.analyticsService.getWebVitalsPages(siteId, from, to, metric, null, rating, 100),
             dimensions: this.analyticsService.getWebVitalsBreakdown(siteId, from, to, metric, dimension, path, rating, 25)
         })
-            .pipe(finalize(() => this.isLoading.set(false)))
+            .pipe(
+                takeUntilDestroyed(this.destroyRef),
+                finalize(() => this.isLoading.set(false))
+            )
             .subscribe({
                 next: ({ summary, series, pages, dimensions }) => {
                     this.reportLoaded.set(true);
                     this.summary.set(summary);
-                    this.series.set(series);
+                    this.metricSeries.set({ metric, points: series });
                     this.pages.set(pages);
                     this.dimensionRows.set(dimensions);
                 },
@@ -489,7 +500,7 @@ export class WebVitalsPage {
                     console.error(error);
                     this.errorKey.set('webVitals.error');
                     this.summary.set([]);
-                    this.series.set([]);
+                    this.metricSeries.set(null);
                     this.pages.set([]);
                     this.dimensionRows.set([]);
                 }

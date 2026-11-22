@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, afterRenderEffect, computed, input, inject, signal, untracked } from '@angular/core';
+import { ChartLegend } from '@core/charts/chart-legend';
+import { ChangeDetectionStrategy, Component, DOCUMENT, ElementRef, DestroyRef, afterRenderEffect, computed, input, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
@@ -9,7 +10,7 @@ import { ChartDesignToggle } from '@components/chart-design-toggle/chart-design-
 import { formatComparisonPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { bindAnnotationInteractions, type AnnotationMarkerKind } from '@core/charts/annotation-interactions';
 import { annotationMarkers } from '@core/charts/annotation-markers';
-import { buildHitkeepChartMergeOptions, buildHitkeepChartOptions, hitkeepChartTheme, resolveChartColor, withChartAlpha, type HitkeepChartAnnotations, type HitkeepChartDesign, type HitkeepChartSeries } from '@core/charts/hitkeep-chart-options';
+import { buildHitkeepChartMergeOptions, buildHitkeepChartOptions, hitkeepChartTheme, resolveChartColor, type HitkeepChartAnnotations, type HitkeepChartDesign, type HitkeepChartSeries } from '@core/charts/hitkeep-chart-options';
 import { provideHitkeepEcharts } from '@core/charts/hitkeep-echarts.provider';
 import { AnnotationStrip } from '@features/annotations/annotation-strip';
 import { SiteAnnotationsService } from '@features/annotations/site-annotations.service';
@@ -19,7 +20,7 @@ import { ThemeManagerService } from '@services/theme-manager.service';
 import { injectSkeletonGate } from '@services/report-subject.service';
 import { localeForLanguage } from '@core/i18n/duration-format';
 
-export type SeriesChartPoint = Record<string, number | string> & { time: string };
+export type SeriesChartPoint = Record<string, number | string | null> & { time: string };
 
 export interface SeriesDefinition {
     key: string;
@@ -47,42 +48,50 @@ interface InspectedPeriod {
 @Component({
     selector: 'app-series-chart',
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [AnnotationStrip, ButtonModule, ChartDesignToggle, NgxEchartsDirective, TranslocoPipe],
+    imports: [ChartLegend, AnnotationStrip, ButtonModule, ChartDesignToggle, NgxEchartsDirective, TranslocoPipe],
     providers: [provideHitkeepEcharts()],
     template: `
-        @if ((showDesignSelector() || notes.canWrite() || showPointInspection()) && !showSkeleton() && hasData()) {
+        @if (!showSkeleton() && hasData()) {
             <div class="mb-2 flex flex-wrap items-center justify-end gap-2">
-                @if (showPointInspection()) {
-                    <button
-                        type="button"
-                        class="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-color hover:bg-surface-100 aria-pressed:bg-surface-100 dark:hover:bg-surface-800 dark:aria-pressed:bg-surface-800"
-                        [attr.aria-pressed]="inspectionIndex() !== null"
-                        [attr.aria-description]="'comparison.inspectChartHint' | transloco"
-                        aria-keyshortcuts="ArrowLeft ArrowRight Escape"
-                        (click)="toggleInspection()"
-                        (keydown)="onInspectionKey($event)"
-                        (blur)="closeInspection()"
-                    >
-                        <i class="pi pi-search" aria-hidden="true"></i>
-                        {{ 'comparison.inspectChart' | transloco }}
-                    </button>
-                    <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
-                }
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-color hover:bg-surface-100 aria-pressed:bg-surface-100 dark:hover:bg-surface-800 dark:aria-pressed:bg-surface-800"
+                    [attr.aria-pressed]="inspectionIndex() !== null"
+                    [attr.aria-description]="'comparison.inspectChartHint' | transloco"
+                    aria-keyshortcuts="ArrowLeft ArrowRight Escape"
+                    (click)="toggleInspection()"
+                    (keydown)="onInspectionKey($event)"
+                    (blur)="closeInspection()"
+                >
+                    <i class="pi pi-search" aria-hidden="true"></i>
+                    {{ 'comparison.inspectChart' | transloco }}
+                </button>
+                <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
                 @if (notes.canWrite()) {
-                    <p-button type="button" size="small" severity="secondary" icon="pi pi-bookmark" [text]="true" [label]="'annotations.add' | transloco" [ariaLabel]="'annotations.addAria' | transloco" (onClick)="addNote()" />
+                    <p-button
+                        class="chart-note-button"
+                        type="button"
+                        size="small"
+                        severity="secondary"
+                        icon="pi pi-bookmark"
+                        [text]="true"
+                        [label]="'annotations.add' | transloco"
+                        [ariaLabel]="'annotations.addAria' | transloco"
+                        (onClick)="addNote()"
+                    />
                 }
                 @if (showDesignSelector()) {
                     <app-chart-design-toggle [value]="effectiveDesign()" (valueChange)="setSelectedDesign($event)" />
                 }
             </div>
         }
-        <div class="h-80 w-full relative" role="img" [attr.aria-label]="accessibilityLabel()">
+        <div class="h-64 sm:h-72 min-w-0 w-full relative" [attr.role]="hasData() ? 'img' : 'group'" [attr.aria-label]="accessibilityLabel()">
             @if (showSkeleton()) {
                 <div class="flex items-center justify-center h-full" aria-live="polite">
                     <i class="pi pi-spin pi-spinner text-4xl text-[var(--p-primary-color)]" aria-hidden="true"></i>
                 </div>
             } @else if (hasData()) {
-                <div echarts class="h-full w-full" [options]="chartFrameOptions()" [initOpts]="chartInitOptions" [autoResize]="true" (chartInit)="onChartInit($event)"></div>
+                <div echarts aria-hidden="true" class="h-full w-full" [options]="chartFrameOptions()" [initOpts]="chartInitOptions" [autoResize]="true" (chartInit)="onChartInit($event)"></div>
             } @else {
                 <div class="absolute inset-0 flex flex-col items-center justify-center text-[var(--p-text-muted-color)] bg-[var(--p-surface-ground)]/50 rounded-lg border-2 border-dashed border-[var(--p-surface-border)] p-6 text-center">
                     <h3 class="font-semibold text-[var(--p-text-color)] text-lg mb-1">{{ emptyTitle() || ('common.empty.noDataTitle' | transloco) }}</h3>
@@ -94,6 +103,7 @@ interface InspectedPeriod {
             }
         </div>
         @if (!showSkeleton() && hasData()) {
+            <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" />
             <app-annotation-strip [annotations]="markers().visible" [granularity]="granularity()" (selected)="notes.openExisting($event, granularity())" />
         }
     `
@@ -103,6 +113,9 @@ export class SeriesChart {
     series = input.required<SeriesDefinition[]>();
     comparisonData = input<SeriesChartPoint[]>([]);
     isLoading = input<boolean>(false);
+    minInterval = input(1);
+    showZeroValues = input(false);
+    valueFormatter = input<(value: number) => string>();
     isShortRange = input<boolean>(false);
     emptyTitle = input<string>('');
     emptyDescription = input<string>('');
@@ -113,7 +126,8 @@ export class SeriesChart {
     ariaLabelKey = input<string>('common.seriesChartAria');
 
     protected readonly chartInitOptions: EChartsInitOpts = { renderer: 'canvas' };
-    private readonly chartInstance = signal<ECharts | null>(null);
+    protected readonly chartInstance = signal<ECharts | null>(null);
+    private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
     private readonly document = inject(DOCUMENT);
     protected readonly inspectionIndex = signal<number | null>(null);
     private readonly hiddenSeries = signal<ReadonlySet<string>>(new Set());
@@ -129,7 +143,6 @@ export class SeriesChart {
     protected readonly effectiveDesign = computed(() => this.designPrefs.design() ?? this.design());
     protected readonly granularity = computed(() => (this.isShortRange() ? 'hour' : 'day'));
     protected readonly markers = computed(() => annotationMarkers(this.data() || [], this.notes.annotations()));
-    protected readonly showPointInspection = computed(() => !!(this.currentPeriod() || this.previousPeriod() || this.comparisonData().length));
 
     private readonly chartAnnotations = computed((): HitkeepChartAnnotations => {
         this.activeLanguage();
@@ -162,8 +175,8 @@ export class SeriesChart {
 
     protected hasData = computed(() => {
         const series = this.series();
-        const currentHasData = this.data().some((point) => series.some((s) => (pointValue(point[s.key]) ?? 0) > 0));
-        return currentHasData || this.pairedComparison().some((point) => series.some((s) => s.includeInComparison !== false && (pointValue(point[s.key]) ?? 0) > 0));
+        const present = (value: number | null) => value !== null && (value !== 0 || this.showZeroValues());
+        return this.data().some((point) => series.some((s) => present(pointValue(point[s.key])))) || this.pairedComparison().some((point) => series.some((s) => s.includeInComparison !== false && present(pointValue(point[s.key]))));
     });
 
     protected readonly showSkeleton = injectSkeletonGate(this.isLoading, this.hasData);
@@ -195,9 +208,10 @@ export class SeriesChart {
             labels: [],
             locale: this.transloco.getActiveLang(),
             series,
+            valueFormatter: this.valueFormatter(),
+            minInterval: this.minInterval(),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())
         });
-        if (!this.showPointInspection()) return frame;
         const hidden = untracked(this.hiddenSeries);
         return {
             ...frame,
@@ -210,7 +224,7 @@ export class SeriesChart {
         this.activeLanguage();
         this.themeManager.version();
         const raw = this.data() || [];
-        const bucketLabel = this.bucketLabelFormatter();
+        const bucketLabel = this.bucketLabelFormatter(raw);
         return buildHitkeepChartMergeOptions({
             ariaLabel: this.accessibilityLabel(),
             design: this.effectiveDesign(),
@@ -281,7 +295,7 @@ export class SeriesChart {
         return index === null || !length ? null : Math.min(index, length - 1);
     });
 
-    private readonly renderedSeries = computed(() => {
+    protected readonly renderedSeries = computed(() => {
         this.activeLanguage();
         this.themeManager.version();
         return this.chartSeries(this.data(), this.pairedComparison());
@@ -298,13 +312,14 @@ export class SeriesChart {
         const detail = this.pointDetails(index, visible)
             .flatMap(({ title, rows }) => [title, ...rows.map(({ label, value }) => `${label}: ${value}`)])
             .join('. ');
-        return detail || this.transloco.translate('comparison.pointUnavailable');
+        return detail || `${this.formatPointTime(this.data()[index].time)}. ${this.transloco.translate('comparison.pointUnavailable')}`;
     });
 
     private readonly pointFormatters = computed(() => {
         const locale = localeForLanguage(this.activeLanguage());
         const options = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'shortOffset' } as const;
         return {
+            day: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }),
             minute: new Intl.DateTimeFormat(locale, options),
             second: new Intl.DateTimeFormat(locale, { ...options, second: '2-digit' }),
             millisecond: new Intl.DateTimeFormat(locale, { ...options, second: '2-digit', fractionalSecondDigits: 3 }),
@@ -319,7 +334,7 @@ export class SeriesChart {
 
     protected onInspectionKey(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
-            this.closeInspection(event);
+            this.closeInspection();
             return;
         }
         const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
@@ -329,9 +344,8 @@ export class SeriesChart {
         this.inspectionIndex.set(Math.max(0, Math.min(index + step, this.data().length - 1)));
     }
 
-    protected closeInspection(event?: Event): void {
+    protected closeInspection(): void {
         if (this.inspectionIndex() === null) return;
-        event?.stopPropagation();
         this.inspectionIndex.set(null);
         const chart = this.chartInstance();
         if (chart && !chart.isDisposed()) chart.dispatchAction({ type: 'hideTip' });
@@ -347,14 +361,25 @@ export class SeriesChart {
                 const id = previous ? `${series.key}-comparison` : series.key;
                 const value = pointValue(point[series.key]);
                 if (!seriesIds.has(id) || (previous && series.includeInComparison === false) || value === null) return [];
-                return [{ label: series.label, value: format.value.format(value) }];
+                return [{ label: series.label, value: (this.valueFormatter() ?? format.value.format)(value) }];
             });
             if (!rows.length) continue;
-            const date = new Date(point.time);
-            const time = (date.getMilliseconds() ? format.millisecond : date.getSeconds() ? format.second : format.minute).format(date);
-            periods.push({ title: `${this.transloco.translate(previous ? 'comparison.previousPeriod' : 'comparison.currentPeriod')} · ${time}`, rows });
+            const period = previous ? this.previousPeriod() : this.currentPeriod();
+            const time = this.formatPointTime(point.time);
+            let title = `${this.transloco.translate(previous ? 'comparison.previousPeriod' : 'comparison.currentPeriod')} · ${this.transloco.translate('comparison.bucketStart', { time })}`;
+            if (period && Date.parse(point.time) < Date.parse(period.from)) {
+                title += ` · ${this.transloco.translate('comparison.countedFrom', { time: this.formatPointTime(period.from) })}`;
+            }
+            periods.push({ title, rows });
         }
         return periods;
+    }
+
+    private formatPointTime(time: string): string {
+        const date = new Date(time);
+        const format = this.pointFormatters();
+        const formatter = time.length === 10 ? format.day : date.getMilliseconds() ? format.millisecond : date.getSeconds() ? format.second : format.minute;
+        return formatter.format(date);
     }
 
     private readonly formatPointTooltip = (params: PointTooltipParam | PointTooltipParam[]): HTMLElement => {
@@ -391,6 +416,10 @@ export class SeriesChart {
         }
     }
 
+    private noteTrigger(): HTMLElement | null {
+        return this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button') ?? this.host.nativeElement.querySelector<HTMLElement>('button[aria-keyshortcuts]');
+    }
+
     private openNewNote(start: number, end: number | null): void {
         const data = this.data() ?? [];
         const startPoint = data[start];
@@ -398,14 +427,14 @@ export class SeriesChart {
             return;
         }
         const endPoint = end === null ? undefined : data[end];
-        this.notes.open({ startsAt: new Date(startPoint.time), endsAt: endPoint ? new Date(endPoint.time) : null, body: '', granularity: this.granularity() });
+        this.notes.open({ startsAt: new Date(startPoint.time), endsAt: endPoint ? new Date(endPoint.time) : null, body: '', granularity: this.granularity() }, this.noteTrigger());
     }
 
     private openMarker(kind: AnnotationMarkerKind, index: number): void {
         const markers = this.markers();
         const annotation = kind === 'line' ? markers.lines[index]?.annotations[0] : markers.areas[index]?.annotation;
         if (annotation) {
-            this.notes.openExisting(annotation, this.granularity());
+            this.notes.openExisting(annotation, this.granularity(), this.noteTrigger());
         }
     }
 
@@ -415,18 +444,16 @@ export class SeriesChart {
 
     private chartSeries(raw: SeriesChartPoint[], cmp: SeriesChartPoint[], includeComparison = cmp.length > 0): HitkeepChartSeries[] {
         const series = this.series() || [];
-        const showMissing = this.showPointInspection();
         const chartSeries: HitkeepChartSeries[] = series.map((s) => ({
             id: s.key,
             label: s.label,
-            data: raw.map((d) => (showMissing ? pointValue(d[s.key]) : Number(d[s.key] ?? 0))),
+            data: raw.map((d) => pointValue(d[s.key])),
             color: resolveChartColor(s.color),
             gradientFrom: s.gradientFrom,
             gradientTo: s.gradientTo,
             design: s.design,
             dashed: s.dashed,
-            smooth: s.smooth,
-            connectNulls: !showMissing
+            smooth: s.smooth
         }));
         // Notes explain the current period, so they ride on its first series only.
         if (raw.length > 0 && chartSeries[0]) {
@@ -442,10 +469,9 @@ export class SeriesChart {
                     id: `${s.key}-comparison`,
                     label: this.transloco.translate('comparison.seriesLabel', { metric: s.label }),
                     data: cmp.map((d) => pointValue(d[s.key])),
-                    color: withChartAlpha(s.color, 0.4),
+                    color: resolveChartColor(s.color),
                     muted: true,
-                    dashed: true,
-                    connectNulls: false
+                    dashed: true
                 });
             }
         }
@@ -458,13 +484,14 @@ export class SeriesChart {
      * construct a few hundred `Intl.DateTimeFormat`s per rebuild, which is the
      * most expensive part of the range switch this chart animates through.
      */
-    private bucketLabelFormatter(): Intl.DateTimeFormat {
+    private bucketLabelFormatter(points: SeriesChartPoint[]): Intl.DateTimeFormat {
         const options: Intl.DateTimeFormatOptions = this.isShortRange() ? { hour: 'numeric', minute: '2-digit' } : { month: 'short', day: 'numeric' };
+        if (points[0]?.time.length === 10) options.timeZone = 'UTC';
         return new Intl.DateTimeFormat(this.localeService.getLocale(), options);
     }
 }
 
-function pointValue(value: number | string | undefined): number | null {
+function pointValue(value: number | string | null | undefined): number | null {
     if (value == null || (typeof value === 'string' && !value.trim())) return null;
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;

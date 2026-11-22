@@ -318,8 +318,9 @@ describe('AskAIControl charts', () => {
         expect(chartHosts.size).toBe(2);
         expect(document.body.querySelector('p-' + 'chart')).toBeNull();
 
-        const answer = fixture.debugElement.query(By.directive(AskAIAnswer)).componentInstance as { answer(): AskAIResponse | null; chartOptions(chart: AskAIChart): unknown };
-        const barOptions = answer.chartOptions(answer.answer()!.charts[1]!) as InspectableChartOption;
+        const answer = fixture.debugElement.query(By.directive(AskAIAnswer)).componentInstance as { answer(): AskAIResponse | null; chartOptionCache(): Map<AskAIChart, { options: InspectableChartOption }> };
+        const barOptions = answer.chartOptionCache().get(answer.answer()!.charts[1]!)!.options;
+        expect(document.body.querySelector('.ai-chart details table')?.textContent).toContain('12');
         expect(barOptions.aria.label.description).toBe('Top sources');
         expect(barOptions.series[0]?.type).toBe('bar');
         expect(barOptions.series[0]?.name).toBe('Visits');

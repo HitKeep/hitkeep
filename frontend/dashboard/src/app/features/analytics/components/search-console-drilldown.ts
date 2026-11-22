@@ -348,7 +348,7 @@ export class SearchConsoleDrilldown {
     });
     protected readonly chartData = computed<SeriesChartPoint[]>(() =>
         this.series().map((point) => ({
-            time: `${point.date}T00:00:00Z`,
+            time: point.date,
             clicks: point.clicks,
             impressions: point.impressions
         }))

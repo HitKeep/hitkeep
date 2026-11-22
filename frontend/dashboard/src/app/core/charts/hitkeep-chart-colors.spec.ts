@@ -19,6 +19,7 @@ function mockTokensUnset(): void {
 
 afterEach(() => {
     vi.restoreAllMocks();
+    document.documentElement.style.removeProperty('--p-indigo-500');
     document.documentElement.style.removeProperty('--p-primary-500');
 });
 
@@ -28,7 +29,7 @@ describe('resolveChartColor', () => {
     });
 
     it('resolves mapped colors from the design token when set', () => {
-        document.documentElement.style.setProperty('--p-primary-500', '#ff0000');
+        document.documentElement.style.setProperty('--p-indigo-500', '#ff0000');
 
         expect(resolveChartColor('#6366f1')).toBe('#ff0000');
     });

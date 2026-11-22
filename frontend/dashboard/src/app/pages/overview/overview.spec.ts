@@ -64,6 +64,7 @@ describe('OverviewPage', () => {
                                 }
                             },
                             common: {
+                                empty: { noDataTitle: 'No data yet' },
                                 timeRanges: {
                                     today: 'Today',
                                     yesterday: 'Yesterday',
@@ -196,7 +197,7 @@ describe('OverviewPage', () => {
         expect(text).toContain('beta.example.com');
     });
 
-    it('does not label totals-only stats as no traffic', () => {
+    it('keeps totals visible without inventing a sparkline when history is missing', () => {
         vi.spyOn(statsService, 'fetchSitesOverviewStats').mockReturnValue(of(overviewResponse({ ...statsWithTraffic('site-alpha', 10, 4), chart_data: [] })));
         siteService.applySites([
             {
@@ -211,10 +212,34 @@ describe('OverviewPage', () => {
         fixture.detectChanges();
 
         const text = fixture.nativeElement.textContent;
-        const chart = fixture.nativeElement.querySelector('.hk-overview-card__chart[role="img"]') as HTMLElement;
+        const chart = fixture.nativeElement.querySelector('.hk-overview-card__chart') as HTMLElement;
         expect(text).toContain('10');
-        expect(text).not.toContain('No traffic');
+        expect(chart.textContent).toContain('No data yet');
+        expect(chart.textContent).not.toContain('No traffic');
+        expect(chart.hasAttribute('role')).toBe(false);
+        expect(chart.querySelector('svg')).toBeNull();
+    });
+
+    it('plots a single bucket as a dot and keeps a real zero bucket in a trend', () => {
+        const stats = statsWithTraffic('site-alpha', 10, 4);
+        const [first, second] = stats.chart_data;
+        const response = vi.spyOn(statsService, 'fetchSitesOverviewStats').mockReturnValue(of(overviewResponse({ ...stats, chart_data: [second] })));
+        siteService.applySites([{ id: 'site-alpha', user_id: 'user-1', domain: 'alpha.example.com', created_at: '2026-01-01T00:00:00Z' }]);
+
+        fixture = TestBed.createComponent(OverviewPage);
+        fixture.detectChanges();
+
+        const chart = fixture.nativeElement.querySelector('.hk-overview-card__chart') as HTMLElement;
         expect(chart.getAttribute('aria-label')).toBe('Traffic trend for alpha.example.com');
+        expect(chart.querySelector('circle')).not.toBeNull();
+        expect(chart.querySelector('polyline')).toBeNull();
+
+        response.mockReturnValue(of(overviewResponse({ ...stats, chart_data: [{ ...first, pageviews: 0, visitors: 0 }, second] })));
+        fixture.debugElement.query(By.css('app-report-range-toolbar')).triggerEventHandler('refresh');
+        fixture.detectChanges();
+
+        expect(chart.querySelector('circle')).toBeNull();
+        expect(chart.querySelector('polyline')?.getAttribute('points')).toBe('0.0,54.0 160.0,2.0');
     });
 
     it('blocks Overview actions through delayed team-switch failure and success, including site refresh', async () => {

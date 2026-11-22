@@ -9,8 +9,8 @@ export type HitkeepChartDesign = 'area' | 'line' | 'bar';
  */
 const CHART_TOKEN_COLORS: Record<string, string[]> = {
     '#10b981': ['--p-primary-500'],
-    '#6366f1': ['--p-primary-500'],
-    '#14b8a6': ['--p-accent-500', '--p-teal-500'],
+    '#6366f1': ['--p-indigo-500'],
+    '#14b8a6': ['--p-teal-600'],
     '#0ea5b7': ['--p-cyan-500'],
     '#2563eb': ['--p-blue-500'],
     '#0f9d58': ['--p-green-500'],
@@ -66,7 +66,6 @@ export interface HitkeepChartSeries {
     dashed?: boolean;
     muted?: boolean;
     smooth?: boolean;
-    connectNulls?: boolean;
     /** Team notes drawn on this series, by category index. */
     annotations?: HitkeepChartAnnotations;
 }
@@ -84,6 +83,8 @@ interface BuildHitkeepChartOptionsInput {
     theme: HitkeepChartTheme;
     design?: HitkeepChartDesign;
     yAxisTicks?: number;
+    minInterval?: number;
+    valueFormatter?: (value: number) => string;
 }
 
 interface LinearGradientFill {
@@ -119,14 +120,13 @@ function motionDuration(ms: number): number {
 export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput) {
     const design = input.design ?? 'area';
     const hasBarSeries = input.series.some((series) => resolveSeriesDesign(series, design) === 'bar');
-    const hasMutedSeries = input.series.some((series) => series.muted);
     const option = {
         animationDuration: motionDuration(260),
         animationDurationUpdate: motionDuration(240),
         animationEasingUpdate: 'cubicOut' as const,
         aria: {
             enabled: true,
-            decal: { show: true },
+            decal: { show: hasBarSeries },
             label: {
                 description: input.ariaLabel
             }
@@ -135,30 +135,17 @@ export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput) {
         grid: {
             left: 8,
             right: 12,
-            top: 32,
-            bottom: 48,
+            top: 16,
+            bottom: 12,
             containLabel: true
         },
-        legend: {
-            show: input.series.length > 1,
-            type: 'scroll',
-            bottom: 0,
-            icon: hasMutedSeries ? undefined : 'circle',
-            itemWidth: hasMutedSeries ? 16 : 8,
-            itemHeight: 8,
-            textStyle: {
-                color: input.theme.textColor,
-                fontSize: 12
-            },
-            pageIconColor: input.theme.textColor,
-            pageIconInactiveColor: withChartAlpha(input.theme.textColor, 0.32),
-            pageTextStyle: {
-                color: input.theme.textColor
-            }
-        },
+        legend: { show: false },
         tooltip: {
             trigger: 'axis',
             confine: true,
+            className: 'hk-echarts-tooltip',
+            enterable: true,
+            hideDelay: 150,
             appendToBody: false,
             backgroundColor: input.theme.tooltipBackgroundColor,
             borderColor: input.theme.tooltipBorderColor,
@@ -196,11 +183,11 @@ export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput) {
         },
         yAxis: {
             type: 'value',
-            min: 0,
+            minInterval: input.minInterval,
             splitNumber: input.yAxisTicks ?? 6,
             axisLabel: {
                 color: input.theme.textColor,
-                formatter: (value: number) => formatChartValue(value, input.locale)
+                formatter: input.valueFormatter ?? ((value: number) => formatChartValue(value, input.locale))
             },
             axisLine: { show: false },
             axisTick: { show: false },
@@ -307,6 +294,7 @@ function buildSeriesOption(series: HitkeepChartSeries, defaultDesign: HitkeepCha
         };
     }
 
+    const hasGaps = series.data.includes(null);
     const areaStyle = design === 'area' && !series.muted && !series.dashed ? { color: gradientFill(series) } : undefined;
     return {
         ...annotations,
@@ -314,16 +302,17 @@ function buildSeriesOption(series: HitkeepChartSeries, defaultDesign: HitkeepCha
         name: series.label,
         type: 'line',
         data: series.data,
-        smooth: series.smooth ?? !series.dashed,
-        showSymbol: false,
+        smooth: series.smooth ?? false,
+        showSymbol: series.data.length === 1 || hasGaps,
+        showAllSymbol: true,
         symbol: 'circle',
-        symbolSize: series.muted ? 5 : 6,
-        connectNulls: series.connectNulls ?? true,
+        symbolSize: !hasGaps ? 6 : (_value: unknown, { dataIndex }: { dataIndex: number }) => (series.data[dataIndex - 1] == null && series.data[dataIndex + 1] == null ? 6 : 0),
+        connectNulls: false,
         sampling: 'lttb',
         lineStyle: {
             color: series.color,
             width: series.muted ? 1.5 : 2,
-            type: series.dashed ? 'dashed' : 'solid'
+            type: series.muted ? 'dashed' : series.dashed ? 'dotted' : 'solid'
         },
         itemStyle: {
             color: series.color

@@ -36,6 +36,7 @@
             (click)="selectMetric(card.metric)"
             (keydown)="handleMetricCardKeydown($event, card.metric)"
             [attr.aria-label]="'webVitals.cards.selectMetricAria' | transloco: { metric: card.label }"
+            [attr.aria-pressed]="card.selected"
         >
             <span class="web-vitals-card__top">
                 <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">{{ card.label }}</span>
@@ -145,7 +146,17 @@
                 <span class="web-vitals-filtered-badge">{{ "dashboard.filteredBadge" | transloco }}</span>
                 }
             </div>
-            <app-series-chart [data]="chartData()" [series]="chartConfig()" [isLoading]="isLoading()" [isShortRange]="isShortRange()" [emptyTitle]="'webVitals.empty.title' | transloco" [emptyDescription]="'webVitals.empty.description' | transloco" />
+            <app-series-chart
+                [data]="chartData()"
+                [series]="chartConfig()"
+                [minInterval]="0"
+                [showZeroValues]="true"
+                [valueFormatter]="chartValueFormatter()"
+                [isLoading]="isLoading()"
+                [isShortRange]="isShortRange()"
+                [emptyTitle]="'webVitals.empty.title' | transloco"
+                [emptyDescription]="'webVitals.empty.description' | transloco"
+            />
         </p-card>
 
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">
@@ -170,15 +181,21 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-3 gap-2 text-sm">
-                    <button type="button" class="web-vitals-dist-cell" [class.web-vitals-dist-cell--active]="selectedRating() === 'good'" (click)="toggleRatingFilter('good')">
+                    <button type="button" class="web-vitals-dist-cell" [class.web-vitals-dist-cell--active]="selectedRating() === 'good'" [attr.aria-pressed]="selectedRating() === 'good'" (click)="toggleRatingFilter('good')">
                         <span>{{ "webVitals.ratings.good" | transloco }}</span>
                         <strong>{{ formatNumber(selected?.good ?? 0) }}</strong>
                     </button>
-                    <button type="button" class="web-vitals-dist-cell" [class.web-vitals-dist-cell--active]="selectedRating() === 'needs_improvement'" (click)="toggleRatingFilter('needs_improvement')">
+                    <button
+                        type="button"
+                        class="web-vitals-dist-cell"
+                        [class.web-vitals-dist-cell--active]="selectedRating() === 'needs_improvement'"
+                        [attr.aria-pressed]="selectedRating() === 'needs_improvement'"
+                        (click)="toggleRatingFilter('needs_improvement')"
+                    >
                         <span>{{ "webVitals.ratings.needs_improvement" | transloco }}</span>
                         <strong>{{ formatNumber(selected?.needs_improvement ?? 0) }}</strong>
                     </button>
-                    <button type="button" class="web-vitals-dist-cell" [class.web-vitals-dist-cell--active]="selectedRating() === 'poor'" (click)="toggleRatingFilter('poor')">
+                    <button type="button" class="web-vitals-dist-cell" [class.web-vitals-dist-cell--active]="selectedRating() === 'poor'" [attr.aria-pressed]="selectedRating() === 'poor'" (click)="toggleRatingFilter('poor')">
                         <span>{{ "webVitals.ratings.poor" | transloco }}</span>
                         <strong>{{ formatNumber(selected?.poor ?? 0) }}</strong>
                     </button>

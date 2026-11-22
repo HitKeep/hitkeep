@@ -24,7 +24,7 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [isShortRange]="isShortRange()"
             [currentPeriod]="currentPeriod()"
             [previousPeriod]="previousPeriod()"
-            [design]="design()"
+            [design]="design() ?? (isShortRange() ? 'bar' : 'area')"
             [showDesignSelector]="showDesignSelector()"
             ariaLabelKey="dashboard.trafficChartAria"
             [emptyTitle]="'dashboard.empty.noTrafficTitle' | transloco"
@@ -44,7 +44,7 @@ export class TrafficChart {
     isShortRange = input<boolean>(false);
     currentPeriod = input<ComparisonPeriod | null>(null);
     previousPeriod = input<ComparisonPeriod | null>(null);
-    design = input<HitkeepChartDesign>('area');
+    design = input<HitkeepChartDesign>();
     showDesignSelector = input<boolean>(true);
 
     snippetClicked = output<void>();
@@ -67,20 +67,20 @@ export class TrafficChart {
                 key: 'pageviews',
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
                 color: '#6366f1',
-                gradientFrom: 'rgba(99, 102, 241, 0.5)',
+                gradientFrom: 'rgba(99, 102, 241, 0.16)',
                 gradientTo: 'rgba(99, 102, 241, 0)'
             },
             {
                 key: 'visitors',
                 label: this.transloco.translate('dashboard.traffic.visitors'),
                 color: '#14b8a6',
-                gradientFrom: 'rgba(20, 184, 166, 0.5)',
+                gradientFrom: 'rgba(13, 148, 136, 0.14)',
                 gradientTo: 'rgba(20, 184, 166, 0)'
             },
             {
                 key: 'visitors-trend',
                 label: this.transloco.translate('dashboard.traffic.trendLine'),
-                color: '#0ea5b7',
+                color: '#64748b',
                 dashed: true,
                 smooth: false,
                 includeInComparison: false

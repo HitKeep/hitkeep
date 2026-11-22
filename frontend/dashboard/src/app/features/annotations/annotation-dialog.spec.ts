@@ -8,7 +8,14 @@ import { SiteAnnotationsService, type AnnotationDraft } from '@features/annotati
 
 describe('AnnotationDialog', () => {
     let fixture: ComponentFixture<AnnotationDialog>;
-    let notes: { draft: ReturnType<typeof signal<AnnotationDraft | null>>; canWrite: ReturnType<typeof signal<boolean>>; save: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
+    let notes: {
+        draft: ReturnType<typeof signal<AnnotationDraft | null>>;
+        canWrite: ReturnType<typeof signal<boolean>>;
+        save: ReturnType<typeof vi.fn>;
+        remove: ReturnType<typeof vi.fn>;
+        restoreFocus: ReturnType<typeof vi.fn>;
+        close: ReturnType<typeof vi.fn>;
+    };
 
     const dialog = () => fixture.componentInstance as unknown as { save: () => Promise<void>; remove: () => Promise<void>; noteForm: { body: () => { value: { set: (v: string) => void } } } };
     const body = () => document.body.querySelector<HTMLTextAreaElement>('#annotation-body');
@@ -19,6 +26,7 @@ describe('AnnotationDialog', () => {
             canWrite: signal(true),
             save: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
+            restoreFocus: vi.fn(),
             close: vi.fn(() => notes.draft.set(null))
         };
         await TestBed.configureTestingModule({

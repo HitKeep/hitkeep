@@ -29,6 +29,7 @@ function liveChart(setOption = vi.fn(), disposed = false) {
         isDisposed: () => disposed,
         on: (name: string, fn: (params: unknown) => void) => handlers.set(name, fn),
         off: vi.fn(),
+        getDom: () => document.createElement('div'),
         getZr: () => ({ on: vi.fn(), off: vi.fn(), setCursorStyle: vi.fn() })
     };
 }
@@ -53,6 +54,7 @@ describe('SeriesChart', () => {
                                 currentPeriod: 'Current period',
                                 previousPeriod: 'Previous period',
                                 gridMismatch: 'Different bucket grids',
+                                bucketStart: 'Bucket starting {{time}}',
                                 inspectChart: 'Inspect chart'
                             }
                         },
@@ -61,6 +63,7 @@ describe('SeriesChart', () => {
                                 seriesLabel: '{{metric}} (vorher)',
                                 currentPeriod: 'Aktueller Zeitraum',
                                 previousPeriod: 'Vorheriger Zeitraum',
+                                bucketStart: 'Intervallbeginn {{time}}',
                                 inspectChart: 'Diagramm prüfen'
                             }
                         }
@@ -92,8 +95,8 @@ describe('SeriesChart', () => {
         fixture.detectChanges();
     });
 
-    it('keeps an image role and accessible label', () => {
-        const container = fixture.debugElement.query(By.css('div[role="img"]'));
+    it('keeps the empty state accessible as a group', () => {
+        const container = fixture.debugElement.query(By.css('div[role="group"]'));
         expect(container).toBeTruthy();
         expect(container.nativeElement.getAttribute('aria-label')).toBeTruthy();
     });
@@ -117,6 +120,22 @@ describe('SeriesChart', () => {
         expect(fixture.debugElement.query(By.css('[echarts]'))).toBeTruthy();
         expect(fixture.debugElement.query(By.css('app-chart-design-toggle'))).toBeTruthy();
         expect(fixture.debugElement.query(By.css('p-' + 'chart'))).toBeNull();
+    });
+
+    it('inspects a date-only series without a comparison and keeps sampled zero distinct from a gap', () => {
+        fixture.componentRef.setInput('data', [
+            { time: '2026-11-12', value: null },
+            { time: '2026-11-13', value: 0 }
+        ]);
+        fixture.componentRef.setInput('series', [{ key: 'value', label: 'INP', color: '#2563eb' }]);
+        fixture.componentRef.setInput('valueFormatter', (value: number) => `${value} ms`);
+        fixture.componentRef.setInput('showZeroValues', true);
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('button[aria-keyshortcuts]')).toBeTruthy();
+        const read = (dataIndex: number) => tooltipFormatter()([{ dataIndex, seriesId: 'value' }]).textContent;
+        expect(read(0)).toBe('');
+        expect(read(1)).toContain('Nov 13, 2026');
+        expect(read(1)).toContain('INP: 0 ms');
     });
 
     it('applies comparison series, chart design variants, and merge updates', () => {
@@ -281,7 +300,7 @@ describe('SeriesChart', () => {
         fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
         fixture.detectChanges();
         expect(fixture.debugElement.query(By.css('[echarts]'))).toBeNull();
-        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).not.toContain('Previous period');
+        expect(fixture.nativeElement.querySelector('[role="group"]').getAttribute('aria-label')).not.toContain('Previous period');
     });
 
     it('patches a live chart with replaceMerge so dropped series cannot linger', async () => {
@@ -390,7 +409,7 @@ describe('SeriesChart', () => {
             notes.canWrite.set(true);
             fixture.detectChanges();
             fixture.debugElement.query(By.css('p-button button')).nativeElement.click();
-            expect(notes.open).toHaveBeenCalledWith({ startsAt: new Date('2026-07-03T00:00:00Z'), endsAt: null, body: '', granularity: 'day' });
+            expect(notes.open).toHaveBeenCalledWith({ startsAt: new Date('2026-07-03T00:00:00Z'), endsAt: null, body: '', granularity: 'day' }, expect.any(HTMLButtonElement));
         });
 
         it('opens the note behind a clicked marker', () => {
@@ -400,7 +419,7 @@ describe('SeriesChart', () => {
             (component as unknown as { onChartInit: (chart: unknown) => void }).onChartInit(chart);
 
             chart.handlers.get('click')?.({ componentType: 'markArea', dataIndex: 0 });
-            expect(notes.openExisting).toHaveBeenCalledWith(campaign, 'day');
+            expect(notes.openExisting).toHaveBeenCalledWith(campaign, 'day', expect.any(HTMLButtonElement));
         });
 
         it('counts notes in the chart label', () => {

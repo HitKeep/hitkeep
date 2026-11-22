@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
@@ -11,6 +11,8 @@ import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocale
 import { WebVitalsPage } from './web-vitals';
 import { SiteService } from '@features/sites/services/site.service';
 import { AnalyticsService } from '@core/services/analytics.service';
+import { SeriesChart } from '@features/analytics/components/series-chart';
+import type { WebVitalSeriesPoint } from '@models/analytics.types';
 import type { SiteSetupState } from '@services/setup-state.service';
 import { flushAnnotations } from '@testing/annotations';
 import { flushSetupState } from '@testing/setup-state';
@@ -161,7 +163,7 @@ describe('WebVitalsPage', () => {
                         langChanges$: of('en'),
                         localeChanges$: of('en'),
                         getLocale: () => 'en-US',
-                        localizeNumber: (value: number) => value.toString(),
+                        localizeNumber: (value: number, _style: string, _locale?: string, options?: Intl.NumberFormatOptions) => new Intl.NumberFormat('en-US', options).format(value),
                         localizeDate: (value: Date) => value.toISOString()
                     }
                 },
@@ -185,7 +187,7 @@ describe('WebVitalsPage', () => {
     /** Recreates the page on a range without a single Web Vitals sample. */
     const createWithoutSamples = (): void => {
         analyticsServiceMock.getWebVitalsSummary.mockReturnValue(of([]));
-        analyticsServiceMock.getWebVitalsTimeseries.mockReturnValue(of([]));
+        analyticsServiceMock.getWebVitalsTimeseries.mockReturnValue(of([{ time: '2026-05-06T00:00:00Z', p75: 0, samples: 0, good: 0, needs_improvement: 0, poor: 0 }]));
         analyticsServiceMock.getWebVitalsPages.mockReturnValue(of([]));
         analyticsServiceMock.getWebVitalsBreakdown.mockReturnValue(of([]));
         fixture = TestBed.createComponent(WebVitalsPage);
@@ -213,6 +215,7 @@ describe('WebVitalsPage', () => {
 
         expect(fixture.nativeElement.querySelector('[data-testid="web-vitals-setup-callout"]')).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Page breakdown');
+        expect(fixture.nativeElement.querySelector('app-series-chart [echarts]')).toBeNull();
     });
 
     it('never shows the callout while the setup state is still unknown', () => {
@@ -238,6 +241,56 @@ describe('WebVitalsPage', () => {
         expect(timeseriesCall[4]).toBe('/');
         expect(timeseriesCall[5]).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Path: /');
+    });
+
+    it('keeps missing p75 buckets distinct from sampled zero and uses the selected metric units', () => {
+        const chart: SeriesChart = fixture.debugElement.query(By.directive(SeriesChart)).componentInstance;
+        expect(chart.valueFormatter()?.(2400)).toBe('2.4 s');
+        expect(chart.data()[0]['p75']).toBe(2400);
+
+        const pendingLcp = new Subject<WebVitalSeriesPoint[]>();
+        const cls = new Subject<WebVitalSeriesPoint[]>();
+        analyticsServiceMock.getWebVitalsTimeseries.mockReturnValueOnce(pendingLcp).mockReturnValue(cls);
+        fixture.debugElement.query(By.css('app-report-range-toolbar')).triggerEventHandler('refresh');
+        const lcpCard = fixture.nativeElement.querySelector('[aria-label="Inspect LCP over time"]') as HTMLElement;
+        const clsCard = fixture.nativeElement.querySelector('[aria-label="Inspect CLS over time"]') as HTMLElement;
+        expect(lcpCard.getAttribute('aria-pressed')).toBe('true');
+        expect(clsCard.getAttribute('aria-pressed')).toBe('false');
+        clsCard.click();
+        fixture.detectChanges();
+        expect(lcpCard.getAttribute('aria-pressed')).toBe('false');
+        expect(clsCard.getAttribute('aria-pressed')).toBe('true');
+        expect(pendingLcp.observed).toBe(false);
+        expect(chart.data()).toEqual([]);
+
+        const measuredZero = { time: '2026-05-06T00:00:00Z', p75: 0, samples: 1, good: 1, needs_improvement: 0, poor: 0 };
+        const noSamples = { ...measuredZero, time: '2026-05-07T00:00:00Z', samples: 0, good: 0 };
+        cls.next([measuredZero, noSamples]);
+        cls.complete();
+        fixture.detectChanges();
+
+        expect(chart.data()).toEqual([
+            { time: measuredZero.time, p75: 0 },
+            { time: noSamples.time, p75: null }
+        ]);
+        expect(chart.valueFormatter()?.(0.08)).toBe('8.0%');
+        expect(fixture.nativeElement.querySelector('app-series-chart [echarts]')).not.toBeNull();
+    });
+
+    it('exposes rating filter selection and deselection through pressed state', () => {
+        const ratingButtons = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('.web-vitals-dist-cell'));
+        const pressedStates = () => ratingButtons.map((button) => button.getAttribute('aria-pressed'));
+        expect(pressedStates()).toEqual(['false', 'false', 'false']);
+
+        ratingButtons[1].click();
+        fixture.detectChanges();
+        expect(pressedStates()).toEqual(['false', 'true', 'false']);
+        expect(analyticsServiceMock.getWebVitalsTimeseries.mock.calls.at(-1)?.[5]).toBe('needs_improvement');
+
+        ratingButtons[1].click();
+        fixture.detectChanges();
+        expect(pressedStates()).toEqual(['false', 'false', 'false']);
+        expect(analyticsServiceMock.getWebVitalsTimeseries.mock.calls.at(-1)?.[5]).toBeNull();
     });
 
     it('keeps breakdown tables searchable, sortable, and paginated', () => {

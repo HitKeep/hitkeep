@@ -157,6 +157,10 @@ app-report-range-toolbar + .hk-overview-toolbar {
     transition: fill 160ms ease;
 }
 
+.hk-overview-card__chart circle {
+    fill: var(--hk-ov-chart-line);
+}
+
 .hk-overview-card__chart polyline {
     fill: none;
     stroke: var(--hk-ov-chart-line);

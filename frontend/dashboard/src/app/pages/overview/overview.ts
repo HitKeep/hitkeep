@@ -36,6 +36,8 @@ interface OverviewSortOption {
     value: OverviewSortKey;
 }
 
+type OverviewSparkline = { kind: 'dot'; y: number } | { kind: 'line'; points: string; areaPoints: string };
+
 interface OverviewSiteRow {
     site: Site;
     status: OverviewSiteStatus;
@@ -44,11 +46,9 @@ interface OverviewSiteRow {
     visitors: number;
     visitorsLabel: string;
     bounceRateLabel: string;
-    sparklinePoints: string;
-    sparklineAreaPoints: string;
+    sparkline: OverviewSparkline | null;
     sparklineAria: string;
     hasTraffic: boolean;
-    hasSparkline: boolean;
     searchText: string;
 }
 
@@ -206,9 +206,7 @@ export class OverviewPage {
         const chartData = stats?.chart_data ?? [];
         const pageviews = stats?.total_pageviews ?? 0;
         const visitors = stats?.unique_sessions ?? 0;
-        const hasTraffic = !!stats && (pageviews > 0 || chartData.some((point) => point.pageviews > 0 || point.visitors > 0));
-        const sparklinePoints = stats ? this.sparklinePoints(chartData, pageviews) : '';
-        const hasSparkline = hasTraffic && sparklinePoints.length > 0;
+        const hasTraffic = pageviews > 0 || visitors > 0 || chartData.some((point) => point.pageviews > 0 || point.visitors > 0);
         return {
             site,
             status: state.status,
@@ -217,11 +215,9 @@ export class OverviewPage {
             visitors,
             visitorsLabel: state.status === 'loading' ? '' : this.localeService.localizeNumber(visitors, 'decimal'),
             bounceRateLabel: state.status === 'ready' && stats ? `${this.localeService.localizeNumber(stats.bounce_rate, 'decimal', undefined, { maximumFractionDigits: 1 })}%` : '-',
-            sparklinePoints,
-            sparklineAreaPoints: sparklinePoints ? `0,${SPARKLINE_HEIGHT} ${sparklinePoints} ${SPARKLINE_WIDTH},${SPARKLINE_HEIGHT}` : '',
+            sparkline: hasTraffic ? this.buildSparkline(chartData) : null,
             sparklineAria: this.transloco.translate('overview.chartAria', { site: site.domain }),
             hasTraffic,
-            hasSparkline,
             searchText: site.domain.toLowerCase()
         };
     }
@@ -237,20 +233,20 @@ export class OverviewPage {
         }
     }
 
-    private sparklinePoints(data: ChartDataPoint[], fallbackValue = 0): string {
-        const values = data.length > 0 ? data.map((point) => point.pageviews) : fallbackValue > 0 ? [fallbackValue, fallbackValue] : [];
-        if (values.length === 0) {
-            return '';
-        }
+    private buildSparkline(data: ChartDataPoint[]): OverviewSparkline | null {
+        if (!data.length) return null;
+        const values = data.map((point) => point.pageviews);
         const max = Math.max(...values, 1);
-        const denominator = Math.max(values.length - 1, 1);
-        return values
+        const yForValue = (value: number) => SPARKLINE_HEIGHT - (value / max) * (SPARKLINE_HEIGHT - 4) - 2;
+        if (values.length === 1) return { kind: 'dot', y: yForValue(values[0]) };
+        const points = values
             .map((value, index) => {
-                const x = (index / denominator) * SPARKLINE_WIDTH;
-                const y = SPARKLINE_HEIGHT - (value / max) * (SPARKLINE_HEIGHT - 4) - 2;
+                const x = (index / (values.length - 1)) * SPARKLINE_WIDTH;
+                const y = yForValue(value);
                 return `${x.toFixed(1)},${y.toFixed(1)}`;
             })
             .join(' ');
+        return { kind: 'line', points, areaPoints: `0,${SPARKLINE_HEIGHT} ${points} ${SPARKLINE_WIDTH},${SPARKLINE_HEIGHT}` };
     }
 
     private initialSort(): OverviewSortKey {

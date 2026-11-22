@@ -292,6 +292,7 @@
     }
   },
   "askAi": {
+    "viewChartData": "Diagrammdaten anzeigen",
     "triggerPlaceholder": "Ask AI",
     "triggerAria": "Ask AI zu dieser Site fragen",
     "submitAria": "Ask-AI-Frage senden",
@@ -3212,6 +3213,8 @@
     }
   },
   "comparison": {
+    "countedFrom": "Gezählt ab {{time}}",
+    "bucketStart": "Intervallbeginn {{time}}",
     "currentPeriod": "Aktueller Zeitraum",
     "previousPeriod": "Vorheriger Zeitraum",
     "unavailable": "Nicht verfügbar",

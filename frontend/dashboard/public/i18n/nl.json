@@ -292,6 +292,7 @@
     }
   },
   "askAi": {
+    "viewChartData": "Grafiekgegevens bekijken",
     "triggerPlaceholder": "Ask AI",
     "triggerAria": "Vraag Ask AI over deze site",
     "submitAria": "Ask AI-vraag verzenden",
@@ -3156,6 +3157,8 @@
     }
   },
   "comparison": {
+    "countedFrom": "Geteld vanaf {{time}}",
+    "bucketStart": "Begin van interval {{time}}",
     "currentPeriod": "Huidige periode",
     "previousPeriod": "Vorige periode",
     "unavailable": "Niet beschikbaar",
