@@ -2,122 +2,8 @@ import { vi } from 'vitest';
 
 import { blockTrackingForMe, cleanup, enableTrackingForMe, init, isTrackingEnabled, track, trackPageview, trackPurchase, TRACKER_VERSION } from './package';
 
-import type { HitKeepWindow } from './core';
-
-type ListenerMap = Record<string, EventListener[]>;
-
-function packageHarness(path = '/pricing') {
-    let currentUrl = new URL(path, 'https://app.example.com');
-    const windowListeners: ListenerMap = {};
-    const documentListeners: ListenerMap = {};
-    const stored = new Map<string, string>();
-    const persisted = new Map<string, string>();
-    const sendBeacon = vi.fn((url: string | URL, data?: BodyInit | null) => {
-        void url;
-        void data;
-        return true;
-    });
-    let prerendering = false;
-
-    const win = {
-        document: {
-            currentScript: null,
-            referrer: '',
-            visibilityState: 'visible',
-            get prerendering() {
-                return prerendering;
-            },
-            createElement: vi.fn((tagName: string) => document.createElement(tagName)),
-            head: { appendChild: vi.fn() },
-            querySelector: vi.fn(() => null),
-            addEventListener: vi.fn((name: string, listener: EventListener) => {
-                documentListeners[name] = [...(documentListeners[name] ?? []), listener];
-            }),
-            removeEventListener: vi.fn((name: string, listener: EventListener) => {
-                documentListeners[name] = (documentListeners[name] ?? []).filter((existing) => existing !== listener);
-            })
-        },
-        location: {
-            get href() {
-                return currentUrl.href;
-            },
-            get hostname() {
-                return currentUrl.hostname;
-            },
-            set hostname(value: string) {
-                currentUrl.hostname = value;
-            },
-            get pathname() {
-                return currentUrl.pathname;
-            },
-            get search() {
-                return currentUrl.search;
-            },
-            get origin() {
-                return currentUrl.origin;
-            }
-        },
-        navigator: {
-            userAgent: 'Mozilla/5.0',
-            doNotTrack: '0',
-            language: 'en-US',
-            sendBeacon
-        },
-        screen: { width: 1440, height: 900 },
-        performance: { now: () => 0 },
-        history: {
-            pushState: vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
-                if (url) currentUrl = new URL(url, currentUrl.href);
-            }),
-            replaceState: vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
-                if (url) currentUrl = new URL(url, currentUrl.href);
-            })
-        },
-        sessionStorage: {
-            getItem: vi.fn((key: string) => stored.get(key) ?? null),
-            setItem: vi.fn((key: string, value: string) => {
-                stored.set(key, value);
-            })
-        },
-        localStorage: {
-            getItem: vi.fn((key: string) => persisted.get(key) ?? null),
-            setItem: vi.fn((key: string, value: string) => {
-                persisted.set(key, value);
-            }),
-            removeItem: vi.fn((key: string) => {
-                persisted.delete(key);
-            })
-        },
-        crypto: {
-            randomUUID: vi.fn(() => '10000000-0000-4000-8000-000000000002'),
-            getRandomValues: crypto.getRandomValues.bind(crypto)
-        },
-        innerWidth: 1280,
-        innerHeight: 720,
-        addEventListener: vi.fn((name: string, listener: EventListener) => {
-            windowListeners[name] = [...(windowListeners[name] ?? []), listener];
-        }),
-        removeEventListener: vi.fn((name: string, listener: EventListener) => {
-            windowListeners[name] = (windowListeners[name] ?? []).filter((existing) => existing !== listener);
-        }),
-        hk: undefined
-    } as unknown as HitKeepWindow;
-
-    return {
-        documentListeners,
-        sendBeacon,
-        setPrerendering: (next: boolean) => {
-            prerendering = next;
-        },
-        win,
-        windowListeners
-    };
-}
-
-async function beaconPayload(sendBeacon: ReturnType<typeof packageHarness>['sendBeacon'], callIndex: number): Promise<Record<string, unknown>> {
-    const body = sendBeacon.mock.calls[callIndex]?.[1] as unknown as Blob;
-    return JSON.parse(await body.text()) as Record<string, unknown>;
-}
+import { bootstrapTracker } from './core';
+import { beaconPayload, packageHarness, trackerHarness } from '../../testing/tracker';
 
 describe('@hitkeep/tracker package entry', () => {
     afterEach(() => {
@@ -281,14 +167,19 @@ describe('@hitkeep/tracker package entry', () => {
     });
 
     it('is a no-op when the hk.js snippet already bootstrapped the page', () => {
-        const harness = packageHarness();
-        (harness.win as { hk?: { _bootstrapped?: boolean } }).hk = { _bootstrapped: true };
+        const harness = trackerHarness();
+        bootstrapTracker(harness.win);
+        const snippetEvent = harness.win.hk?.event;
 
         const handle = init({ host: 'https://stats.example.com' }, harness.win);
         handle.track('ignored');
         trackPageview();
+        handle.cleanup();
 
-        expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(harness.win.hk?.event).toBe(snippetEvent);
+        expect(harness.win.hk?._bootstrapped).toBe(true);
+        harness.win.hk?.event?.('from_snippet');
+        expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://analytics.example.com/ingest', 'https://analytics.example.com/ingest/event']);
     });
 
     it('exposes the opt-out trio backed by localStorage', () => {
@@ -299,12 +190,23 @@ describe('@hitkeep/tracker package entry', () => {
         expect(isTrackingEnabled(harness.win)).toBe(false);
         expect(harness.win.localStorage.getItem('hk_ignore')).toBe('true');
 
-        const handle = init({ host: 'https://stats.example.com' }, harness.win);
+        const config = { host: 'https://stats.example.com/subpath', autoCapturePageviews: false };
+        track('queued_before_blocked_init');
+        const handle = init(config, harness.win);
         handle.track('ignored');
+        handle.cleanup();
+        expect(harness.win.hk?.event).toBeUndefined();
+        expect(harness.win.hk?.getSessionId).toBeUndefined();
+
+        init(config, harness.win).trackPageview();
+        cleanup();
+        cleanup();
         expect(harness.sendBeacon).not.toHaveBeenCalled();
 
         enableTrackingForMe(harness.win);
         expect(isTrackingEnabled(harness.win)).toBe(true);
+        init(config, harness.win).track('enabled');
+        expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://stats.example.com/subpath/ingest/event']);
     });
 
     it('respects capture on localhost', () => {
