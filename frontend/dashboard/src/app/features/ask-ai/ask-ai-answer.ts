@@ -7,7 +7,7 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { browserAppUrl } from '@core/interceptors/base-path.interceptor';
-import { buildHitkeepChartMergeOptions, buildHitkeepChartOptions, hitkeepChartTheme, withChartAlpha, type HitkeepChartDesign, type HitkeepChartSeries } from '@core/charts/hitkeep-chart-options';
+import { buildHitkeepChartMergeOptions, buildHitkeepChartOptions, hitkeepChartTheme, type HitkeepChartSeries } from '@core/charts/hitkeep-chart-options';
 import { provideHitkeepEcharts } from '@core/charts/hitkeep-echarts.provider';
 import { AskAIAction, AskAIChart, AskAIResponse } from '@models/analytics.types';
 import { PreferencesService } from '@services/preferences.service';
@@ -26,7 +26,7 @@ const markdownConverter = new MarkdownIt({ html: false, linkify: false, typograp
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AskAIAnswer {
-    private static readonly palette = ['#2563eb', '#0f766e', '#ca8a04', '#be123c', '#7c3aed'];
+    private static readonly palette = ['#3b82f6', '#0d9488', '#b7791f', '#e11d48', '#8b5cf6'];
     private readonly document = inject(DOCUMENT);
     private readonly transloco = inject(TranslocoService);
     private readonly activeLanguage = injectActiveLang();
@@ -72,9 +72,9 @@ export class AskAIAnswer {
         for (const chart of this.answer()?.charts ?? []) {
             if (chart.type === 'table') continue;
             const rows = chart.rows ?? [];
-            const design = this.chartDesign(chart);
+            const design = chart.type;
             const xKey = chart.x_key ?? '';
-            const settings = { ariaLabel: chart.title, design, labels: rows.map((row) => this.formatCell(row[xKey] ?? '')), locale, series: this.chartSeries(chart, rows, design), theme, yAxisTicks: 5 };
+            const settings = { ariaLabel: chart.title, design, labels: rows.map((row) => this.formatCell(row[xKey] ?? '')), locale, series: this.chartSeries(chart, rows), theme, yAxisTicks: 5 };
             cache.set(chart, { options: buildHitkeepChartOptions(settings), merge: buildHitkeepChartMergeOptions(settings), series: settings.series });
         }
         return cache;
@@ -89,13 +89,10 @@ export class AskAIAnswer {
         }
         return String(value);
     }
-    private chartDesign(chart: AskAIChart): HitkeepChartDesign {
-        return chart.type === 'bar' ? 'bar' : 'line';
-    }
-    private chartSeries(chart: AskAIChart, rows: AskAIChart['rows'], design: HitkeepChartDesign): HitkeepChartSeries[] {
+    private chartSeries(chart: AskAIChart, rows: AskAIChart['rows']): HitkeepChartSeries[] {
         return (chart.series ?? []).map((item, index) => {
             const color = AskAIAnswer.palette[index % AskAIAnswer.palette.length];
-            return { id: item.key, label: item.label, data: rows.map((row) => this.numericCell(row[item.key])), color, gradientFrom: withChartAlpha(color, 0.14), gradientTo: withChartAlpha(color, 0), design };
+            return { id: item.key, label: item.label, data: rows.map((row) => this.numericCell(row[item.key])), color };
         });
     }
     private numericCell(value: string | number | boolean | null | undefined): number | null {

@@ -13,8 +13,8 @@ const CHART_TOKEN_COLORS: Record<string, string[]> = {
     '#14b8a6': ['--p-teal-600'],
     '#0ea5b7': ['--p-cyan-500'],
     '#2563eb': ['--p-blue-500'],
-    '#0f9d58': ['--p-green-500'],
-    '#059669': ['--p-emerald-500'],
+    '#0f9d58': ['--p-green-600'],
+    '#059669': ['--p-emerald-600'],
     '#0f766e': ['--p-teal-700'],
     '#dc2626': ['--p-red-500'],
     '#a16207': ['--p-amber-600']
