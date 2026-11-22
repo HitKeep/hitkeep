@@ -99,6 +99,7 @@ describe('SeriesChart', () => {
         const container = fixture.debugElement.query(By.css('div[role="group"]'));
         expect(container).toBeTruthy();
         expect(container.nativeElement.getAttribute('aria-label')).toBeTruthy();
+        expect(container.nativeElement.hasAttribute('tabindex')).toBe(false);
     });
 
     it('renders the ECharts directive instead of the OptimusUI chart element when data exists', () => {
@@ -247,7 +248,7 @@ describe('SeriesChart', () => {
         await fixture.whenStable();
         expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'showTip', seriesIndex: 0, dataIndex: 1 });
         expect(status.textContent).toContain('Events: 9');
-        chart.handlers.get('legendselectchanged')!({ selected: { 'Events (previous)': false } });
+        chart.handlers.get('legendselectchanged')!({ name: 'Events (previous)', selected: { 'Events (previous)': false } });
         await fixture.whenStable();
         expect(status.textContent).not.toContain('Previous period');
         expect(tooltipFormatter()([{ dataIndex: 1, seriesId: 'count-comparison' }]).textContent).toBe('');

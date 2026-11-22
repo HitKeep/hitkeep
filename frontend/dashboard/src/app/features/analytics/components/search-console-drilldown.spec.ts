@@ -173,6 +173,31 @@ describe('SearchConsoleDrilldown', () => {
         });
     });
 
+    it('keeps four headline values and the date range when all report rows are empty', async () => {
+        service.getOverview.mockReturnValue(of({ clicks: 0, impressions: 0, ctr: 0, average_position: 0 }));
+        service.getSeries.mockReturnValue(of({ series: [] }));
+        service.getQueries.mockReturnValue(of({ rows: [] }));
+        service.getPages.mockReturnValue(of({ rows: [] }));
+        service.getBreakdown.mockReturnValue(of({ rows: [] }));
+        fixture = TestBed.createComponent(SearchConsoleDrilldown);
+        fixture.componentRef.setInput('siteId', 'site-1');
+        fixture.componentRef.setInput('from', '2026-05-01T23:00:00Z');
+        fixture.componentRef.setInput('to', '2026-05-05T22:59:59Z');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelectorAll('app-kpi-card')).toHaveLength(4);
+        expect(fixture.nativeElement.querySelector('[data-testid="search-console-empty"]')).toBeTruthy();
+        expect(fixture.nativeElement.querySelector('app-series-chart, app-metric-card-group')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('UTC');
+
+        service.getQueries.mockReturnValue(of({ rows: [{ value: 'document', clicks: 0, impressions: 2 }] }));
+        fixture.componentRef.setInput('refreshKey', 1);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('[data-testid="search-console-empty"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('app-metric-card-group')).toBeTruthy();
+    });
+
     it('keeps unavailable Search Console headline values as static placeholders', () => {
         fixture = TestBed.createComponent(SearchConsoleDrilldown);
         fixture.detectChanges();

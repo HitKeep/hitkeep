@@ -5,7 +5,7 @@
     <app-no-site-selected icon="pi pi-sparkles" descriptionKey="aiAgents.noSiteDescription" />
     } @else {
     <div>
-        <app-kpi-comparison-cards data-testid="ai-agent-traffic-kpis" [cards]="kpiCards()" [currentPeriod]="loadedPeriod()" gridClass="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" />
+        <app-kpi-comparison-cards data-testid="ai-agent-traffic-kpis" [cards]="kpiCards()" [currentPeriod]="loadedPeriod()" gridClass="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4" />
         <p class="mt-2 text-xs text-[var(--p-text-muted-color)]">{{ "aiAgents.kpis.note" | transloco }}</p>
     </div>
 

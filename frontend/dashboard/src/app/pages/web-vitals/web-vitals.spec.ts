@@ -252,8 +252,8 @@ describe('WebVitalsPage', () => {
         const cls = new Subject<WebVitalSeriesPoint[]>();
         analyticsServiceMock.getWebVitalsTimeseries.mockReturnValueOnce(pendingLcp).mockReturnValue(cls);
         fixture.debugElement.query(By.css('app-report-range-toolbar')).triggerEventHandler('refresh');
-        const lcpCard = fixture.nativeElement.querySelector('[aria-label="Inspect LCP over time"]') as HTMLElement;
-        const clsCard = fixture.nativeElement.querySelector('[aria-label="Inspect CLS over time"]') as HTMLElement;
+        const lcpCard = fixture.nativeElement.querySelector('[aria-label^="Inspect LCP over time"]') as HTMLElement;
+        const clsCard = fixture.nativeElement.querySelector('[aria-label^="Inspect CLS over time"]') as HTMLElement;
         expect(lcpCard.getAttribute('aria-pressed')).toBe('true');
         expect(clsCard.getAttribute('aria-pressed')).toBe('false');
         clsCard.click();

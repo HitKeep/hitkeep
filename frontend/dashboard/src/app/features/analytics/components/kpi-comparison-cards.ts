@@ -10,9 +10,10 @@ import { type KpiComparisonCard, kpiDelta } from './kpi-comparison-metric';
     changeDetection: ChangeDetectionStrategy.OnPush,
     host: { class: 'block' },
     template: `
-        <div [class]="gridClass()">
+        <div class="rounded-lg border border-[var(--p-content-border-color)] bg-[var(--p-content-background)]" [class]="gridClass()">
             @for (card of cards(); track card.id) {
                 <app-kpi-card
+                    [flat]="true"
                     [label]="card.label"
                     [value]="card.value"
                     [loading]="card.loading"

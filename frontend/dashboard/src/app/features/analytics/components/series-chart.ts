@@ -52,35 +52,17 @@ interface InspectedPeriod {
     providers: [provideHitkeepEcharts()],
     template: `
         @let inspectable = hasData() && !showSkeleton();
-        @if (inspectable && (notes.canWrite() || showDesignSelector())) {
-            <div class="mb-2 flex flex-wrap items-center justify-end gap-2">
-                @if (notes.canWrite()) {
-                    <p-button
-                        class="chart-note-button"
-                        type="button"
-                        size="small"
-                        severity="secondary"
-                        icon="pi pi-bookmark"
-                        [text]="true"
-                        [label]="'annotations.add' | transloco"
-                        [ariaLabel]="'annotations.addAria' | transloco"
-                        (onClick)="addNote()"
-                    />
-                }
-                @if (showDesignSelector()) {
-                    <app-chart-design-toggle [value]="effectiveDesign()" (valueChange)="setSelectedDesign($event)" />
-                }
-            </div>
-        }
         <div
-            #plot
             class="h-64 sm:h-72 min-w-0 w-full relative rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
             [attr.role]="inspectable ? 'application' : 'group'"
             [attr.tabindex]="inspectable ? 0 : null"
             [attr.aria-label]="accessibilityLabel()"
             [attr.aria-description]="inspectable ? ('comparison.inspectChartHint' | transloco) : null"
             [attr.aria-keyshortcuts]="inspectable ? 'ArrowLeft ArrowRight Escape' : null"
-            (focus)="plot.matches(':focus-visible') && inspectionIndex.set(0)"
+            (pointerdown)="pointerFocusing = true"
+            (pointerup)="pointerFocusing = false"
+            (pointercancel)="pointerFocusing = false"
+            (focus)="!pointerFocusing && inspectionIndex.set(0)"
             (keydown)="inspectable && onInspectionKey($event)"
             (blur)="closeInspection()"
         >
@@ -102,7 +84,26 @@ interface InspectedPeriod {
         </div>
         @if (inspectable) {
             <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
-            <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" />
+            <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" [toolsAvailable]="notes.canWrite() || showDesignSelector()">
+                <div class="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    @if (notes.canWrite()) {
+                        <p-button
+                            class="chart-note-button"
+                            type="button"
+                            size="small"
+                            severity="secondary"
+                            icon="pi pi-bookmark"
+                            [text]="true"
+                            [label]="'annotations.add' | transloco"
+                            [ariaLabel]="'annotations.addAria' | transloco"
+                            (onClick)="addNote()"
+                        />
+                    }
+                    @if (showDesignSelector()) {
+                        <app-chart-design-toggle [value]="effectiveDesign()" (valueChange)="setSelectedDesign($event)" />
+                    }
+                </div>
+            </app-chart-legend>
             <app-annotation-strip [annotations]="markers().visible" [granularity]="granularity()" (selected)="notes.openExisting($event, granularity())" />
         }
     `
@@ -128,8 +129,18 @@ export class SeriesChart {
     protected readonly chartInstance = signal<ECharts | null>(null);
     private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
     private readonly document = inject(DOCUMENT);
+    protected pointerFocusing = false;
     protected readonly inspectionIndex = signal<number | null>(null);
-    private readonly hiddenSeries = signal<ReadonlySet<string>>(new Set());
+    private readonly selection = signal<ReadonlyMap<string, boolean>>(new Map());
+    private readonly hiddenSeries = computed(() => {
+        const choice = this.selection();
+        const current = this.hasCurrentData();
+        return new Set(
+            this.renderedSeries()
+                .filter((item) => !(choice.get(item.id) ?? this.defaultVisible(item, current)))
+                .map((item) => item.id)
+        );
+    });
     private prefs = inject(PreferencesService);
     private themeManager = inject(ThemeManagerService);
     private designPrefs = inject(ChartDesignPreferencesService);
@@ -172,11 +183,25 @@ export class SeriesChart {
     protected readonly hasComparableSeries = computed(() => this.series().some((series) => series.includeInComparison !== false));
     protected readonly hasPairedComparison = computed(() => this.pairedComparison().length > 0 && this.hasComparableSeries());
 
-    protected hasData = computed(() => {
-        const series = this.series();
-        const present = (value: number | null) => value !== null && (value !== 0 || this.showZeroValues());
-        return this.data().some((point) => series.some((s) => present(pointValue(point[s.key])))) || this.pairedComparison().some((point) => series.some((s) => s.includeInComparison !== false && present(pointValue(point[s.key]))));
-    });
+    private readonly hasCurrentData = computed(() => this.containsData(this.data(), this.series()));
+    protected readonly hasData = computed(
+        () =>
+            this.hasCurrentData() ||
+            this.containsData(
+                this.pairedComparison(),
+                this.series().filter((item) => item.includeInComparison !== false)
+            )
+    );
+
+    private containsData(points: SeriesChartPoint[], series: SeriesDefinition[]): boolean {
+        const includeZero = this.showZeroValues();
+        return points.some((point) =>
+            series.some(({ key }) => {
+                const value = pointValue(point[key]);
+                return value !== null && (includeZero || value !== 0);
+            })
+        );
+    }
 
     protected readonly showSkeleton = injectSkeletonGate(this.isLoading, this.hasData);
 
@@ -211,10 +236,11 @@ export class SeriesChart {
             minInterval: this.minInterval(),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())
         });
-        const hidden = untracked(this.hiddenSeries);
+        const choices = untracked(this.selection);
+        const current = this.hasCurrentData();
         return {
             ...frame,
-            legend: { ...frame.legend, selected: Object.fromEntries(series.map(({ id, label }) => [label, !hidden.has(id)])) },
+            legend: { ...frame.legend, selected: Object.fromEntries(series.map((item) => [item.label, choices.get(item.id) ?? this.defaultVisible(item, current)])) },
             tooltip: { ...frame.tooltip, formatter: this.formatPointTooltip, triggerOn: 'mousemove|click' }
         };
     });
@@ -224,10 +250,11 @@ export class SeriesChart {
         this.themeManager.version();
         const raw = this.data() || [];
         const bucketLabel = this.bucketLabelFormatter(raw);
+        const start = this.currentPeriod()?.from;
         return buildHitkeepChartMergeOptions({
             ariaLabel: this.accessibilityLabel(),
             design: this.effectiveDesign(),
-            labels: raw.map((point) => bucketLabel.format(new Date(point.time))),
+            labels: raw.map((point, index) => (index === 0 && start && Date.parse(point.time) < Date.parse(start) ? this.pointFormatters().minute.format(new Date(start)) : bucketLabel.format(new Date(point.time)))),
             locale: this.transloco.getActiveLang(),
             series: this.renderedSeries(),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())
@@ -275,11 +302,9 @@ export class SeriesChart {
             onOpen: (kind, index) => this.openMarker(kind, index)
         });
         const legendChange = (event: unknown) => {
-            const selected = (event as { selected: Record<string, boolean> }).selected;
-            const ids = this.renderedSeries()
-                .filter(({ label }) => selected[label] === false)
-                .map(({ id }) => id);
-            this.hiddenSeries.set(new Set(ids));
+            const { name, selected } = event as { name: string; selected: Record<string, boolean> };
+            const item = this.renderedSeries().find((series) => series.label === name);
+            if (item) this.selection.update((choices) => new Map(choices).set(item.id, selected[name]));
         };
         chart.on('legendselectchanged', legendChange);
         this.unbindNotes = () => {
@@ -303,11 +328,7 @@ export class SeriesChart {
     protected readonly inspectionAnnouncement = computed(() => {
         const index = this.activeInspectionIndex();
         if (index === null) return '';
-        const visible = new Set(
-            this.renderedSeries()
-                .filter(({ id }) => !this.hiddenSeries().has(id))
-                .map(({ id }) => id)
-        );
+        const visible = this.readableSeries(this.renderedSeries().map(({ id }) => id));
         const detail = this.pointDetails(index, visible)
             .flatMap(({ title, rows }) => [title, ...rows.map(({ label, value }) => `${label}: ${value}`)])
             .join('. ');
@@ -343,6 +364,21 @@ export class SeriesChart {
         this.inspectionIndex.set(null);
         const chart = this.chartInstance();
         if (chart && !chart.isDisposed()) chart.dispatchAction({ type: 'hideTip' });
+    }
+
+    private defaultVisible(item: HitkeepChartSeries, hasCurrent: boolean): boolean {
+        return item.muted ? !hasCurrent : !item.dashed;
+    }
+
+    // A matched prior value remains available on inspection before its overlay is drawn.
+    private readableSeries(ids: string[]): Set<string> {
+        const choices = this.selection();
+        const visible = new Set(ids.filter((id) => !this.hiddenSeries().has(id)));
+        for (const { key } of this.series()) {
+            const prior = key + '-comparison';
+            if (choices.get(prior) !== false && (visible.has(key) || (ids.includes(prior) && choices.get(key) !== false))) visible.add(prior);
+        }
+        return visible;
     }
 
     private pointDetails(index: number, seriesIds: ReadonlySet<string>): InspectedPeriod[] {
@@ -385,7 +421,7 @@ export class SeriesChart {
         root.style.maxWidth = 'min(18rem, 65vw)';
         const index = items[0]?.dataIndex;
         if (index === undefined) return root;
-        const ids = new Set(items.map(({ seriesId }) => seriesId).filter((id) => !this.hiddenSeries().has(id)));
+        const ids = this.readableSeries(items.map(({ seriesId }) => seriesId));
         for (const { title, rows } of this.pointDetails(index, ids)) {
             const section = this.document.createElement('div');
             if (root.childElementCount) section.style.marginTop = '0.5rem';
@@ -411,7 +447,8 @@ export class SeriesChart {
     }
 
     private noteTrigger(): HTMLElement | null {
-        return this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button') ?? this.host.nativeElement.querySelector<HTMLElement>('[aria-keyshortcuts]');
+        const button = this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button');
+        return button?.checkVisibility() ? button : this.host.nativeElement.querySelector<HTMLElement>('[aria-keyshortcuts]');
     }
 
     private openNewNote(start: number, end: number | null): void {

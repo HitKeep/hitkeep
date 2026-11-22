@@ -21,7 +21,7 @@
     } @else if (needsSetup()) {
     <app-setup-callout testId="ai-chatbots-setup-callout" icon="pi pi-comments" titleKey="aiChatbots.setup.title" descriptionKey="aiChatbots.setup.description" docsActionKey="aiChatbots.setup.docsAction" [docsUrl]="docsUrl" />
     } @else {
-    <app-kpi-comparison-cards [cards]="kpiCards()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6" />
+    <app-kpi-comparison-cards [cards]="kpiCards()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 lg:grid-cols-3" class="mb-6" />
 
     <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card mb-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

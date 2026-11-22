@@ -787,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filters",
     "aiCategories": {
       "ai_training_crawler": "Training crawlers",
       "ai_search_indexer": "AI search crawlers",
@@ -926,6 +927,8 @@
     "selectDateRange": "Select date range",
     "seriesChartAria": "Time series chart with data for the last {{count}} intervals",
     "chartDesign": {
+      "options": "Chart options",
+      "overlays": "Chart overlays",
       "label": "Chart style",
       "area": "Area",
       "line": "Line",
@@ -1030,6 +1033,7 @@
       "createSite": "Create site"
     },
     "onboarding": {
+      "checklist": "Setup checklist",
       "title": "Installation checklist",
       "progress": "{{complete}} of {{total}} complete",
       "dismiss": "Dismiss checklist",

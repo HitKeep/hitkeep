@@ -416,7 +416,7 @@ test("events page surfaces seeded audience geography and network data", async ({
     const selectedEvent = await selectSeededEvent(page);
     expect(selectedEvent).toBe(SEEDED_EVENT_NAME);
     await expect(page.getByRole("heading", { name: "Event activity" })).toBeVisible();
-    await expect(page.getByText("Total events")).toBeVisible();
+    await expect(page.getByTestId("event-total-label")).toHaveText("Total events");
     await expect(page.getByText("Cities")).toBeVisible();
     await expect(page.getByText("Providers")).toBeVisible();
     await expect(page.getByText("ASNs")).toBeVisible();

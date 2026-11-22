@@ -103,7 +103,7 @@
                     @if (seriesRange()) {
                     <app-kpi-comparison-trigger [metricLabel]="totalEventKpi().label" [delta]="totalEventDelta()" (compare)="eventComparison.show(totalEventKpi().id, $event)" />
                     }
-                    <div class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
+                    <div data-testid="event-total-label" class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
                     }
                 </div>
                 }

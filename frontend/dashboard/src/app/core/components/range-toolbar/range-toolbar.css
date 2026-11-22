@@ -118,22 +118,14 @@
         grid-row: 1;
         min-width: 0;
         width: 100%;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .range-toolbar__range-group::-webkit-scrollbar {
-        display: none;
+        flex-wrap: wrap;
     }
 
     :host ::ng-deep .range-toolbar__preset-select.p-selectbutton {
         display: inline-flex;
         width: auto;
         flex: 0 0 auto;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
 
     :host ::ng-deep .range-toolbar__preset-select.p-selectbutton .p-togglebutton {
@@ -148,7 +140,7 @@
     }
 
     .range-toolbar__more-select {
-        margin-left: 1.5rem;
+        margin-left: 0;
     }
 
     .range-toolbar__summary {

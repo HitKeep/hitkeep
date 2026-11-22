@@ -115,10 +115,6 @@ export class WebVitalsPage {
 
     protected readonly isShortRange = this.reportRange.isShortRange;
 
-    protected readonly metricOptions = computed<SelectOption<WebVitalMetric>[]>(() => {
-        this.activeLanguage();
-        return METRICS.map((metric) => ({ label: this.metricLabel(metric), value: metric }));
-    });
     protected readonly ratingOptions = computed<SelectOption<WebVitalRating | null>[]>(() => {
         this.activeLanguage();
         return [
@@ -157,19 +153,17 @@ export class WebVitalsPage {
             return {
                 metric,
                 label: this.metricLabel(metric),
-                value: row ? this.formatMetricValue(metric, row.p75) : '-',
+                value: row && row.samples > 0 ? this.formatMetricValue(metric, row.p75) : '-',
                 thresholdPosition: row ? this.thresholdPosition(metric, row.p75) : 0,
                 goodThreshold: this.formatMetricValue(metric, WEB_VITAL_THRESHOLDS[metric].good),
                 poorThreshold: this.formatMetricValue(metric, WEB_VITAL_THRESHOLDS[metric].poor),
                 samples: row?.samples ?? 0,
                 rating: row?.rating ?? null,
-                good: row?.good ?? 0,
-                needsImprovement: row?.needs_improvement ?? 0,
-                poor: row?.poor ?? 0,
                 selected: this.selectedMetric() === metric
             };
         });
     });
+    protected readonly selectedCard = computed(() => this.metricCards().find((card) => card.selected));
     protected readonly selectedSummary = computed(() => this.summary().find((item) => item.metric === this.selectedMetric()) ?? null);
     protected readonly pageRows = computed<WebVitalPageTableRow[]>(() => {
         const metric = this.selectedMetric();

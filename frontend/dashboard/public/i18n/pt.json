@@ -787,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filtros",
     "aiCategories": {
       "ai_training_crawler": "Rastreadores de treino",
       "ai_search_indexer": "Rastreadores de busca de IA",
@@ -919,6 +920,8 @@
     "selectDateRange": "Selecionar período",
     "seriesChartAria": "Gráfico de série temporal com dados para os últimos {{count}} intervalos",
     "chartDesign": {
+      "options": "Opções do gráfico",
+      "overlays": "Séries adicionais",
       "label": "Estilo do gráfico",
       "area": "Área",
       "line": "Linha",
@@ -1018,6 +1021,7 @@
       "createSite": "Criar site"
     },
     "onboarding": {
+      "checklist": "Etapas de configuração",
       "title": "Lista de verificação de instalação",
       "progress": "{{complete}} de {{total}} concluídos",
       "dismiss": "Descartar lista de verificação",

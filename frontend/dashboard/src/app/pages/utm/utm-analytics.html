@@ -7,7 +7,7 @@
         <span>{{ "common.loadingSiteData" | transloco }}</span>
     </div>
     } @else if (siteService.activeSite()) {
-    <app-kpi-comparison-cards [cards]="utmKpis()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6" />
+    <app-kpi-comparison-cards [cards]="utmKpis()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5" class="mb-6" />
 
     <div class="mb-6">
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">

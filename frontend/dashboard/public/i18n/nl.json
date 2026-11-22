@@ -787,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filters",
     "aiCategories": {
       "ai_training_crawler": "Trainingscrawlers",
       "ai_search_indexer": "AI-zoekcrawlers",
@@ -926,6 +927,8 @@
     "selectDateRange": "Selecteer een datumbereik",
     "seriesChartAria": "Tijdreeksgrafiek met gegevens voor de laatste {{count}}-intervallen",
     "chartDesign": {
+      "options": "Grafiekopties",
+      "overlays": "Extra gegevensreeksen",
       "label": "Grafiekstijl",
       "area": "Vlak",
       "line": "Lijn",
@@ -1025,6 +1028,7 @@
       "createSite": "Maak een site"
     },
     "onboarding": {
+      "checklist": "Installatiestappen",
       "title": "Controlelijst voor installatie",
       "progress": "{{complete}} of {{total}} compleet",
       "dismiss": "Controlelijst afwijzen",

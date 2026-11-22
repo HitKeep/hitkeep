@@ -787,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filter",
     "aiCategories": {
       "ai_training_crawler": "Trainings-Crawler",
       "ai_search_indexer": "KI-Suchcrawler",
@@ -921,6 +922,8 @@
     "selectDateRange": "Datumsbereich auswählen",
     "seriesChartAria": "Zeitreihendiagramm mit Daten für die letzten {{count}} Intervalle",
     "chartDesign": {
+      "options": "Diagrammoptionen",
+      "overlays": "Zusätzliche Datenreihen",
       "label": "Diagrammtyp",
       "area": "Fläche",
       "line": "Linie",
@@ -1025,6 +1028,7 @@
       "createSite": "Seite erstellen"
     },
     "onboarding": {
+      "checklist": "Einrichtungsschritte",
       "title": "Installations-Checkliste",
       "progress": "{{complete}} von {{total}} erledigt",
       "dismiss": "Checkliste ausblenden",

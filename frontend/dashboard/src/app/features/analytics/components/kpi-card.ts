@@ -48,7 +48,7 @@ export interface KpiCardModel {
     imports: [CardModule, SkeletonModule, AnimatedDuration, AnimatedNumber, KpiComparisonTrigger],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <p-card class="shadow-sm h-full border border-surface-200 dark:border-surface-700 surface-card">
+        <p-card [class]="flat() ? 'hk-kpi-flat' : 'shadow-sm h-full border border-surface-200 dark:border-surface-700 surface-card'">
             <div class="hk-kpi-card__body flex flex-col gap-2">
                 @for (cue of updateCues(); track cue) {
                     <span class="hk-kpi-card__update-cue" [attr.data-update-cue]="cue" aria-hidden="true"></span>
@@ -86,6 +86,34 @@ export interface KpiCardModel {
     `,
     styles: [
         `
+            .hk-kpi-flat {
+                --p-card-shadow: none;
+                --p-card-background: transparent;
+                --p-card-body-padding: 0.625rem 0.85rem;
+            }
+
+            .hk-kpi-flat .hk-kpi-card__body {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                align-items: center;
+                gap: 0 0.25rem;
+            }
+            .hk-kpi-flat .hk-kpi-card__body > span:not(.hk-kpi-card__update-cue) {
+                grid-column: 1 / -1;
+            }
+            .hk-kpi-flat .hk-kpi-card__body > div {
+                font-size: clamp(1.25rem, 2vw, 1.75rem);
+            }
+            .hk-kpi-flat app-kpi-comparison-trigger {
+                justify-self: start;
+            }
+            @media (min-width: 48rem) {
+                .hk-kpi-flat .hk-kpi-card__body {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 0;
+                }
+            }
             .hk-kpi-card__body {
                 border-radius: 0.5rem;
                 isolation: isolate;
@@ -132,6 +160,7 @@ export class KpiCard implements OnChanges, OnDestroy {
     invertDelta = input<boolean>(false);
     description = input('');
     comparable = input(false);
+    flat = input(false);
     compare = output<HTMLButtonElement>();
 
     private cueSequence = 0;

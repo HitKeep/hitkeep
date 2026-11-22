@@ -35,7 +35,7 @@
             [class.web-vitals-card--selected]="card.selected"
             (click)="selectMetric(card.metric)"
             (keydown)="handleMetricCardKeydown($event, card.metric)"
-            [attr.aria-label]="'webVitals.cards.selectMetricAria' | transloco: { metric: card.label }"
+            [attr.aria-label]="('webVitals.cards.selectMetricAria' | transloco: { metric: card.label }) + ', ' + card.value + (card.rating ? ', ' + ('webVitals.ratings.' + card.rating | transloco) : '')"
             [attr.aria-pressed]="card.selected"
         >
             <span class="web-vitals-card__top">
@@ -46,79 +46,48 @@
             </span>
             <span class="web-vitals-card__value">
                 <strong>{{ card.value }}</strong>
-                <span>{{ "webVitals.columns.p75" | transloco }}</span>
-            </span>
-            <span class="web-vitals-threshold">
-                <span class="web-vitals-threshold__bands" aria-hidden="true">
-                    <span class="web-vitals-threshold__good"></span>
-                    <span class="web-vitals-threshold__mid"></span>
-                    <span class="web-vitals-threshold__poor"></span>
-                </span>
-                <span class="web-vitals-threshold__marker" [style.left.%]="card.thresholdPosition" aria-hidden="true"></span>
-                <span class="web-vitals-threshold__labels">
-                    <span>{{ "webVitals.cards.goodUntil" | transloco: { value: card.goodThreshold } }}</span>
-                    <span>{{ card.poorThreshold }}</span>
-                </span>
-            </span>
-            <span class="web-vitals-card__samples">{{ "webVitals.cards.samples" | transloco: { count: formatNumber(card.samples) } }}</span>
-            <span class="web-vitals-card__strip" aria-hidden="true">
-                <span class="web-vitals-card__strip-good" [style.width.%]="ratingPercent(card.good, card.samples)"></span>
-                <span class="web-vitals-card__strip-mid" [style.width.%]="ratingPercent(card.needsImprovement, card.samples)"></span>
-                <span class="web-vitals-card__strip-poor" [style.width.%]="ratingPercent(card.poor, card.samples)"></span>
+                <span>{{ "webVitals.columns.p75" | transloco }} · {{ "webVitals.cards.samples" | transloco: { count: formatNumber(card.samples) } }}</span>
             </span>
         </div>
         }
     </div>
 
-    <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card mb-6">
-        <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,auto)] gap-4 xl:items-end">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
-                    <label for="web-vitals-metric-select" class="truncate">{{ "webVitals.filters.metric" | transloco }}</label>
-                    <p-select
-                        inputId="web-vitals-metric-select"
-                        [options]="metricOptions()"
-                        [ngModel]="selectedMetric()"
-                        (ngModelChange)="selectedMetric.set($event)"
-                        optionLabel="label"
-                        optionValue="value"
-                        class="w-full"
-                        [attr.aria-label]="'webVitals.filters.metric' | transloco"
-                    />
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
-                    <label for="web-vitals-rating-select" class="truncate">{{ "webVitals.filters.rating" | transloco }}</label>
-                    <p-select
-                        inputId="web-vitals-rating-select"
-                        [options]="ratingOptions()"
-                        [ngModel]="selectedRating()"
-                        (ngModelChange)="selectRatingFilter($event)"
-                        optionLabel="label"
-                        optionValue="value"
-                        class="w-full"
-                        [attr.aria-label]="'webVitals.filters.rating' | transloco"
-                    />
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
-                    <label for="web-vitals-path-select" class="truncate">{{ "webVitals.filters.path" | transloco }}</label>
-                    <p-select
-                        inputId="web-vitals-path-select"
-                        [options]="pathOptions()"
-                        [ngModel]="pathFilter()"
-                        (ngModelChange)="selectPathFilter($event)"
-                        optionLabel="label"
-                        optionValue="value"
-                        [filter]="true"
-                        filterBy="label,value"
-                        class="w-full"
-                        [attr.aria-label]="'webVitals.filters.path' | transloco"
-                    />
-                </div>
+    <details class="mb-3">
+        <summary class="w-fit cursor-pointer rounded py-1.5 text-sm font-medium text-muted-color">{{ 'common.filtersLabel' | transloco }}</summary>
+        <div class="mt-2 grid gap-3 sm:grid-cols-2">
+            <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
+                <label for="web-vitals-rating-select" class="truncate">{{ "webVitals.filters.rating" | transloco }}</label>
+                <p-select
+                    inputId="web-vitals-rating-select"
+                    [options]="ratingOptions()"
+                    [ngModel]="selectedRating()"
+                    (ngModelChange)="selectRatingFilter($event)"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-full"
+                    [attr.aria-label]="'webVitals.filters.rating' | transloco"
+                />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
+                <label for="web-vitals-path-select" class="truncate">{{ "webVitals.filters.path" | transloco }}</label>
+                <p-select
+                    inputId="web-vitals-path-select"
+                    [options]="pathOptions()"
+                    [ngModel]="pathFilter()"
+                    (ngModelChange)="selectPathFilter($event)"
+                    optionLabel="label"
+                    optionValue="value"
+                    [filter]="true"
+                    filterBy="label,value"
+                    class="w-full"
+                    [attr.aria-label]="'webVitals.filters.path' | transloco"
+                />
             </div>
         </div>
-    </p-card>
+    </details>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    @if (hasCustomFilters()) {
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex flex-wrap items-center gap-2">
             @for (chip of filterChips(); track chip.key) {
             <span class="inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-sm" [style.border-color]="chip.removable ? 'var(--p-primary-color)' : 'var(--p-content-border-color)'">
@@ -135,6 +104,7 @@
         </div>
     </div>
 
+    }
     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 mb-6">
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-4">
@@ -170,9 +140,23 @@
             <div class="flex flex-col gap-4">
                 <div class="grid gap-1 rounded-lg border border-[var(--p-content-border-color)] p-3">
                     <span class="text-xs font-semibold text-[var(--p-text-muted-color)]">{{ "webVitals.columns.p75" | transloco }}</span>
-                    <strong class="text-2xl leading-tight tabular-nums text-[var(--p-text-color)]">{{ selected ? formatMetricValue(selected.metric, selected.p75) : "-" }}</strong>
+                    <strong class="text-2xl leading-tight tabular-nums text-[var(--p-text-color)]">{{ selected && selected.samples > 0 ? formatMetricValue(selected.metric, selected.p75) : "-" }}</strong>
                     <span class="text-xs font-semibold text-[var(--p-text-muted-color)]">{{ "webVitals.cards.samples" | transloco: { count: formatNumber(selected?.samples ?? 0) } }}</span>
                 </div>
+                @if (selected && selected.samples > 0) { @if (selectedCard(); as card) {
+                <span class="web-vitals-threshold">
+                    <span class="web-vitals-threshold__bands" aria-hidden="true">
+                        <span class="web-vitals-threshold__good"></span>
+                        <span class="web-vitals-threshold__mid"></span>
+                        <span class="web-vitals-threshold__poor"></span>
+                    </span>
+                    <span class="web-vitals-threshold__marker" [style.left.%]="card.thresholdPosition" aria-hidden="true"></span>
+                    <span class="web-vitals-threshold__labels">
+                        <span>{{ "webVitals.cards.goodUntil" | transloco: { value: card.goodThreshold } }}</span>
+                        <span>{{ card.poorThreshold }}</span>
+                    </span>
+                </span>
+                } }
                 <div>
                     <div class="web-vitals-distribution" aria-hidden="true">
                         <span class="web-vitals-card__strip-good" [style.width.%]="ratingPercent(selected?.good ?? 0, selected?.samples ?? 0)"></span>

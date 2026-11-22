@@ -15,7 +15,7 @@ import { KPI_DELTA_FORMAT, kpiDeltaClass } from './kpi-comparison-metric';
             aria-haspopup="dialog"
             [attr.aria-label]="accessibleLabel()"
             (click)="compare.emit(trigger)"
-            class="inline-flex min-h-11 min-w-11 max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1 text-muted-color hover:bg-surface-100 focus-visible:outline focus-visible:outline-offset-[-2px] dark:hover:bg-surface-800"
+            class="inline-flex min-h-8 min-w-11 max-w-full cursor-pointer items-center gap-1 rounded-md px-1 text-muted-color hover:bg-surface-100 focus-visible:outline focus-visible:outline-offset-[-2px] dark:hover:bg-surface-800"
         >
             <span [class]="deltaClass() || 'text-xs font-medium'">{{ deltaLabel() || ('comparison.compare' | transloco) }}</span>
             <i class="pi pi-info-circle shrink-0 text-xs" aria-hidden="true"></i>
