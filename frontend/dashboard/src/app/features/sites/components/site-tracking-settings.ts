@@ -193,7 +193,7 @@ export class SiteTrackingSettings {
     protected readonly serverIngestSnippet = computed(() => {
         const domain = this.site()?.domain || 'example.com';
         return [
-            `curl -X POST "${this.trackerHostURL()}/api/ingest/server/pageview" \\`,
+            `curl -X POST "${browserAbsoluteAppUrl(this.document, '/api/ingest/server/pageview')}" \\`,
             '  -H "Authorization: Bearer $HITKEEP_API_TOKEN" \\',
             '  -H "Content-Type: application/json" \\',
             "  -d '{",
