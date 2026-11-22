@@ -1,3 +1,5 @@
+import { By } from '@angular/platform-browser';
+import { ExclusionEditor } from '@features/exclusions/exclusion-editor';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
@@ -9,6 +11,7 @@ import { ExclusionsService } from '@services/exclusions.service';
 import { IPExclusion } from '@models/analytics.types';
 
 describe('AdminGlobalExclusionSettings', () => {
+    let editor: ExclusionEditor;
     let fixture: ComponentFixture<AdminGlobalExclusionSettings>;
 
     const exclusionsService = {
@@ -112,6 +115,7 @@ describe('AdminGlobalExclusionSettings', () => {
 
         fixture = TestBed.createComponent(AdminGlobalExclusionSettings);
         fixture.detectChanges();
+        editor = fixture.debugElement.query(By.directive(ExclusionEditor)).componentInstance;
     });
 
     afterEach(() => {
@@ -150,7 +154,7 @@ describe('AdminGlobalExclusionSettings', () => {
         (document.body.querySelector('#instance-exclusion-description') as HTMLInputElement).value = 'Office';
         (document.body.querySelector('#instance-exclusion-description') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
 
         const createCalls = (exclusionsService.createInstanceExclusion as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -162,7 +166,7 @@ describe('AdminGlobalExclusionSettings', () => {
             path: undefined,
             description: 'Office'
         });
-        expect(fixture.componentInstance['isAddDialogVisible']()).toBe(false);
+        expect(editor['isAddDialogVisible']()).toBe(false);
         expect(fixture.nativeElement.textContent).toContain('203.0.113.10/32');
         expect(fixture.nativeElement.textContent).toContain('Created 203.0.113.10/32');
     });
@@ -170,7 +174,7 @@ describe('AdminGlobalExclusionSettings', () => {
     it('shows row loading and success feedback while deleting an exclusion', () => {
         const pending = new Subject<void>();
         exclusionsService.deleteInstanceExclusion.mockReturnValueOnce(pending.asObservable());
-        fixture.componentInstance['exclusions'].set([
+        editor['exclusions'].set([
             {
                 id: 'rule-1',
                 type: 'cidr',
@@ -181,7 +185,7 @@ describe('AdminGlobalExclusionSettings', () => {
         ]);
         fixture.detectChanges();
 
-        fixture.componentInstance['deleteRule']({
+        editor['deleteRule']({
             id: 'rule-1',
             type: 'cidr',
             cidr: '203.0.113.10/32',
@@ -190,13 +194,13 @@ describe('AdminGlobalExclusionSettings', () => {
         });
         fixture.detectChanges();
 
-        expect(fixture.componentInstance['deletingRuleID']()).toBe('rule-1');
+        expect(editor['deletingRuleID']()).toBe('rule-1');
 
         pending.next();
         pending.complete();
         fixture.detectChanges();
 
-        expect(fixture.componentInstance['deletingRuleID']()).toBeNull();
+        expect(editor['deletingRuleID']()).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Deleted 203.0.113.10/32');
     });
 
@@ -210,8 +214,8 @@ describe('AdminGlobalExclusionSettings', () => {
         (document.body.querySelector('#instance-exclusion-cidr') as HTMLInputElement).value = '203.0.113.10/32';
         (document.body.querySelector('#instance-exclusion-cidr') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
+        editor['addRule']();
 
         expect(exclusionsService.createInstanceExclusion).toHaveBeenCalledTimes(1);
         pending.complete();
@@ -231,11 +235,11 @@ describe('AdminGlobalExclusionSettings', () => {
         fixture.detectChanges();
         await fixture.whenStable();
 
-        fixture.componentInstance['form'].controls.type.setValue('country');
-        fixture.componentInstance['form'].controls.countryCode.setValue('DE');
-        fixture.componentInstance['form'].controls.description.setValue('Germany');
+        editor['form'].controls.type.setValue('country');
+        editor['form'].controls.countryCode.setValue('DE');
+        editor['form'].controls.description.setValue('Germany');
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
 
         const createCalls = (exclusionsService.createInstanceExclusion as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -259,7 +263,7 @@ describe('AdminGlobalExclusionSettings', () => {
         (document.body.querySelector('#instance-exclusion-cidr') as HTMLInputElement).value = '203.0.113.10/32';
         (document.body.querySelector('#instance-exclusion-cidr') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
         await fixture.whenStable();
 
