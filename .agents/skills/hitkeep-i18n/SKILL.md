@@ -28,7 +28,6 @@ Inspect only the surfaces relevant to the change:
 - `frontend/dashboard/src/app/transloco-loader.ts`
 - `frontend/dashboard/src/app/core/i18n/`
 - `frontend/dashboard/scripts/check-i18n-locales.mjs`
-- `frontend/dashboard/scripts/sync-i18n-locales.mjs`
 
 Do not infer a new supported language from an Angular locale helper alone. Change language support only when Transloco configuration, locale files, formatting mappings, tests, and product documentation agree.
 
@@ -45,7 +44,7 @@ Keep analytics terminology consistent across all languages. If the repo already 
 
 ## Validate
 
-Add or update focused tests for language switching, computed labels, locale formatting, or OptimusUI synchronization when behavior changes. Use `$hitkeep-qa` to query and run the current gates matching locale, formatting, unit, and browser risk; do not reproduce their commands here. If a locale synchronization utility changes files, review every resulting change before keeping it.
+Add or update focused tests for language switching, computed labels, locale formatting, or OptimusUI synchronization when behavior changes. Use `$hitkeep-qa` to query and run the current gates matching locale, formatting, unit, and browser risk; do not reproduce their commands here. Check all catalogs against English for the same namespaces, nonempty string leaves, and interpolation variables.
 
 ## Output For Reviews
 

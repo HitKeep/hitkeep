@@ -1,8 +1,7 @@
-import { effect, inject, signal, Service } from '@angular/core';
+import { inject, signal, Service } from '@angular/core';
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { finalize, tap } from 'rxjs';
-import { TranslocoService } from '@jsverse/transloco';
-import { getBaseLanguage, getLocaleDirection, normalizeLocaleTag } from '@core/i18n/locale-utils';
+import { DashboardLanguageService } from '@core/i18n/dashboard-language.service';
 import { SKIP_AUTH_REDIRECT } from '@core/interceptors/auth.interceptor';
 
 export interface UserPreferences {
@@ -10,37 +9,14 @@ export interface UserPreferences {
     dismissed_onboarding_at?: string;
 }
 
-type AvailableLang = string | { id: string; label: string };
-
 @Service()
 export class UserPreferencesService {
     private http = inject(HttpClient);
-    private transloco = inject(TranslocoService);
+    private language = inject(DashboardLanguageService);
 
     readonly preferences = signal<UserPreferences | null>(null);
     readonly isLoading = signal(false);
     readonly isSaving = signal(false);
-
-    constructor() {
-        if (typeof document === 'undefined') {
-            return;
-        }
-
-        effect(() => {
-            const prefs = this.preferences();
-            if (!prefs?.default_locale) return;
-            const normalized = normalizeLocaleTag(prefs.default_locale);
-            if (!normalized) return;
-            const base = getBaseLanguage(normalized) || normalized;
-            const translationLang = this.resolveTranslationLang(base);
-
-            document.documentElement.lang = normalized;
-            document.documentElement.dir = getLocaleDirection(normalized);
-            if (this.transloco.getActiveLang() !== translationLang) {
-                this.transloco.setActiveLang(translationLang);
-            }
-        });
-    }
 
     load(options?: { skipAuthRedirect?: boolean }) {
         this.isLoading.set(true);
@@ -56,7 +32,7 @@ export class UserPreferencesService {
     save(preferences: UserPreferences) {
         this.isSaving.set(true);
         return this.http.put<UserPreferences>('/api/user/preferences', preferences).pipe(
-            tap((prefs) => this.applyPreferences(prefs)),
+            tap((prefs) => this.applyPreferences({ ...this.preferences(), ...prefs })),
             finalize(() => {
                 this.isSaving.set(false);
             })
@@ -65,26 +41,6 @@ export class UserPreferencesService {
 
     applyPreferences(prefs: UserPreferences) {
         this.preferences.set(prefs);
-    }
-
-    private resolveTranslationLang(locale: string): string {
-        const normalized = normalizeLocaleTag(locale);
-        const base = getBaseLanguage(normalized) || normalized;
-        const available = this.transloco.getAvailableLangs() as AvailableLang[];
-        const availableIds = available
-            .map((entry) => (typeof entry === 'string' ? entry : entry.id))
-            .map((entry) => normalizeLocaleTag(entry))
-            .filter((entry): entry is string => Boolean(entry));
-
-        if (base && availableIds.includes(base)) {
-            return base;
-        }
-        if (base) {
-            const scoped = availableIds.find((entry) => entry.startsWith(`${base}-`));
-            if (scoped) {
-                return scoped;
-            }
-        }
-        return this.transloco.getDefaultLang();
+        this.language.activate(prefs.default_locale);
     }
 }
