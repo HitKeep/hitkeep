@@ -93,23 +93,20 @@ export interface KpiCardModel {
             }
 
             .hk-kpi-flat .hk-kpi-card__body {
-                display: grid;
-                grid-template-columns: auto 1fr;
+                display: flex;
+                flex-flow: row wrap;
                 align-items: center;
                 gap: 0 0.25rem;
             }
             .hk-kpi-flat .hk-kpi-card__body > span:not(.hk-kpi-card__update-cue) {
-                grid-column: 1 / -1;
+                flex-basis: 100%;
             }
             .hk-kpi-flat .hk-kpi-card__body > div {
                 font-size: clamp(1.25rem, 2vw, 1.75rem);
             }
-            .hk-kpi-flat app-kpi-comparison-trigger {
-                justify-self: start;
-            }
             @media (min-width: 48rem) {
                 .hk-kpi-flat .hk-kpi-card__body {
-                    display: flex;
+                    flex-flow: column nowrap;
                     align-items: flex-start;
                     gap: 0;
                 }

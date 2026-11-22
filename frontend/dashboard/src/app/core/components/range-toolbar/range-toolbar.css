@@ -123,8 +123,9 @@
 
     :host ::ng-deep .range-toolbar__preset-select.p-selectbutton {
         display: inline-flex;
-        width: auto;
-        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 100%;
+        flex: 0 1 auto;
         flex-wrap: wrap;
     }
 
