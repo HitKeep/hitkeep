@@ -58,8 +58,8 @@ func TestBuildHitFilter(t *testing.T) {
 			wantClause: ` AND CASE
 		WHEN hk_external_referrer(h.referrer, h.site_id) IS NULL THEN NULL
 		WHEN h.referrer IS NULL OR NULLIF(TRIM(h.referrer), '') IS NULL THEN '(Direct)'
-		WHEN lower(h.referrer) LIKE 'http%' THEN regexp_replace(regexp_extract(lower(h.referrer), 'https?://([^/:?#]+)', 1), '^www\\.', '')
-		ELSE regexp_replace(lower(TRIM(h.referrer)), '^www\\.', '')
+		WHEN lower(h.referrer) LIKE 'http%' THEN regexp_replace(regexp_extract(lower(h.referrer), 'https?://([^/:?#]+)', 1), '^www\.', '')
+		ELSE regexp_replace(lower(TRIM(h.referrer)), '^www\.', '')
 	END = ?`,
 			wantArgs: []any{"google.com"},
 		},

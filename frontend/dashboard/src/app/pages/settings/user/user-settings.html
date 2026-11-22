@@ -100,12 +100,10 @@
 
                     <app-settings-card [title]="'preferences.language.heading' | transloco" [subtitle]="'preferences.language.description' | transloco" icon="pi pi-language">
                         <div settings-card-body class="settings-form-stack">
-                            @if (loadError(); as loadErrorKey) {
-                            <div class="settings-alert settings-alert--error">{{ loadErrorKey | transloco }}</div>
-                            } @if (saveState() === "saved") {
-                            <div class="settings-alert settings-alert--success">{{ "preferences.status.saved" | transloco }}</div>
+                            @if (saveState() === "saved") {
+                            <div role="status" class="settings-alert settings-alert--success">{{ "preferences.status.saved" | transloco }}</div>
                             } @if (saveState() === "error") {
-                            <div class="settings-alert settings-alert--error">{{ "preferences.status.saveFailed" | transloco }}</div>
+                            <div role="alert" class="settings-alert settings-alert--error">{{ "preferences.status.saveFailed" | transloco }}</div>
                             }
 
                             <div class="settings-field">
@@ -113,8 +111,10 @@
                                 <p-select
                                     inputId="default-locale"
                                     [options]="languageOptions()"
-                                    [formControl]="preferencesForm.defaultLocale().control()"
-                                    (onChange)="onLocaleChange()"
+                                    [formControl]="language"
+                                    [loading]="isSaving()"
+                                    optionValue="value"
+                                    (onChange)="saveLanguage($event.value)"
                                     optionLabel="label"
                                     [filter]="true"
                                     filterBy="label,nativeLabel,value,isoCode,searchText"
@@ -151,10 +151,6 @@
                                 </p-select>
                                 <p class="settings-field-hint">{{ "preferences.language.defaultHint" | transloco }}</p>
                             </div>
-                        </div>
-
-                        <div settings-card-footer>
-                            <p-button [label]="'preferences.actions.saveChanges' | transloco" icon="pi pi-save" [loading]="isSaving()" [disabled]="!canSave()" styleClass="settings-action-btn" (onClick)="save()" />
                         </div>
                     </app-settings-card>
 

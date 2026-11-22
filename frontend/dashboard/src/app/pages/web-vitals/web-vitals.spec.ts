@@ -12,51 +12,48 @@ import { WebVitalsPage } from './web-vitals';
 import { SiteService } from '@features/sites/services/site.service';
 import { AnalyticsService } from '@core/services/analytics.service';
 import { SeriesChart } from '@features/analytics/components/series-chart';
-import type { WebVitalSeriesPoint } from '@models/analytics.types';
+import type { WebVitalDimensionRow, WebVitalSeriesPoint } from '@models/analytics.types';
 import type { SiteSetupState } from '@services/setup-state.service';
 import { flushAnnotations } from '@testing/annotations';
+import { PreferenceStorage } from '@services/preference-storage';
+import { ReportRangePreferencesService } from '@services/report-range-preferences.service';
+import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { flushSetupState } from '@testing/setup-state';
 
 describe('WebVitalsPage', () => {
     let fixture: ComponentFixture<WebVitalsPage>;
     let httpMock: HttpTestingController;
-    let analyticsServiceMock: {
-        getWebVitalsSummary: ReturnType<typeof vi.fn>;
-        getWebVitalsTimeseries: ReturnType<typeof vi.fn>;
-        getWebVitalsPages: ReturnType<typeof vi.fn>;
-        getWebVitalsBreakdown: ReturnType<typeof vi.fn>;
-    };
+    const mockAnalytics = (service: AnalyticsService) => ({
+        getWebVitalsSummary: vi.spyOn(service, 'getWebVitalsSummary').mockImplementation(() =>
+            of([
+                { metric: 'LCP', p75: 2400, samples: 120, good: 90, needs_improvement: 20, poor: 10, rating: 'good' },
+                { metric: 'INP', p75: 280, samples: 90, good: 50, needs_improvement: 30, poor: 10, rating: 'needs_improvement' },
+                { metric: 'CLS', p75: 0.09, samples: 88, good: 70, needs_improvement: 12, poor: 6, rating: 'good' }
+            ])
+        ),
+        getWebVitalsTimeseries: vi.spyOn(service, 'getWebVitalsTimeseries').mockImplementation(() => of([{ time: '2026-05-06T00:00:00Z', p75: 2400, samples: 24, good: 18, needs_improvement: 4, poor: 2 }])),
+        getWebVitalsPages: vi.spyOn(service, 'getWebVitalsPages').mockImplementation(() =>
+            of([
+                {
+                    path: '/pricing',
+                    p75: 3100,
+                    samples: 24,
+                    good: 12,
+                    needs_improvement: 8,
+                    poor: 4,
+                    rating: 'needs_improvement',
+                    metrics: {
+                        LCP: { p75: 3100, samples: 24, good: 12, needs_improvement: 8, poor: 4, rating: 'needs_improvement' },
+                        CLS: { p75: 0.08, samples: 24, good: 21, needs_improvement: 2, poor: 1, rating: 'good' }
+                    }
+                }
+            ])
+        ),
+        getWebVitalsBreakdown: vi.spyOn(service, 'getWebVitalsBreakdown').mockImplementation(() => of([{ name: 'Chrome', p75: 2800, samples: 40, good: 30, needs_improvement: 7, poor: 3, rating: 'needs_improvement' }]))
+    });
+    let analyticsServiceMock: ReturnType<typeof mockAnalytics>;
 
     beforeEach(async () => {
-        analyticsServiceMock = {
-            getWebVitalsSummary: vi.fn(() =>
-                of([
-                    { metric: 'LCP', p75: 2400, samples: 120, good: 90, needs_improvement: 20, poor: 10, rating: 'good' },
-                    { metric: 'INP', p75: 280, samples: 90, good: 50, needs_improvement: 30, poor: 10, rating: 'needs_improvement' },
-                    { metric: 'CLS', p75: 0.09, samples: 88, good: 70, needs_improvement: 12, poor: 6, rating: 'good' }
-                ])
-            ),
-            getWebVitalsTimeseries: vi.fn(() => of([{ time: '2026-05-06T00:00:00Z', p75: 2400, samples: 24, good: 18, needs_improvement: 4, poor: 2 }])),
-            getWebVitalsPages: vi.fn(() =>
-                of([
-                    {
-                        path: '/pricing',
-                        p75: 3100,
-                        samples: 24,
-                        good: 12,
-                        needs_improvement: 8,
-                        poor: 4,
-                        rating: 'needs_improvement',
-                        metrics: {
-                            LCP: { p75: 3100, samples: 24, good: 12, needs_improvement: 8, poor: 4, rating: 'needs_improvement' },
-                            CLS: { p75: 0.08, samples: 24, good: 21, needs_improvement: 2, poor: 1, rating: 'good' }
-                        }
-                    }
-                ])
-            ),
-            getWebVitalsBreakdown: vi.fn(() => of([{ name: 'Chrome', p75: 2800, samples: 40, good: 30, needs_improvement: 7, poor: 3, rating: 'needs_improvement' }]))
-        };
-
         await TestBed.configureTestingModule({
             imports: [
                 WebVitalsPage,
@@ -70,7 +67,7 @@ describe('WebVitalsPage', () => {
                                 selectDateRange: 'Select date range',
                                 searchPlaceholder: 'Search...',
                                 columns: { actions: 'Actions' },
-                                actions: { apply: 'Apply', cancel: 'Cancel', clearAll: 'Clear all' },
+                                actions: { retry: 'Retry', apply: 'Apply', cancel: 'Cancel', clearAll: 'Clear all' },
                                 removeFilterAria: 'Remove filter',
                                 timeRanges: {
                                     today: 'Today',
@@ -156,7 +153,7 @@ describe('WebVitalsPage', () => {
                         isLoading: signal(false)
                     }
                 },
-                { provide: AnalyticsService, useValue: analyticsServiceMock },
+                AnalyticsService,
                 {
                     provide: TranslocoLocaleService,
                     useValue: {
@@ -172,6 +169,7 @@ describe('WebVitalsPage', () => {
             ]
         }).compileComponents();
 
+        analyticsServiceMock = mockAnalytics(TestBed.inject(AnalyticsService));
         httpMock = TestBed.inject(HttpTestingController);
         fixture = TestBed.createComponent(WebVitalsPage);
         fixture.detectChanges();
@@ -252,6 +250,7 @@ describe('WebVitalsPage', () => {
         const cls = new Subject<WebVitalSeriesPoint[]>();
         analyticsServiceMock.getWebVitalsTimeseries.mockReturnValueOnce(pendingLcp).mockReturnValue(cls);
         fixture.debugElement.query(By.css('app-report-range-toolbar')).triggerEventHandler('refresh');
+        TestBed.tick();
         const lcpCard = fixture.nativeElement.querySelector('[aria-label^="Inspect LCP over time"]') as HTMLElement;
         const clsCard = fixture.nativeElement.querySelector('[aria-label^="Inspect CLS over time"]') as HTMLElement;
         expect(lcpCard.getAttribute('aria-pressed')).toBe('true');
@@ -294,14 +293,17 @@ describe('WebVitalsPage', () => {
     });
 
     it('keeps breakdown tables searchable, sortable, and paginated', () => {
-        const searches = Array.from<HTMLInputElement>(fixture.nativeElement.querySelectorAll('input[placeholder="Search..."]'));
-        const tables = fixture.debugElement.queryAll(By.css('p-table'));
-        const sortIcons = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('p-sorticon'));
-
-        expect(searches.length).toBeGreaterThanOrEqual(2);
-        expect(tables.length).toBeGreaterThanOrEqual(2);
-        expect(tables.every((table) => table.componentInstance.paginator === true)).toBe(true);
-        expect(sortIcons.length).toBeGreaterThanOrEqual(11);
+        const assertTableControls = (selector: string, columns: number) => {
+            const table = fixture.debugElement.query(By.css(selector));
+            expect(table.nativeElement.querySelector('input[placeholder="Search..."]')).not.toBeNull();
+            expect(table.query(By.css('p-table')).componentInstance.paginator).toBe(true);
+            expect(table.nativeElement.querySelectorAll('p-sorticon').length).toBeGreaterThanOrEqual(columns);
+        };
+        assertTableControls('[data-testid="web-vitals-pages-table"]', 8);
+        const devices = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent.trim() === 'Devices')!;
+        devices.click();
+        TestBed.tick();
+        assertTableControls('[role="tabpanel"]:not([hidden]) [data-testid="web-vitals-breakdown-table"]', 4);
     });
 
     it('keeps metric cards site-wide while passing rating and path filters to drilldowns', () => {
@@ -347,6 +349,124 @@ describe('WebVitalsPage', () => {
         expect(pagesCall?.[4]).toBeNull();
         expect(pagesCall?.[5]).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Path: /');
+    });
+
+    it('loads three report reads on Pages and only the selected dimension through keyboard or pointer', () => {
+        const counts = () => Object.values(analyticsServiceMock).map((read) => read.mock.calls.length);
+        const tabs = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('[role="tab"]'));
+        const device = tabs.find((tab) => tab.textContent.trim() === 'Devices')!;
+        expect(counts()).toEqual([1, 1, 1, 0]);
+        tabs[0].focus();
+        tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true }));
+        expect(document.activeElement).toBe(device);
+        device.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+        TestBed.tick();
+        expect(device.getAttribute('aria-selected')).toBe('true');
+        expect(counts()).toEqual([1, 1, 1, 1]);
+        expect(analyticsServiceMock.getWebVitalsBreakdown.mock.lastCall?.[4]).toBe('device');
+
+        tabs.find((tab) => tab.textContent.trim() === 'Countries')!.click();
+        TestBed.tick();
+        expect(counts()).toEqual([1, 1, 1, 2]);
+        expect(analyticsServiceMock.getWebVitalsBreakdown.mock.lastCall?.[4]).toBe('country');
+
+        tabs[0].click();
+        TestBed.tick();
+        expect(counts()).toEqual([1, 1, 1, 2]);
+        expect(fixture.nativeElement.textContent).toContain('/pricing');
+    });
+
+    it('cancels obsolete breakdown HTTP requests on tab, site and range changes and refreshes the active scope', async () => {
+        flushAnnotations(httpMock);
+        fixture.destroy();
+        Object.values(analyticsServiceMock).forEach((read) => read.mockRestore());
+        const ranges = TestBed.inject(ReportRangePreferencesService);
+        vi.spyOn(TestBed.inject(PreferenceStorage), 'write').mockReturnValue(undefined);
+        ranges.selectRange({ value: { value: 'custom' }, customRange: [new Date(2026, 4, 1), new Date(2026, 4, 2)] });
+        const realtime = vi.spyOn(TestBed.inject(RealtimeRefreshCoordinator), 'registerSignalUntilDestroyed');
+        fixture = TestBed.createComponent(WebVitalsPage);
+        TestBed.tick();
+        const endpoint = (site: string, name: string) => `/api/sites/${site}/web-vitals/${name}`;
+        const readReport = (site: string) => {
+            for (const name of ['summary', 'timeseries', 'pages']) {
+                const read = httpMock.expectOne((req) => req.url === endpoint(site, name));
+                expect(read.request.params.get('from')).toBe(ranges.currentDateRange()!.from);
+                expect(read.request.params.get('to')).toBe(ranges.currentDateRange()!.to);
+                read.flush(name === 'summary' ? [{ metric: 'LCP', p75: 2400, samples: 120, rating: 'good' }] : []);
+            }
+        };
+        const readDimension = (site: string, dimension: string) => {
+            const read = httpMock.expectOne((req) => req.url === endpoint(site, 'breakdown'));
+            expect(read.request.params.get('from')).toBe(ranges.currentDateRange()!.from);
+            expect(read.request.params.get('to')).toBe(ranges.currentDateRange()!.to);
+            expect(read.request.params.get('dimension')).toBe(dimension);
+            return read;
+        };
+        const page = fixture.componentInstance;
+        readReport('site-1');
+        httpMock.expectNone((req) => req.url.includes('/web-vitals/'));
+
+        page['setBreakdownTab']('device');
+        TestBed.tick();
+        const device = readDimension('site-1', 'device');
+        page['setBreakdownTab']('country');
+        TestBed.tick();
+        expect(device.cancelled).toBe(true);
+        const firstSite = readDimension('site-1', 'country');
+        flushAnnotations(httpMock);
+        const site = TestBed.inject(SiteService).activeSite;
+        site.set({ ...site()!, id: 'site-2' });
+        TestBed.tick();
+        expect(firstSite.cancelled).toBe(true);
+        readReport('site-2');
+        const firstRange = readDimension('site-2', 'country');
+        ranges.selectRange({ value: { value: 'custom' }, customRange: [new Date(2026, 5, 1), new Date(2026, 5, 2)] });
+        TestBed.tick();
+        expect(firstRange.cancelled).toBe(true);
+        readReport('site-2');
+        readDimension('site-2', 'country').flush([{ name: 'Canada', p75: 2200, samples: 2, rating: 'good' }]);
+        flushAnnotations(httpMock);
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('[role="tabpanel"]:not([hidden]) [data-testid="web-vitals-breakdown-table"]').textContent).toContain('Canada');
+
+        for (const refresh of [() => page['refreshData'](), () => realtime.mock.calls[0][1].signal.update((value) => value + 1)]) {
+            refresh();
+            TestBed.tick();
+            readReport('site-2');
+            const pending = readDimension('site-2', 'country');
+            expect(pending.cancelled).toBe(false);
+            pending.flush([]);
+        }
+        page['setBreakdownTab']('pages');
+        TestBed.tick();
+        httpMock.expectNone((req) => req.url.includes('/web-vitals/'));
+    });
+
+    it('retries a failed dimension inside its panel while keeping the chart, KPIs and filters available', async () => {
+        const pending = new Subject<WebVitalDimensionRow[]>();
+        analyticsServiceMock.getWebVitalsBreakdown.mockReturnValueOnce(pending);
+        fixture.componentInstance['setBreakdownTab']('browser');
+        TestBed.tick();
+        expect(fixture.debugElement.query(By.css('[role="tabpanel"]:not([hidden]) [data-testid="web-vitals-breakdown-table"]')).componentInstance.loading()).toBe(true);
+        expect(fixture.nativeElement.querySelector('app-series-chart [echarts]')).not.toBeNull();
+        pending.error(new Error('Unavailable'));
+        flushAnnotations(httpMock);
+        await fixture.whenStable();
+        const alert = fixture.nativeElement.querySelector('[role="tabpanel"] [role="alert"]');
+        expect(alert.textContent).toContain('Web Vitals data could not be loaded.');
+        expect(fixture.nativeElement.querySelector('.web-vitals-card--selected').textContent).toContain('2.4 s');
+        expect(fixture.nativeElement.querySelector('app-series-chart [echarts]')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('#web-vitals-rating-select')).not.toBeNull();
+        const retry = alert.parentElement.querySelector('button');
+        expect(retry.textContent).toContain('Retry');
+        retry.click();
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('[role="tabpanel"]:not([hidden]) [data-testid="web-vitals-breakdown-table"]').textContent).toContain('Chrome');
+        expect(analyticsServiceMock.getWebVitalsBreakdown).toHaveBeenCalledTimes(2);
+        expect(analyticsServiceMock.getWebVitalsSummary).toHaveBeenCalledTimes(1);
+        expect(analyticsServiceMock.getWebVitalsTimeseries).toHaveBeenCalledTimes(1);
+        expect(analyticsServiceMock.getWebVitalsPages).toHaveBeenCalledTimes(1);
     });
 
     it('renders an error state when the report fails', () => {

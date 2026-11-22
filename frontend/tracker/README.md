@@ -68,11 +68,15 @@ createApp(App).mount('#app');
 ### Angular
 
 ```ts
-import { ApplicationConfig, provideAppInitializer } from '@angular/core';
+import { type ApplicationConfig, provideAppInitializer } from '@angular/core';
 import { init } from '@hitkeep/tracker';
 
 export const appConfig: ApplicationConfig = {
-    providers: [provideAppInitializer(() => init({ host: 'https://your-hitkeep.example.com' }))]
+    providers: [
+        provideAppInitializer(() => {
+            init({ host: 'https://your-hitkeep.example.com' });
+        })
+    ]
 };
 ```
 

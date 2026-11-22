@@ -276,12 +276,19 @@
                             <p class="text-sm text-[var(--p-text-muted-color)]">{{ "webVitals.breakdown.description" | transloco: { metric: selectedMetric() } }}</p>
                         </div>
                     </div>
+                    @let active = tab.value === activeBreakdownTab(); @let failed = active && breakdown.error(); @if (failed) {
+                    <div class="flex items-center gap-3">
+                        <span role="alert">{{ "webVitals.error" | transloco }}</span>
+                        <p-button size="small" severity="secondary" [outlined]="true" icon="pi pi-refresh" [label]="'common.actions.retry' | transloco" (onClick)="breakdown.reload()" />
+                    </div>
+                    }
                     <app-table
-                        [value]="dimensionRows()"
+                        [style.display]="failed ? 'none' : null"
+                        [value]="active && breakdown.hasValue() ? breakdown.value() : []"
                         [columns]="dimensionColumns().get(tab.value) ?? []"
                         [stateKey]="'web-vitals-' + tab.value"
                         dataKey="name"
-                        [loading]="isLoading()"
+                        [loading]="active && breakdown.isLoading()"
                         [defaultSort]="{ field: 'samples', order: -1 }"
                         emptyTextKey="webVitals.breakdown.empty"
                         data-testid="web-vitals-breakdown-table"

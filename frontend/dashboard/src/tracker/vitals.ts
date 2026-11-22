@@ -1,34 +1,6 @@
 import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
-interface WebVitalsPayload {
-    n: string;
-    v: number;
-    p: string;
-    nt?: string;
-    mid?: string;
-    sid: string;
-    pid: string;
-    tsrc: string;
-    tv: string;
-    ua?: string;
-}
-
-interface WebVitalsTrackerContext {
-    emit: (payload: WebVitalsPayload) => void;
-    getPath: () => string;
-    sessionId: string;
-    pageId: () => string;
-    trackerSource: string;
-    trackerVersion: string;
-    userAgent: string;
-}
-
-type HitKeepVitalsWindow = Window &
-    typeof globalThis & {
-        hk?: {
-            _webVitals?: WebVitalsTrackerContext;
-        };
-    };
+import type { HitKeepWindow, WebVitalsTrackerContext } from './core';
 
 function navigationType(metric: Metric): string | undefined {
     const value = metric.navigationType;
@@ -50,13 +22,14 @@ function emitMetric(context: WebVitalsTrackerContext, metric: Metric): void {
     });
 }
 
-export function bootstrapWebVitals(win: HitKeepVitalsWindow = window): void {
-    const context = win.hk?._webVitals;
-    if (!context) {
-        return;
-    }
+export function bootstrapWebVitals(win: HitKeepWindow = window): void {
+    // The requested script can finish loading between SDK mounts.
+    if (!win.hk?._webVitalsLoaded) return;
 
-    const report = (metric: Metric) => emitMetric(context, metric);
+    const report = (metric: Metric) => {
+        const context = win.hk?._webVitals;
+        if (context) emitMetric(context, metric);
+    };
     onCLS(report);
     onFCP(report);
     onINP(report);

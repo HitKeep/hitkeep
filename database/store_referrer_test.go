@@ -1,14 +1,75 @@
 package database
 
 import (
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 
 	"hitkeep/api"
 	"hitkeep/importables"
 )
+
+func TestReferrerHostFilter(t *testing.T) {
+	store, userID := setupEventBreakdownStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "site.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	for _, hit := range []struct{ path, referrer string }{
+		{"/www-url", "https://WWW.source.test/article?q=1"},
+		{"/url", "https://source.test/article"},
+		{"/www-host", "www.source.test"},
+		{"/host", "source.test"},
+		{"/suffix", "https://www.source.test.other.test/article"},
+		{"/hyphen", "www-source.test"},
+	} {
+		if err := store.CreateHit(ctx, &api.Hit{
+			SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(),
+			Timestamp: at, Path: hit.path, Referrer: new(hit.referrer),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	wantHostPaths := []string{"/host", "/url", "/www-host", "/www-url"}
+	for _, tc := range []struct {
+		filterType string
+		value      string
+		wantPaths  []string
+	}{
+		{"referrer_host", "source.test", wantHostPaths},
+		{"referrer_host", " WWW.Source.Test ", wantHostPaths},
+		{"referrer_host", "source.test.other.test", []string{"/suffix"}},
+		{"referrer_host", "www-source.test", []string{"/hyphen"}},
+		{"referrer", "source.test", []string{"/host", "/url"}},
+		{"referrer", "www.source.test", []string{"/www-host"}},
+		{"referrer", "WWW.source.test", []string{"/www-url"}},
+	} {
+		t.Run(tc.filterType+"="+tc.value, func(t *testing.T) {
+			params := api.AnalyticsParams{
+				SiteID: site.ID, Start: at.Add(-time.Hour), End: at.Add(time.Hour),
+				Filters: []api.Filter{{Type: tc.filterType, Value: tc.value}},
+			}
+			stats, err := store.GetSiteStatsSections(t.Context(), params, SiteStatsSections{TopLists: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotPaths := make([]string, 0, len(stats.TopPages))
+			for _, page := range stats.TopPages {
+				gotPaths = append(gotPaths, page.Name)
+			}
+			slices.Sort(gotPaths)
+			if diff := cmp.Diff(tc.wantPaths, gotPaths); diff != "" {
+				t.Errorf("matched paths (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestSelfReferrersExcludedFromReports(t *testing.T) {
 	for _, domain := range []string{"example.test", "www.example.test"} {

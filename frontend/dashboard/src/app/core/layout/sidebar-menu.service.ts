@@ -235,10 +235,11 @@ export class SidebarMenuService {
                 id: 'administration',
                 labelKey: 'nav.administration',
                 collapsible: true,
-                visible: () => notShare() && (canViewSystem() || canManageTeamSettings()),
+                visible: notShare,
                 items: [
                     { labelKey: 'nav.systemStatus', icon: 'pi pi-server', routerLink: '/admin/status', visible: canViewSystem },
                     { labelKey: 'nav.systemSettings', icon: 'pi pi-shield', routerLink: '/admin/system', visible: canManageUsers },
+                    { labelKey: 'admin.tabs.globalFilters', icon: 'pi pi-filter', routerLink: '/admin/exclusions', visible: () => this.access.hasInstance(INSTANCE_CAPABILITIES.manageSiteExclusions) },
                     { labelKey: 'nav.team', icon: 'pi pi-users', routerLink: '/admin/team', visible: canManageTeamSettings }
                 ]
             }

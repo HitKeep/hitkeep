@@ -356,18 +356,36 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     const { document, location, navigator, screen, history, sessionStorage, crypto } = win;
     const prerenderDocument = document as PrerenderDocument;
 
-    win.hk = win.hk || {};
-    if (win.hk._bootstrapped) {
+    const hk = (win.hk ??= {});
+    if (hk._bootstrapped) {
         return null;
     }
-    win.hk._bootstrapped = true;
+    hk._bootstrapped = true;
+    let active = true;
+
+    const bindHandle = (track: EventSender, trackPageview: () => void, getSessionId: () => string | undefined, dispose: () => void = noop): TrackerHandle => {
+        if (config.bindToWindow) {
+            hk.event = track;
+            hk.getSessionId = getSessionId;
+        }
+        return {
+            track,
+            trackPageview,
+            cleanup: () => {
+                if (!active) return;
+                active = false;
+                dispose();
+                if (config.bindToWindow) {
+                    if (hk.event === track) delete hk.event;
+                    if (hk.getSessionId === getSessionId) delete hk.getSessionId;
+                }
+                hk._bootstrapped = false;
+            }
+        };
+    };
 
     if (isTrackerBlocked(location.hostname, navigator.userAgent, navigator.doNotTrack, config.collectDnt, config.captureOnLocalhost) || isTrackingOptedOut(win)) {
-        if (config.bindToWindow) {
-            win.hk.event = noop;
-            win.hk.getSessionId = () => undefined;
-        }
-        return null;
+        return bindHandle(noop, noop, noop);
     }
 
     const generateUUID = () => {
@@ -438,7 +456,6 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         target.addEventListener(type, listener, options);
         removers.push(() => target.removeEventListener(type, listener, options));
     };
-    let active = true;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let lastPath = location.pathname;
     let lastPageviewPath = '';
@@ -609,7 +626,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
     };
 
     if (config.webVitalsBundleUrl) {
-        win.hk._webVitals = {
+        const context: WebVitalsTrackerContext = {
             emit: (payload) => {
                 if (awaitingActivation) {
                     queueActivationRequest({ kind: 'web-vital', endpoint: config.webVitalsEndpoint, payload: { ...payload } });
@@ -624,6 +641,10 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
             trackerVersion: config.trackerVersion,
             userAgent: navigator.userAgent
         };
+        hk._webVitals = context;
+        removers.push(() => {
+            if (hk._webVitals === context) delete hk._webVitals;
+        });
         loadWebVitalsBundle(win, config.webVitalsBundleUrl);
     }
 
@@ -798,16 +819,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
 
     const track: EventSender = (name, properties) => emitEvent(name, properties ?? {});
     const currentSessionId = () => (active && !awaitingActivation && !isTrackingOptedOut(win) ? sessionId : undefined);
-    if (config.bindToWindow) {
-        win.hk.event = track;
-        win.hk.getSessionId = currentSessionId;
-    }
-
-    const cleanup = () => {
-        if (!active) {
-            return;
-        }
-        active = false;
+    return bindHandle(track, sendPageView, currentSessionId, () => {
         visibleTimeView = null;
         pendingPageview = false;
         pendingActivationRequests.length = 0;
@@ -818,22 +830,7 @@ export function createTracker(win: HitKeepWindow, config: TrackerRuntimeConfig):
         for (const remove of removers.splice(0, removers.length)) {
             remove();
         }
-        if (win.hk) {
-            if (win.hk.event === track) {
-                delete win.hk.event;
-            }
-            if (win.hk.getSessionId === currentSessionId) {
-                delete win.hk.getSessionId;
-            }
-            win.hk._bootstrapped = false;
-        }
-    };
-
-    return {
-        track,
-        trackPageview: sendPageView,
-        cleanup
-    };
+    });
 }
 
 export function bootstrapTracker(win: HitKeepWindow = window): void {

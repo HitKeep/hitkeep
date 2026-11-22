@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { of, Subject, throwError } from 'rxjs';
@@ -134,23 +134,25 @@ describe('Goals', () => {
         }).compileComponents();
     });
 
-    it('presents one reporting subject and exactly three conversion KPIs', () => {
+    it('presents one reporting subject and exactly three conversion KPIs', async () => {
+        analyticsServiceStub.getGoals.mockReturnValueOnce(
+            of([
+                { site_id: 'site-1', id: 'goal-1', name: 'Pricing', type: 'path', value: '/pricing', created_at: '2026-01-01T00:00:00Z' },
+                { site_id: 'site-1', id: 'goal-2', name: 'Checkout', type: 'path', value: '/checkout', created_at: '2026-01-01T00:00:00Z' }
+            ])
+        );
         const component = TestBed.runInInjectionContext(() => new Goals()) as unknown as {
             kpis: () => { label: string }[];
             subjectOptions: () => { label: string; value: string | null }[];
             selectGoal: (id: string | null) => void;
             selectedGoalId: () => string | null;
-            goals: { set: (goals: { id: string; name: string; type: 'path'; value: string; created_at: string }[]) => void };
             trafficGoalIds: () => string[];
             trafficEnabled: () => boolean;
         };
         expect(component.kpis().length).toBe(3);
         expect(component.subjectOptions()[0].value).toBeNull();
         expect(component.trafficEnabled()).toBe(false);
-        component.goals.set([
-            { id: 'goal-1', name: 'Pricing', type: 'path', value: '/pricing', created_at: '2026-01-01T00:00:00Z' },
-            { id: 'goal-2', name: 'Checkout', type: 'path', value: '/checkout', created_at: '2026-01-01T00:00:00Z' }
-        ]);
+        await TestBed.inject(ApplicationRef).whenStable();
         expect(component.trafficGoalIds()).toEqual(['goal-1', 'goal-2']);
         component.selectGoal('goal-2');
         expect(component.trafficGoalIds()).toEqual(['goal-2']);
@@ -176,9 +178,9 @@ describe('Goals', () => {
         expect(component.goalSeries()).toEqual([{ time: '2026-07-01', conversions: 2 }]);
     });
 
-    it('loads only baseline suggestions for an empty goal cohort on entry and refresh', () => {
+    it('loads only baseline suggestions for an empty goal cohort on entry and refresh', async () => {
         const component = createReporting();
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
 
         expect(component.kpis().map((kpi) => kpi.value)).toEqual([0, 0, 0]);
         expect(component.pathSuggestions()).toEqual(['/pricing']);
@@ -206,7 +208,7 @@ describe('Goals', () => {
         expect(component.kpis().map((card) => card.previous)).toEqual([null, { period: previous, value: 0 }, { period: previous, value: 0 }]);
     });
 
-    it('preserves the definitions error without loading an empty report', () => {
+    it('preserves the definitions error without loading an empty report', async () => {
         const definitions = new Subject<Goal[]>();
         analyticsServiceStub.getGoals.mockReturnValueOnce(definitions);
         const component = createReporting();
@@ -215,7 +217,7 @@ describe('Goals', () => {
         component.refresh('background');
         expect(statsServiceStub.fetchStats).not.toHaveBeenCalled();
         definitions.error(new Error('Definitions unavailable'));
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
         component.refresh('background');
 
         expect(component.goalsError()).toBe(true);
@@ -223,18 +225,18 @@ describe('Goals', () => {
         expect(analyticsServiceStub.getGoalTimeseries).not.toHaveBeenCalled();
 
         component.refresh();
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
         expect(component.goalsError()).toBe(false);
         expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(1);
     });
 
-    it('clears the report and cancels the in-flight cohort after deleting the last goal', () => {
+    it('clears the report and cancels the in-flight cohort after deleting the last goal', async () => {
         analyticsServiceStub.getGoals.mockReturnValueOnce(of([goal]));
         const conversion = { time: '2026-07-01', conversions: 2 };
         analyticsServiceStub.getGoalTimeseries.mockReturnValue(of([conversion]));
         statsServiceStub.fetchStats.mockReturnValueOnce(of({ ...stats, unique_sessions: 2 }));
         const component = createReporting();
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
         expect(component.kpis().map((kpi) => kpi.value)).toEqual([2, 2, 50]);
 
         const staleCohort = new Subject<SiteStats>();
@@ -244,7 +246,7 @@ describe('Goals', () => {
         const baseline = new Subject<SiteStats>();
         statsServiceStub.fetchStats.mockReturnValueOnce(baseline);
         component.deleteGoal(goal);
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
         const staleSubscribed = staleCohort.observed;
         staleCohort.next(stats);
         staleCohort.complete();
@@ -262,9 +264,9 @@ describe('Goals', () => {
         expect(component.pathSuggestions()).toEqual(['/docs']);
     });
 
-    it('loads the cohort and both series after creating the first goal', () => {
+    it('loads the cohort and both series after creating the first goal', async () => {
         const component = createReporting();
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
         statsServiceStub.fetchStats.mockClear();
         analyticsServiceStub.getGoalTimeseries.mockClear();
 
@@ -272,7 +274,7 @@ describe('Goals', () => {
         analyticsServiceStub.getGoalTimeseries.mockReturnValueOnce(of([{ time: '2026-07-01', conversions: 2 }]));
         statsServiceStub.fetchStats.mockReturnValueOnce(of({ ...stats, unique_sessions: 2 }));
         component.onDefinitionsChanged();
-        TestBed.tick();
+        await TestBed.inject(ApplicationRef).whenStable();
 
         expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(2);
         expect(statsServiceStub.fetchStats).toHaveBeenNthCalledWith(1, 'site-1', expect.any(String), expect.any(String), [], [goal.id]);

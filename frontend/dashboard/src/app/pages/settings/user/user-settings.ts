@@ -2,7 +2,6 @@ import { AccountDeletion } from './account-deletion/account-deletion';
 import { NgOptimizedImage } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { toSignal } from '@angular/core/rxjs-interop';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
@@ -14,7 +13,7 @@ import { localeFlagUrl } from '@core/i18n/flag-utils';
 import { getBaseLanguage, getLocaleDirection, normalizeLocaleTag, TextDirection } from '@core/i18n/locale-utils';
 import { SettingsCard } from '@features/settings/components/settings-card';
 import { SettingsSecurity } from '@features/settings/components/settings-security';
-import { UserPreferences, UserPreferencesService } from '@services/user-preferences.service';
+import { UserPreferencesService } from '@services/user-preferences.service';
 import { UserProfile, UserProfileService } from '@services/user-profile.service';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { InputTextModule } from '@openng/optimus-ui/inputtext';
@@ -52,7 +51,7 @@ export class UserSettings {
     private profileService = inject(UserProfileService);
     private transloco = inject(TranslocoService);
     private route = inject(ActivatedRoute);
-    private activeLanguage = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+    private activeLanguage = this.transloco.activeLang;
 
     private readonly profileFormModel = signal({
         email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email, Validators.maxLength(320)] }),
@@ -61,11 +60,7 @@ export class UserSettings {
     });
     protected readonly profileForm = compatForm(this.profileFormModel);
 
-    private readonly preferencesFormModel = signal({
-        defaultLocale: new FormControl<LanguageOption | null>(null)
-    });
-    protected readonly preferencesForm = compatForm(this.preferencesFormModel);
-
+    protected readonly language = new FormControl('', { nonNullable: true });
     protected readonly isProfileLoading = this.profileService.isLoading;
     protected readonly isProfileSaving = this.profileService.isSaving;
     protected readonly profileLoadError = signal<string | null>(null);
@@ -76,9 +71,7 @@ export class UserSettings {
 
     protected readonly isLoading = this.preferencesService.isLoading;
     protected readonly isSaving = this.preferencesService.isSaving;
-    protected readonly loadError = signal<string | null>(null);
     protected readonly saveState = signal<'idle' | 'saved' | 'error'>('idle');
-    protected readonly initialPreferences = signal<UserPreferences | null>(null);
     protected readonly activeTab = signal<UserSettingsTab>('account');
 
     protected readonly languageOptions = computed(() => {
@@ -112,12 +105,9 @@ export class UserSettings {
 
         return options.sort((a, b) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }));
     });
-    protected readonly languageOptionsByValue = computed(() => {
-        const byValue = new Map<string, LanguageOption>();
-        for (const option of this.languageOptions()) {
-            byValue.set(option.value, option);
-        }
-        return byValue;
+    private readonly savedLanguage = computed(() => {
+        const saved = getBaseLanguage(this.preferencesService.preferences()?.default_locale ?? '');
+        return this.languageOptions().some((option) => option.value === saved) ? saved : this.activeLanguage();
     });
 
     protected readonly canSaveProfile = computed(() => {
@@ -126,16 +116,6 @@ export class UserSettings {
         const initial = this.initialProfile();
         if (!initial) return false;
         return !this.profilesEqual(initial, this.currentProfile());
-    });
-
-    protected readonly canSave = computed(() => {
-        if (this.isSaving()) return false;
-        if (this.isLoading()) return false;
-        const initial = this.initialPreferences();
-        if (!initial) return false;
-        const current = this.currentPreferences();
-        if (!current.default_locale) return false;
-        return !this.preferencesEqual(initial, current);
     });
 
     constructor() {
@@ -168,27 +148,12 @@ export class UserSettings {
         });
 
         effect(() => {
-            const control = this.preferencesForm.defaultLocale().control();
-            const shouldDisable = this.isLoading() || this.isSaving();
-            if (shouldDisable && control.enabled) {
-                control.disable({ emitEvent: false });
-            } else if (!shouldDisable && control.disabled) {
-                control.enable({ emitEvent: false });
+            if (this.isSaving() || this.isLoading() || !this.preferencesService.preferences()) {
+                this.language.disable({ emitEvent: false });
+            } else {
+                this.language.setValue(this.savedLanguage(), { emitEvent: false });
+                this.language.enable({ emitEvent: false });
             }
-        });
-
-        effect(() => {
-            const prefs = this.preferencesService.preferences();
-            if (!prefs) return;
-            const base = getBaseLanguage(prefs.default_locale);
-            const selectedLocale = base || prefs.default_locale;
-            const selectedOption = this.languageOptionsByValue().get(selectedLocale) ?? null;
-            this.preferencesForm.defaultLocale().control().setValue(selectedOption, { emitEvent: false });
-            this.initialPreferences.set({
-                default_locale: selectedLocale
-            });
-            this.saveState.set('idle');
-            this.loadError.set(null);
         });
     }
 
@@ -226,25 +191,16 @@ export class UserSettings {
         }
     }
 
-    protected save() {
-        if (!this.canSave()) return;
-        const payload = this.currentPreferences();
+    protected saveLanguage(language: string): void {
+        if (this.isSaving() || this.language.disabled || language === this.savedLanguage()) return;
         this.saveState.set('idle');
-        this.preferencesService.save(payload).subscribe({
-            next: (prefs) => {
-                this.initialPreferences.set(prefs);
-                this.saveState.set('saved');
-            },
+        this.preferencesService.save({ default_locale: language }).subscribe({
+            next: () => this.saveState.set('saved'),
             error: () => {
+                this.language.setValue(this.savedLanguage(), { emitEvent: false });
                 this.saveState.set('error');
             }
         });
-    }
-
-    protected onLocaleChange(): void {
-        if (this.saveState() !== 'idle') {
-            this.saveState.set('idle');
-        }
     }
 
     protected optionLabel(locale: string): string {
@@ -259,20 +215,6 @@ export class UserSettings {
         const language = normalized.split('-')[0];
         const languageName = languageNames?.of(language) ?? language;
         return languageName;
-    }
-
-    protected currentPreferences(): UserPreferences {
-        const selected = this.preferencesForm.defaultLocale().value();
-        const defaultLocale = normalizeLocaleTag(selected?.value ?? '');
-        const base = getBaseLanguage(defaultLocale);
-        const normalizedDefault = base || '';
-        return {
-            default_locale: normalizedDefault
-        };
-    }
-
-    protected preferencesEqual(a: UserPreferences, b: UserPreferences): boolean {
-        return a.default_locale === b.default_locale;
     }
 
     private currentProfile(): EditableProfile {

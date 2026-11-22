@@ -22,6 +22,7 @@ import { TableRowActionItem } from '@components/table-row-actions/table-row-acti
 import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
 import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
 import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
+import { injectConversionDefinitions } from '@features/analytics/services/conversion-definitions';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -86,9 +87,10 @@ export class Funnels {
     private reportingSequence = 0;
     private funnelStatsSequence = 0;
 
-    protected funnels = signal<Funnel[]>([]);
-    protected loading = signal(false);
-    protected loadError = signal(false);
+    private readonly definitions = injectConversionDefinitions((siteId) => this.analytics.getFunnels(siteId));
+    protected readonly funnels = this.definitions.items;
+    protected readonly loading = this.definitions.loading;
+    protected readonly loadError = this.definitions.error;
     protected selectedFunnelId = signal<string | null>(null);
     protected selectedFunnel = computed(() => this.funnels().find((funnel) => funnel.id === this.selectedFunnelId()) ?? null);
     protected subjectControl = new FormControl<string | null>(null);
@@ -122,7 +124,9 @@ export class Funnels {
     protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficFunnelIds = computed(() => {
         const selected = this.selectedFunnelId();
-        return selected ? [selected] : this.funnels().map((funnel) => funnel.id);
+        return this.funnels()
+            .filter((funnel) => !selected || funnel.id === selected)
+            .map((funnel) => funnel.id);
     });
     protected trafficEnabled = computed(() => this.trafficFunnelIds().length > 0);
     protected trafficDescriptionKey = computed(() => (this.selectedFunnelId() ? 'funnels.traffic.selectedDescription' : 'funnels.traffic.allDescription'));
@@ -220,7 +224,9 @@ export class Funnels {
             this.funnelStatsRequest?.unsubscribe();
         });
         this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-            this.selectedFunnelId.set(params.get('funnel'));
+            const id = params.get('funnel');
+            this.selectedFunnelId.set(id);
+            this.subjectControl.setValue(id, { emitEvent: false });
             this.createRequested = params.get('create') === '1';
         });
         effect(() => {
@@ -236,15 +242,13 @@ export class Funnels {
                 });
             }
             this.lastSiteId = site?.id ?? null;
-            if (site) this.loadFunnels(site.id);
-            else this.funnels.set([]);
         });
         effect(() => {
             const site = this.siteService.activeSite();
             const dates = this.reportRange.currentDateRange();
             const funnels = this.funnels();
             const selected = this.selectedFunnelId();
-            if (!site || !dates || this.loading()) return;
+            if (!site || !dates || this.loading() || this.loadError()) return;
             if (this.createRequested && this.canManage()) {
                 this.createRequested = false;
                 this.openCreate();
@@ -323,42 +327,26 @@ export class Funnels {
             .pipe(finalize(() => this.deletingFunnelId.set(null)))
             .subscribe({
                 next: () => {
+                    if (site.id !== this.siteService.activeSite()?.id) return;
                     if (this.selectedFunnelId() === funnel.id) this.selectFunnel(null);
-                    this.loadFunnels(site.id);
+                    this.definitions.reload();
                 }
             });
     }
-    protected onDefinitionsChanged() {
-        const site = this.siteService.activeSite();
-        if (site) this.loadFunnels(site.id);
-    }
+    protected readonly onDefinitionsChanged = this.definitions.reload;
     protected refresh(mode: StatsQueryMode = 'blocking') {
         const site = this.siteService.activeSite();
+        if (!site || this.loading()) return;
+        if (this.loadError()) {
+            if (mode === 'blocking') this.definitions.reload();
+            return;
+        }
         const dates = this.reportRange.currentDateRange();
-        if (!site || !dates) return;
+        if (!dates) return;
         this.trafficRefreshKey.update((key) => key + 1);
         const selected = this.selectedFunnelId();
         this.loadReporting(site.id, dates.from, dates.to, selected ? [selected] : [], mode);
         if (selected) this.loadFunnelStats(site.id, selected, dates.from, dates.to);
-    }
-    private loadFunnels(siteId: string) {
-        this.loading.set(true);
-        this.loadError.set(false);
-        this.analytics
-            .getFunnels(siteId)
-            .pipe(finalize(() => this.loading.set(false)))
-            .subscribe({
-                next: (funnels) => {
-                    this.funnels.set(funnels ?? []);
-                    this.subjectControl.setValue(this.selectedFunnelId(), {
-                        emitEvent: false
-                    });
-                },
-                error: () => {
-                    this.funnels.set([]);
-                    this.loadError.set(true);
-                }
-            });
     }
     private loadReporting(siteId: string, from: string, to: string, funnelIds: string[], mode: StatsQueryMode = 'blocking') {
         const sequence = ++this.reportingSequence;

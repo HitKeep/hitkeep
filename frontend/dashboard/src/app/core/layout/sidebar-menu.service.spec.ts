@@ -132,6 +132,18 @@ describe('SidebarMenuService', () => {
         expect(apiClients?.items).toBeUndefined();
     });
 
+    it.each([false, true])('exposes only global filters to an exclusion manager (cloud %s)', (hosted) => {
+        bootstrap.status.set({ needs_setup: false, version: 'test', cloud: { hosted, signup_enabled: hosted } });
+        permissions.applyPermissions({ instance_role: 'user', instance_capabilities: [INSTANCE_CAPABILITIES.manageSiteExclusions], permissions: {} });
+        const adminLinks = service
+            .searchableItems()
+            .map((item) => item.routerLink)
+            .filter((link) => link?.startsWith('/admin/'));
+        expect(adminLinks).toEqual(['/admin/exclusions']);
+        permissions.applyPermissions({ instance_role: 'user', instance_capabilities: [], permissions: {} });
+        expect(service.searchableItems().some((item) => item.routerLink === '/admin/exclusions')).toBe(false);
+    });
+
     it('does not expose system settings to users who can only view system status', () => {
         permissions.applyPermissions({
             instance_role: 'user',

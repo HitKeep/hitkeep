@@ -1,10 +1,15 @@
-<p-confirmdialog />
+<p-confirmdialog>
+    <ng-template #message let-confirmation>
+        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+        <span class="break-all">{{ confirmation.message }}</span>
+    </ng-template>
+</p-confirmdialog>
 
 <app-crud-dialog
-    [title]="'admin.team.exclusions.addAction' | transloco"
+    [title]="(prefix() + '.addAction' | transloco) + (scope().kind === 'site' ? ' · ' + contextName() : '')"
     [visible]="isAddDialogVisible()"
     (visibleChange)="onAddDialogVisibleChange($event)"
-    [submitLabel]="'admin.team.exclusions.addAction' | transloco"
+    [submitLabel]="prefix() + '.addAction' | transloco"
     [cancelLabel]="'common.actions.cancel' | transloco"
     [saving]="isSaving()"
     (submitted)="addRule()"
@@ -12,15 +17,15 @@
     <form [formGroup]="form" class="site-settings-dialog-form" (ngSubmit)="addRule()">
         <div class="grid gap-3 md:grid-cols-2">
             <div class="site-settings-field">
-                <label for="team-exclusion-type">{{ "admin.team.exclusions.typeLabel" | transloco }}</label>
-                <p-select inputId="team-exclusion-type" [options]="ruleTypeOptions()" formControlName="type" optionLabel="label" optionValue="value" appendTo="body" class="w-full" (onChange)="onRuleTypeChange()" />
+                <label for="{{ scope().kind }}-exclusion-type">{{ prefix() + '.typeLabel' | transloco }}</label>
+                <p-select inputId="{{ scope().kind }}-exclusion-type" [options]="ruleTypeOptions()" formControlName="type" optionLabel="label" optionValue="value" appendTo="body" class="w-full" (onChange)="clearValueErrors()" />
             </div>
 
             @switch (form.controls.type.value) { @case ("country") {
             <div class="site-settings-field">
-                <label for="team-exclusion-country">{{ "admin.team.exclusions.countryLabel" | transloco }}</label>
+                <label for="{{ scope().kind }}-exclusion-country">{{ prefix() + '.countryLabel' | transloco }}</label>
                 <p-select
-                    inputId="team-exclusion-country"
+                    inputId="{{ scope().kind }}-exclusion-country"
                     [options]="countryOptions()"
                     formControlName="countryCode"
                     optionLabel="label"
@@ -28,7 +33,8 @@
                     appendTo="body"
                     [filter]="true"
                     filterBy="searchText"
-                    [placeholder]="'admin.team.exclusions.countryPlaceholder' | transloco"
+                    [ariaFilterLabel]="prefix() + '.countryPlaceholder' | transloco"
+                    [placeholder]="prefix() + '.countryPlaceholder' | transloco"
                     class="w-full"
                 >
                     <ng-template #selectedItem let-selectedOption>
@@ -47,40 +53,40 @@
                     </ng-template>
                 </p-select>
                 @if (form.controls.countryCode.touched && form.controls.countryCode.invalid) {
-                <p-message severity="error" variant="simple" size="small">{{ "admin.team.exclusions.errors.invalidCountry" | transloco }}</p-message>
+                <p-message severity="error" variant="simple" size="small">{{ prefix() + '.errors.invalidCountry' | transloco }}</p-message>
                 }
             </div>
             } @case ("user_agent") {
             <div class="site-settings-field">
-                <label for="team-exclusion-user-agent">{{ "admin.team.exclusions.userAgentLabel" | transloco }}</label>
-                <input id="team-exclusion-user-agent" pInputText formControlName="userAgent" [placeholder]="'admin.team.exclusions.userAgentPlaceholder' | transloco" />
+                <label for="{{ scope().kind }}-exclusion-user-agent">{{ prefix() + '.userAgentLabel' | transloco }}</label>
+                <input id="{{ scope().kind }}-exclusion-user-agent" pInputText formControlName="userAgent" [placeholder]="prefix() + '.userAgentPlaceholder' | transloco" />
                 @if (form.controls.userAgent.touched && form.controls.userAgent.invalid) {
-                <p-message severity="error" variant="simple" size="small">{{ "admin.team.exclusions.errors.invalidUserAgent" | transloco }}</p-message>
+                <p-message severity="error" variant="simple" size="small">{{ prefix() + '.errors.invalidUserAgent' | transloco }}</p-message>
                 }
             </div>
             } @case ("path") {
             <div class="site-settings-field">
-                <label for="team-exclusion-path">{{ "admin.team.exclusions.pathLabel" | transloco }}</label>
-                <input id="team-exclusion-path" pInputText formControlName="path" [placeholder]="'admin.team.exclusions.pathPlaceholder' | transloco" />
+                <label for="{{ scope().kind }}-exclusion-path">{{ prefix() + '.pathLabel' | transloco }}</label>
+                <input id="{{ scope().kind }}-exclusion-path" pInputText formControlName="path" [placeholder]="prefix() + '.pathPlaceholder' | transloco" />
                 @if (form.controls.path.touched && form.controls.path.invalid) {
-                <p-message severity="error" variant="simple" size="small">{{ "admin.team.exclusions.errors.invalidPath" | transloco }}</p-message>
+                <p-message severity="error" variant="simple" size="small">{{ prefix() + '.errors.invalidPath' | transloco }}</p-message>
                 }
             </div>
             } @case ("cidr") {
             <div class="site-settings-field">
-                <label for="team-exclusion-cidr">{{ "admin.team.exclusions.cidrLabel" | transloco }}</label>
-                <input id="team-exclusion-cidr" pInputText formControlName="cidr" [placeholder]="'admin.team.exclusions.cidrPlaceholder' | transloco" />
+                <label for="{{ scope().kind }}-exclusion-cidr">{{ prefix() + '.cidrLabel' | transloco }}</label>
+                <input id="{{ scope().kind }}-exclusion-cidr" pInputText formControlName="cidr" [placeholder]="prefix() + '.cidrPlaceholder' | transloco" />
                 @if (form.controls.cidr.touched && form.controls.cidr.invalid) {
-                <p-message severity="error" variant="simple" size="small">{{ "admin.team.exclusions.errors.invalidCidr" | transloco }}</p-message>
+                <p-message severity="error" variant="simple" size="small">{{ prefix() + '.errors.invalidCidr' | transloco }}</p-message>
                 }
             </div>
             } @default never; }
 
             <div class="site-settings-field md:col-span-2">
-                <label for="team-exclusion-description">{{ "admin.team.exclusions.descriptionLabel" | transloco }}</label>
-                <input id="team-exclusion-description" pInputText formControlName="description" [placeholder]="'admin.team.exclusions.descriptionPlaceholder' | transloco" />
+                <label for="{{ scope().kind }}-exclusion-description">{{ prefix() + '.descriptionLabel' | transloco }}</label>
+                <input id="{{ scope().kind }}-exclusion-description" pInputText formControlName="description" [placeholder]="prefix() + '.descriptionPlaceholder' | transloco" />
                 @if (form.controls.description.touched && form.controls.description.invalid) {
-                <p-message severity="error" variant="simple" size="small">{{ "admin.team.exclusions.errors.descriptionTooLong" | transloco }}</p-message>
+                <p-message severity="error" variant="simple" size="small">{{ prefix() + '.errors.descriptionTooLong' | transloco }}</p-message>
                 }
             </div>
         </div>
@@ -91,10 +97,10 @@
     </form>
 </app-crud-dialog>
 
-<app-settings-card [title]="'admin.team.exclusions.title' | transloco" [subtitle]="'admin.team.exclusions.description' | transloco" icon="pi pi-filter">
+<app-settings-card [title]="(scope().kind === 'site' ? 'sites.settings.tabs.filtering' : prefix() + '.title') | transloco" [subtitle]="prefix() + '.description' | transloco" icon="pi pi-filter">
     <div settings-card-header class="flex flex-wrap items-center justify-end gap-2">
-        <p-button [label]="'admin.team.exclusions.addAction' | transloco" icon="pi pi-plus" size="small" [type]="'button'" (onClick)="openAddDialog()" />
-        <p-button [label]="'settings.apiClients.actions.refresh' | transloco" icon="pi pi-refresh" [text]="true" size="small" [type]="'button'" [disabled]="isLoading()" (onClick)="reload()" />
+        <p-button [label]="prefix() + '.addAction' | transloco" icon="pi pi-plus" size="small" [type]="'button'" [disabled]="isLoading() || !!error() || !!deletingRuleID()" (onClick)="openAddDialog()" />
+        <p-button [label]="'settings.apiClients.actions.refresh' | transloco" icon="pi pi-refresh" [text]="true" size="small" [type]="'button'" [disabled]="isLoading() || isSaving() || !!deletingRuleID()" (onClick)="reload()" />
     </div>
 
     <div settings-card-body class="grid gap-4">
@@ -106,43 +112,45 @@
 
         <div class="flex items-center justify-between gap-3 border-y border-[var(--p-content-border-color)] py-3 max-sm:flex-col max-sm:items-stretch">
             <div class="grid min-w-0 gap-1">
-                <span class="text-sm leading-5 text-[var(--p-text-muted-color)]">{{ "admin.team.exclusions.suggestionsTitle" | transloco }}</span>
-                <code class="break-all text-sm leading-5 text-[var(--p-text-color)]">
-                    @if (isCurrentIPLoading()) { {{ "admin.team.exclusions.currentIpLoading" | transloco }} } @else if (currentIPCIDR(); as cidr) { {{ cidr }} } @else { {{ "admin.team.exclusions.currentIpUnavailable" | transloco }} }
-                </code>
+                <span class="text-sm leading-5 text-[var(--p-text-muted-color)]">{{ prefix() + '.suggestionsTitle' | transloco }}</span>
+                @if (currentIPCIDR(); as cidr) {
+                <p-button [label]="cidr" [ariaLabel]="(prefix() + '.addAction' | transloco) + ' · ' + cidr" icon="pi pi-plus" [text]="true" size="small" [disabled]="isLoading() || !!error() || !!deletingRuleID()" (onClick)="openAddDialog(cidr)" />
+                } @else {
+                <span class="text-sm">{{ prefix() + (isCurrentIPLoading() ? '.currentIpLoading' : '.currentIpUnavailable') | transloco }}</span>
+                }
             </div>
             <app-copy-control [value]="currentIPCIDR()" [text]="true" [rounded]="true" size="small" [disabled]="isCurrentIPLoading() || !currentIPCIDR()" />
         </div>
 
-        @if (hasInheritedExclusions()) {
-        <p-message severity="secondary">{{ "admin.team.exclusions.inheritedHint" | transloco }}</p-message>
+        @if (!error() && !isLoading() && hasInheritedExclusions()) {
+        <p-message severity="secondary">{{ prefix() + '.inheritedHint' | transloco }}</p-message>
         } @if (isLoading()) {
         <div class="flex min-h-28 items-center justify-center gap-2 text-sm text-[var(--p-text-muted-color)]" role="status">
             <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
-            <span>{{ "admin.team.exclusions.loading" | transloco }}</span>
+            <span>{{ prefix() + '.loading' | transloco }}</span>
         </div>
-        } @else if (exclusions().length === 0) {
+        } @else if (!error() && exclusions().length === 0) {
         <div class="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-[var(--p-content-border-color)] p-4 text-center">
-            <p class="m-0 max-w-[60ch] text-sm text-[var(--p-text-muted-color)]">{{ "admin.team.exclusions.empty" | transloco }}</p>
-            <p-button [label]="'admin.team.exclusions.addAction' | transloco" icon="pi pi-plus" [outlined]="true" size="small" [type]="'button'" (onClick)="openAddDialog()" />
+            <p class="m-0 max-w-[60ch] text-sm text-[var(--p-text-muted-color)]">{{ prefix() + '.empty' | transloco }}</p>
+            <p-button [label]="prefix() + '.addAction' | transloco" icon="pi pi-plus" [outlined]="true" size="small" [type]="'button'" (onClick)="openAddDialog()" />
         </div>
-        } @else {
+        } @else if (!error()) {
         <app-table
             [value]="exclusionRows()"
-            [columns]="exclusionColumns"
-            stateKey="team-exclusions"
+            [columns]="exclusionColumns()"
+            [stateKey]="tableKey()"
             [searchFields]="['scope_label', 'country_name', 'search_value']"
             [defaultSort]="{ field: 'created_at', order: -1 }"
             defaultGroupBy="type_label"
             [rowActions]="ruleActions"
             [rowActionsLoading]="ruleActionLoading"
-            emptyTextKey="admin.team.exclusions.empty"
-            data-testid="team-exclusions-table"
+            [emptyTextKey]="prefix() + '.empty'"
+            [attr.data-testid]="tableKey() + '-table'"
         >
             <ng-template appTableCell="type_label" let-rule>
                 <span class="flex items-center gap-2">
                     <span>{{ rule.type_label }}</span>
-                    <p-tag [value]="rule.scope_label" severity="secondary" [rounded]="true" />
+                    @if (rule.scope_label) { <p-tag [value]="rule.scope_label" severity="secondary" [rounded]="true" /> }
                 </span>
             </ng-template>
             <ng-template appTableCell="value_label" let-rule>
@@ -157,7 +165,7 @@
             </ng-template>
             <ng-template appTableSlot="actions" let-rule>
                 @if (rule.inherited) {
-                <span class="text-xs text-[var(--p-text-muted-color)]">{{ "admin.team.exclusions.inheritedReadOnly" | transloco }}</span>
+                <span class="text-xs text-[var(--p-text-muted-color)]">{{ prefix() + '.inheritedReadOnly' | transloco }}</span>
                 } @else {
                 <app-table-row-actions [items]="ruleActions(rule)" [loading]="deletingRuleID() === rule.id" />
                 }

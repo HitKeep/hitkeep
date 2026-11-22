@@ -164,7 +164,7 @@ func referrerHostExpr(prefix string) string {
 	return fmt.Sprintf(`CASE
 		WHEN hk_external_referrer(%sreferrer, %ssite_id) IS NULL THEN NULL
 		WHEN %sreferrer IS NULL OR NULLIF(TRIM(%sreferrer), '') IS NULL THEN '(Direct)'
-		WHEN lower(%sreferrer) LIKE 'http%%' THEN regexp_replace(regexp_extract(lower(%sreferrer), 'https?://([^/:?#]+)', 1), '^www\\.', '')
-		ELSE regexp_replace(lower(TRIM(%sreferrer)), '^www\\.', '')
+		WHEN lower(%sreferrer) LIKE 'http%%' THEN regexp_replace(regexp_extract(lower(%sreferrer), 'https?://([^/:?#]+)', 1), '^www\.', '')
+		ELSE regexp_replace(lower(TRIM(%sreferrer)), '^www\.', '')
 	END`, prefix, prefix, prefix, prefix, prefix, prefix, prefix)
 }

@@ -410,6 +410,12 @@ export const routes: Routes = [
                         }
                     },
                     {
+                        path: 'exclusions',
+                        loadComponent: () => import('@pages/admin/components/admin-global-exclusion-settings').then((m) => m.AdminGlobalExclusionSettings),
+                        canActivate: [capabilityGuard],
+                        data: { ...titleData('admin.exclusions.title'), instanceCapability: INSTANCE_CAPABILITIES.manageSiteExclusions }
+                    },
+                    {
                         path: 'system',
                         loadComponent: () => import('@pages/admin/admin-settings').then((m) => m.AdminSettings),
                         canActivate: [capabilityGuard],
