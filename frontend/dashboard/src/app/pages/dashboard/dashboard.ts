@@ -411,6 +411,7 @@ export class Dashboard {
         return !this.isShareMode() && !!onboarding && !onboarding.dismissed && !onboarding.complete;
     });
     protected readonly onboardingSteps = computed(() => this.onboarding.onboarding()?.steps ?? []);
+    protected readonly waitingForSiteTracking = computed(() => this.onboardingSteps().some((step) => step.key === 'verify_tracking' && !step.complete && !!step.site_id && step.site_id === this.siteService.activeSite()?.id));
     protected readonly onboardingRailSteps = computed<WorkflowProgressStep[]>(() => {
         this.activeLanguage();
         const steps = this.onboardingSteps();

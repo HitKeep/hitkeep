@@ -27,10 +27,10 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [design]="design() ?? (isShortRange() ? 'bar' : 'area')"
             [showDesignSelector]="showDesignSelector()"
             ariaLabelKey="dashboard.trafficChartAria"
-            [emptyTitle]="'dashboard.empty.noTrafficTitle' | transloco"
-            [emptyDescription]="'dashboard.empty.noTrafficDescription' | transloco"
+            [emptyTitle]="(waitingForTracking() ? 'dashboard.empty.noTrafficTitle' : 'common.empty.noDataTitle') | transloco"
+            [emptyDescription]="(waitingForTracking() ? 'dashboard.empty.noTrafficDescription' : 'common.empty.noDataDescription') | transloco"
         >
-            @if (!embed.isEmbedMode()) {
+            @if (waitingForTracking() && showTrackingAction() && !embed.isEmbedMode()) {
                 <p-button chart-empty-actions [label]="'dashboard.empty.getTrackingCode' | transloco" icon="pi pi-code" size="small" (onClick)="snippetClicked.emit()" />
             }
         </app-series-chart>
@@ -46,6 +46,8 @@ export class TrafficChart {
     previousPeriod = input<ComparisonPeriod | null>(null);
     design = input<HitkeepChartDesign>();
     showDesignSelector = input<boolean>(true);
+    waitingForTracking = input(false);
+    showTrackingAction = input(true);
 
     snippetClicked = output<void>();
 

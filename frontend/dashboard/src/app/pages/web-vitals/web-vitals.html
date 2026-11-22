@@ -53,7 +53,7 @@
     </div>
 
     <details class="mb-3">
-        <summary class="w-fit cursor-pointer rounded py-1.5 text-sm font-medium text-muted-color">{{ 'common.filtersLabel' | transloco }}</summary>
+        <summary class="w-fit cursor-pointer rounded py-1.5 text-sm font-medium text-muted-color">{{ 'common.filtersLabel' | transloco }} @if (!hasCustomFilters()) { · {{ 'webVitals.filters.pathChip' | transloco: { path: pathFilter() } }} }</summary>
         <div class="mt-2 grid gap-3 sm:grid-cols-2">
             <div class="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] font-semibold text-[var(--p-text-muted-color)]">
                 <label for="web-vitals-rating-select" class="truncate">{{ "webVitals.filters.rating" | transloco }}</label>

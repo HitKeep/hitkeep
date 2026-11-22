@@ -409,6 +409,7 @@ describe('SeriesChart', () => {
 
             notes.canWrite.set(true);
             fixture.detectChanges();
+            fixture.nativeElement.querySelector('app-chart-legend summary').click();
             fixture.debugElement.query(By.css('p-button button')).nativeElement.click();
             expect(notes.open).toHaveBeenCalledWith({ startsAt: new Date('2026-07-03T00:00:00Z'), endsAt: null, body: '', granularity: 'day' }, expect.any(HTMLButtonElement));
         });

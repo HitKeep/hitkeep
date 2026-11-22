@@ -54,7 +54,7 @@ test("web vitals dashboard renders seeded data and filters", async ({ page }) =>
     await expect(page.getByRole("button", { name: "Inspect LCP over time" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Inspect INP over time" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Inspect CLS over time" })).toBeVisible();
-    await expect(page.getByText("Path: /", { exact: true })).toHaveCount(0);
+    await expect(page.locator("summary").filter({ hasText: "Path: /" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "LCP p75 trend" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Rating mix" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Page breakdown" })).toBeVisible();
@@ -80,7 +80,7 @@ test("web vitals dashboard renders seeded data and filters", async ({ page }) =>
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Clear all" }).click();
-    await expect(page.getByText("Path: /", { exact: true })).toHaveCount(0);
+    await expect(page.locator("summary").filter({ hasText: "Path: /" })).toBeVisible();
     await expect(page.getByText("Rating: Good")).toHaveCount(0);
 
     await expectBreakdownRow(page, "Cities", SEEDED_CITY_RE);

@@ -254,7 +254,7 @@ export class SeriesChart {
         return buildHitkeepChartMergeOptions({
             ariaLabel: this.accessibilityLabel(),
             design: this.effectiveDesign(),
-            labels: raw.map((point, index) => (index === 0 && start && Date.parse(point.time) < Date.parse(start) ? this.pointFormatters().minute.format(new Date(start)) : bucketLabel.format(new Date(point.time)))),
+            labels: raw.map((point, index) => bucketLabel.format(new Date(index === 0 && start && Date.parse(start) > Date.parse(point.time) ? start : point.time))),
             locale: this.transloco.getActiveLang(),
             series: this.renderedSeries(),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())
