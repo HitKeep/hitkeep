@@ -3,7 +3,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
 import { injectActiveLang } from '@core/i18n/active-lang';
-import { localeForLanguage } from '@core/i18n/duration-format';
 import { finalize } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { TranslocoPipe } from '@jsverse/transloco';
@@ -20,7 +19,6 @@ import { TrafficRecordsCard } from '@features/hits/components/traffic-records-ca
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_ALL_ANALYTICS_KINDS } from '@services/realtime.service';
 import { TrafficChart } from '@features/analytics/components/traffic-chart';
-import { ComparisonPeriods } from '@features/analytics/components/comparison-periods';
 import { MetricCardGroup, MetricCardGroupAction, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SearchConsoleDrilldown } from '@features/analytics/components/search-console-drilldown';
 import { VisibleTimeReport } from '@features/analytics/components/visible-time-report';
@@ -28,15 +26,15 @@ import type { Funnel, GoalStats, MetricStat } from '@models/analytics.types';
 import type { ConversionSubject } from '@features/analytics/models/conversion-subject';
 import { WorkflowProgress, type WorkflowProgressStep } from '@components/workflow-progress/workflow-progress';
 import { ExportSplitButton, ExportStatusBanner } from '@components/export-split-button/export-split-button';
-import { DialogShell } from '@components/dialog-shell/dialog-shell';
 import { FilterChipItem, FilterChipRow } from '@components/filter-chip-row/filter-chip-row';
-import { KPI_DELTA_FORMAT, KPI_PERCENT_FORMAT, KPI_SHORT_DECIMAL_FORMAT, KpiCard, type KpiCardModel } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT, KPI_SHORT_DECIMAL_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { ShareService } from '@services/share.service';
 import { EmbedService } from '@services/embed.service';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { isIntradayPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
 import { aiFilterChipLabel } from '@features/analytics/ai-category-labels';
 import { buildAIMetricCardTabs } from '@features/analytics/ai-metric-cards';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
@@ -62,10 +60,9 @@ interface DashboardReportRequest {
     subject: { kind: ConversionSubject['kind']; id: string } | null;
 }
 type KpiMetricID = 'live_visitors' | 'total_pageviews' | 'unique_sessions' | 'bounce_rate' | 'avg_session_duration' | 'pages_per_session';
-interface KpiCardData extends KpiCardModel {
+interface KpiCardData extends KpiComparisonCard {
     id: KpiMetricID;
     valueClass: string;
-    previousValue?: number;
 }
 @Component({
     selector: 'app-dashboard',
@@ -80,9 +77,7 @@ interface KpiCardData extends KpiCardModel {
         ExportSplitButton,
         ExportStatusBanner,
         FilterChipRow,
-        KpiCard,
-        ComparisonPeriods,
-        DialogShell,
+        KpiComparisonCards,
         TrafficChart,
         MetricCardGroup,
         SearchConsoleDrilldown,
@@ -124,8 +119,6 @@ export class Dashboard {
     protected isAIActivityLoading = this.aiActivityQuery.isLoading;
     protected readonly seriesRange = this.statsQuery.currentRange;
     protected readonly comparisonRange = this.statsQuery.comparisonRange;
-    protected readonly comparisonOpen = signal(false);
-    private readonly comparisonSelection = signal<{ id: KpiMetricID; trigger: HTMLButtonElement } | null>(null);
     protected readonly kpiUpdateKey = signal(0);
     protected selectedConversion = signal<ConversionSubject | null>(null, {
         equal: (a, b) => a?.kind === b?.kind && a?.id === b?.id && a?.name === b?.name
@@ -468,6 +461,7 @@ export class Dashboard {
         const loading = this.isStatsLoading();
         const updateKey = this.kpiUpdateKey();
         const cmp = stats?.comparison;
+        const previousPeriod = this.comparisonRange();
         const baseClass = 'text-2xl xl:text-3xl font-bold';
         const liveVisitors = stats?.live_visitors ?? 0;
         return [
@@ -478,108 +472,60 @@ export class Dashboard {
                 loading,
                 updateKey,
                 valueClass: liveVisitors > 0 ? `${baseClass} text-green-600 dark:text-green-400` : baseClass,
-                delta: null
+                description: stats ? this.transloco.translate('comparison.liveOnly') : ''
             },
             {
                 id: 'total_pageviews',
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
                 value: stats?.total_pageviews ?? '—',
-                previousValue: cmp?.total_pageviews,
+                previous: kpiBaseline(previousPeriod, cmp?.total_pageviews),
                 loading,
                 updateKey,
-                valueClass: baseClass,
-                delta: cmp ? this.calcDelta(stats?.total_pageviews ?? 0, cmp.total_pageviews) : null
+                valueClass: baseClass
             },
             {
                 id: 'unique_sessions',
                 label: this.transloco.translate('dashboard.kpis.uniqueSessions'),
                 value: stats?.unique_sessions ?? '—',
-                previousValue: cmp?.unique_sessions,
+                previous: kpiBaseline(previousPeriod, cmp?.unique_sessions),
                 loading,
                 updateKey,
-                valueClass: baseClass,
-                delta: cmp ? this.calcDelta(stats?.unique_sessions ?? 0, cmp.unique_sessions) : null
+                valueClass: baseClass
             },
             {
                 id: 'bounce_rate',
                 label: this.transloco.translate('dashboard.kpis.bounceRate'),
                 value: stats?.bounce_rate ?? '—',
-                previousValue: cmp?.bounce_rate,
+                previous: kpiBaseline(previousPeriod, cmp?.bounce_rate),
                 loading,
                 updateKey,
                 valueClass: baseClass,
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: cmp ? this.calcDelta(stats?.bounce_rate ?? 0, cmp.bounce_rate) : null,
                 invertDelta: true
             },
             {
                 id: 'avg_session_duration',
                 label: this.transloco.translate('dashboard.kpis.avgDuration'),
                 value: stats?.avg_session_duration ?? '—',
-                previousValue: cmp?.avg_session_duration,
+                previous: kpiBaseline(previousPeriod, cmp?.avg_session_duration),
                 loading,
                 updateKey,
                 valueClass: baseClass,
-                duration: true,
-                delta: cmp ? this.calcDelta(stats?.avg_session_duration ?? 0, cmp.avg_session_duration) : null
+                duration: true
             },
             {
                 id: 'pages_per_session',
                 label: this.transloco.translate('dashboard.kpis.pagesPerSession'),
                 value: stats?.pages_per_session ?? '—',
-                previousValue: cmp?.pages_per_session,
+                previous: kpiBaseline(previousPeriod, cmp?.pages_per_session),
                 loading,
                 updateKey,
                 valueClass: baseClass,
-                format: KPI_SHORT_DECIMAL_FORMAT,
-                delta: cmp ? this.calcDelta(stats?.pages_per_session ?? 0, cmp.pages_per_session) : null
+                format: KPI_SHORT_DECIMAL_FORMAT
             }
         ];
     });
-    protected readonly comparisonMetric = computed(() => {
-        const card = this.kpiCards().find(({ id }) => id === this.comparisonSelection()?.id);
-        if (!card || typeof card.value !== 'number') return null;
-        const locale = localeForLanguage(this.activeLanguage());
-        const previous = card.previousValue;
-        const delta = card.delta;
-        return {
-            label: card.label,
-            current: this.formatKpiValue(card, card.value, locale),
-            previous: previous === undefined ? null : this.formatKpiValue(card, previous, locale),
-            absolute: previous === undefined ? null : this.formatKpiValue(card, card.value - previous, locale, true),
-            relative: delta == null ? null : new Intl.NumberFormat(locale, KPI_DELTA_FORMAT).format(delta / 100),
-            zeroBaseline: previous === 0
-        };
-    });
-
-    protected openKpiComparison(id: KpiMetricID, trigger: HTMLButtonElement): void {
-        this.comparisonSelection.set({ id, trigger });
-        this.comparisonOpen.set(true);
-    }
-
-    protected restoreComparisonFocus(): void {
-        this.comparisonSelection()?.trigger.focus({ preventScroll: true });
-        this.comparisonSelection.set(null);
-    }
-
-    private formatKpiValue(card: KpiCardData, value: number, locale: string, difference = false): string {
-        const signDisplay = difference ? 'exceptZero' : 'auto';
-        if (card.duration) {
-            if (difference) {
-                return new Intl.NumberFormat(locale, { style: 'unit', unit: 'second', unitDisplay: 'short', signDisplay, maximumFractionDigits: 1 }).format(value);
-            }
-            const wholeSeconds = Math.floor(value);
-            const minutes = Math.floor(wholeSeconds / 60);
-            const seconds = wholeSeconds % 60;
-            return this.transloco.translate(minutes > 0 ? 'common.durationMinutesSeconds' : 'common.durationSeconds', { minutes, seconds });
-        }
-        if (card.id === 'bounce_rate' && !difference) {
-            return new Intl.NumberFormat(locale, { ...card.format, style: 'percent' }).format(value / 100);
-        }
-        const formatted = new Intl.NumberFormat(locale, { ...card.format, signDisplay }).format(value);
-        return card.id === 'bounce_rate' ? this.transloco.translate('comparison.percentagePoints', { value: formatted }) : formatted;
-    }
 
     protected openTrackingSettings() {
         const site = this.siteService.activeSite();
@@ -826,8 +772,6 @@ export class Dashboard {
             effectiveMode
         );
     }
-
-    protected readonly calcDelta = calcDelta;
 
     protected getCurrentDateRange() {
         return this.reportRange.currentDateRange();

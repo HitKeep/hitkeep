@@ -100,8 +100,8 @@
                     <p-skeleton width="80px" height="2rem" />
                     } @else {
                     <div class="text-2xl xl:text-3xl font-bold tabular-nums leading-none"><app-animated-number [value]="totalEventCount()" /></div>
-                    @if (totalEventDelta() !== null) {
-                    <span [class]="totalEventDeltaClass()">{{ totalEventDeltaLabel() }}</span>
+                    @if (seriesRange()) {
+                    <button appKpiComparisonTrigger [metricLabel]="totalEventKpi().label" [delta]="totalEventDelta()" (compare)="eventComparison.show(totalEventKpi().id, $event)"></button>
                     }
                     <div class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
                     }
@@ -121,6 +121,8 @@
             />
         </p-card>
     </div>
+
+    <app-kpi-comparison-dialog #eventComparison [cards]="[totalEventKpi()]" [currentPeriod]="seriesRange()" />
 
     <!-- Active filter chips — matches dashboard / goals / funnels / UTM pattern -->
     <div class="flex flex-wrap items-center gap-2 mb-6">

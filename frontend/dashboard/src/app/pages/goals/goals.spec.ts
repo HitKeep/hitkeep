@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocaleService } from '@jsverse/transloco-locale';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { provideRouter } from '@angular/router';
 
@@ -14,9 +14,12 @@ import { AccessService } from '@services/access.service';
 import { ConfirmationService } from '@openng/optimus-ui/api';
 import { Goal, GoalSeriesPoint, SiteStats } from '@models/analytics.types';
 import { emptySiteStats } from '@testing/empty-site-stats';
+import { previousPeriod } from '@core/analytics/comparison-period';
+import type { KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 
 interface GoalsReporting {
-    kpis: () => { value: number }[];
+    kpis: () => KpiComparisonCard[];
+    loadReporting: (siteId: string, from: string, to: string, cohortIds: string[], seriesIds: string[]) => void;
     pathSuggestions: () => string[];
     goalsError: () => boolean;
     goalSeries: () => GoalSeriesPoint[];
@@ -187,6 +190,20 @@ describe('Goals', () => {
         expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(3);
         expect(statsServiceStub.fetchStats.mock.calls.every((args) => args.length === 3)).toBe(true);
         expect(analyticsServiceStub.getGoalTimeseries).not.toHaveBeenCalled();
+    });
+
+    it('keeps the session baselines when the previous conversion series fails', () => {
+        const component = createReporting();
+        const current = { from: '2026-07-01T00:00:00.000Z', to: '2026-07-02T23:59:59.999Z' };
+        const previous = previousPeriod(current.from, current.to);
+        const comparison = { ...stats, total_conversions: 0 };
+        statsServiceStub.fetchStats.mockReturnValueOnce(of({ ...stats, unique_sessions: 2, comparison: { ...comparison, unique_sessions: 0 } })).mockReturnValueOnce(of({ ...stats, comparison: { ...comparison, unique_sessions: 8 } }));
+        analyticsServiceStub.getGoalTimeseries.mockReturnValueOnce(of([{ time: current.from, conversions: 2 }])).mockReturnValueOnce(throwError(() => new Error('Previous series unavailable')));
+
+        component.loadReporting('site-1', current.from, current.to, [goal.id], [goal.id]);
+
+        expect(component.kpis().map((card) => card.value)).toEqual([2, 2, 50]);
+        expect(component.kpis().map((card) => card.previous)).toEqual([null, { period: previous, value: 0 }, { period: previous, value: 0 }]);
     });
 
     it('preserves the definitions error without loading an empty report', () => {

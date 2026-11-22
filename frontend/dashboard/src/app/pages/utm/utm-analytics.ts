@@ -2,14 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, injec
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { isIntradayPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoDecimalPipe } from '@jsverse/transloco-locale';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SiteService } from '@features/sites/services/site.service';
 import { injectStatsQuery, type StatsQueryMode } from '@features/analytics/services/stats-query';
 import { PageState } from '@components/page-state/page-state';
-import { KpiCard } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
@@ -26,7 +26,7 @@ interface MetricFilter {
 @Component({
     selector: 'app-utm-analytics',
     standalone: true,
-    imports: [TranslocoPipe, TranslocoDecimalPipe, CardModule, PageState, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart],
+    imports: [TranslocoPipe, TranslocoDecimalPipe, CardModule, PageState, ReportRangeToolbar, KpiComparisonCards, MetricCardGroup, SeriesChart],
     templateUrl: './utm-analytics.html',
     styleUrl: './utm-analytics.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -96,53 +96,59 @@ export class UtmAnalytics {
             }
         ];
     });
-    protected readonly utmKpis = computed(() => {
+    protected readonly utmKpis = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         const stats = this.stats();
         const cmp = stats?.comparison;
+        const period = this.comparisonRange();
         const loading = this.isStatsLoading();
         const updateKey = this.kpiUpdateKey();
 
         return [
             {
+                id: 'campaign',
                 label: this.transloco.translate('utm.kpis.campaign'),
                 value: stats?.utm_campaign_hits ?? 0,
                 loading,
                 updateKey,
                 valueClass: 'text-2xl xl:text-3xl font-bold',
-                delta: cmp ? this.calcDelta(stats?.utm_campaign_hits ?? 0, cmp.utm_campaign_hits) : null
+                previous: kpiBaseline(period, cmp?.utm_campaign_hits)
             },
             {
+                id: 'content',
                 label: this.transloco.translate('utm.kpis.content'),
                 value: stats?.utm_content_hits ?? 0,
                 loading,
                 updateKey,
                 valueClass: 'text-2xl xl:text-3xl font-bold',
-                delta: cmp ? this.calcDelta(stats?.utm_content_hits ?? 0, cmp.utm_content_hits) : null
+                previous: kpiBaseline(period, cmp?.utm_content_hits)
             },
             {
+                id: 'medium',
                 label: this.transloco.translate('utm.kpis.medium'),
                 value: stats?.utm_medium_hits ?? 0,
                 loading,
                 updateKey,
                 valueClass: 'text-2xl xl:text-3xl font-bold',
-                delta: cmp ? this.calcDelta(stats?.utm_medium_hits ?? 0, cmp.utm_medium_hits) : null
+                previous: kpiBaseline(period, cmp?.utm_medium_hits)
             },
             {
+                id: 'source',
                 label: this.transloco.translate('utm.kpis.source'),
                 value: stats?.utm_source_hits ?? 0,
                 loading,
                 updateKey,
                 valueClass: 'text-2xl xl:text-3xl font-bold',
-                delta: cmp ? this.calcDelta(stats?.utm_source_hits ?? 0, cmp.utm_source_hits) : null
+                previous: kpiBaseline(period, cmp?.utm_source_hits)
             },
             {
+                id: 'term',
                 label: this.transloco.translate('utm.kpis.term'),
                 value: stats?.utm_term_hits ?? 0,
                 loading,
                 updateKey,
                 valueClass: 'text-2xl xl:text-3xl font-bold',
-                delta: cmp ? this.calcDelta(stats?.utm_term_hits ?? 0, cmp.utm_term_hits) : null
+                previous: kpiBaseline(period, cmp?.utm_term_hits)
             }
         ];
     });
@@ -250,8 +256,6 @@ export class UtmAnalytics {
             onSuccess: effectiveMode === 'background' ? () => this.kpiUpdateKey.update((key) => key + 1) : undefined
         });
     }
-
-    protected readonly calcDelta = calcDelta;
 
     protected applyMetricFilter(type: MetricFilterType, metric: { name: string }) {
         this.activeFilters.update((filters) => toggleDimensionFilter(filters, type, metric.name));

@@ -15,12 +15,14 @@ import { FilterChipItem, FilterChipRow } from '@components/filter-chip-row/filte
 import { NoSiteSelected } from '@components/no-site-selected/no-site-selected';
 import { SetupCallout } from '@components/setup-callout/setup-callout';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
-import { KPI_PERCENT_FORMAT, KpiCard, KpiCardModel } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { EventAudience, MetricStat } from '@models/analytics.types';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta, safeRate } from '@core/analytics/delta-utils';
+import { safeRate } from '@core/analytics/delta-utils';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { SetupStateService } from '@services/setup-state.service';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
@@ -50,7 +52,7 @@ const CHATBOT_EVENTS: Record<ChatbotMetricKey, string> = {
 
 @Component({
     selector: 'app-ai-chatbots',
-    imports: [FormsModule, TranslocoPipe, SelectModule, ButtonModule, CardModule, ReportRangeToolbar, ExportSplitButton, ExportStatusBanner, FilterChipRow, NoSiteSelected, SetupCallout, SeriesChart, KpiCard, MetricCardGroup],
+    imports: [FormsModule, TranslocoPipe, SelectModule, ButtonModule, CardModule, ReportRangeToolbar, ExportSplitButton, ExportStatusBanner, FilterChipRow, NoSiteSelected, SetupCallout, SeriesChart, KpiComparisonCards, MetricCardGroup],
     templateUrl: './ai-chatbots.html',
     styleUrl: './ai-chatbots.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -230,15 +232,15 @@ export class AIChatbots {
     protected readonly citationCtr = computed(() => this.safeRate(this.totalClicked(), this.totalRendered()));
     protected readonly comparisonCitationCtr = computed(() => this.safeRate(this.comparisonClicked(), this.comparisonRendered()));
 
-    protected readonly kpiCards = computed<KpiCardModel[]>(() => {
+    protected readonly kpiCards = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         return [
-            this.kpi(this.transloco.translate('aiChatbots.kpis.conversations'), this.totalStarted(), this.calcDelta(this.totalStarted(), this.comparisonStarted())),
-            this.kpi(this.transloco.translate('aiChatbots.kpis.prompts'), this.totalSent(), this.calcDelta(this.totalSent(), this.comparisonSent())),
-            this.kpi(this.transloco.translate('aiChatbots.kpis.responses'), this.totalRendered(), this.calcDelta(this.totalRendered(), this.comparisonRendered())),
-            this.kpi(this.transloco.translate('aiChatbots.kpis.assistedConversions'), this.totalAssisted(), this.calcDelta(this.totalAssisted(), this.comparisonAssisted())),
-            this.kpi(this.transloco.translate('aiChatbots.kpis.handoffRate'), this.handoffRate(), this.calcDelta(this.handoffRate(), this.comparisonHandoffRate()), KPI_PERCENT_FORMAT, '%'),
-            this.kpi(this.transloco.translate('aiChatbots.kpis.citationCtr'), this.citationCtr(), this.calcDelta(this.citationCtr(), this.comparisonCitationCtr()), KPI_PERCENT_FORMAT, '%')
+            this.kpi('conversations', this.totalStarted(), this.comparisonStarted()),
+            this.kpi('prompts', this.totalSent(), this.comparisonSent()),
+            this.kpi('responses', this.totalRendered(), this.comparisonRendered()),
+            this.kpi('assistedConversions', this.totalAssisted(), this.comparisonAssisted()),
+            this.kpi('handoffRate', this.handoffRate(), this.comparisonHandoffRate(), KPI_PERCENT_FORMAT, '%'),
+            this.kpi('citationCtr', this.citationCtr(), this.comparisonCitationCtr(), KPI_PERCENT_FORMAT, '%')
         ];
     });
     protected readonly metricCardTabs = computed<MetricCardGroupTab<AudienceDimensionFilterType>[]>(() => {
@@ -624,18 +626,15 @@ export class AIChatbots {
         return safeRate(numerator, denominator);
     }
 
-    private calcDelta(current: number, previous: number): number | null {
-        return calcDelta(current, previous);
-    }
-
-    private kpi(label: string, value: number | string, delta: number | null, format?: Intl.NumberFormatOptions, suffix?: string): KpiCardModel {
+    private kpi(id: string, value: number, previous: number, format?: Intl.NumberFormatOptions, suffix?: string): KpiComparisonCard {
         return {
-            label,
+            id,
+            label: this.transloco.translate(`aiChatbots.kpis.${id}`),
             value,
-            delta,
+            previous: kpiBaseline(this.comparisonRange(), previous),
             format,
             suffix,
-            loading: false,
+            loading: this.isLoadingSeries(),
             updateKey: this.kpiUpdateKey()
         };
     }

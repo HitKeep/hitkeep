@@ -8,6 +8,7 @@ import { Subject } from 'rxjs';
 import { vi } from 'vitest';
 
 import type { FilterChipItem } from '@components/filter-chip-row/filter-chip-row';
+import { kpiDelta, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import type { MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import type { SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { SiteService } from '@features/sites/services/site.service';
@@ -18,15 +19,6 @@ import { aiActivityStat, emptyAIActivityComparison, emptyAIActivityReport, empty
 import { flushAnnotations } from '@testing/annotations';
 import { flushSetupState } from '@testing/setup-state';
 import { AIAgentsPage } from './ai-agents-page';
-
-interface AgentKpiCard {
-    id: string;
-    label: string;
-    value: number | string;
-    loading: boolean;
-    delta?: number | null;
-    suffix?: string;
-}
 
 interface StatStrip {
     label: string;
@@ -41,7 +33,7 @@ interface StatStripGroup {
 }
 
 interface PageInternals {
-    kpiCards: () => AgentKpiCard[];
+    kpiCards: () => KpiComparisonCard[];
     cardGroups: () => MetricCardGroupTab[];
     correlation: () => AIFetchCorrelationReport | null;
     fetchDepthGroups: () => StatStripGroup[];
@@ -260,7 +252,9 @@ describe('AIAgentsPage', () => {
 
     it('maps four merged KPIs with deltas from the report comparison', () => {
         create();
-        flushActivity(
+        const [request] = matching(ACTIVITY_URL);
+        const period = { from: request.request.params.get('compare_from'), to: request.request.params.get('compare_to') };
+        request.flush(
             emptyAIActivityReport({
                 ai_requests: 120,
                 referral_visits: 30,
@@ -269,12 +263,14 @@ describe('AIAgentsPage', () => {
                 comparison: emptyAIActivityComparison({ ai_requests: 100, referral_visits: 60, paths_crawled: 4, pageviews: 400 })
             })
         );
+        fixture.detectChanges();
 
         const cards = instance().kpiCards();
         expect(cards.map((card) => card.id)).toEqual(['ai_requests', 'referral_visits', 'paths_crawled', 'share_of_pageviews']);
         expect(cards.map((card) => card.label)).toEqual(['AI requests', 'AI referral visits', 'Pages crawled', 'Share of pageviews']);
         expect(cards.map((card) => card.value)).toEqual([120, 30, 8, 20]);
-        expect(cards.map((card) => card.delta)).toEqual([20, -50, 100, -20]);
+        expect(cards.map(kpiDelta)).toEqual([20, -50, 100, -20]);
+        expect(cards.map((card) => card.previous)).toEqual([100, 60, 4, 25].map((value) => ({ period, value })));
         expect(cards[3].suffix).toBe('%');
         expect(fixture.nativeElement.querySelectorAll('[data-testid="ai-agent-traffic-kpis"] app-kpi-card').length).toBe(4);
         expect(fixture.nativeElement.textContent).toContain('Tracked hits and forwarded logs are merged.');
@@ -287,7 +283,7 @@ describe('AIAgentsPage', () => {
         expect(
             instance()
                 .kpiCards()
-                .map((card) => card.delta)
+                .map((card) => card.previous)
         ).toEqual([null, null, null, null]);
     });
 

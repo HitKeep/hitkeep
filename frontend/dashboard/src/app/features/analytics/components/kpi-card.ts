@@ -4,8 +4,10 @@ import { AnimatedNumber } from '@components/animated-number/animated-number';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
 import { injectSkeletonGate } from '@services/report-subject.service';
-import { injectActiveLang } from '@core/i18n/active-lang';
-import { localeForLanguage } from '@core/i18n/duration-format';
+import { KPI_DELTA_FORMAT, kpiDeltaClass } from './kpi-comparison-metric';
+import { KpiComparisonTrigger } from './kpi-comparison-trigger';
+
+export { KPI_DELTA_FORMAT } from './kpi-comparison-metric';
 
 export const KPI_PERCENT_FORMAT: Intl.NumberFormatOptions = Object.freeze({
     minimumFractionDigits: 1,
@@ -27,13 +29,6 @@ export const KPI_MONEY_FALLBACK_FORMAT: Intl.NumberFormatOptions = Object.freeze
     maximumFractionDigits: 2
 });
 
-export const KPI_DELTA_FORMAT: Intl.NumberFormatOptions = Object.freeze({
-    style: 'percent',
-    signDisplay: 'exceptZero',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1
-});
-
 export interface KpiCardModel {
     label: string;
     value: string | number;
@@ -43,7 +38,6 @@ export interface KpiCardModel {
     prefix?: string;
     suffix?: string;
     duration?: boolean;
-    delta?: number | null;
     invertDelta?: boolean;
     updateKey?: number;
 }
@@ -51,7 +45,7 @@ export interface KpiCardModel {
 @Component({
     selector: 'app-kpi-card',
     standalone: true,
-    imports: [CardModule, SkeletonModule, AnimatedDuration, AnimatedNumber],
+    imports: [CardModule, SkeletonModule, AnimatedDuration, AnimatedNumber, KpiComparisonTrigger],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <p-card class="shadow-sm h-full border border-surface-200 dark:border-surface-700 surface-card">
@@ -77,18 +71,8 @@ export interface KpiCardModel {
                     }
                 </div>
                 @let deltaValue = normalizedDelta();
-                @if (!showSkeleton() && comparisonLabel()) {
-                    <button
-                        #trigger
-                        type="button"
-                        class="hk-kpi-card__content inline-flex min-h-11 min-w-11 max-w-full cursor-pointer items-center gap-1.5 self-start rounded-md px-1 text-muted-color hover:bg-surface-100 focus-visible:outline focus-visible:outline-offset-[-2px] dark:hover:bg-surface-800"
-                        aria-haspopup="dialog"
-                        [attr.aria-label]="comparisonDelta() ? comparisonLabel() + ' · ' + comparisonDelta() : comparisonLabel()"
-                        (click)="compare.emit(trigger)"
-                    >
-                        <span [class]="deltaValue === null ? 'text-xs font-medium' : deltaClass()">{{ comparisonDelta() || comparisonFallback() }}</span>
-                        <i class="pi pi-info-circle shrink-0 text-xs" aria-hidden="true"></i>
-                    </button>
+                @if (!showSkeleton() && comparable() && numericValue() !== null) {
+                    <button appKpiComparisonTrigger class="hk-kpi-card__content self-start" [metricLabel]="label()" [delta]="delta()" [invertDelta]="invertDelta()" (compare)="compare.emit($event)"></button>
                 } @else if (!showSkeleton() && deltaValue !== null) {
                     <div class="hk-kpi-card__content flex items-center gap-1">
                         <span [class]="deltaClass()"><app-animated-number [value]="deltaValue" [format]="deltaFormat" /></span>
@@ -147,11 +131,9 @@ export class KpiCard implements OnChanges, OnDestroy {
     delta = input<number | null>(null);
     invertDelta = input<boolean>(false);
     description = input('');
-    comparisonLabel = input('');
-    comparisonFallback = input('');
+    comparable = input(false);
     compare = output<HTMLButtonElement>();
 
-    private readonly activeLanguage = injectActiveLang();
     private cueSequence = 0;
     private cueTimer: ReturnType<typeof setTimeout> | null = null;
     /** Whether a value was on screen before the change currently being handled. */
@@ -170,20 +152,7 @@ export class KpiCard implements OnChanges, OnDestroy {
         if (delta === null || !Number.isFinite(delta)) return null;
         return delta / 100;
     });
-    protected readonly comparisonDelta = computed(() => {
-        const delta = this.normalizedDelta();
-        return delta === null ? '' : new Intl.NumberFormat(localeForLanguage(this.activeLanguage()), this.deltaFormat).format(delta);
-    });
-
-    protected deltaClass = computed(() => {
-        const normalized = this.normalizedDelta();
-        if (normalized === null) return '';
-        if (normalized === 0) return 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-surface-100 dark:bg-surface-800 text-muted-color';
-        const positive = this.invertDelta() ? normalized < 0 : normalized > 0;
-        return positive
-            ? 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-            : 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-    });
+    protected readonly deltaClass = computed(() => kpiDeltaClass(this.delta(), this.invertDelta()));
 
     ngOnChanges(changes: SimpleChanges): void {
         const skeleton = this.showSkeleton();

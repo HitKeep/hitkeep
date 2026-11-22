@@ -42,55 +42,7 @@
     } @else if (siteService.activeSite()) {
     <!-- KPI Cards -->
     <!-- TODO: Refactor for mobile, weird UX -->
-    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        @for (card of kpiCards(); track card.id) {
-        <app-kpi-card
-            [label]="card.label"
-            [value]="card.value"
-            [loading]="card.loading"
-            [updateKey]="card.updateKey ?? 0"
-            [valueClass]="card.valueClass"
-            [format]="card.format"
-            [suffix]="card.suffix"
-            [duration]="card.duration ?? false"
-            [delta]="card.delta ?? null"
-            [invertDelta]="card.invertDelta ?? false"
-            [description]="card.id === 'live_visitors' && stats() ? ('comparison.liveOnly' | transloco) : ''"
-            [comparisonLabel]="card.id !== 'live_visitors' && stats() ? ('comparison.openMetric' | transloco: { metric: card.label }) : ''"
-            [comparisonFallback]="'comparison.compare' | transloco"
-            (compare)="openKpiComparison(card.id, $event)"
-        />
-        }
-    </div>
-
-    <app-dialog-shell
-        [title]="comparisonMetric()?.label ?? ''"
-        [visible]="comparisonOpen()"
-        (visibleChange)="$event || comparisonOpen.set(false)"
-        (closed)="restoreComparisonFocus()"
-        [secondaryLabel]="'common.actions.close' | transloco"
-        [showPrimary]="false"
-        width="32rem"
-    >
-        @if (comparisonMetric(); as metric) {
-        <div class="space-y-4 text-sm" data-testid="kpi-comparison">
-            <app-comparison-periods [current]="seriesRange()" [previous]="comparisonRange()" [currentValue]="metric.current" [previousValue]="metric.previous" />
-            <dl class="grid grid-cols-2 gap-4 border-t border-surface-200 pt-4 dark:border-surface-700">
-                <div>
-                    <dt class="text-muted-color">{{ 'comparison.absoluteChange' | transloco }}</dt>
-                    <dd class="m-0 mt-0.5 font-semibold tabular-nums">{{ metric.absolute ?? ('comparison.unavailable' | transloco) }}</dd>
-                </div>
-                <div>
-                    <dt class="text-muted-color">{{ 'comparison.relativeChange' | transloco }}</dt>
-                    <dd class="m-0 mt-0.5 font-semibold tabular-nums">{{ metric.relative ?? ('comparison.unavailable' | transloco) }}</dd>
-                </div>
-            </dl>
-            @if (metric.zeroBaseline) {
-            <p class="text-muted-color">{{ 'comparison.zeroBaseline' | transloco }}</p>
-            }
-        </div>
-        }
-    </app-dialog-shell>
+    <app-kpi-comparison-cards [cards]="kpiCards()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6" />
 
     <!-- Traffic Chart -->
     <div class="mb-6">

@@ -99,6 +99,14 @@ describe('Events', () => {
                                     docsAction: 'Read the custom events guide'
                                 }
                             },
+                            comparison: {
+                                openMetric: 'Compare {{metric}}',
+                                compare: 'Compare',
+                                currentPeriod: 'Current period',
+                                previousPeriod: 'Previous period',
+                                absoluteChange: 'Absolute change',
+                                relativeChange: 'Relative change'
+                            },
                             dashboard: {
                                 filteredBadge: 'Filtered'
                             },
@@ -107,7 +115,8 @@ describe('Events', () => {
                                 noActiveFilter: 'No active filter',
                                 removeFilterAria: 'Remove filter',
                                 actions: {
-                                    clearAll: 'Clear all'
+                                    clearAll: 'Clear all',
+                                    close: 'Close'
                                 },
                                 metrics: {
                                     topPages: 'Top Pages',
@@ -220,6 +229,26 @@ describe('Events', () => {
 
     it('skips the setup-state lookup while the selected range has custom events', () => {
         httpMock.expectNone('/api/sites/site-1/setup-state');
+    });
+
+    it('opens and closes the shared comparison for the inline event total', async () => {
+        const report = component as unknown as EventsReport;
+        report.selectedEvent.set('newsletter_signup');
+        await fixture.whenStable();
+
+        const trigger = fixture.nativeElement.querySelector('button[aria-label="Compare Total events · 0.0%"]') as HTMLButtonElement;
+        trigger.click();
+        await fixture.whenStable();
+
+        expect(fixture.nativeElement.querySelectorAll('app-kpi-comparison-dialog').length).toBe(1);
+        const comparison = document.body.querySelector('[data-testid="kpi-comparison"]')!;
+        const values = Array.from(comparison.querySelectorAll('dl:first-child dd, :scope > dl dd'), (cell) => cell.textContent?.trim());
+        expect(values).toEqual(['12', '12', '0', '0.0%']);
+
+        document.body.querySelector<HTMLButtonElement>('.dialog-shell-footer button')!.click();
+        fixture.detectChanges();
+        await vi.waitFor(() => expect(document.body.querySelector('[data-testid="kpi-comparison"]')).toBeNull());
+        expect(document.activeElement).toBe(trigger);
     });
 
     it('marks automatic events in the event dropdown', async () => {

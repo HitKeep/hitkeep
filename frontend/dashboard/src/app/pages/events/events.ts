@@ -17,7 +17,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
+import { KpiComparisonDialog } from '@features/analytics/components/kpi-comparison-dialog';
+import { KpiComparisonTrigger } from '@features/analytics/components/kpi-comparison-trigger';
+import { kpiBaseline, type KpiComparisonCard, kpiDelta } from '@features/analytics/components/kpi-comparison-metric';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_EVENT_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
@@ -52,7 +54,24 @@ const AUTOMATIC_EVENT_NAMES = Object.keys(AUTOMATIC_EVENT_META);
 
 @Component({
     selector: 'app-events',
-    imports: [FormsModule, ReactiveFormsModule, TranslocoPipe, SelectModule, CardModule, SkeletonModule, ButtonModule, MessageModule, MetricCardGroup, ReportRangeToolbar, SeriesChart, AnimatedNumber, NoSiteSelected, SetupCallout],
+    imports: [
+        FormsModule,
+        ReactiveFormsModule,
+        TranslocoPipe,
+        SelectModule,
+        CardModule,
+        SkeletonModule,
+        ButtonModule,
+        MessageModule,
+        MetricCardGroup,
+        ReportRangeToolbar,
+        SeriesChart,
+        AnimatedNumber,
+        KpiComparisonDialog,
+        KpiComparisonTrigger,
+        NoSiteSelected,
+        SetupCallout
+    ],
     templateUrl: './events.html',
     styleUrl: './events.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -98,7 +117,17 @@ export class Events {
     protected readonly comparisonEventSeriesChart = computed<SeriesChartPoint[]>(() => this.comparisonEventSeries().map((p) => ({ time: p.time, count: p.count })));
     protected readonly totalEventCount = computed(() => this.eventSeries().reduce((sum, p) => sum + p.count, 0));
     protected readonly comparisonTotalCount = computed(() => this.comparisonEventSeries().reduce((sum, p) => sum + p.count, 0));
-    protected readonly totalEventDelta = computed(() => this.calcDelta(this.totalEventCount(), this.comparisonTotalCount()));
+    protected readonly totalEventKpi = computed<KpiComparisonCard>(() => {
+        this.activeLanguage();
+        return {
+            id: 'total_events',
+            label: this.transloco.translate('events.kpis.totalEvents'),
+            value: this.totalEventCount(),
+            loading: this.isLoadingEventSeries(),
+            previous: kpiBaseline(this.comparisonRange(), this.comparisonTotalCount())
+        };
+    });
+    protected readonly totalEventDelta = computed(() => kpiDelta(this.totalEventKpi()));
     protected readonly isLoading = computed(() => this.isLoadingNames() || this.isLoadingEventSeries());
     protected readonly showEventTotalSkeleton = injectSkeletonGate(this.isLoadingEventSeries, () => this.eventSeries().length > 0);
 
@@ -161,19 +190,6 @@ export class Events {
 
     protected readonly hasActiveFilters = computed(() => this.filterChips().length > 0);
 
-    protected readonly totalEventDeltaClass = computed(() => {
-        const d = this.totalEventDelta();
-        if (d === null) return '';
-        return d >= 0
-            ? 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-            : 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-    });
-
-    protected readonly totalEventDeltaLabel = computed(() => {
-        const d = this.totalEventDelta();
-        if (d === null) return '';
-        return `${d >= 0 ? '+' : ''}${d.toFixed(1)}%`;
-    });
     protected readonly metricCardTabs = computed<MetricCardGroupTab<EventMetricFilterType>[]>(() => {
         this.activeLanguage();
         const audience = this.audience();
@@ -424,8 +440,6 @@ export class Events {
             debounceMs: 700
         });
     }
-
-    protected readonly calcDelta = calcDelta;
 
     protected clearAllFilters() {
         this.selectedPropertyValue.set(null);

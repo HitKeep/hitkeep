@@ -12,14 +12,16 @@ import { MessageModule } from '@openng/optimus-ui/message';
 import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
 import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
+import { safeRate } from '@core/analytics/delta-utils';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
 import { PageState } from '@components/page-state/page-state';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
-import { KpiCard, KpiCardModel, KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -41,7 +43,23 @@ import { injectActiveLang } from '@core/i18n/active-lang';
 @Component({
     selector: 'app-goals',
     standalone: true,
-    imports: [ButtonModule, CardModule, ConfirmDialogModule, ConversionSubjectCard, GoalManager, KpiCard, MessageModule, PageState, ReportRangeToolbar, SeriesChart, AppTable, AppTableCell, TrafficRecordsCard, TranslocoDecimalPipe, TranslocoPipe],
+    imports: [
+        ButtonModule,
+        CardModule,
+        ConfirmDialogModule,
+        ConversionSubjectCard,
+        GoalManager,
+        KpiComparisonCards,
+        MessageModule,
+        PageState,
+        ReportRangeToolbar,
+        SeriesChart,
+        AppTable,
+        AppTableCell,
+        TrafficRecordsCard,
+        TranslocoDecimalPipe,
+        TranslocoPipe
+    ],
     providers: [ConfirmationService],
     templateUrl: './goals.html',
     styleUrl: './goals.css',
@@ -157,37 +175,44 @@ export class Goals {
             }
         ];
     });
-    protected kpis = computed<KpiCardModel[]>(() => {
+    protected kpis = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         const conversions = this.goalSeries().reduce((sum, point) => sum + point.conversions, 0);
         const comparisonConversions = this.comparisonGoalSeries().reduce((sum, point) => sum + point.conversions, 0);
         const convertingSessions = this.stats()?.unique_sessions ?? 0;
-        const comparisonConvertingSessions = this.stats()?.comparison?.unique_sessions ?? 0;
+        const comparisonConvertingSessions = this.stats()?.comparison?.unique_sessions;
         const allSessions = this.baselineStats()?.unique_sessions ?? 0;
-        const comparisonAllSessions = this.baselineStats()?.comparison?.unique_sessions ?? 0;
-        const rate = allSessions ? (convertingSessions / allSessions) * 100 : 0;
-        const comparisonRate = comparisonAllSessions ? (comparisonConvertingSessions / comparisonAllSessions) * 100 : 0;
+        const comparisonAllSessions = this.baselineStats()?.comparison?.unique_sessions;
+        const rate = safeRate(convertingSessions, allSessions);
+        const comparisonRate = comparisonConvertingSessions == null || comparisonAllSessions == null ? null : safeRate(comparisonConvertingSessions, comparisonAllSessions);
+        const seriesPeriod = this.comparisonRange();
+        const currentPeriod = this.seriesRange();
+        // Cohort and baseline stats use the same bounds but can succeed without the previous series.
+        const statsPeriod = currentPeriod ? previousPeriod(currentPeriod.from, currentPeriod.to) : null;
         const loading = this.seriesLoading();
         return [
             {
+                id: 'conversions',
                 label: this.transloco.translate('goals.kpis.conversions'),
                 value: conversions,
                 loading,
-                delta: calcDelta(conversions, comparisonConversions)
+                previous: kpiBaseline(seriesPeriod, comparisonConversions)
             },
             {
+                id: 'converting_sessions',
                 label: this.transloco.translate('goals.kpis.convertingSessions'),
                 value: convertingSessions,
                 loading,
-                delta: calcDelta(convertingSessions, comparisonConvertingSessions)
+                previous: kpiBaseline(statsPeriod, comparisonConvertingSessions)
             },
             {
+                id: 'conversion_rate',
                 label: this.transloco.translate('common.kpis.conversionRate'),
                 value: rate,
                 loading,
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: calcDelta(rate, comparisonRate)
+                previous: kpiBaseline(statsPeriod, comparisonRate)
             }
         ];
     });

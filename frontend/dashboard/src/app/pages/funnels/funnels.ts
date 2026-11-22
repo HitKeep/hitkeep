@@ -12,7 +12,6 @@ import { TagModule } from '@openng/optimus-ui/tag';
 import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
 import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
@@ -20,7 +19,9 @@ import { PageState } from '@components/page-state/page-state';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
-import { KpiCard, KpiCardModel, KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -40,7 +41,23 @@ import { EmbedService } from '@services/embed.service';
 @Component({
     selector: 'app-funnels',
     standalone: true,
-    imports: [ButtonModule, CardModule, ConfirmDialogModule, ConversionSubjectCard, FunnelManager, KpiCard, PageState, ReportRangeToolbar, SeriesChart, AppTable, AppTableCell, TagModule, TrafficRecordsCard, TranslocoDecimalPipe, TranslocoPipe],
+    imports: [
+        ButtonModule,
+        CardModule,
+        ConfirmDialogModule,
+        ConversionSubjectCard,
+        FunnelManager,
+        KpiComparisonCards,
+        PageState,
+        ReportRangeToolbar,
+        SeriesChart,
+        AppTable,
+        AppTableCell,
+        TagModule,
+        TrafficRecordsCard,
+        TranslocoDecimalPipe,
+        TranslocoPipe
+    ],
     providers: [ConfirmationService],
     templateUrl: './funnels.html',
     styleUrl: './funnels.css',
@@ -159,7 +176,7 @@ export class Funnels {
             }
         ];
     });
-    protected kpis = computed<KpiCardModel[]>(() => {
+    protected kpis = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         const entries = this.funnelSeries().reduce((sum, point) => sum + point.entries, 0);
         const completions = this.funnelSeries().reduce((sum, point) => sum + point.completions, 0);
@@ -167,26 +184,30 @@ export class Funnels {
         const comparisonCompletions = this.comparisonFunnelSeries().reduce((sum, point) => sum + point.completions, 0);
         const rate = entries ? (completions / entries) * 100 : 0;
         const comparisonRate = comparisonEntries ? (comparisonCompletions / comparisonEntries) * 100 : 0;
+        const period = this.comparisonRange();
         return [
             {
+                id: 'entries',
                 label: this.transloco.translate('funnels.kpis.entries'),
                 value: entries,
                 loading: this.seriesLoading(),
-                delta: calcDelta(entries, comparisonEntries)
+                previous: kpiBaseline(period, comparisonEntries)
             },
             {
+                id: 'completions',
                 label: this.transloco.translate('funnels.kpis.completions'),
                 value: completions,
                 loading: this.seriesLoading(),
-                delta: calcDelta(completions, comparisonCompletions)
+                previous: kpiBaseline(period, comparisonCompletions)
             },
             {
+                id: 'completion_rate',
                 label: this.transloco.translate('funnels.kpis.completionRate'),
                 value: rate,
                 loading: this.seriesLoading(),
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: calcDelta(rate, comparisonRate)
+                previous: kpiBaseline(period, comparisonRate)
             }
         ];
     });
