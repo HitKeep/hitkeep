@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	json "hitkeep/jsonapi"
 )
@@ -170,7 +169,7 @@ func (a *App) CaptureScreenshots(ctx context.Context, request ScreenshotRequest)
 		return ScreenshotResult{}, errors.New("development did not report a dashboard URL")
 	}
 
-	captureID := time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewString()[:8]
+	captureID := time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewV4().String()[:8]
 	outputDir := filepath.Join(a.workspace.StateDir, "artifacts", "screenshots", captureID)
 	if err := os.MkdirAll(outputDir, 0o700); err != nil {
 		return ScreenshotResult{}, fmt.Errorf("create screenshot artifact directory: %w", err)

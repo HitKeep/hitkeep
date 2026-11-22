@@ -17,8 +17,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	json "hitkeep/jsonapi"
 )
@@ -285,7 +284,7 @@ func (a *App) prepareDevSession(request DevRequest, owner DevOwner) (devSessionR
 	now := time.Now().UTC()
 	record := devSessionRecord{
 		State:        DevStateStarting,
-		GenerationID: time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewString()[:8],
+		GenerationID: time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewV4().String()[:8],
 		Variant:      request.Variant,
 		Owner:        owner,
 		StartedAt:    &now,

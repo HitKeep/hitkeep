@@ -18,8 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	json "hitkeep/jsonapi"
 )
@@ -57,7 +56,7 @@ func (a *App) StartRun(ctx context.Context, request RunRequest) (RunStart, error
 		}
 	}
 	_ = a.pruneTerminalRunTempRoots()
-	id := time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewString()[:8]
+	id := time.Now().UTC().Format("20060102T150405") + "-" + uuid.NewV4().String()[:8]
 	runTempEnvironment, err := a.prepareRunTempEnvironment(id)
 	if err != nil {
 		return RunStart{}, fmt.Errorf("prepare run temporary environment: %w", err)
@@ -1074,7 +1073,7 @@ func (a *App) acquireQASlots(ctx context.Context, weight int) (func(), error) {
 	if err := os.MkdirAll(queueDirectory, 0o700); err != nil {
 		return nil, err
 	}
-	waiterName := fmt.Sprintf("%020d-%d-%s", time.Now().UnixNano(), os.Getpid(), uuid.NewString())
+	waiterName := fmt.Sprintf("%020d-%d-%s", time.Now().UnixNano(), os.Getpid(), uuid.NewV4().String())
 	waiterPath := filepath.Join(queueDirectory, waiterName)
 	if err := os.WriteFile(waiterPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
 		return nil, err

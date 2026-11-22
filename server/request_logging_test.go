@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"uuid"
 
 	json "hitkeep/jsonapi"
 	"hitkeep/server/shared"
@@ -27,8 +28,9 @@ func TestRequestLoggingMiddlewareAddsRequestFields(t *testing.T) {
 	server.requestLoggingMiddleware(next).ServeHTTP(recorder, request)
 
 	requestID := recorder.Header().Get("X-Request-Id")
-	if requestID == "" {
-		t.Fatal("expected generated request ID")
+	id, err := uuid.Parse(requestID)
+	if err != nil || id.String() != requestID || id[6]>>4 != 4 {
+		t.Fatalf("request ID = %q, want canonical version 4 UUID", requestID)
 	}
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("response status = %d, want %d", recorder.Code, http.StatusCreated)
