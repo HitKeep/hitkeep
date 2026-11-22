@@ -70,8 +70,8 @@
                 [comparisonData]="comparisonChartSeries()"
                 [isLoading]="isLoadingSeries()"
                 [isShortRange]="isShortRange()"
-                [currentPeriodLabel]="currentPeriodLabel()"
-                [comparisonLabel]="comparisonLabel()"
+                [currentPeriod]="seriesRange()"
+                [previousPeriod]="comparisonRange()"
                 [emptyTitle]="'aiChatbots.chart.emptyTitle' | transloco"
                 [emptyDescription]="'aiChatbots.chart.emptyDescription' | transloco"
             />

@@ -11,7 +11,7 @@ import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 import { MessageModule } from '@openng/optimus-ui/message';
 import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
-import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
+import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
@@ -107,11 +107,9 @@ export class Goals {
     protected seriesLoading = signal(false);
     protected trafficRefreshKey = signal(0);
     protected isRefreshing = computed(() => this.goalsLoading() || this.seriesLoading());
-    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
-    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    protected readonly comparisonRange = signal<ComparisonPeriod | null>(null);
     protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
-    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
-    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
     protected canManage = computed(() => {
         const site = this.siteService.activeSite();
         return !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageGoals);

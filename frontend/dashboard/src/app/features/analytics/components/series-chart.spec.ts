@@ -24,6 +24,7 @@ function liveChart(setOption = vi.fn(), disposed = false) {
     const handlers = new Map<string, (params: unknown) => void>();
     return {
         setOption,
+        dispatchAction: vi.fn(),
         handlers,
         isDisposed: () => disposed,
         on: (name: string, fn: (params: unknown) => void) => handlers.set(name, fn),
@@ -37,6 +38,8 @@ describe('SeriesChart', () => {
     let fixture: ComponentFixture<SeriesChart>;
     let notes: ReturnType<typeof stubAnnotations>;
 
+    const tooltipFormatter = () => (component as unknown as { chartFrameOptions: () => { tooltip: { formatter: (params: { dataIndex: number; seriesId: string }[]) => HTMLElement } } }).chartFrameOptions().tooltip.formatter;
+
     beforeEach(async () => {
         notes = stubAnnotations();
         await TestBed.configureTestingModule({
@@ -44,8 +47,23 @@ describe('SeriesChart', () => {
                 SeriesChart,
                 TranslocoTestingModule.forRoot({
                     langs: {
-                        en: { comparison: { seriesLabel: '{{metric}} (previous)', bucketOrder: 'Paired by bucket order', gridMismatch: 'Different bucket grids' } },
-                        de: { comparison: { seriesLabel: '{{metric}} (vorher)' } }
+                        en: {
+                            comparison: {
+                                seriesLabel: '{{metric}} (previous)',
+                                currentPeriod: 'Current period',
+                                previousPeriod: 'Previous period',
+                                gridMismatch: 'Different bucket grids',
+                                inspectChart: 'Inspect chart'
+                            }
+                        },
+                        de: {
+                            comparison: {
+                                seriesLabel: '{{metric}} (vorher)',
+                                currentPeriod: 'Aktueller Zeitraum',
+                                previousPeriod: 'Vorheriger Zeitraum',
+                                inspectChart: 'Diagramm prüfen'
+                            }
+                        }
                     },
                     translocoConfig: {
                         availableLangs: ['en', 'de'],
@@ -135,26 +153,90 @@ describe('SeriesChart', () => {
         expect(merge.series.find((series) => series.name === 'Events')?.data).toEqual([5, 9]);
     });
 
-    it('renders a prior-only series on a valid zero-filled current grid and localizes the label', () => {
+    it('groups actual offset timestamps across midnight and includes genuine zero values', () => {
+        const local = (day: number, hour: number, minute: number) => new Date(2026, 6, day, hour, minute).toISOString();
         fixture.componentRef.setInput('data', [
-            { time: '2026-07-01T00:00:00Z', count: 0 },
-            { time: '2026-07-02T00:00:00Z', count: 0 }
+            { time: local(1, 23, 45), count: 0 },
+            { time: local(2, 0, 15), sessions: 1 }
         ]);
         fixture.componentRef.setInput('comparisonData', [
-            { time: '2026-06-28T00:00:00Z', count: 5 },
-            { time: '2026-06-29T00:00:00Z', count: 0 }
+            { time: local(1, 22, 45), count: 5, sessions: Number.POSITIVE_INFINITY },
+            { time: local(1, 23, 15), count: 6 }
         ]);
-        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
+        fixture.componentRef.setInput('series', [
+            { key: 'count', label: '<b>Events</b>', color: '#2563eb' },
+            { key: 'sessions', label: 'Sessions', color: '#10b981' }
+        ]);
+        fixture.componentRef.setInput('currentPeriod', { from: local(1, 23, 35), to: local(2, 0, 25) });
+        fixture.componentRef.setInput('previousPeriod', { from: local(1, 22, 35), to: local(1, 23, 25) });
         fixture.detectChanges();
 
-        const options = (component as unknown as { chartMergeOptions: () => { series: { name: string; data: number[] }[] } }).chartMergeOptions;
+        const options = (component as unknown as { chartMergeOptions: () => { series: { name: string; data: (number | null)[]; connectNulls?: boolean }[] } }).chartMergeOptions;
         expect(fixture.debugElement.query(By.css('[echarts]'))).toBeTruthy();
-        expect(fixture.nativeElement.textContent).toContain('Paired by bucket order');
-        expect(options().series[1]).toMatchObject({ name: 'Events (previous)', data: [5, 0] });
+        expect(fixture.nativeElement.querySelector('app-comparison-periods')).toBeNull();
+        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).toContain('Current period');
+        expect(options().series[0]).toMatchObject({ data: [0, null], connectNulls: false });
+        expect(options().series[2]).toMatchObject({ name: '<b>Events</b> (previous)', data: [5, 6] });
+        expect(options().series[3]).toMatchObject({ data: [null, null], connectNulls: false });
+
+        const formatter = tooltipFormatter();
+        const pointsAt = (dataIndex: number) => ['count', 'count-comparison'].map((seriesId) => ({ dataIndex, seriesId }));
+        const both = formatter(pointsAt(0));
+        expect(Array.from(both.querySelectorAll('strong'), (heading) => heading.textContent)).toEqual([expect.stringContaining('11:45'), expect.stringContaining('10:45')]);
+        expect(both.textContent).toContain('<b>Events</b>: 0');
+        expect(both.querySelector('b')).toBeNull();
+        const priorOnly = formatter(pointsAt(1));
+        expect(priorOnly.querySelectorAll('strong')).toHaveLength(1);
+        expect(priorOnly.textContent).toContain('11:15');
+        expect(priorOnly.textContent).toContain('<b>Events</b>: 6');
+        const acrossMidnight = formatter([...pointsAt(1), { dataIndex: 1, seriesId: 'sessions' }]);
+        expect(Array.from(acrossMidnight.querySelectorAll('strong'), (heading) => heading.textContent)).toEqual([expect.stringContaining('12:15'), expect.stringContaining('11:15')]);
+        expect(acrossMidnight.textContent).toContain('Sessions: 1');
+        expect(acrossMidnight.textContent).not.toContain('Sessions: 0');
 
         TestBed.inject(TranslocoService).setActiveLang('de');
         fixture.detectChanges();
-        expect(options().series[1].name).toBe('Events (vorher)');
+        expect(options().series[2].name).toBe('<b>Events</b> (vorher)');
+        expect(formatter(pointsAt(0)).textContent).toContain('Vorheriger Zeitraum');
+        expect(formatter(pointsAt(1)).textContent).toContain('23:15');
+    });
+
+    it('inspects points by keyboard, announces visible series, and dismisses with Escape', async () => {
+        fixture.componentRef.setInput('data', [
+            { time: '2026-07-01T00:00:00Z', count: 5 },
+            { time: '2026-07-02T00:00:00Z', count: 7 }
+        ]);
+        fixture.componentRef.setInput('comparisonData', [
+            { time: '2026-06-29T00:00:00Z', count: 3 },
+            { time: '2026-06-30T00:00:00Z', count: 9 }
+        ]);
+        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        const chart = liveChart();
+        (component as unknown as { onChartInit: (chart: unknown) => void }).onChartInit(chart);
+        const button = fixture.nativeElement.querySelector('button[aria-keyshortcuts]') as HTMLButtonElement;
+        const status = fixture.nativeElement.querySelector('[role="status"]') as HTMLElement;
+        const press = (key: string) => {
+            button.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+            fixture.detectChanges();
+        };
+        button.click();
+        await fixture.whenStable();
+        expect(status.textContent).toContain('Events: 3');
+        press('ArrowRight');
+        await fixture.whenStable();
+        expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'showTip', seriesIndex: 0, dataIndex: 1 });
+        expect(status.textContent).toContain('Events: 9');
+        chart.handlers.get('legendselectchanged')!({ selected: { 'Events (previous)': false } });
+        await fixture.whenStable();
+        expect(status.textContent).not.toContain('Previous period');
+        expect(tooltipFormatter()([{ dataIndex: 1, seriesId: 'count-comparison' }]).textContent).toBe('');
+        press('Escape');
+        await vi.waitFor(() => {
+            expect(button.getAttribute('aria-pressed')).toBe('false');
+            expect(status.textContent).toBe('');
+        });
     });
 
     it.each([
@@ -176,7 +258,30 @@ describe('SeriesChart', () => {
 
         const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions();
         expect(merge.series.map((series) => series.name)).toEqual(['Events']);
-        expect(fixture.nativeElement.textContent).toContain('Different bucket grids');
+        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).toContain('Different bucket grids');
+        const tip = tooltipFormatter()([
+            { dataIndex: 0, seriesId: 'count' },
+            { dataIndex: 0, seriesId: 'count-comparison' }
+        ]);
+        expect(tip.textContent).toContain('Events: 7');
+        expect(tip.textContent).not.toContain('Previous period');
+    });
+
+    it('only describes a previous series when one is plotted', () => {
+        fixture.componentRef.setInput('data', [{ time: '2026-07-01T00:00:00Z', count: 0, trend: 3 }]);
+        fixture.componentRef.setInput('comparisonData', [{ time: '2026-06-30T00:00:00Z', count: 0, trend: 2 }]);
+        const trend = { key: 'trend', label: 'Trend', color: '#2563eb', includeInComparison: false };
+        fixture.componentRef.setInput('series', [trend]);
+        fixture.detectChanges();
+
+        const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions;
+        expect(merge().series.map((series) => series.name)).toEqual(['Trend']);
+        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).not.toContain('Previous period');
+
+        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
+        fixture.detectChanges();
+        expect(fixture.debugElement.query(By.css('[echarts]'))).toBeNull();
+        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).not.toContain('Previous period');
     });
 
     it('patches a live chart with replaceMerge so dropped series cannot linger', async () => {

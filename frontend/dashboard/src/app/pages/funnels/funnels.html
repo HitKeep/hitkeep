@@ -42,8 +42,8 @@
             [isShortRange]="isShortRange()"
             [emptyTitle]="'funnels.series.emptyTitle' | transloco"
             [emptyDescription]="'funnels.series.emptyDescription' | transloco"
-            [currentPeriodLabel]="currentPeriodLabel()"
-            [comparisonLabel]="comparisonLabel()"
+            [currentPeriod]="seriesRange()"
+            [previousPeriod]="comparisonRange()"
         />
 
         @if (selectedFunnel() && funnelStats()) {

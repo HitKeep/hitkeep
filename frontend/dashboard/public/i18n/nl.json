@@ -1005,7 +1005,7 @@
     "trafficChartAria": "Verkeerskaart met gegevens voor de laatste {{count}}-intervallen",
     "traffic": {
       "visitors": "Bezoekers",
-      "trendLine": "Trendlijn"
+      "trendLine": "Bezoekerstrend"
     },
     "kpis": {
       "liveVisitors": "Levende bezoekers",
@@ -3156,22 +3156,25 @@
     }
   },
   "comparison": {
-    "details": "Periodes vergelijken",
-    "metric": "Metriek",
     "currentPeriod": "Huidige periode",
     "previousPeriod": "Vorige periode",
-    "relativeChange": "Relatieve verandering",
     "unavailable": "Niet beschikbaar",
-    "zeroBaseline": "Niet gedefinieerd (vorige waarde is nul)",
-    "elapsedRule": "De vorige periode eindigt direct vóór de huidige periode en duurt even lang. De relatieve verandering is berekend ten opzichte van de vorige waarde.",
-    "liveOnly": "Livebezoekers telt de afgelopen vijf minuten en heeft geen vergelijking.",
-    "currentOnlyBreakdowns": "Uitsplitsingen en verkeersrecords tonen alleen de huidige periode.",
-    "seriesLabel": "{{metric}} (vorige)",
-    "bucketOrder": "De reeksen zijn uitgelijnd op de volgorde van de tijdvakken. De as toont de datums van de huidige periode.",
-    "gridMismatch": "De vorige periode heeft een andere indeling in tijdvakken. Die reeks is daarom verborgen.",
+    "zeroBaseline": "Bij een vorige waarde van nul is geen procentuele wijziging mogelijk.",
+    "liveOnly": "Live bezoekers zijn bezoekers van de laatste vijf minuten.",
+    "currentOnlyBreakdowns": "Uitsplitsingen en verkeerslogboeken gaan over de huidige periode.",
+    "seriesLabel": "{{metric}} (vorig)",
+    "gridMismatch": "De vorige intervallen verschillen, waardoor de vorige reeks niet in de grafiek staat.",
     "vsLabel": "vs.",
-    "pageviewsLabel": "Pageviews (vorige periode)",
-    "visitorsLabel": "Bezoekers (vorige periode)"
+    "exactTimes": "Exacte tijden",
+    "sameElapsedTime": "De vorige periode eindigt vlak voor de huidige periode en duurt even lang.",
+    "compare": "Vergelijken",
+    "openMetric": "{{metric}} vergelijken",
+    "absoluteChange": "Absolute verandering",
+    "relativeChange": "Relatieve verandering",
+    "percentagePoints": "{{value}} procentpunt",
+    "inspectChart": "Grafiek verkennen",
+    "pointUnavailable": "Geen zichtbare waarden op dit punt.",
+    "inspectChartHint": "Gebruik de pijltjes links en rechts om tussen punten te bewegen. Druk op Escape om te sluiten."
   },
   "events": {
     "setup": {

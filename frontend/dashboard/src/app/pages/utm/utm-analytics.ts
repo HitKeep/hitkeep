@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
 import { injectActiveLang } from '@core/i18n/active-lang';
-import { injectPeriodLabel, isIntradayPeriod } from '@core/analytics/comparison-period';
+import { isIntradayPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoDecimalPipe } from '@jsverse/transloco-locale';
@@ -49,8 +49,8 @@ export class UtmAnalytics {
         if (this.statsQuery.blockingFailed() || measured == null || observed == null) return null;
         return { measured, observed, unobserved: measured - observed };
     });
-    protected readonly currentPeriodLabel = injectPeriodLabel(this.statsQuery.currentRange);
-    protected readonly comparisonLabel = injectPeriodLabel(this.statsQuery.comparisonRange);
+    protected readonly seriesRange = this.statsQuery.currentRange;
+    protected readonly comparisonRange = this.statsQuery.comparisonRange;
     protected readonly kpiUpdateKey = signal(0);
     protected isRefreshing = computed(() => this.isStatsLoading());
     protected readonly isShortRange = computed(() => isIntradayPeriod(this.statsQuery.currentRange()));

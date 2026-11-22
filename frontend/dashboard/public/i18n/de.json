@@ -1005,7 +1005,7 @@
     "trafficChartAria": "Traffic-Diagramm mit Daten für die letzten {{count}} Intervalle",
     "traffic": {
       "visitors": "Besucher",
-      "trendLine": "Trendlinie"
+      "trendLine": "Besuchertrend"
     },
     "kpis": {
       "liveVisitors": "Live-Besucher",
@@ -3212,22 +3212,25 @@
     }
   },
   "comparison": {
-    "details": "Zeitraumvergleich",
-    "metric": "Kennzahl",
     "currentPeriod": "Aktueller Zeitraum",
     "previousPeriod": "Vorheriger Zeitraum",
-    "relativeChange": "Relative Änderung",
     "unavailable": "Nicht verfügbar",
-    "zeroBaseline": "Nicht definiert (vorheriger Wert ist null)",
-    "elapsedRule": "Der vorherige Zeitraum endet unmittelbar vor dem aktuellen Zeitraum und ist genauso lang. Die relative Änderung bezieht sich auf den vorherigen Wert.",
-    "liveOnly": "Live-Besucher erfasst die letzten fünf Minuten und hat keinen Vergleichswert.",
-    "currentOnlyBreakdowns": "Aufschlüsselungen und Zugriffsprotokolle zeigen nur den aktuellen Zeitraum.",
-    "seriesLabel": "{{metric}} (vorher)",
-    "bucketOrder": "Die Reihen sind nach der Reihenfolge der Zeitintervalle ausgerichtet. Die Achse zeigt das Datum im aktuellen Zeitraum.",
-    "gridMismatch": "Der vorherige Zeitraum verwendet andere Zeitintervalle. Seine Datenreihe wird ausgeblendet.",
+    "zeroBaseline": "Bei einem vorherigen Wert von null lässt sich keine prozentuale Änderung berechnen.",
+    "liveOnly": "Live-Besucher erfasst die letzten fünf Minuten.",
+    "currentOnlyBreakdowns": "Aufschlüsselungen und Zugriffsprotokolle beziehen sich auf den aktuellen Zeitraum.",
+    "seriesLabel": "{{metric}} (vor.)",
+    "gridMismatch": "Die vorherigen Intervalle unterscheiden sich. Daher fehlt die vorherige Datenreihe im Diagramm.",
     "vsLabel": "vs.",
-    "pageviewsLabel": "Seitenaufrufe (vor.)",
-    "visitorsLabel": "Besucher (vor.)"
+    "exactTimes": "Genaue Zeiten",
+    "sameElapsedTime": "Der vorherige Zeitraum endet unmittelbar vor dem aktuellen und dauert genauso lange.",
+    "compare": "Vergleichen",
+    "openMetric": "{{metric}} vergleichen",
+    "absoluteChange": "Absolute Änderung",
+    "relativeChange": "Relative Änderung",
+    "percentagePoints": "{{value}} Prozentpunkte",
+    "inspectChart": "Diagramm prüfen",
+    "pointUnavailable": "An diesem Punkt sind keine Werte sichtbar.",
+    "inspectChartHint": "Mit der linken und rechten Pfeiltaste zwischen Punkten wechseln. Zum Schließen Escape drücken."
   },
   "events": {
     "setup": {

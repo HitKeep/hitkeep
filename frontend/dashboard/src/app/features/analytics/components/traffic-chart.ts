@@ -4,6 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { HitkeepChartDesign } from '@core/charts/hitkeep-chart-options';
+import type { ComparisonPeriod } from '@core/analytics/comparison-period';
 import { EmbedService } from '@services/embed.service';
 import { ChartDataPoint } from '@models/analytics.types';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart';
@@ -21,8 +22,8 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [comparisonData]="comparisonPoints()"
             [isLoading]="isLoading()"
             [isShortRange]="isShortRange()"
-            [currentPeriodLabel]="currentPeriodLabel()"
-            [comparisonLabel]="comparisonLabel()"
+            [currentPeriod]="currentPeriod()"
+            [previousPeriod]="previousPeriod()"
             [design]="design()"
             [showDesignSelector]="showDesignSelector()"
             ariaLabelKey="dashboard.trafficChartAria"
@@ -41,8 +42,8 @@ export class TrafficChart {
     comparisonData = input<ChartDataPoint[]>([]);
     isLoading = input<boolean>(false);
     isShortRange = input<boolean>(false);
-    currentPeriodLabel = input<string>('');
-    comparisonLabel = input<string>('');
+    currentPeriod = input<ComparisonPeriod | null>(null);
+    previousPeriod = input<ComparisonPeriod | null>(null);
     design = input<HitkeepChartDesign>('area');
     showDesignSelector = input<boolean>(true);
 
@@ -67,16 +68,14 @@ export class TrafficChart {
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
                 color: '#6366f1',
                 gradientFrom: 'rgba(99, 102, 241, 0.5)',
-                gradientTo: 'rgba(99, 102, 241, 0)',
-                comparisonLabel: this.transloco.translate('comparison.pageviewsLabel')
+                gradientTo: 'rgba(99, 102, 241, 0)'
             },
             {
                 key: 'visitors',
                 label: this.transloco.translate('dashboard.traffic.visitors'),
                 color: '#14b8a6',
                 gradientFrom: 'rgba(20, 184, 166, 0.5)',
-                gradientTo: 'rgba(20, 184, 166, 0)',
-                comparisonLabel: this.transloco.translate('comparison.visitorsLabel')
+                gradientTo: 'rgba(20, 184, 166, 0)'
             },
             {
                 key: 'visitors-trend',

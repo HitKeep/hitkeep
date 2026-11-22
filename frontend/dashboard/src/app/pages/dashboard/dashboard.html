@@ -55,73 +55,42 @@
             [duration]="card.duration ?? false"
             [delta]="card.delta ?? null"
             [invertDelta]="card.invertDelta ?? false"
+            [description]="card.id === 'live_visitors' && stats() ? ('comparison.liveOnly' | transloco) : ''"
+            [comparisonLabel]="card.id !== 'live_visitors' && stats() ? ('comparison.openMetric' | transloco: { metric: card.label }) : ''"
+            [comparisonFallback]="'comparison.compare' | transloco"
+            (compare)="openKpiComparison(card.id, $event)"
         />
         }
     </div>
 
-    <details data-testid="period-comparison" class="mb-6 rounded-lg border border-surface-200 px-4 py-2 dark:border-surface-700">
-        <summary class="cursor-pointer py-1 text-sm font-medium">{{ 'comparison.details' | transloco }}</summary>
-        <div class="space-y-2 pb-2 pt-1 text-sm">
-            @if (stats()) {
-            <p class="text-muted-color">{{ 'comparison.elapsedRule' | transloco }}</p>
-            <dl class="grid gap-x-2 gap-y-1 sm:grid-cols-[auto_1fr]">
-                <dt class="font-medium">{{ 'comparison.currentPeriod' | transloco }}</dt>
-                <dd>{{ currentPeriodLabel() }}</dd>
-                <dt class="font-medium">{{ 'comparison.previousPeriod' | transloco }}</dt>
-                <dd>{{ comparisonLabel() || ('comparison.unavailable' | transloco) }}</dd>
+    <app-dialog-shell
+        [title]="comparisonMetric()?.label ?? ''"
+        [visible]="comparisonOpen()"
+        (visibleChange)="$event || comparisonOpen.set(false)"
+        (closed)="restoreComparisonFocus()"
+        [secondaryLabel]="'common.actions.close' | transloco"
+        [showPrimary]="false"
+        width="32rem"
+    >
+        @if (comparisonMetric(); as metric) {
+        <div class="space-y-4 text-sm" data-testid="kpi-comparison">
+            <app-comparison-periods [current]="seriesRange()" [previous]="comparisonRange()" [currentValue]="metric.current" [previousValue]="metric.previous" />
+            <dl class="grid grid-cols-2 gap-4 border-t border-surface-200 pt-4 dark:border-surface-700">
+                <div>
+                    <dt class="text-muted-color">{{ 'comparison.absoluteChange' | transloco }}</dt>
+                    <dd class="m-0 mt-0.5 font-semibold tabular-nums">{{ metric.absolute ?? ('comparison.unavailable' | transloco) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-muted-color">{{ 'comparison.relativeChange' | transloco }}</dt>
+                    <dd class="m-0 mt-0.5 font-semibold tabular-nums">{{ metric.relative ?? ('comparison.unavailable' | transloco) }}</dd>
+                </div>
             </dl>
-            <div class="overflow-x-auto">
-                <table class="w-full text-start tabular-nums">
-                    <thead>
-                        <tr class="border-b border-surface-200 dark:border-surface-700">
-                            <th scope="col" class="py-1 text-start">{{ 'comparison.metric' | transloco }}</th>
-                            <th scope="col" class="px-2 py-1 text-end">{{ 'comparison.currentPeriod' | transloco }}</th>
-                            <th scope="col" class="px-2 py-1 text-end">{{ 'comparison.previousPeriod' | transloco }}</th>
-                            <th scope="col" class="py-1 text-end">{{ 'comparison.relativeChange' | transloco }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @for (card of kpiCards(); track card.id) { @if (card.id !== 'live_visitors') {
-                        <tr>
-                            <th scope="row" class="py-1 text-start font-medium">{{ card.label }}</th>
-                            <td class="px-2 py-1 text-end">
-                                @if (card.duration) {
-                                <app-animated-duration [value]="+card.value" />
-                                } @else {
-                                <app-animated-number [value]="+card.value" [format]="card.format" [suffix]="card.suffix" />
-                                }
-                            </td>
-                            <td class="px-2 py-1 text-end">
-                                @if (card.previousValue !== undefined) { @if (card.duration) {
-                                <app-animated-duration [value]="card.previousValue" />
-                                } @else {
-                                <app-animated-number [value]="card.previousValue" [format]="card.format" [suffix]="card.suffix" />
-                                } } @else {
-                                <span aria-hidden="true">—</span>
-                                <span class="sr-only">{{ 'comparison.unavailable' | transloco }}</span>
-                                }
-                            </td>
-                            <td class="py-1 text-end">
-                                @if (card.delta !== null && card.delta !== undefined) {
-                                <app-animated-number [value]="card.delta / 100" [format]="comparisonDeltaFormat" />
-                                } @else if (card.previousValue === 0) { {{ 'comparison.zeroBaseline' | transloco }} } @else {
-                                <span aria-hidden="true">—</span>
-                                <span class="sr-only">{{ 'comparison.unavailable' | transloco }}</span>
-                                }
-                            </td>
-                        </tr>
-                        } }
-                    </tbody>
-                </table>
-            </div>
-            <p class="text-muted-color">{{ 'comparison.liveOnly' | transloco }}</p>
-            } @else if (isStatsLoading()) {
-            <p role="status">{{ 'common.loadingSiteData' | transloco }}</p>
-            } @else {
-            <p>{{ 'comparison.unavailable' | transloco }}</p>
+            @if (metric.zeroBaseline) {
+            <p class="text-muted-color">{{ 'comparison.zeroBaseline' | transloco }}</p>
             }
         </div>
-    </details>
+        }
+    </app-dialog-shell>
 
     <!-- Traffic Chart -->
     <div class="mb-6">
@@ -139,8 +108,8 @@
                 [comparisonData]="stats()?.comparison?.chart_data || []"
                 [isLoading]="isStatsLoading()"
                 [isShortRange]="isShortRange()"
-                [currentPeriodLabel]="currentPeriodLabel()"
-                [comparisonLabel]="comparisonLabel()"
+                [currentPeriod]="seriesRange()"
+                [previousPeriod]="comparisonRange()"
                 (snippetClicked)="openTrackingSettings()"
             />
         </p-card>

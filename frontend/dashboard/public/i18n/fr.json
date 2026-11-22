@@ -1005,7 +1005,7 @@
     "trafficChartAria": "Graphique du trafic avec les données des {{count}} derniers intervalles",
     "traffic": {
       "visitors": "Visiteurs",
-      "trendLine": "Courbe de tendance"
+      "trendLine": "Tendance des visiteurs"
     },
     "kpis": {
       "liveVisitors": "Visiteurs en direct",
@@ -3173,22 +3173,25 @@
     }
   },
   "comparison": {
-    "details": "Comparaison des périodes",
-    "metric": "Indicateur",
     "currentPeriod": "Période actuelle",
     "previousPeriod": "Période précédente",
-    "relativeChange": "Variation relative",
     "unavailable": "Indisponible",
-    "zeroBaseline": "Indéfinie (la valeur précédente est nulle)",
-    "elapsedRule": "La période précédente se termine juste avant la période actuelle et couvre la même durée. La variation relative est calculée par rapport à la valeur précédente.",
-    "liveOnly": "Les visiteurs en direct couvrent les cinq dernières minutes, sans comparaison.",
-    "currentOnlyBreakdowns": "Les ventilations et les journaux de trafic portent uniquement sur la période actuelle.",
-    "seriesLabel": "{{metric}} (période précédente)",
-    "bucketOrder": "Les séries sont alignées selon l’ordre des intervalles. L’axe affiche les dates de la période actuelle.",
-    "gridMismatch": "La période précédente utilise des intervalles différents. Sa série est masquée.",
+    "zeroBaseline": "Une valeur précédente de zéro ne permet pas de calculer la variation en pourcentage.",
+    "liveOnly": "Les visiteurs en direct correspondent aux cinq dernières minutes.",
+    "currentOnlyBreakdowns": "Les ventilations et les journaux de trafic portent sur la période actuelle.",
+    "seriesLabel": "{{metric}} (préc.)",
+    "gridMismatch": "Les intervalles précédents diffèrent, ce qui empêche d’afficher la série précédente sur ce graphique.",
     "vsLabel": "c/a",
-    "pageviewsLabel": "Pages vues (préc.)",
-    "visitorsLabel": "Visiteurs (préc.)"
+    "exactTimes": "Heures exactes",
+    "sameElapsedTime": "La période précédente se termine juste avant la période actuelle et dure aussi longtemps.",
+    "compare": "Comparer",
+    "openMetric": "Comparer {{metric}}",
+    "absoluteChange": "Variation absolue",
+    "relativeChange": "Variation relative",
+    "percentagePoints": "{{value}} points de pourcentage",
+    "inspectChart": "Explorer le graphique",
+    "pointUnavailable": "Aucune valeur visible à ce point.",
+    "inspectChartHint": "Utilisez les flèches gauche et droite pour changer de point. Appuyez sur Échap pour fermer."
   },
   "events": {
     "setup": {

@@ -998,7 +998,7 @@
     "trafficChartAria": "Gráfico de tráfego com dados para os últimos {{count}} intervalos",
     "traffic": {
       "visitors": "Visitantes",
-      "trendLine": "Linha de tendência"
+      "trendLine": "Tendência de visitantes"
     },
     "kpis": {
       "liveVisitors": "Visitantes online",
@@ -3146,22 +3146,25 @@
     }
   },
   "comparison": {
-    "details": "Comparação de períodos",
-    "metric": "Métrica",
     "currentPeriod": "Período atual",
     "previousPeriod": "Período anterior",
-    "relativeChange": "Variação relativa",
     "unavailable": "Indisponível",
-    "zeroBaseline": "Indefinida (o valor anterior é zero)",
-    "elapsedRule": "O período anterior termina imediatamente antes do atual e tem a mesma duração. A variação relativa é calculada em relação ao valor anterior.",
-    "liveOnly": "Os visitantes em tempo real abrangem os últimos cinco minutos e não têm comparação.",
-    "currentOnlyBreakdowns": "Os detalhamentos e os registros de tráfego mostram apenas o período atual.",
-    "seriesLabel": "{{metric}} (anterior)",
-    "bucketOrder": "As séries são alinhadas pela ordem dos intervalos. O eixo mostra as datas do período atual.",
-    "gridMismatch": "O período anterior usa intervalos diferentes e a série correspondente fica oculta.",
+    "zeroBaseline": "Quando o valor anterior é zero, não é possível calcular a variação percentual.",
+    "liveOnly": "A contagem de visitantes em tempo real abrange os últimos cinco minutos.",
+    "currentOnlyBreakdowns": "Os detalhamentos e os registros de tráfego correspondem ao período atual.",
+    "seriesLabel": "{{metric}} (ant.)",
+    "gridMismatch": "Como os intervalos anteriores são diferentes, o gráfico não exibe a série anterior.",
     "vsLabel": "vs.",
-    "pageviewsLabel": "Visualizações de página (ant.)",
-    "visitorsLabel": "Visitantes (ant.)"
+    "exactTimes": "Horários exatos",
+    "sameElapsedTime": "O período anterior termina imediatamente antes do atual e tem a mesma duração.",
+    "compare": "Comparar",
+    "openMetric": "Comparar {{metric}}",
+    "absoluteChange": "Variação absoluta",
+    "relativeChange": "Variação relativa",
+    "percentagePoints": "{{value}} pp",
+    "inspectChart": "Explorar gráfico",
+    "pointUnavailable": "Nenhum valor visível neste ponto.",
+    "inspectChartHint": "Use as setas para a esquerda e para a direita para alternar entre os pontos. Pressione Esc para fechar."
   },
   "events": {
     "setup": {

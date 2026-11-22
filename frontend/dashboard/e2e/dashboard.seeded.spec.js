@@ -734,3 +734,54 @@ test("UTM keeps Analytics as the default alongside Generator and QR codes", asyn
     await page.reload();
     await expect(page.getByRole("tab", { name: "Analytics", exact: true })).toHaveAttribute("aria-selected", "true");
 });
+
+for (const mobile of [false, true]) {
+    test.describe(mobile ? "German mobile comparison" : "English desktop comparison", () => {
+        if (mobile) test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+        test("opens a KPI dialog and inspects both traffic periods", async ({ page }) => {
+            if (mobile) {
+                await page.route("**/api/user/bootstrap", async (route) => {
+                    const response = await route.fetch();
+                    const payload = await response.json();
+                    await route.fulfill({ response, json: { ...payload, preferences: { ...payload.preferences, default_locale: "de-DE" } } });
+                });
+            }
+
+            await login(page, "/dashboard");
+            await selectSeededSite(page);
+            const comparison = page.locator('app-kpi-card button[aria-haspopup="dialog"]').first();
+            await expect(comparison).toHaveAccessibleName(mobile ? /Seitenaufrufe vergleichen/ : /Compare Pageviews/);
+            if (mobile) await comparison.tap();
+            else {
+                await comparison.focus();
+                await comparison.press("Enter");
+            }
+            const dialog = page.getByRole("dialog", { name: mobile ? "Seitenaufrufe" : "Pageviews" });
+            await expect(dialog).toBeVisible();
+            await expect(dialog.getByText(mobile ? "Absolute Änderung" : "Absolute change")).toBeVisible();
+            await dialog.getByText(mobile ? "Genaue Zeiten" : "Exact times").click();
+            await expect(dialog.getByText(mobile ? /dauert genauso lange/ : /covers the same elapsed time/)).toBeVisible();
+            await page.keyboard.press("Escape");
+            await expect(dialog).toBeHidden();
+            await expect(comparison).toBeFocused();
+
+            const chart = page.locator("app-traffic-chart");
+            const canvas = chart.locator("canvas").first();
+            await expect(canvas).toBeVisible();
+            const tooltip = chart.locator(".hk-chart-point-tooltip");
+            if (mobile) await canvas.tap({ position: { x: 100, y: 140 } });
+            else await canvas.hover({ position: { x: 140, y: 140 } });
+            await expect(tooltip).toBeVisible();
+            await expect(page.getByRole("dialog")).toHaveCount(0);
+            await expect(tooltip.locator("strong")).toHaveText([mobile ? /Aktueller Zeitraum/ : /Current period/, mobile ? /Vorheriger Zeitraum/ : /Previous period/]);
+
+            const inspect = chart.getByRole("button", { name: mobile ? "Diagramm prüfen" : "Inspect chart" });
+            await inspect.focus();
+            await inspect.press("ArrowRight");
+            await expect(chart.getByRole("status")).toContainText(mobile ? "Vorheriger Zeitraum" : "Previous period");
+            await inspect.press("Escape");
+            await expect(tooltip).toBeHidden();
+        });
+    });
+}

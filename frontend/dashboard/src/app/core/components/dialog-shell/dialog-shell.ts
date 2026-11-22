@@ -29,6 +29,7 @@ export class DialogShell {
     readonly showPrimary = input(true);
 
     readonly visibleChange = output<boolean>();
+    readonly closed = output<void>();
     readonly secondaryAction = output<void>();
     readonly primaryAction = output<void>();
 

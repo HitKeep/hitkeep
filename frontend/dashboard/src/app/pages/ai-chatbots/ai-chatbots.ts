@@ -19,7 +19,7 @@ import { KPI_PERCENT_FORMAT, KpiCard, KpiCardModel } from '@features/analytics/c
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { EventAudience, MetricStat } from '@models/analytics.types';
 import { injectActiveLang } from '@core/i18n/active-lang';
-import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
+import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta, safeRate } from '@core/analytics/delta-utils';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { SetupStateService } from '@services/setup-state.service';
@@ -69,10 +69,8 @@ export class AIChatbots {
     private readonly activeLanguage = injectActiveLang();
 
     private seriesRequest?: Subscription;
-    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
-    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
-    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
-    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
+    protected readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    protected readonly comparisonRange = signal<ComparisonPeriod | null>(null);
     protected readonly kpiUpdateKey = signal(0);
 
     protected readonly selectedScopeKey = signal<ScopeKey>('provider');

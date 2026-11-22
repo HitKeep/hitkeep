@@ -59,13 +59,14 @@ export interface HitkeepChartSeries {
     id: string;
     label: string;
     color: string;
-    data: number[];
+    data: (number | null)[];
     gradientFrom?: string;
     gradientTo?: string;
     design?: HitkeepChartDesign;
     dashed?: boolean;
     muted?: boolean;
     smooth?: boolean;
+    connectNulls?: boolean;
     /** Team notes drawn on this series, by category index. */
     annotations?: HitkeepChartAnnotations;
 }
@@ -115,13 +116,14 @@ function motionDuration(ms: number): number {
     return reduced ? 0 : ms;
 }
 
-export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput): EChartsCoreOption {
+export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput) {
     const design = input.design ?? 'area';
     const hasBarSeries = input.series.some((series) => resolveSeriesDesign(series, design) === 'bar');
+    const hasMutedSeries = input.series.some((series) => series.muted);
     const option = {
         animationDuration: motionDuration(260),
         animationDurationUpdate: motionDuration(240),
-        animationEasingUpdate: 'cubicOut',
+        animationEasingUpdate: 'cubicOut' as const,
         aria: {
             enabled: true,
             decal: { show: true },
@@ -141,8 +143,8 @@ export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput): 
             show: input.series.length > 1,
             type: 'scroll',
             bottom: 0,
-            icon: 'circle',
-            itemWidth: 8,
+            icon: hasMutedSeries ? undefined : 'circle',
+            itemWidth: hasMutedSeries ? 16 : 8,
             itemHeight: 8,
             textStyle: {
                 color: input.theme.textColor,
@@ -210,7 +212,7 @@ export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput): 
         },
         series: input.series.map((series) => buildSeriesOption(series, design, input.theme))
     };
-    return option as EChartsCoreOption;
+    return option;
 }
 
 export function buildHitkeepChartMergeOptions(input: BuildHitkeepChartOptionsInput): EChartsCoreOption {
@@ -316,7 +318,7 @@ function buildSeriesOption(series: HitkeepChartSeries, defaultDesign: HitkeepCha
         showSymbol: false,
         symbol: 'circle',
         symbolSize: series.muted ? 5 : 6,
-        connectNulls: true,
+        connectNulls: series.connectNulls ?? true,
         sampling: 'lttb',
         lineStyle: {
             color: series.color,
