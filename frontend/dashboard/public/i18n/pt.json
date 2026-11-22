@@ -1943,7 +1943,10 @@
           "dormant": "Inativo",
           "domain_mismatch": "Incompatibilidade de domínio"
         },
-        "waitingHint": "Aguardando o primeiro acesso aceito. Este painel se atualiza automaticamente por dois minutos.",
+        "waitingBrowser": "Implante o rastreador e abra uma página publicada em {{ domain }} onde o rastreamento seja permitido. Se o status continuar como aguardando, confira se o rastreador carrega e revise o Do Not Track, o consentimento e as exclusões.",
+        "waitingServer": "Envie uma visualização de página de uma visita real a {{ domain }} pela integração de servidor. Se o status continuar como aguardando, confira a resposta da integração e o acesso dela ao site.",
+        "waitingHint": "O verificador consulta o status automaticamente por até dois minutos. Você pode atualizá-lo a qualquer momento.",
+        "unavailable": "O status do rastreamento está indisponível. Use o botão de atualização para tentar novamente.",
         "mismatchHint": "O hostname detectado mais recente não corresponde ao domínio configurado para este site.",
         "fields": {
           "firstHit": "Primeiro acesso",

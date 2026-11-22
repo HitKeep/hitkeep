@@ -2159,7 +2159,10 @@
           "dormant": "Inactivo",
           "domain_mismatch": "El dominio no coincide"
         },
-        "waitingHint": "Esperando el primer hit aceptado. Este panel se actualiza automáticamente durante dos minutos.",
+        "waitingBrowser": "Despliega el rastreador y abre una página publicada en {{ domain }} donde esté permitido el seguimiento. Si el estado sigue en espera, comprueba que se cargue el rastreador y revisa Do Not Track, el consentimiento y las exclusiones.",
+        "waitingServer": "Envía una vista de página de una visita real a {{ domain }} a través de tu integración de servidor. Si el estado sigue en espera, comprueba la respuesta de la integración y su acceso al sitio.",
+        "waitingHint": "El verificador comprueba el estado automáticamente durante un máximo de dos minutos. Puedes actualizarlo en cualquier momento.",
+        "unavailable": "El estado del seguimiento no está disponible. Pulsa «Actualizar» para reintentar.",
         "mismatchHint": "El hostname detectado más reciente no coincide con el dominio configurado del sitio.",
         "fields": {
           "firstHit": "Primer hit",

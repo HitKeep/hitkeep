@@ -1941,7 +1941,10 @@
           "dormant": "Slaperig",
           "domain_mismatch": "Domein komt niet overeen"
         },
-        "waitingHint": "Wachten op de eerste geaccepteerde hit. Dit paneel wordt automatisch gedurende twee minuten vernieuwd.",
+        "waitingBrowser": "Implementeer de tracker en open daarna een gepubliceerde pagina op {{ domain }} waar tracking is toegestaan. Blijft de status op wachten staan, controleer dan of de tracker laadt en bekijk Do Not Track, toestemming en uitsluitingen.",
+        "waitingServer": "Stuur via je serverintegratie een paginaweergave voor een echt bezoek op {{ domain }}. Blijft de status op wachten staan, controleer dan de reactie van de integratie en de toegang tot deze site.",
+        "waitingHint": "De status wordt maximaal twee minuten automatisch gecontroleerd. Je kunt de status op elk moment vernieuwen.",
+        "unavailable": "De trackingstatus is niet beschikbaar. Kies ‘Vernieuwen’ om het opnieuw te proberen.",
         "mismatchHint": "De laatst gedetecteerde hostnaam komt niet overeen met het geconfigureerde domein van deze site.",
         "fields": {
           "firstHit": "Eerste klap",
