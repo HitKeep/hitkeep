@@ -64,7 +64,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -96,8 +96,8 @@ jobs:
         run: |
           set -euo pipefail
           publisher_archive="mcp-publisher_linux_amd64.tar.gz"
-          publisher_url="https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/$publisher_archive"
-          publisher_sha256="a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+          publisher_url="https://github.com/modelcontextprotocol/registry/releases/download/v1.8.11/$publisher_archive"
+          publisher_sha256="99fbd857ae2277e5e4a4a2cddc7f4d3e64612c6f90950f44584c3539c9df854f"
           curl --fail --silent --show-error --location "$publisher_url" --output "$publisher_archive"
           printf '%s  %s\n' "$publisher_sha256" "$publisher_archive" | sha256sum --check --status
           tar -xzf "$publisher_archive" mcp-publisher
