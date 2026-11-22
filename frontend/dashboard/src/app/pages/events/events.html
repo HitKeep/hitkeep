@@ -101,7 +101,7 @@
                     } @else {
                     <div class="text-2xl xl:text-3xl font-bold tabular-nums leading-none"><app-animated-number [value]="totalEventCount()" /></div>
                     @if (seriesRange()) {
-                    <button appKpiComparisonTrigger [metricLabel]="totalEventKpi().label" [delta]="totalEventDelta()" (compare)="eventComparison.show(totalEventKpi().id, $event)"></button>
+                    <app-kpi-comparison-trigger [metricLabel]="totalEventKpi().label" [delta]="totalEventDelta()" (compare)="eventComparison.show(totalEventKpi().id, $event)" />
                     }
                     <div class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
                     }

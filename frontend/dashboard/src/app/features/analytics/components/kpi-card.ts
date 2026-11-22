@@ -72,7 +72,7 @@ export interface KpiCardModel {
                 </div>
                 @let deltaValue = normalizedDelta();
                 @if (!showSkeleton() && comparable() && numericValue() !== null) {
-                    <button appKpiComparisonTrigger class="hk-kpi-card__content self-start" [metricLabel]="label()" [delta]="delta()" [invertDelta]="invertDelta()" (compare)="compare.emit($event)"></button>
+                    <app-kpi-comparison-trigger class="hk-kpi-card__content self-start" [metricLabel]="label()" [delta]="delta()" [invertDelta]="invertDelta()" (compare)="compare.emit($event)" />
                 } @else if (!showSkeleton() && deltaValue !== null) {
                     <div class="hk-kpi-card__content flex items-center gap-1">
                         <span [class]="deltaClass()"><app-animated-number [value]="deltaValue" [format]="deltaFormat" /></span>
