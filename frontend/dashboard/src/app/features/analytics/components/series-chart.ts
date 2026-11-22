@@ -252,10 +252,14 @@ export class SeriesChart {
         const raw = this.data() || [];
         const bucketLabel = this.bucketLabelFormatter(raw);
         const start = this.currentPeriod()?.from;
+        const clippedStart = start && raw.length && Date.parse(start) > Date.parse(raw[0].time) ? start : null;
+        const labels = raw.map((point, index) => bucketLabel.format(new Date(index === 0 && clippedStart ? clippedStart : point.time)));
+        const repeatedFirstDay = clippedStart && !this.isShortRange() && labels[0] === labels[1];
         return buildHitkeepChartMergeOptions({
             ariaLabel: this.accessibilityLabel(),
             design: this.effectiveDesign(),
-            labels: raw.map((point, index) => bucketLabel.format(new Date(index === 0 && start && Date.parse(start) > Date.parse(point.time) ? start : point.time))),
+            labels,
+            axisLabelFormatter: (label, index) => (repeatedFirstDay && index === 1 ? '' : label),
             locale: this.transloco.getActiveLang(),
             series: this.renderedSeries(),
             theme: hitkeepChartTheme(this.prefs.isDarkMode())

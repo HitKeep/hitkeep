@@ -85,6 +85,7 @@ interface BuildHitkeepChartOptionsInput {
     yAxisTicks?: number;
     minInterval?: number;
     valueFormatter?: (value: number) => string;
+    axisLabelFormatter?: (label: string, index: number) => string;
 }
 
 interface LinearGradientFill {
@@ -174,6 +175,7 @@ export function buildHitkeepChartOptions(input: BuildHitkeepChartOptionsInput) {
             data: input.labels,
             axisLabel: {
                 color: input.theme.textColor,
+                formatter: input.axisLabelFormatter,
                 hideOverlap: true,
                 margin: 12
             },
@@ -230,7 +232,8 @@ export function buildHitkeepChartMergeOptions(input: BuildHitkeepChartOptionsInp
         },
         xAxis: {
             boundaryGap: hasBarSeries,
-            data: input.labels
+            data: input.labels,
+            axisLabel: { formatter: input.axisLabelFormatter }
         },
         series: input.series.map((series) => buildSeriesOption(series, design, input.theme))
     } as EChartsCoreOption;

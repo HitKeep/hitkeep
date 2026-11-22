@@ -173,6 +173,24 @@ describe('SeriesChart', () => {
         expect(merge.series.find((series) => series.name === 'Events')?.data).toEqual([5, 9]);
     });
 
+    it('prints a repeated clipped day once and preserves both buckets for inspection', () => {
+        const at = (day: number, hour: number) => new Date(2026, 10, day, hour).toISOString();
+        fixture.componentRef.setInput('data', [
+            { time: at(11, 1), count: 3 },
+            { time: at(12, 1), count: 319 },
+            { time: at(13, 1), count: 343 }
+        ]);
+        fixture.componentRef.setInput('series', [{ key: 'count', label: 'Views', color: '#6366f1' }]);
+        fixture.componentRef.setInput('currentPeriod', { from: at(12, 0), to: at(14, 0) });
+        fixture.detectChanges();
+        const chart = (component as unknown as { chartMergeOptions: () => { xAxis: { data: string[]; axisLabel: { formatter: (label: string, index: number) => string } } } }).chartMergeOptions();
+        const { data, axisLabel } = chart.xAxis;
+        expect(data[0]).toBe(data[1]);
+        expect(data.map(axisLabel.formatter)).toEqual([data[0], '', data[2]]);
+        expect(tooltipFormatter()([{ dataIndex: 0, seriesId: 'count' }]).textContent).toContain('Views: 3');
+        expect(tooltipFormatter()([{ dataIndex: 1, seriesId: 'count' }]).textContent).toContain('Views: 319');
+    });
+
     it('groups actual offset timestamps across midnight and includes genuine zero values', () => {
         const local = (day: number, hour: number, minute: number) => new Date(2026, 6, day, hour, minute).toISOString();
         fixture.componentRef.setInput('data', [
