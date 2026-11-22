@@ -273,7 +273,7 @@ describe('WebVitalsPage', () => {
             { time: measuredZero.time, p75: 0 },
             { time: noSamples.time, p75: null }
         ]);
-        expect(chart.valueFormatter()?.(0.08)).toBe('8.0%');
+        expect(chart.valueFormatter()?.(0.08)).toBe('0.08');
         expect(fixture.nativeElement.querySelector('app-series-chart [echarts]')).not.toBeNull();
     });
 

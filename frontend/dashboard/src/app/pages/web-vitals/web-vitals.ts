@@ -398,10 +398,7 @@ export class WebVitalsPage {
 
     protected formatMetricValue(metric: WebVitalMetric, value: number): string {
         if (metric === 'CLS') {
-            return `${this.localeService.localizeNumber(value * 100, 'decimal', undefined, {
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1
-            })}%`;
+            return this.localeService.localizeNumber(value, 'decimal', undefined, { maximumFractionDigits: 3 });
         }
         if ((metric === 'LCP' || metric === 'FCP') && value >= 1000) {
             return `${this.localeService.localizeNumber(value / 1000, 'decimal', undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
