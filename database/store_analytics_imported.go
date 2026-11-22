@@ -29,20 +29,40 @@ func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.Analyti
 	}
 
 	var (
-		pageviews sql.NullInt64
-		visits    sql.NullInt64
-		bounces   sql.NullInt64
-		duration  sql.NullInt64
+		pageviews       sql.NullInt64
+		visits          sql.NullInt64
+		bounces         sql.NullInt64
+		duration        sql.NullInt64
+		utmCampaignHits int
+		utmContentHits  int
+		utmMediumHits   int
+		utmSourceHits   int
+		utmTermHits     int
 	)
+	// Composite source rows cannot establish pageview counts for individual UTM fields.
 	err := s.db.QueryRowContext(ctx, `
-		SELECT
-			SUM(pageviews),
-			SUM(visits),
-			SUM(bounces),
-			SUM(visit_duration)
-		FROM imported_traffic_daily
-		WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
-	`, params.SiteID, params.Start, params.End).Scan(&pageviews, &visits, &bounces, &duration)
+		WITH traffic AS (
+			SELECT SUM(pageviews), SUM(visits), SUM(bounces), SUM(visit_duration)
+			FROM imported_traffic_daily
+			WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
+		), utm AS (
+			SELECT
+				COALESCE(SUM(pageviews) FILTER (WHERE dimension = 'utm_campaign'), 0),
+				COALESCE(SUM(pageviews) FILTER (WHERE dimension = 'utm_content'), 0),
+				COALESCE(SUM(pageviews) FILTER (WHERE dimension = 'utm_medium'), 0),
+				COALESCE(SUM(pageviews) FILTER (WHERE dimension = 'utm_source'), 0),
+				COALESCE(SUM(pageviews) FILTER (WHERE dimension = 'utm_term'), 0)
+			FROM imported_dimension_daily
+			WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
+				AND dimension IN ('utm_campaign', 'utm_content', 'utm_medium', 'utm_source', 'utm_term')
+				AND TRIM(name) <> ''
+		)
+		SELECT traffic.*, utm.*
+		FROM traffic CROSS JOIN utm
+	`, params.SiteID, params.Start, params.End, params.SiteID, params.Start, params.End).Scan(
+		&pageviews, &visits, &bounces, &duration,
+		&utmCampaignHits, &utmContentHits, &utmMediumHits, &utmSourceHits, &utmTermHits,
+	)
 	if err != nil {
 		return fmt.Errorf("query imported traffic totals: %w", err)
 	}
@@ -58,6 +78,11 @@ func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.Analyti
 
 	stats.TotalPageviews += importedPageviews
 	stats.UniqueSessions += importedVisits
+	stats.UTMCampaignHits += utmCampaignHits
+	stats.UTMContentHits += utmContentHits
+	stats.UTMMediumHits += utmMediumHits
+	stats.UTMSourceHits += utmSourceHits
+	stats.UTMTermHits += utmTermHits
 	totalSessions := nativeSessions + importedVisits
 	if totalSessions > 0 {
 		stats.BounceRate = (float64(nativeBounces+importedBounces) / float64(totalSessions)) * 100

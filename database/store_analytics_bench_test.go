@@ -36,6 +36,8 @@ func benchmarkSiteStats(b *testing.B) (*Store, api.AnalyticsParams) {
 	}
 	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	rng := rand.New(rand.NewPCG(1, 2))
+	ids := rand.NewChaCha8([32]byte{1})
+	newID := func() uuid.UUID { return uuid.Must(uuid.NewRandomFromReader(ids)) }
 	referrers := []string{"", "", "https://www.google.com/", "https://news.ycombinator.com/item?id=1", "https://chatgpt.com/", "https://t.co/x"}
 	agents := []string{
 		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
@@ -45,14 +47,14 @@ func benchmarkSiteStats(b *testing.B) (*Store, api.AnalyticsParams) {
 	countries := []string{"DE", "US", "FR", "GB", "NL"}
 	hits := make([]*api.Hit, 0, 200_000)
 	for len(hits) < cap(hits) {
-		session, referrer, country := uuid.New(), referrers[rng.IntN(len(referrers))], countries[rng.IntN(len(countries))]
+		session, referrer, country := newID(), referrers[rng.IntN(len(referrers))], countries[rng.IntN(len(countries))]
 		// 2,000 distinct agents: real traffic repeats agents, but not three.
 		agent := fmt.Sprintf("%s build/%d", agents[rng.IntN(len(agents))], rng.IntN(2000))
 		at := start.Add(time.Duration(rng.IntN(29*24*3600)) * time.Second)
 		for page := range 1 + rng.IntN(5) {
 			width := 390 + rng.IntN(3)*700
 			hit := &api.Hit{
-				SiteID: site.ID, SessionID: session, PageID: uuid.New(), Timestamp: at.Add(time.Duration(page) * time.Minute),
+				SiteID: site.ID, SessionID: session, PageID: newID(), Timestamp: at.Add(time.Duration(page) * time.Minute),
 				Path: fmt.Sprintf("/page-%d", rng.IntN(60)), UserAgent: &agent, CountryCode: &country, ViewportWidth: &width,
 			}
 			if page == 0 && referrer != "" {
@@ -86,6 +88,87 @@ func BenchmarkGetSiteStats(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
+		})
+	}
+}
+
+func BenchmarkImportedUTMKPIs(b *testing.B) {
+	store, params := benchmarkSiteStats(b)
+	ctx := b.Context()
+	if _, err := store.db.ExecContext(ctx, `
+		UPDATE hits
+		SET utm_campaign = 'native-campaign', utm_content = 'native-content', utm_medium = 'email',
+			utm_source = 'newsletter', utm_term = 'native-term', paid_click = (path = '/page-0')
+		WHERE path IN ('/page-0', '/page-1', '/page-2', '/page-3', '/page-4', '/page-5')`); err != nil {
+		b.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO imported_traffic_daily (site_id, import_id, date, visitors, visits, pageviews, bounces, visit_duration, source_file)
+		SELECT ?, '00000000-0000-4000-8000-000000000001', day, 900, 1000, 2500, 200, 30000, 'benchmark'
+		FROM range(CAST(? AS DATE), CAST(? AS DATE), INTERVAL 1 DAY) AS dates(day)`,
+		params.SiteID, params.Start, params.End); err != nil {
+		b.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO imported_dimension_daily (site_id, import_id, date, dimension, name, pageviews, source_file)
+		SELECT ?, '00000000-0000-4000-8000-000000000001', day, dimension, dimension || '-' || label,
+			5 + (label % 20), 'benchmark'
+		FROM range(CAST(? AS DATE), CAST(? AS DATE), INTERVAL 1 DAY) AS dates(day)
+		CROSS JOIN (VALUES ('utm_campaign', 40), ('utm_content', 60), ('utm_medium', 8), ('utm_source', 20),
+			('utm_term', 100), ('page', 60), ('entry_page', 60), ('exit_page', 60), ('source', 20),
+			('browser', 12), ('device', 3), ('country', 25), ('city', 60), ('provider', 24),
+			('asn', 24), ('language', 12), ('operating_system', 6)) AS dimensions(dimension, cardinality)
+		CROSS JOIN LATERAL range(cardinality) AS labels(label)`, params.SiteID, params.Start, params.End); err != nil {
+		b.Fatal(err)
+	}
+
+	params.CompareStart = params.Start
+	params.Start = params.Start.AddDate(0, 0, 15)
+	params.CompareEnd = params.Start.Add(-time.Millisecond)
+	params.End = params.End.Add(-time.Millisecond)
+	for _, scenario := range []struct {
+		name     string
+		sections SiteStatsSections
+	}{
+		{"dashboard", AllSiteStatsSections},
+		{"kpis", SiteStatsSections{}},
+	} {
+		b.Run(scenario.name, func(b *testing.B) {
+			ctx := b.Context()
+			run := func() *api.SiteStats {
+				stats, err := store.GetSiteStatsSections(ctx, params, scenario.sections)
+				if err != nil {
+					b.Fatal(err)
+				}
+				return stats
+			}
+			// Warm the rollups and prepared chart reads before sampling the steady-state operation.
+			stats := run()
+			if stats.TotalPageviews <= 14*2500 || stats.Comparison == nil || stats.Comparison.TotalPageviews <= 15*2500 {
+				b.Fatalf("fixture needs native hits in both windows")
+			}
+			if _, err := store.db.ExecContext(ctx, `CALL truncate_duckdb_logs()`); err != nil {
+				b.Fatal(err)
+			}
+			if _, err := store.db.ExecContext(ctx, `CALL enable_logging('QueryLog')`); err != nil {
+				b.Fatal(err)
+			}
+			run()
+			if _, err := store.db.ExecContext(ctx, `CALL disable_logging()`); err != nil {
+				b.Fatal(err)
+			}
+			var logEntries int
+			if err := store.db.QueryRowContext(ctx, `
+				SELECT COUNT(DISTINCT query_id) FROM duckdb_logs
+				WHERE type = 'QueryLog' AND message NOT LIKE '%disable_logging%'`).Scan(&logEntries); err != nil {
+				b.Fatal(err)
+			}
+			for b.Loop() {
+				run()
+			}
+			b.ReportMetric(float64(logEntries), "query-log/op")
+			b.ReportMetric(float64(stats.UTMTermHits), "current-utm-term/op")
+			b.ReportMetric(float64(stats.Comparison.UTMTermHits), "comparison-utm-term/op")
 		})
 	}
 }
