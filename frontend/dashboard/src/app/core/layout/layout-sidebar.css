@@ -98,3 +98,7 @@ app-layout-sidebar aside[hidden] {
 .focus-navigation-drawer .focus-sidebar__link {
     min-height: 2.75rem;
 }
+.focus-navigation-drawer .p-drawer-header {
+    justify-content: flex-end;
+    padding: 0.25rem 0.75rem 0;
+}

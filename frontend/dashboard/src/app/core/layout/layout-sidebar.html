@@ -16,7 +16,7 @@
     (visibleChange)="isMobileDrawerOpen.set($event)"
     (onShow)="focusMobileNavigation()"
     [pt]="{ root: { id: 'focus-mobile-navigation', role: 'dialog', 'aria-modal': 'true', 'aria-label': ('nav.primaryNavigationAria' | transloco) } }"
-    [header]="'nav.primaryNavigationAria' | transloco"
+    [ariaCloseLabel]="'common.actions.close' | transloco"
     appendTo="body"
     styleClass="focus-navigation-drawer"
     [style]="{ width: 'min(20rem, 100vw)' }"
