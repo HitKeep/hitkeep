@@ -22,6 +22,7 @@ import { TableRowActionItem } from '@components/table-row-actions/table-row-acti
 import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
 import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
 import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
+import { injectConversionDefinitions } from '@features/analytics/services/conversion-definitions';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -85,9 +86,10 @@ export class Goals {
     private createRequested = false;
     private reportingRequest: Subscription | null = null;
 
-    protected goals = signal<Goal[]>([]);
-    protected goalsLoading = signal(false);
-    protected goalsError = signal(false);
+    private readonly definitions = injectConversionDefinitions((siteId) => this.analytics.getGoals(siteId));
+    protected readonly goals = this.definitions.items;
+    protected readonly goalsLoading = this.definitions.loading;
+    protected readonly goalsError = this.definitions.error;
     protected selectedGoalId = signal<string | null>(null);
     protected selectedGoal = computed(() => this.goals().find((goal) => goal.id === this.selectedGoalId()) ?? null);
     protected readonly goalRows = computed(() =>
@@ -135,7 +137,9 @@ export class Goals {
     protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficGoalIds = computed(() => {
         const selected = this.selectedGoalId();
-        return selected ? [selected] : this.goals().map((goal) => goal.id);
+        return this.goals()
+            .filter((goal) => !selected || goal.id === selected)
+            .map((goal) => goal.id);
     });
     protected trafficEnabled = computed(() => this.trafficGoalIds().length > 0);
     protected trafficDescriptionKey = computed(() => (this.selectedGoalId() ? 'goals.traffic.selectedDescription' : 'goals.traffic.allDescription'));
@@ -227,7 +231,9 @@ export class Goals {
     constructor() {
         this.destroyRef.onDestroy(() => this.reportingRequest?.unsubscribe());
         this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-            this.selectedGoalId.set(params.get('goal'));
+            const id = params.get('goal');
+            this.selectedGoalId.set(id);
+            this.subjectControl.setValue(id, { emitEvent: false });
             this.createRequested = params.get('create') === '1';
         });
         effect(() => {
@@ -243,8 +249,6 @@ export class Goals {
                 });
             }
             this.lastSiteId = site?.id ?? null;
-            if (site) this.loadGoals(site.id);
-            else this.goals.set([]);
         });
         effect(() => {
             const site = this.siteService.activeSite();
@@ -330,20 +334,18 @@ export class Goals {
             .pipe(finalize(() => this.deletingGoalId.set(null)))
             .subscribe({
                 next: () => {
+                    if (site.id !== this.siteService.activeSite()?.id) return;
                     if (this.selectedGoalId() === goal.id) this.selectGoal(null);
-                    this.loadGoals(site.id);
+                    this.definitions.reload();
                 }
             });
     }
-    protected onDefinitionsChanged() {
-        const site = this.siteService.activeSite();
-        if (site) this.loadGoals(site.id);
-    }
+    protected readonly onDefinitionsChanged = this.definitions.reload;
     protected refresh(mode: StatsQueryMode = 'blocking') {
         const site = this.siteService.activeSite();
         if (!site || this.goalsLoading()) return;
         if (this.goalsError()) {
-            if (mode === 'blocking') this.loadGoals(site.id);
+            if (mode === 'blocking') this.definitions.reload();
             return;
         }
         const dates = this.reportRange.currentDateRange();
@@ -351,25 +353,6 @@ export class Goals {
         this.trafficRefreshKey.update((key) => key + 1);
         const selected = this.selectedGoalId();
         this.loadReporting(site.id, dates.from, dates.to, selected ? [selected] : this.goals().map((goal) => goal.id), selected ? [selected] : [], mode);
-    }
-    private loadGoals(siteId: string) {
-        this.goalsLoading.set(true);
-        this.goalsError.set(false);
-        this.analytics
-            .getGoals(siteId)
-            .pipe(finalize(() => this.goalsLoading.set(false)))
-            .subscribe({
-                next: (goals) => {
-                    this.goals.set(goals ?? []);
-                    this.subjectControl.setValue(this.selectedGoalId(), {
-                        emitEvent: false
-                    });
-                },
-                error: () => {
-                    this.goals.set([]);
-                    this.goalsError.set(true);
-                }
-            });
     }
     private loadReporting(siteId: string, from: string, to: string, cohortIds: string[], seriesIds: string[], mode: StatsQueryMode = 'blocking') {
         this.reportingRequest?.unsubscribe();
