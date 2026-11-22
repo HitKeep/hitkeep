@@ -776,6 +776,19 @@ for (const mobile of [false, true]) {
             await expect(page.getByRole("dialog")).toHaveCount(0);
             await expect(tooltip.locator("strong")).toHaveText([mobile ? /Aktueller Zeitraum/ : /Current period/, mobile ? /Vorheriger Zeitraum/ : /Previous period/]);
 
+            if (!mobile) {
+                await tooltip.hover();
+                await expect.poll(() => tooltip.evaluate((element) => element.matches(":hover"))).toBe(true);
+                await page.keyboard.press("Escape");
+                await expect(tooltip).toBeHidden();
+                await canvas.hover({ position: { x: 215, y: 140 } });
+                await expect(tooltip).toBeVisible();
+            }
+            const pageviews = chart.getByRole("button", { name: mobile ? "Seitenaufrufe" : "Pageviews", exact: true });
+            await pageviews.focus();
+            await pageviews.press("Space");
+            await expect(pageviews).toHaveAttribute("aria-pressed", "false");
+
             const inspect = chart.getByRole("button", { name: mobile ? "Diagramm prüfen" : "Inspect chart" });
             await inspect.focus();
             await inspect.press("ArrowRight");
