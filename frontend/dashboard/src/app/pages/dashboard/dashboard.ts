@@ -553,7 +553,10 @@ export class Dashboard {
             }
         });
 
-        this.refreshOnboarding();
+        effect(() => {
+            this.teamService.activeTeamId();
+            if (!this.isShareMode()) untracked(() => this.refreshOnboarding());
+        });
 
         effect(() => {
             if (this.reportLinkApplied) return;
@@ -728,7 +731,9 @@ export class Dashboard {
     private refreshRealtimeData() {
         this.refreshStatsOnly('background');
         this.trafficRefreshKey.update((key) => key + 1);
-        this.refreshOnboarding();
+        if (this.onboarding.onboarding() === null || this.showOnboarding()) {
+            this.refreshOnboarding();
+        }
     }
 
     private loadStatsForCurrentRange(mode: StatsQueryMode = 'blocking') {

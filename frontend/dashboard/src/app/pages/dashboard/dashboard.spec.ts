@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideHttpClient } from '@angular/common/http';
+import { FetchBackend, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting, type TestRequest } from '@angular/common/http/testing';
+import { inject } from '@angular/core';
 import { provideRouter, Router } from '@angular/router';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
@@ -27,6 +29,27 @@ describe('Dashboard', () => {
     let component: Dashboard;
     let fixture: ComponentFixture<Dashboard>;
     let realtimeEvents: Subject<RealtimeEvent>;
+    let http: HttpTestingController;
+    let initialOnboarding: TestRequest;
+
+    const onboardingRequest = { method: 'GET', url: '/api/user/onboarding' };
+    const onboardingSection = () => (fixture.nativeElement as HTMLElement).querySelector('section[aria-labelledby="dashboard-onboarding-title"]');
+    const startTrackingSite = () => {
+        vi.spyOn(TestBed.inject(HitService), 'loadHits').mockImplementation(() => undefined);
+        TestBed.inject(SiteService).activeSite.set({ id: 'site-1', user_id: 'user-1', domain: 'example.com', created_at: '2026-01-01T00:00:00Z' });
+        fixture.detectChanges();
+    };
+    const deliverHit = async () => {
+        realtimeEvents.next({
+            type: 'analytics.changed',
+            site_id: 'site-1',
+            kinds: ['hits'],
+            changed_at: '2026-07-10T08:00:00Z',
+            bucket_start: '2026-07-10T08:00:00Z',
+            counts: { hits: 1 }
+        });
+        await vi.advanceTimersByTimeAsync(600);
+    };
 
     const emptyStats = () => emptySiteStats();
 
@@ -76,7 +99,8 @@ describe('Dashboard', () => {
                 })
             ],
             providers: [
-                provideHttpClient(),
+                provideHttpClient(withInterceptors([(request, next) => (request.url.startsWith(onboardingRequest.url) ? next(request) : inject(FetchBackend).handle(request))])),
+                provideHttpClientTesting(),
                 provideRouter([]),
                 {
                     provide: AnalyticsService,
@@ -120,10 +144,13 @@ describe('Dashboard', () => {
             ]
         }).compileComponents();
 
+        http = TestBed.inject(HttpTestingController);
+        TestBed.inject(TeamService).activeTeamId.set('team-1');
         fixture = TestBed.createComponent(Dashboard);
         component = fixture.componentInstance;
         vi.spyOn(TestBed.inject(StatsService), 'fetchStats').mockReturnValue(of(emptyStats()));
         fixture.detectChanges();
+        initialOnboarding = http.expectOne(onboardingRequest);
     });
 
     it('should create', () => {
@@ -335,37 +362,86 @@ describe('Dashboard', () => {
         expect(navigate).toHaveBeenCalledWith(['/admin/team/members/invite']);
     });
 
-    it('refreshes onboarding when realtime analytics activity changes', async () => {
+    it('advances the accessible onboarding checklist on the first realtime hit', async () => {
         vi.useFakeTimers();
         try {
-            const siteService = TestBed.inject(SiteService);
-            const onboardingService = TestBed.inject(OnboardingService);
-            vi.spyOn(TestBed.inject(StatsService), 'loadStats').mockImplementation(() => undefined);
-            vi.spyOn(TestBed.inject(HitService), 'loadHits').mockImplementation(() => undefined);
+            initialOnboarding.flush({
+                dismissed: false,
+                complete: false,
+                steps: [
+                    { key: 'verify_tracking', complete: false },
+                    { key: 'automatic_events', complete: false }
+                ]
+            });
+            startTrackingSite();
+            expect(onboardingSection()?.querySelector('[aria-current="step"]')?.textContent).toContain('dashboard.onboarding.steps.verify_tracking');
 
-            vi.spyOn(onboardingService, 'load').mockReturnValue(of({ dismissed: false, complete: false, steps: [] }));
-            siteService.activeSite.set({
-                id: 'site-1',
-                user_id: 'user-1',
-                domain: 'example.com',
-                created_at: '2026-01-01T00:00:00Z'
+            await deliverHit();
+            http.expectOne(onboardingRequest).flush({
+                dismissed: false,
+                complete: false,
+                steps: [
+                    { key: 'verify_tracking', complete: true },
+                    { key: 'automatic_events', complete: false }
+                ]
             });
             fixture.detectChanges();
+            expect(onboardingSection()?.querySelector('[aria-current="step"]')?.textContent).toContain('dashboard.onboarding.steps.automatic_events');
+            expect(onboardingSection()?.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
 
-            const load = onboardingService.load as ReturnType<typeof vi.fn>;
-            load.mockClear();
-            realtimeEvents.next({
-                type: 'analytics.changed',
-                site_id: 'site-1',
-                kinds: ['hits'],
-                changed_at: '2026-07-10T08:00:00Z',
-                bucket_start: '2026-07-10T08:00:00Z',
-                counts: { hits: 1 }
-            });
+            const dismiss = onboardingSection()?.querySelector<HTMLButtonElement>('button[aria-label="dashboard.onboarding.dismiss"]');
+            expect(dismiss).toBeTruthy();
+            dismiss?.click();
+            http.expectOne({ method: 'POST', url: '/api/user/onboarding/dismiss' }).flush(null);
+            fixture.detectChanges();
 
-            await vi.advanceTimersByTimeAsync(600);
+            await deliverHit();
+            http.expectNone(onboardingRequest);
+            expect(onboardingSection()).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 
-            expect(load).toHaveBeenCalledTimes(1);
+    it('skips realtime onboarding requests after completion and still loads on manual refresh', async () => {
+        vi.useFakeTimers();
+        try {
+            const complete = { dismissed: false, complete: true, steps: [] };
+            initialOnboarding.flush(complete);
+            startTrackingSite();
+            expect(onboardingSection()).toBeNull();
+
+            await deliverHit();
+            await deliverHit();
+            http.expectNone(onboardingRequest);
+
+            component.refreshAll();
+            http.expectOne(onboardingRequest).flush(complete);
+            expect(onboardingSection()).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('invalidates onboarding on team switches and retries an unknown checklist on realtime activity', async () => {
+        vi.useFakeTimers();
+        try {
+            initialOnboarding.flush({ dismissed: false, complete: true, steps: [] });
+            startTrackingSite();
+
+            component.refreshAll();
+            const previousTeam = http.expectOne(onboardingRequest);
+            TestBed.inject(TeamService).activeTeamId.set('team-2');
+            const incomplete = { dismissed: false, complete: false, steps: [{ key: 'invite_teammate', complete: false }] };
+            previousTeam.flush(incomplete);
+            fixture.detectChanges();
+            expect(onboardingSection()).toBeNull();
+            http.expectOne(onboardingRequest).flush(null, { status: 503, statusText: 'Unavailable' });
+
+            await deliverHit();
+            http.expectOne(onboardingRequest).flush(incomplete);
+            fixture.detectChanges();
+            expect(onboardingSection()?.querySelector('[aria-current="step"]')?.textContent).toContain('dashboard.onboarding.steps.invite_teammate');
         } finally {
             vi.useRealTimers();
         }
