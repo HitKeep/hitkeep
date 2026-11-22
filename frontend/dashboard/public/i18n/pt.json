@@ -798,6 +798,10 @@
     },
     "actions": {
       "apply": "Aplicar",
+      "remove": "Remover",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "archive": "Arquivar",
       "cancel": "Cancelar",
       "clearAll": "Limpar tudo",
       "close": "Fechar",
@@ -823,6 +827,8 @@
       "actions": "Ações",
       "added": "Adicionado",
       "created": "Criado",
+      "createdAt": "Criado em",
+      "updated": "Atualizado",
       "device": "Dispositivo",
       "domain": "Domínio",
       "email": "E-mail",
@@ -903,6 +909,7 @@
       "geoModeAria": "Selecionar métrica de público",
       "pageModeAria": "Selecionar métrica de página",
       "topPages": "Principais páginas",
+      "topReferrers": "Principais referenciadores",
       "topSources": "Principais origens"
     },
     "noActiveFilter": "Nenhum filtro ativo",
@@ -2424,6 +2431,23 @@
       }
     },
     "system": {
+      "mcp": {
+        "title": "Acesso ao MCP",
+        "connection": "Conexão",
+        "readiness": "Disponibilidade do MCP",
+        "server": "Servidor",
+        "docsTools": "Ferramentas de documentação",
+        "endpoint": "Endpoint",
+        "docsUrl": "URL da documentação",
+        "copyEndpoint": "Copiar endpoint",
+        "copyDocsUrl": "Copiar URL da documentação",
+        "summary": {
+          "readyWithDocs": "O servidor e as ferramentas de documentação estão disponíveis.",
+          "ready": "O servidor está disponível. As ferramentas de documentação estão desativadas.",
+          "disabled": "O acesso ao MCP está desativado.",
+          "unknown": "O status do MCP ainda não foi carregado."
+        }
+      },
       "overview": {
         "title": "Visão Geral do Sistema",
         "version": "Versão",
