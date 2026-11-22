@@ -188,7 +188,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -256,7 +256,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -325,7 +325,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -391,7 +391,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
