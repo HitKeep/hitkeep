@@ -39,6 +39,7 @@ CREATE TABLE hits_rebuild (
     asn_org         VARCHAR,
     qr_code_id      UUID
 );
-INSERT INTO hits_rebuild SELECT * FROM hits;
+-- Older databases appended hostname after the base tables were created.
+INSERT INTO hits_rebuild BY NAME SELECT * FROM hits;
 DROP TABLE hits;
 ALTER TABLE hits_rebuild RENAME TO hits;

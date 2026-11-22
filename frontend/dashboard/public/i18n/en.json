@@ -978,6 +978,16 @@
     }
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Visible time by page",
+      "description": "Top pages by tracked views in the selected range. Averages use only views with a measurement.",
+      "average": "Avg. visible time",
+      "coverage": "Measured / tracked views",
+      "missing": "No sample",
+      "empty": "No tracked pageviews match this selection.",
+      "unavailable": "Visible time is temporarily unavailable.",
+      "forbidden": "You don’t have access to this report."
+    },
     "conversions": {
       "title": "Conversions",
       "description": "Filter the entire workspace by a goal or funnel cohort.",
@@ -1194,6 +1204,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Paid traffic signals",
+      "scope": "Counts cover matching native HitKeep sessions measured with paid signals enabled, with or without UTM tags. Tagged sessions can also appear in the UTM metrics.",
+      "observed": "Paid signal observed",
+      "count": "{{ observed }} of {{ measured }} measured",
+      "unobserved": "No paid signal observed",
+      "unobservedHint": "Sessions with no observed signal may include paid and organic traffic.",
+      "noMeasurement": "No measured sessions match this date range and filters.",
+      "unavailable": "Paid signal counts could not be loaded."
+    },
     "noSiteDescription": "Select or create a site to view UTM metrics.",
     "series": {
       "title": "UTM performance",
@@ -1940,7 +1960,13 @@
         },
         "script": {
           "description": "Copy and paste the code below into your website's HTML. Automatic tracking is enabled by default for outbound clicks, downloads, and form submissions.",
-          "docsAction": "Tracker guide"
+          "docsAction": "Tracker guide",
+          "declarativeEventsLabel": "Track marked clicks and form submissions",
+          "declarativeEventsDescription": "Send custom events for clicks on marked elements and submissions of marked forms. Mark them with data-hk-event or data-hitkeep-event."
+        },
+        "assistant": {
+          "copyAction": "Copy coding assistant prompt",
+          "prompt": "Install the HitKeep tracker on {{ domain }}. Inspect the project for an existing HitKeep integration. If one exists, update it only as needed. Otherwise, add the following script once in the shared page template. Keep the script URL and all attributes exactly as shown, and preserve the site's consent behavior.\n\n{{ snippet }}\n\nOpen a page on the intended hostname. In the browser's Network panel, confirm that the tracker script loads and the pageview request succeeds. Test any enabled automatic events by performing the corresponding actions and checking the event requests. In HitKeep, use “{{ verifier }}” to confirm a recent accepted hit. Report what you verified and what still needs checking."
         },
         "npm": {
           "description": "Bundle the typed tracker into a React, Vue, Angular, or Astro app. No script tag, full TypeScript types, and content blockers do not filter it.",
@@ -1969,10 +1995,14 @@
         "badge": "{{ count }} changed",
         "deliveryTitle": "Delivery and privacy"
       },
+      "paidSignalsLabel": "Paid traffic signals",
+      "paidSignalsDescription": "Detect supported ad click IDs on tracked pages. The tracker sends only the presence signal.",
       "collectDntLabel": "Collect DNT",
       "collectDntDescription": "Track users even if \"Do Not Track\" is enabled in their browser.",
       "disableBeaconLabel": "Disable sendBeacon",
       "disableBeaconDescription": "Use standard fetch requests instead of navigator.sendBeacon.",
+      "visibleTimeLabel": "Measure visible time",
+      "visibleTimeDescription": "Add an option to measure how long each page is visible in the browser.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Load the separate Web Vitals bundle and send LCP, INP, CLS, FCP, and TTFB samples. Off by default.",
       "autoTrackingTitle": "Automatic event tracking",
@@ -1997,7 +2027,10 @@
           "dormant": "Dormant",
           "domain_mismatch": "Domain mismatch"
         },
-        "waitingHint": "Waiting for the first accepted hit. This panel refreshes automatically for two minutes.",
+        "waitingBrowser": "Deploy the tracker, then open a published page on {{ domain }} where tracking is permitted. If it stays on Waiting, check that the tracker loads and review Do Not Track, consent, and exclusions.",
+        "waitingServer": "Send a pageview for a real visit on {{ domain }} through your server integration. If it stays on Waiting, check the integration’s response and its access to this site.",
+        "waitingHint": "The verifier checks automatically for up to two minutes. You can refresh it at any time.",
+        "unavailable": "Tracking status unavailable. Use Refresh to retry.",
         "mismatchHint": "The latest detected hostname does not match this site's configured domain.",
         "fields": {
           "firstHit": "First hit",
@@ -3242,6 +3275,19 @@
     }
   },
   "comparison": {
+    "details": "Period comparison",
+    "metric": "Metric",
+    "currentPeriod": "Current period",
+    "previousPeriod": "Previous period",
+    "relativeChange": "Relative change",
+    "unavailable": "Unavailable",
+    "zeroBaseline": "Undefined (previous value is zero)",
+    "elapsedRule": "The previous period ends immediately before the current period and covers the same elapsed time. Relative change is measured against the previous value.",
+    "liveOnly": "Live visitors covers the last five minutes and has no comparison.",
+    "currentOnlyBreakdowns": "Breakdowns and traffic records show the current period only.",
+    "seriesLabel": "{{metric}} (previous)",
+    "bucketOrder": "The lines are aligned by bucket order. The axis shows current-period dates.",
+    "gridMismatch": "The previous period uses a different bucket grid, so its series is hidden.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Pageviews (prev.)",
     "visitorsLabel": "Visitors (prev.)"

@@ -21,17 +21,20 @@ import { REALTIME_ALL_ANALYTICS_KINDS } from '@services/realtime.service';
 import { TrafficChart } from '@features/analytics/components/traffic-chart';
 import { MetricCardGroup, MetricCardGroupAction, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SearchConsoleDrilldown } from '@features/analytics/components/search-console-drilldown';
+import { VisibleTimeReport } from '@features/analytics/components/visible-time-report';
 import type { Funnel, GoalStats, MetricStat } from '@models/analytics.types';
 import type { ConversionSubject } from '@features/analytics/models/conversion-subject';
 import { WorkflowProgress, type WorkflowProgressStep } from '@components/workflow-progress/workflow-progress';
 import { ExportSplitButton, ExportStatusBanner } from '@components/export-split-button/export-split-button';
+import { AnimatedDuration } from '@components/animated-duration/animated-duration';
+import { AnimatedNumber } from '@components/animated-number/animated-number';
 import { FilterChipItem, FilterChipRow } from '@components/filter-chip-row/filter-chip-row';
-import { KPI_PERCENT_FORMAT, KPI_SHORT_DECIMAL_FORMAT, KpiCard } from '@features/analytics/components/kpi-card';
+import { KPI_DELTA_FORMAT, KPI_PERCENT_FORMAT, KPI_SHORT_DECIMAL_FORMAT, KpiCard, type KpiCardModel } from '@features/analytics/components/kpi-card';
 import { ShareService } from '@services/share.service';
 import { EmbedService } from '@services/embed.service';
-import { translateRangeLabel } from '@components/range-toolbar/range-toolbar';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
+import { injectPeriodLabel, isIntradayPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { aiFilterChipLabel } from '@features/analytics/ai-category-labels';
 import { buildAIMetricCardTabs } from '@features/analytics/ai-metric-cards';
@@ -58,18 +61,10 @@ interface DashboardReportRequest {
     subject: { kind: ConversionSubject['kind']; id: string } | null;
 }
 type KpiMetricID = 'live_visitors' | 'total_pageviews' | 'unique_sessions' | 'bounce_rate' | 'avg_session_duration' | 'pages_per_session';
-interface KpiCardData {
+interface KpiCardData extends KpiCardModel {
     id: KpiMetricID;
-    label: string;
-    value: number | string;
-    loading: boolean;
     valueClass: string;
-    format?: Intl.NumberFormatOptions;
-    suffix?: string;
-    duration?: boolean;
-    updateKey?: number;
-    delta?: number | null;
-    invertDelta?: boolean;
+    previousValue?: number;
 }
 @Component({
     selector: 'app-dashboard',
@@ -85,9 +80,12 @@ interface KpiCardData {
         ExportStatusBanner,
         FilterChipRow,
         KpiCard,
+        AnimatedDuration,
+        AnimatedNumber,
         TrafficChart,
         MetricCardGroup,
         SearchConsoleDrilldown,
+        VisibleTimeReport,
         AddSiteDialog,
         TrafficRecordsCard
     ],
@@ -123,7 +121,9 @@ export class Dashboard {
     protected isStatsLoading = this.statsQuery.isLoading;
     protected aiActivity = this.aiActivityQuery.report;
     protected isAIActivityLoading = this.aiActivityQuery.isLoading;
-    protected currentComparisonRange = this.statsQuery.comparisonRange;
+    protected readonly currentPeriodLabel = injectPeriodLabel(this.statsQuery.currentRange);
+    protected readonly comparisonLabel = injectPeriodLabel(this.statsQuery.comparisonRange);
+    protected readonly comparisonDeltaFormat = KPI_DELTA_FORMAT;
     protected readonly kpiUpdateKey = signal(0);
     protected selectedConversion = signal<ConversionSubject | null>(null, {
         equal: (a, b) => a?.kind === b?.kind && a?.id === b?.id && a?.name === b?.name
@@ -168,6 +168,11 @@ export class Dashboard {
         },
         { equal: (a, b) => JSON.stringify(a) === JSON.stringify(b) }
     );
+    protected readonly visibleTimeRequest = computed(() => {
+        if (this.isShareMode()) return null;
+        const request = this.reportRequest();
+        return request && this.access.canSite(request.siteId, SITE_CAPABILITIES.view) ? request : null;
+    });
     protected hasFilters = computed(() => this.activeFilters().length > 0 || this.selectedConversion() !== null);
     protected canManageConversions = computed(() => {
         const site = this.siteService.activeSite();
@@ -467,7 +472,7 @@ export class Dashboard {
             {
                 id: 'live_visitors',
                 label: this.transloco.translate('dashboard.kpis.liveVisitors'),
-                value: liveVisitors,
+                value: stats ? liveVisitors : '—',
                 loading,
                 updateKey,
                 valueClass: liveVisitors > 0 ? `${baseClass} text-green-600 dark:text-green-400` : baseClass,
@@ -476,7 +481,8 @@ export class Dashboard {
             {
                 id: 'total_pageviews',
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
-                value: stats?.total_pageviews ?? 0,
+                value: stats?.total_pageviews ?? '—',
+                previousValue: cmp?.total_pageviews,
                 loading,
                 updateKey,
                 valueClass: baseClass,
@@ -485,7 +491,8 @@ export class Dashboard {
             {
                 id: 'unique_sessions',
                 label: this.transloco.translate('dashboard.kpis.uniqueSessions'),
-                value: stats?.unique_sessions ?? 0,
+                value: stats?.unique_sessions ?? '—',
+                previousValue: cmp?.unique_sessions,
                 loading,
                 updateKey,
                 valueClass: baseClass,
@@ -494,7 +501,8 @@ export class Dashboard {
             {
                 id: 'bounce_rate',
                 label: this.transloco.translate('dashboard.kpis.bounceRate'),
-                value: stats?.bounce_rate ?? 0,
+                value: stats?.bounce_rate ?? '—',
+                previousValue: cmp?.bounce_rate,
                 loading,
                 updateKey,
                 valueClass: baseClass,
@@ -506,7 +514,8 @@ export class Dashboard {
             {
                 id: 'avg_session_duration',
                 label: this.transloco.translate('dashboard.kpis.avgDuration'),
-                value: stats?.avg_session_duration ?? 0,
+                value: stats?.avg_session_duration ?? '—',
+                previousValue: cmp?.avg_session_duration,
                 loading,
                 updateKey,
                 valueClass: baseClass,
@@ -516,7 +525,8 @@ export class Dashboard {
             {
                 id: 'pages_per_session',
                 label: this.transloco.translate('dashboard.kpis.pagesPerSession'),
-                value: stats?.pages_per_session ?? 0,
+                value: stats?.pages_per_session ?? '—',
+                previousValue: cmp?.pages_per_session,
                 loading,
                 updateKey,
                 valueClass: baseClass,
@@ -532,36 +542,7 @@ export class Dashboard {
         void this.router.navigate(['/sites', site.id, 'settings', 'tracking']);
     }
 
-    protected readonly isShortRange = this.reportRange.isShortRange;
-    protected chartTitle = computed(() => {
-        this.activeLanguage();
-        const range = this.reportRange.selectedRange();
-
-        if (range.value !== 'custom') {
-            return this.transloco.translate('dashboard.chartTitleWithRange', {
-                range: range.label ?? translateRangeLabel(this.transloco, range.value)
-            });
-        }
-
-        const dates = this.reportRange.customRangeDates();
-        if (dates && dates.length === 2 && dates[0] && dates[1]) {
-            const start = this.localeService.localizeDate(dates[0], undefined, {
-                month: 'short',
-                day: 'numeric'
-            });
-            const end = this.localeService.localizeDate(dates[1], undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-            });
-            return this.transloco.translate('dashboard.chartTitleCustomRange', {
-                start,
-                end
-            });
-        }
-
-        return this.transloco.translate('dashboard.chartTitleOverview');
-    });
+    protected readonly isShortRange = computed(() => isIntradayPeriod(this.statsQuery.currentRange()));
     constructor() {
         this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
             const goalId = params.get('goal');
@@ -749,16 +730,6 @@ export class Dashboard {
         this.trafficRefreshKey.update((key) => key + 1);
         this.refreshOnboarding();
     }
-
-    protected comparisonLabel = computed(() => {
-        this.activeLanguage();
-        const r = this.currentComparisonRange();
-        if (!r) return '';
-        const showYear = new Date(r.from).getFullYear() !== new Date().getFullYear();
-        const opts = showYear ? ({ month: 'short', day: 'numeric', year: 'numeric' } as const) : ({ month: 'short', day: 'numeric' } as const);
-        const fmt = (d: string) => this.localeService.localizeDate(new Date(d), undefined, opts);
-        return `${fmt(r.from)} – ${fmt(r.to)}`;
-    });
 
     private loadStatsForCurrentRange(mode: StatsQueryMode = 'blocking') {
         const request = this.reportRequest();

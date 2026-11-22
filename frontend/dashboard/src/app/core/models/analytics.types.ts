@@ -295,6 +295,13 @@ export interface WebVitalSeriesPoint {
     poor: number;
 }
 
+export interface VisibleTimePage {
+    path: string;
+    avg_visible_ms: number | null;
+    measured_views: number;
+    tracked_views: number;
+}
+
 export interface WebVitalPageRow {
     path: string;
     p75: number;
@@ -623,6 +630,8 @@ export interface ComparisonStats {
     utm_medium_hits: number;
     utm_source_hits: number;
     utm_term_hits: number;
+    paid_signal_sessions?: number;
+    paid_signal_measured_sessions?: number;
     goals: GoalStats[];
     total_conversions: number;
 }
@@ -662,6 +671,8 @@ export interface SiteStats {
     utm_medium_hits: number;
     utm_source_hits: number;
     utm_term_hits: number;
+    paid_signal_sessions?: number;
+    paid_signal_measured_sessions?: number;
     goals: GoalStats[];
     funnels: Funnel[];
     comparison?: ComparisonStats;

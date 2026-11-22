@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3
+    image: traefik:v3.7.19
     container_name: hitkeep-traefik
     restart: unless-stopped
     command:

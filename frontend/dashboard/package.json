@@ -2,7 +2,7 @@
     "name": "@hitkeep/dashboard",
     "license": "MIT",
     "version": "2.17.0",
-    "packageManager": "npm@12.2.2",
+    "packageManager": "npm@12.2.3",
     "scripts": {
         "ng": "ng",
         "start": "ng serve",
@@ -24,13 +24,13 @@
     },
     "private": true,
     "dependencies": {
-        "@angular/cdk": "~22.2.6",
-        "@angular/common": "^22.2.5",
-        "@angular/compiler": "^22.2.5",
-        "@angular/core": "^22.2.5",
-        "@angular/forms": "^22.2.5",
-        "@angular/platform-browser": "^22.2.5",
-        "@angular/router": "^22.2.5",
+        "@angular/cdk": "~22.2.7",
+        "@angular/common": "^22.2.6",
+        "@angular/compiler": "^22.2.6",
+        "@angular/core": "^22.2.6",
+        "@angular/forms": "^22.2.6",
+        "@angular/platform-browser": "^22.2.6",
+        "@angular/router": "^22.2.6",
         "@fontsource-variable/lexend": "^5.3.0",
         "@jsverse/transloco-locale": "^8.4.0",
         "@openng/icons": "^1.0.0",
@@ -38,7 +38,7 @@
         "@openng/optimus-ui-locale": "^2.0.2",
         "@openng/optimus-ui-tailwindcss": "^2.0.2",
         "@openng/optimus-ui-themes": "^2.0.2",
-        "@scalar/api-reference": "^1.77.0",
+        "@scalar/api-reference": "^1.78.1",
         "@tailwindcss/postcss": "^4.3.5",
         "circle-flags": "^2.8.3",
         "echarts": "^6.1.0",
@@ -53,33 +53,33 @@
         "web-vitals": "^6.2.3"
     },
     "devDependencies": {
-        "@angular-devkit/schematics": "^22.2.6",
+        "@angular-devkit/schematics": "^22.2.7",
         "@angular-eslint/builder": "^22.6.0",
-        "@angular/build": "^22.2.6",
-        "@angular/cli": "^22.2.6",
-        "@angular/compiler-cli": "^22.2.5",
+        "@angular/build": "^22.2.7",
+        "@angular/cli": "^22.2.7",
+        "@angular/compiler-cli": "^22.2.6",
         "@eslint/js": "^10.0.1",
         "@jsverse/transloco": "^8.4.0",
         "@jsverse/transloco-optimize": "^8.4.0",
-        "@playwright/test": "^1.65.0",
+        "@playwright/test": "^1.65.1",
         "@types/markdown-it": "14.2.0",
         "@vitest/browser-playwright": "^5.1.0",
         "@vitest/coverage-v8": "^5.1.0",
         "angular-eslint": "22.6.0",
-        "baseline-browser-mapping": "^2.11.35",
+        "baseline-browser-mapping": "^2.11.37",
         "esbuild": "0.28.2",
-        "eslint": "^10.14.0",
-        "jsdom": "^31.0.0",
-        "oxfmt": "^0.77.0",
-        "playwright": "^1.65.0",
-        "postcss": "^8.5.32",
+        "eslint": "^10.15.0",
+        "jsdom": "^31.0.1",
+        "oxfmt": "^0.78.0",
+        "playwright": "^1.65.1",
+        "postcss": "^8.5.33",
         "typescript": "~6.0.3",
-        "typescript-eslint": "8.72.1",
+        "typescript-eslint": "8.72.2",
         "vitest": "^5.1.0"
     },
     "engines": {
         "node": "26.13.1",
-        "npm": "12.2.2"
+        "npm": "12.2.3"
     },
     "devEngines": {
         "runtime": {
@@ -89,15 +89,14 @@
         },
         "packageManager": {
             "name": "npm",
-            "version": "12.2.2",
+            "version": "12.2.3",
             "onFail": "warn"
         }
     },
     "overrides": {
-        "dompurify": "3.4.17",
-        "vite": "8.3.6",
+        "vite": "8.3.8",
         "@jsverse/transloco-optimize": {
-            "glob": "^13.0.6"
+            "glob": "^14.0.6"
         },
         "@scalar/json-magic": {
             "undici": "^8.12.4"

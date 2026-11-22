@@ -67,7 +67,7 @@ try {
         [
             "import { blockTrackingForMe, cleanup, init, isTrackingEnabled, track, trackPurchase, TRACKER_VERSION } from '@hitkeep/tracker';",
             "import type { PurchaseProperties, TrackerConfig, TrackerHandle } from '@hitkeep/tracker';",
-            "const config: TrackerConfig = { host: 'https://stats.example.com', captureOnLocalhost: true };",
+            "const config: TrackerConfig = { host: 'https://stats.example.com', captureOnLocalhost: true, enablePaidSignals: true, visibleTime: true };",
             "const handle: TrackerHandle = init(config);",
             "track('signup', { plan: 'pro' });",
             "const purchase: PurchaseProperties = { transaction_id: 'tx', value: 1, currency: 'EUR' };",

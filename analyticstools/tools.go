@@ -468,7 +468,7 @@ var FunnelStats = Define(ToolFunnelStats, "Get HitKeep Funnel Stats",
 		if err != nil {
 			return FunnelStatsOutput{}, err
 		}
-		return FunnelStatsOutput{SiteID: call.ID.String(), From: formatTime(call.From), To: formatTime(call.To), Stats: stats}, nil
+		return FunnelStatsOutput{SiteID: call.ID.String(), From: formatTime(call.From), To: formatTime(call.To), Stats: toFunnelStats(stats)}, nil
 	})
 
 type qrCampaignsInput struct {

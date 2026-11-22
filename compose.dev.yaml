@@ -74,7 +74,7 @@ services:
       - backend
 
   mailpit:
-    image: axllent/mailpit@sha256:5a49a77c5bdbe7c5474450b4f46348d09949df3695257729c93a30369382d4f6
+    image: axllent/mailpit:v1.34.0@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
     ports:
       - "${HK_SMTP_PORT:-1025}:1025"
       - "${HK_MAIL_UI_PORT:-8025}:8025"

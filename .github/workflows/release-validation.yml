@@ -134,7 +134,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -256,7 +256,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
@@ -297,7 +297,7 @@ jobs:
         run: |
           set -euo pipefail
           HITKEEP_ARCHIVE_VERSION="${HITKEEP_VERSION#v}" \
-            env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.19.0 release \
+            env -u GOROOT go run github.com/goreleaser/goreleaser/v2@v2.20.3 release \
               --snapshot --clean --skip=publish --config .goreleaser.yaml
           for arch in amd64 arm64; do
             mapfile -t archives < <(find dist -maxdepth 1 -type f -name "hitkeep_*_Linux_${arch}.tar.gz")
@@ -331,11 +331,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.2
       - name: Install Kind
         run: env -u GOROOT go install sigs.k8s.io/kind@v0.33.0
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0

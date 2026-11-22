@@ -64,6 +64,7 @@ function packageHarness(path = '/pricing') {
             sendBeacon
         },
         screen: { width: 1440, height: 900 },
+        performance: { now: () => 0 },
         history: {
             pushState: vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
                 if (url) currentUrl = new URL(url, currentUrl.href);
@@ -139,6 +140,7 @@ describe('@hitkeep/tracker package entry', () => {
         const payload = await beaconPayload(harness.sendBeacon, 0);
         expect(payload['tsrc']).toBe('@hitkeep/tracker');
         expect(payload['tv']).toBe(TRACKER_VERSION);
+        expect(payload).not.toHaveProperty('pc');
     });
 
     it('supports path-prefixed hosts', () => {
@@ -148,6 +150,67 @@ describe('@hitkeep/tracker package entry', () => {
         handle.track('signup_clicked');
 
         expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://www.example.net/hitkeep/ingest', 'https://www.example.net/hitkeep/ingest/event']);
+    });
+
+    it('measures manual pageviews through a prefix-relative keepalive POST when beacons are disabled', () => {
+        const harness = packageHarness();
+        const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 202 }));
+        vi.stubGlobal('fetch', fetch);
+        const handle = init({ host: 'https://www.example.net/hitkeep', autoCapturePageviews: false, visibleTime: true, useBeacon: false }, harness.win);
+        const hide = () => {
+            for (const listener of harness.windowListeners['pagehide'] ?? []) {
+                listener(new PageTransitionEvent('pagehide'));
+            }
+        };
+        expect(fetch).not.toHaveBeenCalled();
+        handle.trackPageview();
+        hide();
+
+        expect(fetch).toHaveBeenCalledTimes(2);
+        const { page_id: pid } = JSON.parse(fetch.mock.calls[0]![1].body as string);
+        const [url, request] = fetch.mock.calls[1]!;
+        expect(url).toBe('https://www.example.net/hitkeep/ingest/visible-time');
+        expect(request).toMatchObject({ method: 'POST', keepalive: true, credentials: 'omit' });
+        expect(request.headers).toBeUndefined();
+        expect(JSON.parse(request.body as string)).toEqual({ pid, ms: 0 });
+    });
+
+    it('tracks marked interactions with automatic events disabled and removes their listeners on cleanup', async () => {
+        const harness = packageHarness();
+        const handle = init(
+            {
+                host: 'https://stats.example.com',
+                autoCapturePageviews: false,
+                declarativeEvents: true,
+                outboundLinks: false,
+                fileDownloads: false,
+                formSubmissions: false
+            },
+            harness.win
+        );
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        const form = document.createElement('form');
+        form.setAttribute('data-hk-event', 'named_submit');
+        for (const [event, target] of [
+            [new MouseEvent('click'), button],
+            [new SubmitEvent('submit'), form]
+        ] as const) {
+            for (const listener of harness.documentListeners[event.type] ?? []) {
+                target.addEventListener(event.type, listener, { once: true });
+            }
+            target.dispatchEvent(event);
+        }
+
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(2);
+        expect(await beaconPayload(harness.sendBeacon, 0)).toMatchObject({ n: 'named_click', p: {} });
+        expect(await beaconPayload(harness.sendBeacon, 1)).toMatchObject({ n: 'named_submit', p: {} });
+
+        handle.cleanup();
+        expect(harness.documentListeners['click']).toHaveLength(0);
+        expect(harness.documentListeners['auxclick']).toHaveLength(0);
+        expect(harness.documentListeners['submit']).toHaveLength(0);
     });
 
     it('binds window.hk.event by default and skips it when disabled', () => {
@@ -178,34 +241,33 @@ describe('@hitkeep/tracker package entry', () => {
         expect((second['p'] as Record<string, unknown>)['transaction_id']).toBe('tx-1');
     });
 
-    it('replays pre-init, ecommerce, and live events only after prerender activation', async () => {
+    it('replays pre-init, ecommerce, and live events only after prerender activation', () => {
+        const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 204 }));
+        vi.stubGlobal('fetch', fetchMock);
         const harness = packageHarness('/checkout?utm_source=speculative');
         harness.setPrerendering(true);
 
         track('early_event', { step: 1 });
         trackPurchase({ transaction_id: 'tx-1', value: 49.9, currency: 'EUR' });
-        const handle = init({ host: 'https://stats.example.com' }, harness.win);
+        const handle = init({ host: 'https://stats.example.com', enablePaidSignals: true }, harness.win);
         handle.track('live_event', { step: 2 });
-        harness.win.history.replaceState({}, '', '/confirmation?utm_source=activated');
+        harness.win.history.replaceState({}, '', '/confirmation?utm_source=activated&gclid=private');
 
         expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
 
         harness.setPrerendering(false);
         harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
 
-        expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual(['https://stats.example.com/ingest', 'https://stats.example.com/ingest/event', 'https://stats.example.com/ingest/event', 'https://stats.example.com/ingest/event']);
-        const pageview = await beaconPayload(harness.sendBeacon, 0);
-        const earlyEvent = await beaconPayload(harness.sendBeacon, 1);
-        const purchase = await beaconPayload(harness.sendBeacon, 2);
-        const liveEvent = await beaconPayload(harness.sendBeacon, 3);
-        expect(pageview['path']).toBe('/confirmation');
-        expect(pageview['u_src']).toBe('activated');
-        expect(earlyEvent['n']).toBe('early_event');
-        expect(earlyEvent['path']).toBe('/confirmation');
-        expect(purchase['n']).toBe('purchase');
-        expect(purchase['path']).toBe('/confirmation');
-        expect(liveEvent['n']).toBe('live_event');
-        expect(liveEvent['path']).toBe('/confirmation');
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['https://stats.example.com/ingest', 'https://stats.example.com/ingest/event', 'https://stats.example.com/ingest/event', 'https://stats.example.com/ingest/event']);
+        const [pageview, ...events] = fetchMock.mock.calls.map(([, request]) => JSON.parse(String(request?.body)) as Record<string, unknown>);
+        expect(pageview).toMatchObject({ path: '/confirmation', u_src: 'activated', pc: true });
+        expect(events).toMatchObject([
+            { n: 'early_event', path: '/confirmation' },
+            { n: 'purchase', path: '/confirmation' },
+            { n: 'live_event', path: '/confirmation' }
+        ]);
+        expect(events.every((event) => !Object.hasOwn(event, 'pc'))).toBe(true);
     });
 
     it('returns the existing handle when initialized twice', () => {

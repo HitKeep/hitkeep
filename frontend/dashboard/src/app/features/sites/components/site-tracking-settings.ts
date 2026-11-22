@@ -23,7 +23,7 @@ import { DOCS_LINKS, NPM_PACKAGE_NAME, NPM_PACKAGE_URL, WORDPRESS_PLUGIN_URL } f
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { DISCLOSURE_FIELDSET_DESIGN_TOKENS } from '@core/theme/hitkeep-preset';
 import { browserAbsoluteAppUrl } from '@core/interceptors/base-path.interceptor';
-import { finalize } from 'rxjs';
+import { Subject, catchError, exhaustMap, finalize, interval, merge, of, takeUntil, takeWhile, timeout, timer } from 'rxjs';
 
 interface TrackingDomainSelectOption {
     label: string;
@@ -31,6 +31,9 @@ interface TrackingDomainSelectOption {
 }
 
 const INSTALL_METHODS = ['script', 'npm', 'wordpress', 'server'] as const;
+const STATUS_POLL_INTERVAL = 3000;
+const STATUS_POLL_WINDOW = 120000;
+const STATUS_REQUEST_TIMEOUT = 15000;
 
 /** The four supported ways to get data into HitKeep. */
 export type InstallMethod = (typeof INSTALL_METHODS)[number];
@@ -73,12 +76,15 @@ export class SiteTrackingSettings {
     private document = inject(DOCUMENT);
     private transloco = inject(TranslocoService);
     site = input.required<Site | null>();
-    protected trackingStatus = signal<SiteTrackingStatus | null>(null);
+    private readonly manualStatusRefresh = new Subject<void>();
+    protected readonly statusResult = signal<SiteTrackingStatus | 'unavailable' | null>(null);
+    protected readonly trackingStatus = computed(() => {
+        const result = this.statusResult();
+        return result === 'unavailable' ? null : result;
+    });
     protected isLoadingStatus = signal(false);
     protected trackingDomainOptions = signal<SiteTrackingDomainOptions | null>(null);
     protected isLoadingTrackingDomains = signal(false);
-    private statusRequestID = 0;
-    private statusLoadingRequestID = 0;
     private domainOptionsRequestID = 0;
     /** The instance's own tracker URL. Derived from `<base href>`, which never changes. */
     private readonly defaultTrackerURL = browserAbsoluteAppUrl(this.document, '/hk.js');
@@ -89,9 +95,12 @@ export class SiteTrackingSettings {
         collectDnt: new FormControl(false, { nonNullable: true }),
         disableBeacon: new FormControl(false, { nonNullable: true }),
         enableWebVitals: new FormControl(false, { nonNullable: true }),
+        enablePaidSignals: new FormControl(false, { nonNullable: true }),
+        enableVisibleTime: new FormControl(false, { nonNullable: true }),
         trackOutbound: new FormControl(true, { nonNullable: true }),
         trackDownloads: new FormControl(true, { nonNullable: true }),
-        trackForms: new FormControl(true, { nonNullable: true })
+        trackForms: new FormControl(true, { nonNullable: true }),
+        enableDeclarativeEvents: new FormControl(false, { nonNullable: true })
     });
     protected readonly trackingForm = compatForm(this.trackingFormModel);
 
@@ -162,16 +171,24 @@ export class SiteTrackingSettings {
         if (this.trackingForm.collectDnt().value()) attrs += ' data-collect-dnt="true"';
         if (this.trackingForm.disableBeacon().value()) attrs += ' data-disable-beacon="true"';
         if (this.trackingForm.enableWebVitals().value()) attrs += ' data-enable-web-vitals="true"';
+        if (this.trackingForm.enablePaidSignals().value()) attrs += ' data-enable-paid-signals="true"';
         if (!this.trackingForm.trackOutbound().value()) attrs += ' data-disable-outbound-tracking="true"';
         if (!this.trackingForm.trackDownloads().value()) attrs += ' data-disable-download-tracking="true"';
         if (!this.trackingForm.trackForms().value()) attrs += ' data-disable-form-tracking="true"';
+        if (this.trackingForm.enableDeclarativeEvents().value()) attrs += ' data-enable-declarative-events="true"';
+        if (this.trackingForm.enableVisibleTime().value()) attrs += ' data-enable-visible-time="true"';
 
-        return `<script async src="${scriptURL}"${attrs}></script>`;
+        return `<script async src="${scriptURL}"${attrs} referrerpolicy="no-referrer"></script>`;
     });
 
     protected readonly npmInstallCommand = `npm install ${NPM_PACKAGE_NAME}`;
 
-    protected readonly npmInitSnippet = computed(() => `import { init } from '${NPM_PACKAGE_NAME}';\n\ninit({ host: '${this.trackerHostURL()}' });`);
+    protected readonly npmInitSnippet = computed(() => {
+        const options = [`host: '${this.trackerHostURL()}'`];
+        if (this.trackingForm.enablePaidSignals().value()) options.push('enablePaidSignals: true');
+        if (this.trackingForm.enableVisibleTime().value()) options.push('visibleTime: true');
+        return `import { init } from '${NPM_PACKAGE_NAME}';\n\ninit({ ${options.join(', ')} });`;
+    });
 
     protected readonly serverIngestSnippet = computed(() => {
         const domain = this.site()?.domain || 'example.com';
@@ -181,7 +198,7 @@ export class SiteTrackingSettings {
             '  -H "Content-Type: application/json" \\',
             "  -d '{",
             `    "url": "https://${domain}/pricing",`,
-            '    "timestamp": "2026-04-03T12:30:45Z",',
+            `    "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'",`,
             '    "visitor_ip": "203.0.113.42",',
             '    "user_agent": "Mozilla/5.0"',
             "  }'"
@@ -189,42 +206,57 @@ export class SiteTrackingSettings {
     });
 
     /** How many snippet options differ from their defaults, shown on the collapsed fieldset. */
-    protected readonly changedOptionCount = computed(
-        () =>
-            [
+    protected readonly changedOptionCount = computed(() => {
+        const options = [this.trackingForm.enablePaidSignals().value(), this.trackingForm.enableVisibleTime().value(), this.selectedSnippetTrackingDomain() !== null];
+        if (this.installMethod() === 'script') {
+            options.push(
                 this.trackingForm.collectDnt().value(),
                 this.trackingForm.disableBeacon().value(),
                 this.trackingForm.enableWebVitals().value(),
                 !this.trackingForm.trackOutbound().value(),
                 !this.trackingForm.trackDownloads().value(),
                 !this.trackingForm.trackForms().value(),
-                this.selectedSnippetTrackingDomain() !== null
-            ].filter(Boolean).length
-    );
+                this.trackingForm.enableDeclarativeEvents().value()
+            );
+        }
+        return options.filter(Boolean).length;
+    });
 
     constructor() {
         effect((onCleanup) => {
             const site = this.site();
-            this.statusRequestID += 1;
-            this.trackingStatus.set(null);
+            this.statusResult.set(null);
             this.trackingDomainOptions.set(null);
             this.trackingDomainControl.setValue(null);
             if (!site) {
                 return;
             }
 
-            this.loadStatus(site.id);
             this.loadTrackingDomainOptions(site.id);
-            const startedAt = Date.now();
-            const timer = setInterval(() => {
-                const current = this.trackingStatus();
-                if (Date.now() - startedAt > 120000 || (current && current.status !== 'waiting')) {
-                    clearInterval(timer);
-                    return;
-                }
-                this.loadStatus(site.id, { quiet: true });
-            }, 3000);
-            onCleanup(() => clearInterval(timer));
+            const poll = interval(STATUS_POLL_INTERVAL).pipe(
+                takeUntil(timer(STATUS_POLL_WINDOW)),
+                takeWhile(() => {
+                    const status = this.trackingStatus();
+                    return !status || status.status === 'waiting';
+                })
+            );
+            const statusChecks = merge(of(undefined), this.manualStatusRefresh, poll)
+                .pipe(
+                    exhaustMap(() => {
+                        this.isLoadingStatus.set(true);
+                        return this.siteService.getTrackingStatus(site.id).pipe(
+                            timeout({ first: STATUS_REQUEST_TIMEOUT }),
+                            catchError(() => of('unavailable' as const)),
+                            finalize(() => this.isLoadingStatus.set(false))
+                        );
+                    })
+                )
+                .subscribe((result) => {
+                    if (this.site() === site) {
+                        this.statusResult.set(result);
+                    }
+                });
+            onCleanup(() => statusChecks.unsubscribe());
         });
     }
 
@@ -239,44 +271,11 @@ export class SiteTrackingSettings {
     }
 
     protected refreshStatus() {
-        const site = this.site();
-        if (!site) return;
-        this.loadStatus(site.id);
+        this.manualStatusRefresh.next();
     }
 
     protected trackerLabel(status: SiteTrackingStatus): string {
-        const source = status.tracker_source || 'hk.js';
-        return status.tracker_version ? `${source} ${status.tracker_version}` : source;
-    }
-
-    private loadStatus(siteId: string, options: { quiet?: boolean } = {}) {
-        const requestID = ++this.statusRequestID;
-        const loadingRequestID = options.quiet ? this.statusLoadingRequestID : ++this.statusLoadingRequestID;
-        if (!options.quiet) {
-            this.isLoadingStatus.set(true);
-        }
-        this.siteService
-            .getTrackingStatus(siteId)
-            .pipe(
-                finalize(() => {
-                    if (!options.quiet && loadingRequestID === this.statusLoadingRequestID) {
-                        this.isLoadingStatus.set(false);
-                    }
-                }),
-                takeUntilDestroyed(this.destroyRef)
-            )
-            .subscribe({
-                next: (status) => {
-                    if (requestID === this.statusRequestID && this.site()?.id === siteId) {
-                        this.trackingStatus.set(status);
-                    }
-                },
-                error: () => {
-                    if (requestID === this.statusRequestID && this.site()?.id === siteId) {
-                        this.trackingStatus.set(null);
-                    }
-                }
-            });
+        return [status.tracker_source, status.tracker_version].filter(Boolean).join(' ') || '-';
     }
 
     private loadTrackingDomainOptions(siteId: string) {

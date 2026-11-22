@@ -179,12 +179,13 @@ describe('Funnels', () => {
         };
         const first = new Subject<FunnelSeriesPoint[]>();
         const second = new Subject<FunnelSeriesPoint[]>();
-        analyticsServiceStub.getFunnelTimeseries.mockReset().mockReturnValue(of<FunnelSeriesPoint[]>([])).mockReturnValueOnce(first).mockReturnValueOnce(second);
+        analyticsServiceStub.getFunnelTimeseries.mockReset().mockReturnValue(of<FunnelSeriesPoint[]>([])).mockReturnValueOnce(first).mockReturnValueOnce(of([])).mockReturnValueOnce(second);
 
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['funnel-1']);
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['funnel-2']);
         first.next([{ time: '2026-07-01', entries: 1, completions: 1 }]);
         second.next([{ time: '2026-07-01', entries: 2, completions: 1 }]);
+        second.complete();
 
         expect(component.funnelSeries()).toEqual([{ time: '2026-07-01', entries: 2, completions: 1 }]);
     });

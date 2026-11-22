@@ -165,7 +165,7 @@ func TestCrossOriginProtectionBlocksBrowserRequestsToServerEndpoints(t *testing.
 func TestCrossOriginProtectionBypassesOnlyPublicBrowserIngestAndOAuthTokenEndpoints(t *testing.T) {
 	handler := crossOriginTestHandler()
 
-	for _, path := range []string{"/ingest", "/ingest/event", "/ingest/web-vitals", "/oauth/token", "/oauth/revoke"} {
+	for _, path := range []string{"/ingest", "/ingest/event", "/ingest/web-vitals", "/ingest/visible-time", "/oauth/token", "/oauth/revoke"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, path, nil)
 			req.Header.Set("Sec-Fetch-Site", "cross-site")

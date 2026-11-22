@@ -7,8 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"hitkeep/server/shared"
 )
@@ -51,7 +50,7 @@ func requestIDFromRequest(r *http.Request) string {
 	if requestID != "" && len(requestID) <= maxRequestIDLength && strings.IndexFunc(requestID, unicode.IsControl) == -1 {
 		return requestID
 	}
-	return uuid.NewString()
+	return uuid.NewV4().String()
 }
 
 func safeRequestPath(rawPath string) string {

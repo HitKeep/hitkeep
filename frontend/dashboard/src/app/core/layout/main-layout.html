@@ -5,7 +5,6 @@
         [class.sidebar-hidden]="sidebarHidden()"
         [panelSizes]="panelSizes()"
         [minSizes]="minSizes()"
-        [step]="8"
         [pt]="{ panel: {}, gutter: { role: 'presentation' }, gutterHandle: { role: 'separator', 'aria-label': ('nav.resizeSidebar' | transloco), 'aria-orientation': 'vertical', 'aria-valuemin': 220, 'aria-valuemax': 320, 'aria-valuenow': context.sidebarWidthPx() } }"
         (onResizeEnd)="onSidebarResize($event)"
     >

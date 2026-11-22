@@ -151,6 +151,8 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.2
       - name: Verify evidence before registry login
         env:
           GH_TOKEN: ${{ github.token }}
@@ -188,7 +190,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -256,7 +258,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -325,7 +327,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}
@@ -391,7 +393,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
           SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: python3 scripts/release/candidate.py public --tag "$TAG" --source-sha "$SOURCE_SHA" --directory public-candidate
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: dispatch-token
         with:
           app-id: ${{ vars.HITKEEP_RELEASE_APP_ID }}

@@ -20,8 +20,8 @@ func TestBuildRollupWindowSplitsPartialEdges(t *testing.T) {
 	if !window.FullEnd.Equal(time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)) {
 		t.Fatalf("unexpected full end: %s", window.FullEnd)
 	}
-	if window.Leading == nil || !window.Leading.Equal(window.FullStart) {
-		t.Fatalf("expected leading edge to end at %s, got %v", window.FullStart, window.Leading)
+	if leading := window.FullStart.Add(-time.Nanosecond); window.Leading == nil || !window.Leading.Equal(leading) {
+		t.Fatalf("expected leading edge to end at %s, got %v", leading, window.Leading)
 	}
 	trailing := time.Date(2026, 4, 20, 13, 0, 0, 0, time.UTC)
 	if window.Trailing == nil || !window.Trailing.Equal(trailing) {

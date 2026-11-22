@@ -179,12 +179,13 @@ describe('Goals', () => {
         };
         const first = new Subject<GoalSeriesPoint[]>();
         const second = new Subject<GoalSeriesPoint[]>();
-        analyticsServiceStub.getGoalTimeseries.mockReset().mockReturnValue(of<GoalSeriesPoint[]>([])).mockReturnValueOnce(first).mockReturnValueOnce(second);
+        analyticsServiceStub.getGoalTimeseries.mockReset().mockReturnValue(of<GoalSeriesPoint[]>([])).mockReturnValueOnce(first).mockReturnValueOnce(of([])).mockReturnValueOnce(second);
 
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['goal-1'], ['goal-1']);
         component.loadReporting('site-1', '2026-07-01', '2026-07-02', ['goal-2'], ['goal-2']);
         first.next([{ time: '2026-07-01', conversions: 1 }]);
         second.next([{ time: '2026-07-01', conversions: 2 }]);
+        second.complete();
 
         expect(component.goalSeries()).toEqual([{ time: '2026-07-01', conversions: 2 }]);
     });

@@ -43,7 +43,7 @@ function fetchMockOk() {
     });
 }
 
-function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scriptSrc = 'https://analytics.example.com/hk.js') {
+function trackerHarness(path = '/signup', scriptSrc = 'https://analytics.example.com/hk.js') {
     const script = document.createElement('script');
     script.src = scriptSrc;
     const appendedScripts: HTMLScriptElement[] = [];
@@ -71,6 +71,7 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
     const documentListeners: ListenerMap = {};
     let visibilityState = 'visible';
     let prerendering = false;
+    let monotonicTime = 0;
     const stored = new Map<string, string>();
     const sessionStorage = {
         getItem: vi.fn((key: string) => stored.get(key) ?? null),
@@ -107,7 +108,7 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
     };
     const fakeDocument = {
         currentScript: script,
-        referrer: 'https://referrer.example.com/article?secret=1',
+        referrer: 'https://referrer.example.com/article?secret=1#fragment',
         get visibilityState() {
             return visibilityState;
         },
@@ -140,6 +141,7 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
         },
         screen: { width: 1440, height: 900 },
         history,
+        performance: { now: () => monotonicTime },
         sessionStorage,
         localStorage,
         crypto: {
@@ -166,6 +168,9 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
         script,
         sendBeacon,
         sessionStorage,
+        setTime: (next: number) => {
+            monotonicTime = next;
+        },
         setVisibilityState: (next: string) => {
             visibilityState = next;
         },
@@ -175,6 +180,47 @@ function trackerHarness(path = '/signup?utm_source=launch&utm_medium=email', scr
         win,
         windowListeners
     };
+}
+
+function dispatchInteraction(harness: ReturnType<typeof trackerHarness>, target: Element, event: Event): boolean {
+    const root = target.closest('form') ?? target;
+    for (const listener of harness.documentListeners[event.type] ?? []) {
+        root.addEventListener(event.type, listener, { capture: true, once: true });
+    }
+    let trackerPreventedDefault = false;
+    target.addEventListener(
+        event.type,
+        (event) => {
+            trackerPreventedDefault = event.defaultPrevented;
+            event.preventDefault();
+        },
+        { once: true }
+    );
+    target.dispatchEvent(event);
+    return trackerPreventedDefault;
+}
+
+function recordedEvents(harness: ReturnType<typeof trackerHarness>) {
+    return Promise.all(harness.sendBeacon.mock.calls.filter(([url]) => String(url).endsWith('/ingest/event')).map(async ([, body]) => JSON.parse(await (body as Blob).text()) as { n: string; p: Record<string, unknown>; path: string }));
+}
+
+function visibility(harness: ReturnType<typeof trackerHarness>, state: string, at: number) {
+    harness.setTime(at);
+    harness.setVisibilityState(state);
+    for (const listener of harness.documentListeners['visibilitychange'] ?? []) {
+        listener(new Event('visibilitychange'));
+    }
+}
+
+function pageLifecycle(harness: ReturnType<typeof trackerHarness>, type: 'pagehide' | 'pageshow', persisted: boolean, at: number) {
+    harness.setTime(at);
+    for (const listener of harness.windowListeners[type] ?? []) {
+        listener(new PageTransitionEvent(type, { persisted }));
+    }
+}
+
+function visibleSamples(harness: ReturnType<typeof trackerHarness>) {
+    return harness.sendBeacon.mock.calls.filter(([url]) => String(url).endsWith('/ingest/visible-time')).map(([, body]) => JSON.parse(body as string));
 }
 
 describe('tracker core', () => {
@@ -285,6 +331,212 @@ describe('tracker core', () => {
         expect(trackedEvent).toBeNull();
     });
 
+    it('leaves legacy markers available for manual tracking by default', async () => {
+        const harness = trackerHarness();
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/';
+        link.setAttribute('data-hk-event', 'clicked');
+        dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+
+        const form = document.createElement('form');
+        form.setAttribute('data-hitkeep-event', 'submitted');
+        dispatchInteraction(harness, form, new SubmitEvent('submit'));
+
+        (harness.win as HitKeepWindow).hk?.event?.('clicked', { manual: true });
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'clicked', p: { manual: true } })]);
+    });
+
+    it('tracks the nearest marked click in dynamic content and leaves default navigation intact', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/private?token=secret';
+        link.setAttribute('data-hitkeep-event', 'link_click');
+        const child = document.createElement('span');
+        child.textContent = 'Private text';
+        child.setAttribute('data-hk-event', 'Pricing-CTA_2');
+        link.append(child);
+        for (const event of [
+            new MouseEvent('click', { bubbles: true, cancelable: true }),
+            new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }),
+            new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }),
+            new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 })
+        ]) {
+            expect(dispatchInteraction(harness, child, event)).toBe(false);
+            // A marker on the clicked descendant also replaces link classification on its own.
+            link.removeAttribute('data-hitkeep-event');
+        }
+        expect(await recordedEvents(harness)).toEqual(Array(3).fill(expect.objectContaining({ n: 'Pricing-CTA_2', p: {} })));
+    });
+
+    it('ignores malformed and oversized marker names without sending classified link metadata', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const link = document.createElement('a');
+        link.href = 'https://external.example.com/private';
+        for (const name of ['', ' spaced ', 'person@example.com', 'line\nbreak', 'a'.repeat(65)]) {
+            link.setAttribute('data-hk-event', name);
+            dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+        }
+        const maxLengthName = 'a'.repeat(64);
+        link.setAttribute('data-hk-event', maxLengthName);
+        dispatchInteraction(harness, link, new MouseEvent('click', { cancelable: true }));
+
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: maxLengthName, p: {} })]);
+    });
+
+    it('records a native form interaction at submit and prefers the submitter marker', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const form = document.createElement('form');
+        form.id = 'private-form';
+        form.action = 'https://forms.example.com/private';
+        form.setAttribute('data-hitkeep-event', 'form_sent');
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'button_sent');
+        button.value = 'private value';
+        const icon = document.createElement('span');
+        button.append(icon);
+        form.append(button);
+        dispatchInteraction(harness, icon, new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(await recordedEvents(harness)).toEqual([]);
+
+        dispatchInteraction(harness, form, new SubmitEvent('submit', { submitter: button }));
+        dispatchInteraction(harness, form, new SubmitEvent('submit'));
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'button_sent', p: {} }), expect.objectContaining({ n: 'form_sent', p: {} })]);
+    });
+
+    it('defers clicks on labels and submit controls associated with a form by id', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const fixture = document.createElement('div');
+        fixture.innerHTML = `
+            <form id="external-submitter-form" data-hk-event="form_sent"></form>
+            <label for="external-submitter" data-hk-event="label_clicked">Send</label>
+            <button id="external-submitter" form="external-submitter-form" data-hk-event="button_sent">Send</button>
+        `;
+        document.body.append(fixture);
+        try {
+            const form = fixture.querySelector('form')!;
+            const label = fixture.querySelector('label')!;
+            const button = fixture.querySelector('button')!;
+            dispatchInteraction(harness, label, new MouseEvent('click', { cancelable: true }));
+            dispatchInteraction(harness, button, new MouseEvent('click', { cancelable: true }));
+            dispatchInteraction(harness, form, new SubmitEvent('submit', { submitter: button }));
+        } finally {
+            fixture.remove();
+        }
+
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'button_sent', p: {} })]);
+    });
+
+    it('tracks label activation once and preserves the native checkbox action', async () => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        bootstrapTracker(harness.win);
+
+        const fixture = document.createElement('div');
+        fixture.innerHTML = `
+            <label data-hk-event="nested_checkbox"><input type="checkbox"><span>Nested</span></label>
+            <label for="external-checkbox" data-hk-event="external_label">External</label>
+            <input id="external-checkbox" type="checkbox">
+            <label for="marked-checkbox" data-hk-event="second_label">Marked</label>
+            <input id="marked-checkbox" type="checkbox" data-hk-event="external_control">
+        `;
+        for (const listener of harness.documentListeners['click'] ?? []) {
+            fixture.addEventListener('click', listener, true);
+        }
+        document.body.append(fixture);
+        try {
+            fixture.querySelector('span')?.click();
+            fixture.querySelector<HTMLLabelElement>('label[for="external-checkbox"]')?.click();
+            fixture.querySelector<HTMLLabelElement>('label[for="marked-checkbox"]')?.click();
+            expect(Array.from(fixture.querySelectorAll('input'), (input) => input.checked)).toEqual([true, true, true]);
+        } finally {
+            fixture.remove();
+        }
+
+        expect((await recordedEvents(harness)).map(({ n }) => n)).toEqual(['nested_checkbox', 'external_label', 'external_control']);
+    });
+
+    it('honors opt-out before replaying a declarative event queued during prerender', async () => {
+        const harness = trackerHarness('/prerender');
+        harness.setPrerendering(true);
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
+        bootstrapTracker(harness.win);
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+
+        setTrackingOptOut(harness.win, true);
+        harness.setPrerendering(false);
+        harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(await recordedEvents(harness)).toEqual([]);
+
+        setTrackingOptOut(harness.win, false);
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(await recordedEvents(harness)).toEqual([expect.objectContaining({ n: 'named_click', p: {}, path: '/prerender' })]);
+    });
+
+    it('drops a queued declarative retry after opt-out while preserving manual delivery', async () => {
+        const fetchMock = fetchMockOk();
+        fetchMock.mockRejectedValueOnce(new Error('offline'));
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness();
+        const handle = createTracker(harness.win, runtimeConfig({ disableBeacon: true, enableDeclarativeEvents: true, capturePageviews: false }));
+
+        try {
+            const button = document.createElement('button');
+            button.setAttribute('data-hk-event', 'named_click');
+            dispatchInteraction(harness, button, new MouseEvent('click'));
+            await flushPromises();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            setTrackingOptOut(harness.win, true);
+            harness.windowListeners['pagehide']?.[0]?.(new Event('pagehide'));
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            handle?.track('manual_event');
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        } finally {
+            handle?.cleanup();
+        }
+    });
+
+    it.each(['DNT', 'bot', 'opt-out'])('keeps paid pageviews and declarative events inactive when blocked by %s', (reason) => {
+        const harness = trackerHarness();
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
+        if (reason === 'DNT') {
+            Object.defineProperty(harness.win.navigator, 'doNotTrack', { value: '1' });
+        } else if (reason === 'bot') {
+            Object.defineProperty(harness.win.navigator, 'userAgent', { value: 'Googlebot' });
+        } else {
+            setTrackingOptOut(harness.win, true);
+        }
+        bootstrapTracker(harness.win);
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+    });
+
     it('reads auto-tracking opt-out flags from the snippet element', () => {
         const script = document.createElement('script');
         script.setAttribute('data-collect-dnt', 'true');
@@ -293,6 +545,8 @@ describe('tracker core', () => {
         script.setAttribute('data-disable-outbound-tracking', 'true');
         script.setAttribute('data-disable-download-tracking', 'true');
         script.setAttribute('data-disable-form-tracking', 'true');
+        script.setAttribute('data-enable-declarative-events', 'true');
+        script.setAttribute('data-enable-paid-signals', 'true');
         script.setAttribute('data-enable-web-vitals', 'true');
 
         expect(readTrackerOptions(script)).toEqual({
@@ -302,7 +556,10 @@ describe('tracker core', () => {
             disableOutboundTracking: true,
             disableDownloadTracking: true,
             disableFormTracking: true,
+            enableDeclarativeEvents: true,
+            enablePaidSignals: true,
             enableWebVitals: true,
+            enableVisibleTime: false,
             trackerSource: 'hk.js',
             trackerVersion: ''
         });
@@ -352,6 +609,7 @@ describe('tracker core', () => {
         const fetchInit = fetchMock.mock.calls[0]?.[1];
         expect(fetchInit?.keepalive).toBe(true);
         expect(fetchInit?.credentials).toBe('omit');
+        expect(fetchInit?.referrerPolicy).toBe('no-referrer');
     });
 
     it('does not load the Web Vitals bundle unless the snippet opts in', () => {
@@ -372,6 +630,7 @@ describe('tracker core', () => {
         expect(harness.appendedScripts.length).toBe(1);
         expect(harness.appendedScripts[0]?.src).toBe('https://analytics.example.com/hk-vitals.js');
         expect(harness.appendedScripts[0]?.async).toBe(true);
+        expect(harness.appendedScripts[0]?.referrerPolicy).toBe('no-referrer');
     });
 
     it('posts tracker requests under the script subdirectory', () => {
@@ -396,7 +655,7 @@ describe('tracker core', () => {
     });
 
     it('adds transient path and user-agent context to browser events', async () => {
-        const harness = trackerHarness('/signup?plan=pro');
+        const harness = trackerHarness('/signup');
 
         bootstrapTracker(harness.win);
         const win = harness.win as TrackerTestWindow;
@@ -406,6 +665,87 @@ describe('tracker core', () => {
         const payload = JSON.parse(await eventBody.text()) as Record<string, unknown>;
         expect(payload['path']).toBe('/signup');
         expect(payload['ua']).toBe('Mozilla/5.0');
+        expect(payload['r']).toBe('https://referrer.example.com/article');
+    });
+
+    it('uses keepalive fetch without Referer on a query-bearing page and resumes Beacon after navigation', () => {
+        const fetchMock = fetchMockOk();
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness('/signup?gclid=private&plan=pro#fragment', 'https://app.example.com/hk.js');
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
+        harness.script.setAttribute('data-enable-declarative-events', 'true');
+        harness.script.setAttribute('data-enable-web-vitals', 'true');
+        bootstrapTracker(harness.win);
+
+        const button = document.createElement('button');
+        button.setAttribute('data-hk-event', 'named_click');
+        dispatchInteraction(harness, button, new MouseEvent('click'));
+        const vitals = (harness.win as HitKeepWindow).hk?._webVitals;
+        vitals?.emit({ n: 'LCP', v: 100, p: vitals.getPath(), sid: vitals.sessionId, pid: vitals.pageId(), tsrc: vitals.trackerSource, tv: vitals.trackerVersion });
+
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['https://app.example.com/ingest', 'https://app.example.com/ingest/event', 'https://app.example.com/ingest/web-vitals']);
+        const payloads = fetchMock.mock.calls.map(([, init]) => {
+            expect(init).toMatchObject({ keepalive: true, referrerPolicy: 'no-referrer' });
+            expect(init?.body).not.toMatch(/private|plan=|secret=|fragment/);
+            return JSON.parse(String(init?.body)) as Record<string, unknown>;
+        });
+        expect(payloads[0]).toMatchObject({ pc: true, path: '/signup', referrer: 'https://referrer.example.com/article' });
+        expect(payloads[1]).toMatchObject({ n: 'named_click', p: {}, path: '/signup', r: 'https://referrer.example.com/article' });
+        expect(payloads[1]).not.toHaveProperty('pc');
+        expect(payloads[2]).toMatchObject({ p: '/signup' });
+        expect(payloads[2]).not.toHaveProperty('pc');
+
+        harness.history.pushState({}, '', '/next');
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it.each([
+        ['?gclid=google', true, true],
+        ['?msclkid=bing', true, true],
+        ['?gclid=&gclid=second&msclkid=', true, true],
+        ['?gclid=&gclid&msclkid=&msclkid', true, false],
+        ['?GCLID=upper&Msclkid=mixed&gclid_extra=other&fbclid=other', true, false],
+        ['?gclid=google&msclkid=bing', false, undefined]
+    ])('sets pc for %s only when paid signal capture is enabled', (query, enabled, expected) => {
+        const fetchMock = fetchMockOk();
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness(`/signup${query}`);
+        if (enabled) {
+            harness.script.setAttribute('data-enable-paid-signals', 'true');
+        }
+        bootstrapTracker(harness.win);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+        if (expected === undefined) {
+            expect(payload).not.toHaveProperty('pc');
+        } else {
+            expect(payload['pc']).toBe(expected);
+        }
+        expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toMatch(/gclid|msclkid|fbclid|google|bing|second|upper|mixed/i);
+    });
+
+    it('does not send paid-enabled pageviews or retry queued ones after opt-out', async () => {
+        const fetchMock = fetchMockOk();
+        fetchMock.mockRejectedValueOnce(new Error('offline'));
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness('/signup?gclid=private');
+        const handle = createTracker(harness.win, runtimeConfig({ enablePaidSignals: true }));
+
+        try {
+            await flushPromises();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            setTrackingOptOut(harness.win, true);
+            harness.windowListeners['pagehide']?.[0]?.(new Event('pagehide'));
+            harness.history.pushState({}, '', '/next');
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(harness.sendBeacon).not.toHaveBeenCalled();
+        } finally {
+            handle?.cleanup();
+        }
     });
 
     it('queues failed requests in memory and flushes them on pagehide', async () => {
@@ -479,27 +819,31 @@ describe('tracker core', () => {
         expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
     });
 
-    it('defers pageviews and reads attribution from the activated URL', async () => {
-        const harness = trackerHarness('/prerendered?utm_source=speculative&utm_campaign=old');
+    it('defers pageviews and reads attribution from the activated URL', () => {
+        const fetchMock = fetchMockOk();
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness('/prerendered?utm_source=speculative&utm_campaign=old&gclid=discarded');
         harness.setPrerendering(true);
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
 
         bootstrapTracker(harness.win);
         harness.history.pushState({}, '', '/activated?utm_source=intermediate');
         harness.history.replaceState({}, '', '/activated-final?utm_source=activated&utm_campaign=new&hk_qr=10000000-0000-4000-8000-000000000099');
 
         expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
 
         harness.setPrerendering(false);
         harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
 
-        expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
-        const body = harness.sendBeacon.mock.calls[0]?.[1] as unknown as Blob;
-        const payload = JSON.parse(await body.text()) as Record<string, unknown>;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
         expect(payload['path']).toBe('/activated-final');
-        expect(payload['referrer']).toBe('https://referrer.example.com/article?secret=1');
+        expect(payload['referrer']).toBe('https://referrer.example.com/article');
         expect(payload['u_src']).toBe('activated');
         expect(payload['u_cmp']).toBe('new');
         expect(payload['qr']).toBe('10000000-0000-4000-8000-000000000099');
+        expect(payload['pc']).toBe(false);
     });
 
     it('replays snapshotted events and web vitals after the activated pageview', async () => {
@@ -542,8 +886,8 @@ describe('tracker core', () => {
         const vital = JSON.parse(await (harness.sendBeacon.mock.calls[3]?.[1] as unknown as Blob).text()) as Record<string, unknown>;
         expect((checkout['p'] as Record<string, unknown>)['plan']).toBe('starter');
         expect(checkout['path']).toBe('/activated');
-        expect(checkout['r']).toBe('https://referrer.example.com/article?secret=1');
-        expect(pageview['referrer']).toBe('https://referrer.example.com/article?secret=1');
+        expect(checkout['r']).toBe('https://referrer.example.com/article');
+        expect(pageview['referrer']).toBe('https://referrer.example.com/article');
         expect(vital['p']).toBe('/activated');
         expect(vital['pid']).toBe(pageview['page_id']);
     });
@@ -625,22 +969,25 @@ describe('tracker core', () => {
         expect(harness.windowListeners['pagehide']?.length).toBe(1);
     });
 
-    it('keeps attribution in memory and limits sessionStorage to the session tuple', () => {
-        const harness = trackerHarness('/signup?utm_source=launch&utm_medium=email&hk_qr=qr-123');
+    it('keeps landing attribution in memory across SPA views and limits sessionStorage to the session tuple', async () => {
+        const fetchMock = fetchMockOk();
+        vi.stubGlobal('fetch', fetchMock);
+        const harness = trackerHarness('/signup?utm_source=launch&utm_medium=email&hk_qr=qr-123&msclkid=private');
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
 
         bootstrapTracker(harness.win);
         harness.history.pushState({}, '', '/dashboard?utm_source=changed&utm_medium=social');
+        harness.history.pushState({}, '', '/dashboard#details');
+        harness.history.pushState({}, '', '/account');
 
-        const secondBeaconBody = harness.sendBeacon.mock.calls[1]?.[1] as unknown as Blob;
-
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
+        const [first, second, third] = [fetchMock.mock.calls[0]?.[1]?.body, fetchMock.mock.calls[1]?.[1]?.body, await (harness.sendBeacon.mock.calls[0]?.[1] as Blob).text()];
         expect(harness.sessionStorage.setItem.mock.calls.every(([key]) => key === 'hk_session')).toBe(true);
         expect(harness.sessionStorage.setItem.mock.calls[0]?.[1]).toMatch(/^10000000-0000-4000-8000-000000000001\|\d+$/);
-        return secondBeaconBody.text().then((body) => {
-            const payload = JSON.parse(body) as Record<string, unknown>;
-            expect(payload['u_src']).toBe('launch');
-            expect(payload['u_med']).toBe('email');
-            expect(payload['qr']).toBe('qr-123');
-        });
+        for (const body of [first, second, third]) {
+            expect(JSON.parse(String(body))).toMatchObject({ u_src: 'launch', u_med: 'email', qr: 'qr-123', pc: true });
+        }
     });
 
     function runtimeConfig(overrides: Partial<TrackerRuntimeConfig> = {}): TrackerRuntimeConfig {
@@ -651,12 +998,16 @@ describe('tracker core', () => {
             disableOutboundTracking: false,
             disableDownloadTracking: false,
             disableFormTracking: false,
+            enableDeclarativeEvents: false,
+            enablePaidSignals: false,
             enableWebVitals: false,
+            enableVisibleTime: false,
             trackerSource: '@hitkeep/tracker',
             trackerVersion: '2.12.0',
             pageEndpoint: 'https://stats.example.com/ingest',
             eventEndpoint: 'https://stats.example.com/ingest/event',
             webVitalsEndpoint: 'https://stats.example.com/ingest/web-vitals',
+            visibleTimeEndpoint: null,
             webVitalsBundleUrl: 'https://stats.example.com/hk-vitals.js',
             capturePageviews: true,
             captureOnLocalhost: false,
@@ -664,6 +1015,165 @@ describe('tracker core', () => {
             ...overrides
         };
     }
+
+    it('counts visible intervals across BFCache and reserves a third attempt for the final sample', async () => {
+        const harness = trackerHarness('/signup', 'https://stats.example.com/prefix/hk.js');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.script.setAttribute('data-enable-web-vitals', 'true');
+        let nextId = 0;
+        vi.mocked(harness.win.crypto.randomUUID).mockImplementation(() => `10000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}`);
+        bootstrapTracker(harness.win);
+        const { page_id: pid } = JSON.parse(await (harness.sendBeacon.mock.calls[0]?.[1] as Blob).text());
+
+        pageLifecycle(harness, 'pagehide', true, 14.7);
+        visibility(harness, 'hidden', 20);
+        visibility(harness, 'visible', 100);
+        pageLifecycle(harness, 'pageshow', true, 150);
+        visibility(harness, 'hidden', 155.5);
+        visibility(harness, 'visible', 160);
+        visibility(harness, 'hidden', 170);
+        harness.history.replaceState({}, '', '/signup?duplicate=true');
+        expect((harness.win as HitKeepWindow).hk?._webVitals?.pageId()).toBe(pid);
+        visibility(harness, 'visible', 1000);
+        harness.setTime(1007);
+        harness.history.pushState({}, '', '/next');
+
+        expect(visibleSamples(harness)).toEqual([
+            { pid, ms: 14 },
+            { pid, ms: 20 },
+            { pid, ms: 37 }
+        ]);
+        expect(harness.sendBeacon.mock.calls.map(([url]) => url)).toEqual([
+            'https://stats.example.com/prefix/ingest',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest/visible-time',
+            'https://stats.example.com/prefix/ingest'
+        ]);
+        const next = JSON.parse(await (harness.sendBeacon.mock.calls[4]?.[1] as Blob).text());
+        expect(next.page_id).not.toBe(pid);
+        expect((harness.win as HitKeepWindow).hk?._webVitals?.pageId()).toBe(next.page_id);
+    });
+
+    it('emits zero for a hidden-born view and suppresses equal checkpoints and final samples', () => {
+        const harness = trackerHarness('/signup');
+        harness.setVisibilityState('hidden');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(harness.win);
+
+        pageLifecycle(harness, 'pagehide', true, 500);
+        pageLifecycle(harness, 'pageshow', true, 700);
+        visibility(harness, 'hidden', 900);
+        pageLifecycle(harness, 'pagehide', false, 1000);
+
+        expect(visibleSamples(harness)).toEqual([{ pid: '10000000-0000-4000-8000-000000000001', ms: 0 }]);
+    });
+
+    it('starts timing at prerender activation and caps cumulative milliseconds', () => {
+        const harness = trackerHarness('/signup');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.setPrerendering(true);
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 20);
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+
+        visibility(harness, 'visible', 1000);
+        harness.setPrerendering(false);
+        harness.documentListeners['prerenderingchange']?.[0]?.(new Event('prerenderingchange'));
+        visibility(harness, 'hidden', 1020);
+        visibility(harness, 'visible', 2000);
+        pageLifecycle(harness, 'pagehide', false, 86403000);
+
+        expect(visibleSamples(harness).map(({ ms }) => ms)).toEqual([20, 86400000]);
+    });
+
+    it('checks opt-out at emission and clears timing listeners on cleanup', () => {
+        const harness = trackerHarness('/signup');
+        const handle = createTracker(harness.win as HitKeepWindow, runtimeConfig({ visibleTimeEndpoint: 'https://stats.example.com/ingest/visible-time' }));
+        setTrackingOptOut(harness.win, true);
+        visibility(harness, 'hidden', 20);
+        setTrackingOptOut(harness.win, false);
+        visibility(harness, 'visible', 100);
+        visibility(harness, 'hidden', 110);
+        expect(visibleSamples(harness)).toEqual([]);
+
+        const listeners = harness.windowListeners['pageshow'];
+        expect(listeners).toHaveLength(1);
+        handle?.cleanup();
+        handle?.trackPageview();
+        pageLifecycle(harness, 'pageshow', true, 200);
+        visibility(harness, 'hidden', 300);
+        expect(harness.windowListeners['pageshow']).toHaveLength(0);
+        expect(harness.documentListeners['visibilitychange']).toHaveLength(0);
+        expect(harness.sendBeacon).toHaveBeenCalledTimes(1);
+    });
+
+    it('honors Do Not Track for visible time unless the tracker is configured to collect it', () => {
+        const blocked = trackerHarness('/signup');
+        Object.defineProperty(blocked.win.navigator, 'doNotTrack', { value: '1' });
+        blocked.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(blocked.win);
+        visibility(blocked, 'hidden', 10);
+        expect(blocked.sendBeacon).not.toHaveBeenCalled();
+
+        const allowed = trackerHarness('/signup');
+        Object.defineProperty(allowed.win.navigator, 'doNotTrack', { value: '1' });
+        allowed.script.setAttribute('data-enable-visible-time', 'true');
+        allowed.script.setAttribute('data-collect-dnt', 'true');
+        bootstrapTracker(allowed.win);
+        visibility(allowed, 'hidden', 10);
+        expect(visibleSamples(allowed).map(({ ms }) => ms)).toEqual([10]);
+    });
+
+    it('falls back to keepalive fetch once when a visible-time beacon is rejected', () => {
+        const harness = trackerHarness('/signup');
+        const fetch = fetchMockOk();
+        vi.stubGlobal('fetch', fetch);
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        harness.sendBeacon.mockReturnValueOnce(true).mockReturnValue(false);
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 10);
+        pageLifecycle(harness, 'pagehide', false, 20);
+        for (const listener of harness.windowListeners['online'] ?? []) {
+            listener(new Event('online'));
+        }
+
+        expect(visibleSamples(harness)).toHaveLength(1);
+        expect(fetch).toHaveBeenCalledExactlyOnceWith('https://analytics.example.com/ingest/visible-time', {
+            method: 'POST',
+            body: JSON.stringify(visibleSamples(harness)[0]),
+            keepalive: true,
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer'
+        });
+    });
+
+    it('keeps paid landing URLs and referrers private when also sending visible time', () => {
+        const harness = trackerHarness('/signup?gclid=private#fragment', 'https://stats.example.com/prefix/hk.js');
+        const fetch = fetchMockOk();
+        vi.stubGlobal('fetch', fetch);
+        harness.script.setAttribute('data-enable-paid-signals', 'true');
+        harness.script.setAttribute('data-enable-visible-time', 'true');
+        bootstrapTracker(harness.win);
+        visibility(harness, 'hidden', 25);
+
+        expect(harness.sendBeacon).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(2);
+        const [[pageURL, pageRequest], [sampleURL, sampleRequest]] = fetch.mock.calls;
+        expect(pageURL).toBe('https://stats.example.com/prefix/ingest');
+        expect(pageRequest?.referrerPolicy).toBe('no-referrer');
+        const page = JSON.parse(String(pageRequest?.body));
+        expect(page).toMatchObject({ pc: true, path: '/signup', referrer: 'https://referrer.example.com/article' });
+        expect(String(pageRequest?.body)).not.toMatch(/gclid|private|secret|fragment/);
+        expect(sampleURL).toBe('https://stats.example.com/prefix/ingest/visible-time');
+        expect(sampleRequest).toEqual({
+            method: 'POST',
+            body: JSON.stringify({ pid: page.page_id, ms: 25 }),
+            keepalive: true,
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer'
+        });
+    });
 
     it('creates a tracker from explicit endpoints without a script element', async () => {
         const harness = trackerHarness('/signup');

@@ -72,7 +72,7 @@ test("Focus preserves the active page while resizing, collapsing and restoring n
     await page.mouse.up();
     await expect.poll(() => sidebarWidth(page)).toBeGreaterThan(initial + 35);
     const pointerWidth = await sidebarWidth(page);
-    await handle.press("ArrowRight", { delay: 120 });
+    await handle.press("ArrowRight");
     await expect.poll(() => sidebarWidth(page)).toBeGreaterThan(pointerWidth + 1);
     const width = await sidebarWidth(page);
     expect(width).toBeLessThanOrEqual(320);

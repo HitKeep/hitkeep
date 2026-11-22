@@ -58,6 +58,21 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 	// Authorization is handled by the handler middleware (SitePerm/RequirePermission).
 	// Tenant analytics stores do not contain the control-plane sites table.
 
+	stats, err := s.querySiteStatsWindow(ctx, params, sections, false)
+	if err != nil {
+		return nil, err
+	}
+	// A half-specified comparison would report an empty baseline as a drop.
+	if !params.CompareStart.IsZero() && !params.CompareEnd.IsZero() {
+		stats.Comparison, err = s.GetComparisonStats(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calc comparison stats: %w", err)
+		}
+	}
+	return stats, nil
+}
+
+func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsParams, sections SiteStatsSections, comparison bool) (*api.SiteStats, error) {
 	stats := &api.SiteStats{
 		ChartData:       []api.ChartDataPoint{},
 		TopPages:        []api.MetricStat{},
@@ -86,11 +101,12 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 	}
 	filterSQL += sessionSQL
 	filterArgs = append(filterArgs, sessionArgs...)
-	liveThreshold := time.Now().Add(-5 * time.Minute)
-	liveQuery := "SELECT COUNT(DISTINCT h.session_id) FROM hits h WHERE h.site_id = ? AND h.timestamp >= ?" + filterSQL
-	err = s.db.QueryRowContext(ctx, liveQuery, append([]any{params.SiteID, liveThreshold}, filterArgs...)...).Scan(&stats.LiveVisitors)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calc live visitors: %w", err)
+	if !comparison {
+		liveThreshold := time.Now().Add(-5 * time.Minute)
+		liveQuery := "SELECT COUNT(DISTINCT h.session_id) FROM hits h WHERE h.site_id = ? AND h.timestamp >= ?" + filterSQL
+		if err := s.db.QueryRowContext(ctx, liveQuery, append([]any{params.SiteID, liveThreshold}, filterArgs...)...).Scan(&stats.LiveVisitors); err != nil {
+			return nil, fmt.Errorf("failed to calc live visitors: %w", err)
+		}
 	}
 
 	truncUnit := truncUnitForRange(params.Start, params.End)
@@ -102,7 +118,7 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 		useRollups = false
 	}
 
-	if useRollups {
+	if !comparison && useRollups {
 		if err := s.refreshDirtyRollupsInRange(ctx, params.SiteID, dirtyRollupSession, rollupKind, gridStart, gridEnd); err != nil {
 			return nil, fmt.Errorf("failed to refresh session rollups: %w", err)
 		}
@@ -112,19 +128,9 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 	if err != nil {
 		return nil, fmt.Errorf("failed to calc KPIs: %w", err)
 	}
-	err = s.queryUTMKpis(
-		ctx,
-		params,
-		filterSQL,
-		filterArgs,
-		&stats.UTMCampaignHits,
-		&stats.UTMContentHits,
-		&stats.UTMMediumHits,
-		&stats.UTMSourceHits,
-		&stats.UTMTermHits,
-	)
+	err = s.queryUTMKpis(ctx, params, filterSQL, filterArgs, stats)
 	if err != nil {
-		return nil, fmt.Errorf("failed to calc UTM KPIs: %w", err)
+		return nil, fmt.Errorf("failed to calc UTM and paid signal KPIs: %w", err)
 	}
 
 	if sections.Chart && useRollups {
@@ -151,11 +157,15 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 		}
 	}
 
-	if err := s.querySiteTopLists(ctx, params, sections, filterSQL, filterArgs, stats); err != nil {
+	if comparison {
+		if err := s.queryAIKpis(ctx, params, filterSQL, filterArgs, &stats.AIBotHits, &stats.AISourceVisits); err != nil {
+			return nil, fmt.Errorf("failed to calc AI KPIs: %w", err)
+		}
+	} else if err := s.querySiteTopLists(ctx, params, sections, filterSQL, filterArgs, stats); err != nil {
 		return nil, err
 	}
 
-	if err := s.augmentImportedSiteStats(ctx, params, truncUnit, sections, stats); err != nil {
+	if err := s.augmentImportedSiteStats(ctx, params, truncUnit, sections, stats, !comparison); err != nil {
 		return nil, err
 	}
 
@@ -163,17 +173,12 @@ func (s *Store) GetSiteStatsSections(ctx context.Context, params api.AnalyticsPa
 		if err := s.querySiteGoals(ctx, params, truncUnit, filterSQL, filterArgs, stats); err != nil {
 			return nil, err
 		}
-	}
-
-	// Both ends must be present: the compare params are parsed leniently, so a
-	// half-specified window would measure against [start, zero time] and report
-	// an empty baseline as a 100% drop.
-	if !params.CompareStart.IsZero() && !params.CompareEnd.IsZero() {
-		comparison, err := s.GetComparisonStats(ctx, params)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calc comparison stats: %w", err)
+		if !comparison {
+			stats.Funnels, err = s.GetFunnels(ctx, params.SiteID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch funnels: %w", err)
+			}
 		}
-		stats.Comparison = comparison
 	}
 
 	return stats, nil
@@ -524,10 +529,5 @@ func (s *Store) querySiteGoals(ctx context.Context, params api.AnalyticsParams, 
 		})
 	}
 
-	funnels, err := s.GetFunnels(ctx, params.SiteID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch funnels: %w", err)
-	}
-	stats.Funnels = funnels
 	return nil
 }

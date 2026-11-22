@@ -389,8 +389,20 @@ async function prepareAIVisibilityShot(page) {
 
 async function captureRoute(page, record, slug, path, settle = TABLE_SETTLE) {
     await nav(page, path, settle);
-    if (path === "/dashboard") await selectRangePreset(page, "30d");
-    if (path === "/settings/reports") await page.getByTestId("report-table").waitFor({ state: "visible" });
+    if (path === "/dashboard") await selectRangePreset(page, slug === "dashboard-comparison" ? "Today" : "30d");
+    if (path === "/settings/reports") {
+        const table = page.getByTestId("report-table");
+        const empty = page.getByRole("heading", { name: "No reports yet", exact: true });
+        await table.or(empty).waitFor({ state: "visible" });
+        if (await empty.isVisible()) {
+            await page.getByTestId("new-report").click();
+            const editor = page.getByRole("dialog", { name: "Create report" });
+            await editor.getByTestId("report-name").fill("Morning traffic summary");
+            await editor.getByRole("button", { name: /Save$/ }).click();
+            await editor.waitFor({ state: "hidden" });
+        }
+        await table.waitFor({ state: "visible" });
+    }
     if (path === "/import-export/import") await page.getByRole("button", { name: /select plausible importer/i }).waitFor({ state: "visible" });
     record(slug, await shoot(page, slug));
 }
@@ -977,13 +989,33 @@ async function captureQRScreenshots(page, record, attempt) {
 }
 
 async function captureWebhookScreenshots(page, record, attempt) {
+    // Document a successful delivery without sending events or exposing a signing secret.
+    const timestamp = new Date(Date.now() - 15 * 60_000).toISOString();
+    const webhook = {
+        id: "docs-release-notifications",
+        scope: "site",
+        name: "Release notifications",
+        description: "Report changes to the growth team",
+        url: "https://hooks.example.com/hitkeep",
+        enabled: true,
+        events: ["goal.created", "goal.updated"],
+        created_at: timestamp,
+        updated_at: timestamp
+    };
+    const delivery = { id: "docs-delivery", webhook_id: webhook.id, event_id: "docs-test", event_type: "webhook.test", status: "succeeded", attempt_count: 1, response_status: 204, created_at: timestamp, attempts: [] };
+    await page.route("**/api/sites/*/webhooks", (route) => route.fulfill({ json: [webhook] }));
+    await page.route(`**/api/sites/*/webhooks/${webhook.id}/deliveries`, (route) => route.fulfill({ json: [delivery] }));
     await attempt("integration-webhooks", () => captureRoute(page, record, "integration-webhooks", "/integration/webhooks"));
     await attempt("integration-webhook-form", async () => {
         await page.getByTestId("create-webhook").click();
         await page.getByLabel("Name", { exact: true }).fill("Release notifications");
         await page.getByLabel("Destination URL").fill("https://hooks.example.com/hitkeep");
         record("integration-webhook-form", await shoot(page, "integration-webhook-form"));
-        await page.locator(".event-options").scrollIntoViewIfNeeded();
+        await page.keyboard.press("Escape");
+    });
+    await attempt("integration-webhooks-events", async () => {
+        await page.locator(".webhook-event-count button").click();
+        await page.locator(".webhook-events-popover").getByText("goal.updated").waitFor({ state: "visible" });
         record("integration-webhooks-events", await shoot(page, "integration-webhooks-events"));
         await page.keyboard.press("Escape");
     });
@@ -992,6 +1024,7 @@ async function captureWebhookScreenshots(page, record, attempt) {
         await page.locator("tbody tr").first().getByRole("button", { name: "More actions" }).click();
         await page.getByRole("menuitem", { name: /deliveries/i }).click();
         await page.getByRole("dialog").waitFor({ state: "visible" });
+        await page.getByTestId("webhook-deliveries-table").getByText("webhook.test", { exact: true }).waitFor({ state: "visible" });
         record("integration-webhook-deliveries", await shoot(page, "integration-webhook-deliveries"));
         await page.keyboard.press("Escape");
     });
@@ -1320,6 +1353,7 @@ async function run() {
                     "Ask AI deterministic SSE and budget state",
                     "annotations",
                     "tracking verifier",
+                    "synthetic webhook endpoint and successful test delivery",
                     "incomplete onboarding",
                     "OAuth management and WordPress consent",
                     "Assistants HTTPS endpoint",

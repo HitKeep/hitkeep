@@ -19,8 +19,14 @@ export interface TrackerConfig {
     fileDownloads?: boolean;
     /** Track form submissions as `form_submit`. Default `true`. */
     formSubmissions?: boolean;
+    /** Track named clicks and submissions marked with `data-hk-event` or `data-hitkeep-event`. Default `false`. */
+    declarativeEvents?: boolean;
+    /** Report whether the landing URL has a paid click signal. Default `false`. */
+    enablePaidSignals?: boolean;
     /** Load the Web Vitals bundle from `${host}/hk-vitals.js`. Default `false`. */
     webVitals?: boolean;
+    /** Measure cumulative time a pageview is visible. Default `false`. */
+    visibleTime?: boolean;
     /** Prefer `navigator.sendBeacon` over keepalive fetch. Default `true`. */
     useBeacon?: boolean;
     /** Drop tracking when the browser sends `DNT: 1`. Default `true`. */
@@ -88,7 +94,8 @@ function resolveRuntimeConfig(config: TrackerConfig): TrackerRuntimeConfig {
         throw new Error('@hitkeep/tracker: init requires a host, e.g. init({ host: "https://stats.example.com" })');
     }
     const enableWebVitals = config.webVitals === true;
-    const endpoints = resolveTrackerEndpoints(new URL(`${host.replace(/\/+$/, '')}/`), enableWebVitals);
+    const enableVisibleTime = config.visibleTime === true;
+    const endpoints = resolveTrackerEndpoints(new URL(`${host.replace(/\/+$/, '')}/`), enableWebVitals, enableVisibleTime);
     return {
         ...endpoints,
         collectDnt: config.respectDoNotTrack === false,
@@ -97,7 +104,10 @@ function resolveRuntimeConfig(config: TrackerConfig): TrackerRuntimeConfig {
         disableOutboundTracking: config.outboundLinks === false,
         disableDownloadTracking: config.fileDownloads === false,
         disableFormTracking: config.formSubmissions === false,
+        enableDeclarativeEvents: config.declarativeEvents === true,
+        enablePaidSignals: config.enablePaidSignals === true,
         enableWebVitals,
+        enableVisibleTime,
         trackerSource: (config.trackerSource || DEFAULT_TRACKER_SOURCE).trim().slice(0, 64) || DEFAULT_TRACKER_SOURCE,
         trackerVersion: TRACKER_VERSION,
         capturePageviews: config.autoCapturePageviews !== false,

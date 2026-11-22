@@ -320,6 +320,8 @@ func (s *TakeoutService) cleanExportPath(filename string) (string, bool) {
 	return cleanedFile, true
 }
 
+const takeoutHitSelect = "SELECT 'hit' AS record_type, h.*, v.visible_ms FROM hits h LEFT JOIN page_visible_time v USING (site_id, page_id)"
+
 func buildTakeoutQuery(sources []takeoutQuerySource, filename, format string) string {
 	if len(sources) == 0 {
 		sources = []takeoutQuerySource{{WhereClause: "FALSE"}}
@@ -339,7 +341,7 @@ func buildTakeoutQuery(sources []takeoutQuerySource, filename, format string) st
 		}
 		if includeAnalytics {
 			selects = append(selects,
-				fmt.Sprintf("SELECT 'hit' as record_type, * FROM hits WHERE %s", whereClause),
+				takeoutHitSelect+" WHERE "+whereClause,
 				fmt.Sprintf("SELECT 'event' as record_type, * FROM events WHERE %s", whereClause),
 				fmt.Sprintf("SELECT 'web_vital' as record_type, * FROM web_vitals WHERE %s", whereClause),
 				fmt.Sprintf("SELECT 'ai_fetch' as record_type, * FROM ai_fetches WHERE %s", whereClause),
@@ -490,7 +492,7 @@ func buildQRCodeTakeoutQuery(filename, format string, siteID, qrCodeID uuid.UUID
 	if includeAnalytics {
 		sessionScope := fmt.Sprintf("SELECT DISTINCT session_id FROM hits WHERE site_id = '%s' AND qr_code_id = '%s'", site, qr)
 		selects = append(selects,
-			fmt.Sprintf("SELECT 'hit' AS record_type, * FROM hits WHERE site_id = '%s' AND qr_code_id = '%s'", site, qr),
+			fmt.Sprintf(takeoutHitSelect+" WHERE site_id = '%s' AND qr_code_id = '%s'", site, qr),
 			fmt.Sprintf("SELECT 'qr_code_open' AS record_type, * FROM qr_code_opens WHERE site_id = '%s' AND qr_code_id = '%s'", site, qr),
 			fmt.Sprintf("SELECT 'event' AS record_type, * FROM events WHERE site_id = '%s' AND session_id IN (%s)", site, sessionScope),
 			fmt.Sprintf("SELECT 'web_vital' AS record_type, * FROM web_vitals WHERE site_id = '%s' AND session_id IN (%s)", site, sessionScope),

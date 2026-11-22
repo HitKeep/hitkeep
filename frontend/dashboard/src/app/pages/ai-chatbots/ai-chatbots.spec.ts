@@ -9,6 +9,7 @@ import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { Observable, of, Subject } from 'rxjs';
 import { vi } from 'vitest';
 
+import { previousPeriod } from '@core/analytics/comparison-period';
 import { AnalyticsService } from '@core/services/analytics.service';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
@@ -264,7 +265,9 @@ describe('AIChatbots', () => {
         expect(comparisonCalls().length).toBeGreaterThan(comparisonCallsBefore);
     });
 
-    it('should not reload the comparison series on a background realtime refresh', () => {
+    it('reuses the comparison on a background refresh with identical bounds', () => {
+        const range = TestBed.inject(ReportRangePreferencesService);
+        vi.spyOn(range, 'currentDateRange').mockReturnValue(range.currentDateRange());
         create();
 
         const comparisonCallsBefore = comparisonCalls().length;
@@ -272,6 +275,23 @@ describe('AIChatbots', () => {
         instance().refreshData('background');
 
         expect(comparisonCalls().length).toBe(comparisonCallsBefore);
+    });
+
+    it('refreshes both periods when the selected window advances in the background', () => {
+        const range = TestBed.inject(ReportRangePreferencesService);
+        const initial = range.currentDateRange()!;
+        const next = { ...initial, to: new Date(Date.parse(initial.to) + 1000).toISOString() };
+        vi.spyOn(range, 'currentDateRange').mockReturnValue(initial);
+        create();
+
+        const count = comparisonCalls().length;
+        vi.mocked(range.currentDateRange).mockReturnValue(next);
+        instance().refreshData('background');
+
+        const comparison = previousPeriod(next.from, next.to);
+        const refreshed = comparisonCalls().slice(count);
+        expect(refreshed).toHaveLength(6);
+        expect(refreshed.every((call) => call[1] === comparison.from && call[2] === comparison.to)).toBe(true);
     });
 
     it('should ask for the shared setup state only when the selected range has no conversations', () => {

@@ -971,6 +971,16 @@
     }
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Tempo visível por página",
+      "description": "Páginas com mais visualizações registradas no período selecionado. A média inclui apenas visualizações com medição.",
+      "average": "Tempo visível médio",
+      "coverage": "Visualizações medidas / registradas",
+      "missing": "Sem medição",
+      "empty": "Não há visualizações de página registradas para essa seleção.",
+      "unavailable": "O tempo visível está temporariamente indisponível.",
+      "forbidden": "Você não tem acesso a esse relatório."
+    },
     "conversions": { "title": "Conversões", "description": "Filtre todo o espaço de trabalho por uma coorte de meta ou funil.", "filters": { "goal": "Meta: {{name}}", "funnel": "Funil: {{name}}" }, "invalidSubject": "Essa meta ou funil não está mais disponível para este site." },
     "breadcrumbOverview": "Visão geral",
     "filteredBadge": "Filtrado",
@@ -1155,6 +1165,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Sinais de tráfego pago",
+      "scope": "As contagens incluem as sessões correspondentes registradas diretamente pelo HitKeep com a medição de sinais ativada, com ou sem tags UTM. As sessões com tags também podem aparecer nas métricas de UTM.",
+      "observed": "Sinal de tráfego pago detectado",
+      "count": "{{ observed }} de {{ measured }} sessões medidas",
+      "unobserved": "Nenhum sinal de tráfego pago detectado",
+      "unobservedHint": "As sessões sem sinal detectado podem vir de tráfego pago ou orgânico.",
+      "noMeasurement": "Nenhuma sessão medida corresponde a este período e a estes filtros.",
+      "unavailable": "Não foi possível carregar as contagens de sinais de tráfego pago."
+    },
     "noSiteDescription": "Selecione ou crie um site para visualizar as métricas de UTM.",
     "series": {
       "title": "Desempenho de UTM",
@@ -1856,7 +1876,13 @@
         },
         "script": {
           "description": "Copie e cole o código abaixo no HTML do seu site. O rastreamento automático é ativado por padrão para cliques de saída, downloads e envios de formulários.",
-          "docsAction": "Guia do rastreador"
+          "docsAction": "Guia do rastreador",
+          "declarativeEventsLabel": "Rastrear cliques e envios de formulários marcados",
+          "declarativeEventsDescription": "Envia eventos personalizados ao clicar em elementos marcados ou enviar formulários marcados. Use data-hk-event ou data-hitkeep-event para marcá-los."
+        },
+        "assistant": {
+          "copyAction": "Copiar prompt para o assistente de código",
+          "prompt": "Instale o rastreador do HitKeep em {{ domain }}. Verifique primeiro se o projeto já tem uma integração com o HitKeep. Se tiver, atualize-a apenas se for necessário. Caso contrário, adicione o script a seguir uma única vez no modelo compartilhado das páginas. Mantenha o URL e todos os atributos do script como estão e preserve o funcionamento do consentimento no site.\n\n{{ snippet }}\n\nAbra uma página no nome de host previsto. No painel Rede do navegador, confirme que o script do rastreador carrega e que a solicitação de visualização de página é bem-sucedida. Teste os eventos automáticos ativados executando as ações correspondentes e verificando as solicitações de evento. No HitKeep, use “{{ verifier }}” para confirmar que um acesso recente foi aceito. Informe o que você verificou e o que ainda precisa ser conferido."
         },
         "npm": {
           "description": "Inclua o rastreador tipado em um app React, Vue, Angular ou Astro. Sem tag de script, com tipos TypeScript completos e sem filtragem por bloqueadores de conteúdo.",
@@ -1885,10 +1911,14 @@
         "badge": "{{ count }} alteradas",
         "deliveryTitle": "Entrega e privacidade"
       },
+      "paidSignalsLabel": "Sinais de tráfego pago",
+      "paidSignalsDescription": "Detecta IDs de cliques em anúncios compatíveis nas páginas monitoradas. O rastreador só informa se há um ID.",
       "collectDntLabel": "Coletar DNT",
       "collectDntDescription": "Rastrear usuários mesmo se o \"Do Not Track\" estiver ativado no navegador.",
       "disableBeaconLabel": "Desativar sendBeacon",
       "disableBeaconDescription": "Usar requisições fetch padrão em vez de navigator.sendBeacon.",
+      "visibleTimeLabel": "Medir o tempo visível",
+      "visibleTimeDescription": "Adiciona uma opção para medir quanto tempo cada página permanece visível no navegador.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Carregar o pacote separado Web Vitals e enviar amostras de LCP, INP, CLS, FCP e TTFB. Desativado por padrão.",
       "autoTrackingTitle": "Rastreamento automático de eventos",
@@ -1913,7 +1943,10 @@
           "dormant": "Inativo",
           "domain_mismatch": "Incompatibilidade de domínio"
         },
-        "waitingHint": "Aguardando o primeiro acesso aceito. Este painel se atualiza automaticamente por dois minutos.",
+        "waitingBrowser": "Implante o rastreador e abra uma página publicada em {{ domain }} onde o rastreamento seja permitido. Se o status continuar como aguardando, confira se o rastreador carrega e revise o Do Not Track, o consentimento e as exclusões.",
+        "waitingServer": "Envie uma visualização de página de uma visita real a {{ domain }} pela integração de servidor. Se o status continuar como aguardando, confira a resposta da integração e o acesso dela ao site.",
+        "waitingHint": "O verificador consulta o status automaticamente por até dois minutos. Você pode atualizá-lo a qualquer momento.",
+        "unavailable": "O status do rastreamento está indisponível. Use o botão de atualização para tentar novamente.",
         "mismatchHint": "O hostname detectado mais recente não corresponde ao domínio configurado para este site.",
         "fields": {
           "firstHit": "Primeiro acesso",
@@ -3113,6 +3146,19 @@
     }
   },
   "comparison": {
+    "details": "Comparação de períodos",
+    "metric": "Métrica",
+    "currentPeriod": "Período atual",
+    "previousPeriod": "Período anterior",
+    "relativeChange": "Variação relativa",
+    "unavailable": "Indisponível",
+    "zeroBaseline": "Indefinida (o valor anterior é zero)",
+    "elapsedRule": "O período anterior termina imediatamente antes do atual e tem a mesma duração. A variação relativa é calculada em relação ao valor anterior.",
+    "liveOnly": "Os visitantes em tempo real abrangem os últimos cinco minutos e não têm comparação.",
+    "currentOnlyBreakdowns": "Os detalhamentos e os registros de tráfego mostram apenas o período atual.",
+    "seriesLabel": "{{metric}} (anterior)",
+    "bucketOrder": "As séries são alinhadas pela ordem dos intervalos. O eixo mostra as datas do período atual.",
+    "gridMismatch": "O período anterior usa intervalos diferentes e a série correspondente fica oculta.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Visualizações de página (ant.)",
     "visitorsLabel": "Visitantes (ant.)"

@@ -944,6 +944,43 @@ func TestExportSiteDataWithTenantStoresIncludesTeamSiteRowsInAllFormats(t *testi
 	}
 }
 
+func TestExportSiteDataVisibleTime(t *testing.T) {
+	ctx, store, service, userID, siteID := setupTakeoutFixture(t)
+	t.Cleanup(func() { _ = store.Close() })
+	other, err := store.CreateSite(ctx, userID, "other-visible-time.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pageID uuid.UUID
+	if err := store.DB().QueryRowContext(ctx, "SELECT page_id FROM hits WHERE site_id = ?", siteID).Scan(&pageID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateHit(ctx, &api.Hit{SiteID: other.ID, SessionID: uuid.New(), PageID: pageID, Path: "/other", Timestamp: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Exec(ctx, "INSERT INTO page_visible_time VALUES (?, ?, 0), (?, ?, 9000)", siteID, pageID, other.ID, pageID); err != nil {
+		t.Fatal(err)
+	}
+	createTakeoutHit(t, store, siteID, "/missing")
+	filename, err := service.ExportSiteData(ctx, siteID, "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]any{}
+	for _, row := range readJSONTakeoutRows(t, filename) {
+		if row["record_type"] == "hit" {
+			path := takeoutString(row["path"])
+			if _, duplicate := got[path]; duplicate {
+				t.Fatalf("duplicate hit for %q", path)
+			}
+			got[path] = row["visible_ms"]
+		}
+	}
+	if missing, exists := got["/missing"]; len(got) != 2 || got["/utm"] != float64(0) || !exists || missing != nil {
+		t.Fatalf("unexpected visible time by path: %#v", got)
+	}
+}
+
 func TestExportSiteDataJSONIncludesUTMFields(t *testing.T) {
 	ctx, store, service, _, siteID := setupTakeoutFixture(t)
 	t.Cleanup(func() { _ = store.Close() })

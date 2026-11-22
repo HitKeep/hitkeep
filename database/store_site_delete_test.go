@@ -61,6 +61,7 @@ func TestResetSiteStatsClearsMeasuredDataOnly(t *testing.T) {
 		"hits",
 		"events",
 		"web_vitals",
+		"page_visible_time",
 		"hit_rollups_hourly",
 		"hit_rollups_daily",
 		"hit_rollups_monthly",
@@ -142,6 +143,7 @@ func seedSiteData(t *testing.T, ctx context.Context, store *Store) (uuid.UUID, u
 	exec("INSERT INTO goals (id, site_id, name, type, value, created_at) VALUES (?, ?, ?, ?, ?, ?)", goalID, siteID, "Signup", "event", "signup", now)
 	exec("INSERT INTO funnels (id, site_id, name, steps, created_at) VALUES (?, ?, ?, ?, ?)", funnelID, siteID, "Main", "[]", now)
 	exec("INSERT INTO hits (id, site_id, session_id, page_id, timestamp, path, region, city, provider, asn, asn_org) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", uuid.New(), siteID, sessionID, pageID, now, "/", "California", "Mountain View", "Google LLC", 15169, "Google LLC")
+	exec("INSERT INTO page_visible_time (site_id, page_id, visible_ms) VALUES (?, ?, ?)", siteID, pageID, 1200)
 	exec("INSERT INTO events (id, site_id, session_id, name, properties, timestamp) VALUES (?, ?, ?, ?, ?, ?)", uuid.New(), siteID, sessionID, "signup", "{}", now)
 	exec("INSERT INTO web_vitals (id, site_id, session_id, page_id, metric, value, rating, path, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", uuid.New(), siteID, sessionID, pageID, "LCP", 2600, "needs_improvement", "/pricing", now)
 

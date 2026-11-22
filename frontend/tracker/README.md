@@ -13,7 +13,7 @@ This is the official browser SDK for [HitKeep](https://hitkeep.com), a self-host
 - **Framework-native** — no `<script>` tag, no `window.hk` casts, full TypeScript types
 - **Automatic tracking** — pageviews, SPA route changes, outbound links, file downloads, form submits
 - **Typed e-commerce events** — `view_item`, `add_to_cart`, `begin_checkout`, `purchase`
-- **Tiny and self-contained** — ~3.7 kB gzipped, zero runtime dependencies, ESM + CJS
+- **Self-contained** — zero runtime dependencies, ESM + CJS
 
 ## Install
 
@@ -109,7 +109,10 @@ init({
     outboundLinks: true, // outbound_click events
     fileDownloads: true, // file_download events
     formSubmissions: true, // form_submit events
+    declarativeEvents: false, // named clicks and submits from HTML attributes
+    enablePaidSignals: false, // report the presence of a paid click signal on pageviews
     webVitals: false, // load the Web Vitals bundle from `${host}/hk-vitals.js`
+    visibleTime: false, // measure time the page is visible
     useBeacon: true, // prefer navigator.sendBeacon
     respectDoNotTrack: true, // drop tracking when DNT is enabled
     captureOnLocalhost: false, // localhost is blocked by default
@@ -118,6 +121,103 @@ init({
 ```
 
 Each option maps to a `hk.js` data attribute where one exists — see the [tracker architecture guide](https://hitkeep.com/guides/tracking/tracker-architecture/) for the delivery, retry, and storage behavior shared by both.
+
+### Visible time
+
+Set `visibleTime: true` in `init()`, or add `data-enable-visible-time="true"` to your `hk.js` script tag. HitKeep measures how long each tracked pageview is visible, up to 24 hours. Timing pauses when the page is hidden, and a back/forward cache restore continues the original pageview.
+
+Each pageview can send up to two checkpoints when the page is hidden or cached, plus a final sample when navigation ends the view. Each sample contains the pageview ID and cumulative milliseconds. Unchanged values are skipped, and SDK `cleanup()` discards any pending measurement. An interrupted exit or failed request can leave a pageview with a partial measurement or no measurement.
+
+### Named clicks and submits in HTML
+
+Set `declarativeEvents: true` in `init()`, or add `data-enable-declarative-events="true"` to your `hk.js` script tag. Then add `data-hk-event` to a clickable element, form, or submit button. `data-hitkeep-event` is also supported.
+
+```html
+<a href="/pricing" data-hk-event="pricing_clicked">See pricing</a>
+<form action="/subscribe" method="post" data-hk-event="newsletter_submitted">
+    <button type="submit">Subscribe</button>
+</form>
+```
+
+Use a fixed event name of 1–64 characters. Start with an ASCII letter or digit and use only ASCII letters, digits, underscores, and hyphens. The closest marker wins. On submit, the submit button's marker takes precedence over the form's marker. A marked submit button records its event when the browser dispatches the submit event, so a single click that submits a form generates one event. Marked links also support modifier and middle clicks.
+
+When a label forwards a click to an associated control with a marker, the control handles the event.
+
+HitKeep sends the name with the usual custom-event context and empty properties. Element text, link destinations, form fields, and other element metadata are excluded.
+
+By default, the attributes only suppress automatic events so existing manual handlers can keep calling `track()` or `hk.event()`. When opting in, remove manual calls for interactions you want the markup to track. Named events take precedence over outbound, download, and form classification.
+
+### Paid click signals
+
+Set `enablePaidSignals: true` in `init()`, or add `data-enable-paid-signals="true"` to your `hk.js` script tag. Pageviews then include a boolean indicating whether the landing URL contains a nonempty `gclid` or `msclkid` parameter. Parameter names are case-sensitive. The tracker sends only the boolean and keeps it in memory across SPA pageviews, alongside existing UTM attribution.
+
+The tracker strips query strings and fragments from referrer fields. On pages with a query string, analytics requests use keepalive fetch without an HTTP `Referer` header. Add `referrerpolicy="no-referrer"` to the snippet's script tag to apply the same protection to the browser's initial script request.
+
+### Track page-not-found views
+
+Use the fixed event name `page_not_found` to count views of your 404 page. Each example uses your existing tracker installation and sends one named event with empty properties per eligible 404 view, in addition to normal pageview tracking.
+
+Choose one example for each view. In the site's **Events** report, select `page_not_found` to see its occurrence count. A server can return HTTP 404 while a client router can show its missing route after loading an HTTP 200 app shell.
+
+Use these examples only where the current and previous tracked pathnames are safe to collect. Both examples skip the event when the document's incoming referrer includes anything beyond the origin.
+
+#### Server-rendered 404 page
+
+In the template your server returns with HTTP status 404, register the listener before your existing snippet. The window's `load` event waits for the `async` tracker script. Keep the URL and any `data-*` options from your existing snippet, and add the listener only to the 404 template. The `referrerpolicy` attribute keeps the current URL out of the request for `hk.js`.
+
+```html
+<script>
+    window.addEventListener('load', () => {
+        const referrer = document.referrer;
+        if (!referrer || referrer === `${new URL(referrer).origin}/`) {
+            window.hk?.event?.('page_not_found');
+        }
+    }, { once: true });
+</script>
+<script async src="https://your-hitkeep.example.com/hk.js" referrerpolicy="no-referrer"></script>
+```
+
+#### Vue Router SPA
+
+Give the catch-all route a name and register the hook once in your browser entry point, before `app.use(router)` starts the initial navigation. Vue Router reports duplicate and aborted navigations through `failure`. A query or fragment change on the same missing pathname keeps the current 404 view. A different missing pathname or a later return to a missing pathname counts as a new view.
+
+```ts
+import { createApp } from 'vue';
+import { createRouter, createWebHistory } from 'vue-router';
+import { init, track } from '@hitkeep/tracker';
+import App from './App.vue';
+import Home from './Home.vue';
+import NotFound from './NotFound.vue';
+
+const router = createRouter({
+    history: createWebHistory(),
+    routes: [
+        { path: '/', component: Home },
+        { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound }
+    ]
+});
+
+init({ host: 'https://your-hitkeep.example.com' });
+
+const referrer = document.referrer;
+const hasPublicReferrer = !referrer || referrer === `${new URL(referrer).origin}/`;
+router.afterEach((to, from, failure) => {
+    if (failure || to.name !== 'not-found' || !hasPublicReferrer) return;
+    if (from.name === to.name && from.path === to.path) return;
+
+    track('page_not_found');
+});
+
+createApp(App).use(router).mount('#app');
+```
+
+#### Keep private URLs out of tracking
+
+The example checks the incoming `document.referrer` before calling the tracker. The tracker sends the current pathname as `path` and the previous SPA URL or incoming referrer as `r`, with query strings and fragments removed. The `p` object for custom properties is empty. Normal pageviews can still send referrer context and recognized campaign parameters when the example skips the event.
+
+Set `Referrer-Policy: no-referrer` on pages that link from sensitive URLs, including same-origin pages, or use `rel="noreferrer"` on those links. Set the header on the tracked response as well to keep the current URL out of the analytics request's HTTP `Referer` header. A policy on the 404 response alone leaves its incoming `document.referrer` intact.
+
+Where a 404 pathname or incoming referrer can contain private data, serve that response without the tracker. For an SPA, keep tracking in a public shell and send visitors to a separate, untracked document for private routes, since automatic pageviews also read the URL.
 
 ### E-commerce
 

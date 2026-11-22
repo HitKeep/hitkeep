@@ -151,6 +151,91 @@ func TestIngestCORSActualRequestEchoesOrigin(t *testing.T) {
 	}
 }
 
+func TestBrowserPageviewPaidClickPersistsAfterQueue(t *testing.T) {
+	producer := &capturingProducer{}
+	h, cleanup := setupIngestHandler(t, func(ctx *shared.Context) {
+		ctx.Producer = producer
+	})
+	defer cleanup()
+	mux := http.NewServeMux()
+	Register(mux, h.ctx)
+
+	ctx := t.Context()
+	site, err := h.ctx.Store.FindSiteByDomain(ctx, "example.com")
+	if err != nil || site == nil {
+		t.Fatalf("find site: %v", err)
+	}
+	for _, tc := range []struct {
+		name       string
+		field      string
+		want       *bool
+		wantStatus int
+	}{
+		{name: "true", field: `,"pc":true`, want: new(true), wantStatus: http.StatusAccepted},
+		{name: "false", field: `,"pc":false`, want: new(false), wantStatus: http.StatusAccepted},
+		{name: "null", field: `,"pc":null`, wantStatus: http.StatusAccepted},
+		{name: "omitted", wantStatus: http.StatusAccepted},
+		{name: "string is invalid", field: `,"pc":"true"`, wantStatus: http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessionID, pageID := uuid.New(), uuid.New()
+			count := producer.messageCount("hits")
+			body := `{"path":"/landing?gclid=landing-secret#fragment","referrer":"https://external.example/a?fbclid=referrer-secret#fragment","u_med":"email","session_id":"` +
+				sessionID.String() + `","page_id":"` + pageID.String() + `"` + tc.field + `}`
+			req := httptest.NewRequest(http.MethodPost, "/ingest", strings.NewReader(body))
+			req.Header.Set("Origin", "https://example.com")
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			messages := producer.messagesForTopic("hits")
+			if rec.Code != http.StatusAccepted {
+				if len(messages) != count {
+					t.Fatal("invalid input published a hit")
+				}
+				return
+			}
+			if len(messages) != count+1 {
+				t.Fatalf("published %d hits, want one", len(messages)-count)
+			}
+			if got := bytes.Contains(messages[count], []byte(`"paid_click":`)); got != (tc.want != nil) {
+				t.Fatalf("queued paid_click presence = %t, want %t", got, tc.want != nil)
+			}
+			var hit api.Hit
+			if err := json.Unmarshal(messages[count], &hit); err != nil {
+				t.Fatalf("decode queued hit: %v", err)
+			}
+			if hit.Path != "/landing" || stringValue(hit.Referrer) != "https://external.example/a" || stringValue(hit.UTMMedium) != "email" {
+				t.Fatalf("queued hit path or attribution differs: %+v", hit)
+			}
+			created, err := h.ctx.Store.CreateHitsBulkIdempotent(t.Context(), []*api.Hit{&hit})
+			if err != nil || len(created) != 1 {
+				t.Fatalf("persist queued hit: %d created, %v", len(created), err)
+			}
+			result, err := h.ctx.Store.GetHits(t.Context(), api.HitQueryParams{
+				SiteID: site.ID,
+				Start:  hit.Timestamp.Add(-time.Minute),
+				End:    hit.Timestamp.Add(time.Minute),
+				Limit:  count + 1,
+			})
+			if err != nil {
+				t.Fatalf("get persisted hit: %v", err)
+			}
+			for _, stored := range result.Data {
+				if stored.PageID != pageID {
+					continue
+				}
+				if got := stored.PaidClick; (got == nil) != (tc.want == nil) || got != nil && *got != *tc.want {
+					t.Fatalf("paid_click = %v, want %v", got, tc.want)
+				}
+				return
+			}
+			t.Fatal("persisted hit missing")
+		})
+	}
+}
+
 func TestRegisteredBrowserIngestDropsSpeculativeRequests(t *testing.T) {
 	producer := &capturingProducer{}
 	h, cleanup := setupIngestHandler(t, func(ctx *shared.Context) {

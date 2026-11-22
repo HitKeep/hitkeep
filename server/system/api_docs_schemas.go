@@ -69,7 +69,19 @@ func openAPIV1Schemas() map[string]any {
 }
 
 func openAPIV1AnalyticsSchemas() map[string]any {
+	paidSignalSessions := map[string]any{"type": "integer", "description": "Distinct sessions with a paid-click signal on at least one matching native hit."}
+	paidSignalMeasuredSessions := map[string]any{"type": "integer", "description": "Distinct sessions with a measured paid-click signal (true or false) on at least one matching native hit."}
 	return map[string]any{
+		"VisibleTimePage": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path":           map[string]any{"type": "string"},
+				"avg_visible_ms": map[string]any{"type": []string{"number", "null"}, "minimum": 0, "description": "Mean visible milliseconds across measured pageviews. Null when no pageview on this path has a sample."},
+				"measured_views": map[string]any{"type": "integer", "minimum": 0, "description": "Tracked pageviews with a stored sample."},
+				"tracked_views":  map[string]any{"type": "integer", "minimum": 1, "description": "All tracked pageviews for this path in the selected scope."},
+			},
+			"required": []string{"path", "avg_visible_ms", "measured_views", "tracked_views"},
+		},
 		"Error": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -346,6 +358,7 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 				"utm_content":     map[string]any{"type": "string"},
 				"qr_code_id":      map[string]any{"type": "string", "format": "uuid"},
 				"is_unique":       map[string]any{"type": "boolean"},
+				"paid_click":      map[string]any{"type": "boolean", "description": "Paid-click signal reported for this hit. Omitted when unmeasured."},
 			},
 		},
 		"PaginatedHits": map[string]any{
@@ -780,6 +793,28 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 				"conversion_rate": map[string]any{"type": "number"},
 			},
 		},
+		"ComparisonStats": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"total_pageviews":               map[string]any{"type": "integer"},
+				"unique_sessions":               map[string]any{"type": "integer"},
+				"bounce_rate":                   map[string]any{"type": "number"},
+				"avg_session_duration":          map[string]any{"type": "number"},
+				"pages_per_session":             map[string]any{"type": "number"},
+				"chart_data":                    map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/ChartDataPoint"}},
+				"ai_bot_hits":                   map[string]any{"type": "integer"},
+				"ai_source_visits":              map[string]any{"type": "integer"},
+				"utm_campaign_hits":             map[string]any{"type": "integer"},
+				"utm_content_hits":              map[string]any{"type": "integer"},
+				"utm_medium_hits":               map[string]any{"type": "integer"},
+				"utm_source_hits":               map[string]any{"type": "integer"},
+				"utm_term_hits":                 map[string]any{"type": "integer"},
+				"goals":                         map[string]any{"type": []string{"array", "null"}, "items": map[string]any{"$ref": "#/components/schemas/GoalStats"}},
+				"total_conversions":             map[string]any{"type": "integer"},
+				"paid_signal_sessions":          paidSignalSessions,
+				"paid_signal_measured_sessions": paidSignalMeasuredSessions,
+			},
+		},
 		"SiteStats": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -822,6 +857,9 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 					"type":  "array",
 					"items": map[string]any{"$ref": "#/components/schemas/ImportExclusionReason"},
 				},
+				"comparison":                    map[string]any{"$ref": "#/components/schemas/ComparisonStats"},
+				"paid_signal_sessions":          paidSignalSessions,
+				"paid_signal_measured_sessions": paidSignalMeasuredSessions,
 			},
 		},
 		"EcommerceSummary": map[string]any{

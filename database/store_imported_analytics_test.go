@@ -143,19 +143,110 @@ func TestEventGoalsIncludeImportedAggregateVisitors(t *testing.T) {
 
 func TestImportedAggregatesIncludedWithComparisonRequest(t *testing.T) {
 	store, userID := setupEventBreakdownStore(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	site, err := store.CreateSite(ctx, userID, "imported-comparison.example.com")
 	if err != nil {
 		t.Fatalf("create site: %v", err)
 	}
-	if err := store.CreateGoal(ctx, &api.Goal{SiteID: site.ID, Name: "Signup", Type: "event", Value: "signup"}); err != nil {
+	goal := api.Goal{SiteID: site.ID, Name: "Signup", Type: "event", Value: "signup"}
+	if err := store.CreateGoal(ctx, &goal); err != nil {
 		t.Fatalf("create goal: %v", err)
 	}
+	funnel := api.Funnel{SiteID: site.ID, Name: "Signup", Steps: []api.FunnelStep{{Type: "path", Value: "/pricing"}, {Type: "event", Value: "signup"}}}
+	if err := store.CreateFunnel(ctx, &funnel); err != nil {
+		t.Fatalf("create funnel: %v", err)
+	}
 
-	day := time.Date(2026, 4, 8, 0, 0, 0, 0, time.UTC)
-	putImportedComparisonRows(t, ctx, store, site.ID, day)
-	stats := getComparisonDashboardStats(t, ctx, store, site.ID, day)
-	assertImportedComparisonStats(t, stats)
+	// Both windows contain a complete imported day, a native visit, and only
+	// part of the days at either end. The split day is partial in both windows.
+	split := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	for _, offset := range []int{-3, -2, 0, 1, 3} {
+		putImportedComparisonRows(t, ctx, store, site.ID, split.AddDate(0, 0, offset))
+	}
+	for _, offset := range []int{-1, 2} {
+		day := split.AddDate(0, 0, offset)
+		session := uuid.New()
+		for _, at := range []time.Time{day, day.Add(time.Minute)} {
+			if err := store.CreateHit(ctx, &api.Hit{SiteID: site.ID, SessionID: session, PageID: uuid.New(), Timestamp: at, Path: "/pricing"}); err != nil {
+				t.Fatalf("create native hit: %v", err)
+			}
+		}
+		if err := store.CreateEvent(ctx, &api.Event{SiteID: site.ID, SessionID: session, Timestamp: day, Name: "signup"}); err != nil {
+			t.Fatalf("create native event: %v", err)
+		}
+	}
+
+	params := api.AnalyticsParams{
+		SiteID:       site.ID,
+		Start:        split,
+		End:          split.Add(72*time.Hour - time.Millisecond),
+		CompareStart: split.Add(-72 * time.Hour),
+		CompareEnd:   split.Add(-time.Millisecond),
+	}
+	stats := getComparisonDashboardStats(t, ctx, store, params)
+	assertComparedDashboardTotals(t, stats, 22, 11, 5, 60.0/11)
+	if !containsMetric(stats.TopPages, "/pricing", 8) {
+		t.Fatalf("expected current-period page breakdown to use the same import dates, got %+v", stats.TopPages)
+	}
+	if stats.BounceRate != (2.0/float64(stats.UniqueSessions))*100 || stats.PagesPerSession != 2 {
+		t.Fatalf("expected blended bounce and pages per session, got %v and %v", stats.BounceRate, stats.PagesPerSession)
+	}
+
+	for _, test := range []struct {
+		name   string
+		filter func(*api.AnalyticsParams)
+	}{
+		{"hit filter", func(p *api.AnalyticsParams) { p.Filters = []api.Filter{{Type: "path", Value: "/pricing"}} }},
+		{"goal cohort", func(p *api.AnalyticsParams) { p.GoalIDs = []uuid.UUID{goal.ID} }},
+		{"funnel cohort", func(p *api.AnalyticsParams) { p.FunnelIDs = []uuid.UUID{funnel.ID} }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			scoped := params
+			test.filter(&scoped)
+			filtered := getComparisonDashboardStats(t, t.Context(), store, scoped)
+			assertComparedDashboardTotals(t, filtered, 2, 1, 1, 60)
+			if len(filtered.ImportedExcluded) != 1 || filtered.ImportedExcluded[0].Reason != "aggregate_filter" {
+				t.Fatalf("missing aggregate filter exclusion: %+v", filtered.ImportedExcluded)
+			}
+		})
+	}
+
+	params.Start, params.End = split.Add(time.Hour), split.Add(2*time.Hour-time.Millisecond)
+	params.CompareStart, params.CompareEnd = split, split.Add(time.Hour-time.Millisecond)
+	short := getComparisonDashboardStats(t, ctx, store, params)
+	assertComparedDashboardTotals(t, short, 0, 0, 0, 0)
+	if len(short.ImportedExcluded) != 1 || short.ImportedExcluded[0].Reason != "daily_grain" {
+		t.Fatalf("missing daily grain exclusion: %+v", short.ImportedExcluded)
+	}
+}
+
+func TestSiteStatsChartIncludesHitsAtInclusivePeriodEnds(t *testing.T) {
+	store, userID := setupEventBreakdownStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "comparison-ends.example.com")
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+
+	previousEnd := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	currentStart := previousEnd.Add(time.Millisecond)
+	currentEnd := currentStart.Add(8 * time.Hour)
+	for _, at := range []time.Time{previousEnd, currentEnd} {
+		if err := store.CreateHit(ctx, &api.Hit{SiteID: site.ID, SessionID: uuid.New(), PageID: uuid.New(), Timestamp: at, Path: "/"}); err != nil {
+			t.Fatalf("create hit at %s: %v", at, err)
+		}
+	}
+
+	stats := getComparisonDashboardStats(t, ctx, store, api.AnalyticsParams{
+		SiteID:       site.ID,
+		Start:        currentStart,
+		End:          currentEnd,
+		CompareStart: previousEnd.Add(-currentEnd.Sub(currentStart)),
+		CompareEnd:   previousEnd,
+	})
+	if stats.Comparison == nil || totalChartPageviews(stats.ChartData) != 1 || totalChartPageviews(stats.Comparison.ChartData) != 1 {
+		t.Fatalf("expected one chart hit in each period: current %+v, previous %+v", stats.ChartData, stats.Comparison)
+	}
 }
 
 func TestImportedSiteStatsIncludeGeoNetworkDimensions(t *testing.T) {
@@ -208,7 +299,7 @@ func putImportedComparisonRows(t *testing.T, ctx context.Context, store *Store, 
 	if err != nil {
 		t.Fatalf("new sink: %v", err)
 	}
-	if err := sink.PutTraffic(ctx, importables.TrafficRow{Date: day, Visitors: 10, Visits: 10, Pageviews: 20, SourceFile: "datapoints.csv"}); err != nil {
+	if err := sink.PutTraffic(ctx, importables.TrafficRow{Date: day, Visitors: 10, Visits: 10, Pageviews: 20, Bounces: 2, SourceFile: "datapoints.csv"}); err != nil {
 		t.Fatalf("put traffic: %v", err)
 	}
 	if err := sink.PutDimension(ctx, importables.DimensionRow{Date: day, Dimension: "page", Name: "/pricing", Visitors: 3, Visits: 3, Pageviews: 6, SourceFile: "datapoints.csv"}); err != nil {
@@ -222,37 +313,33 @@ func putImportedComparisonRows(t *testing.T, ctx context.Context, store *Store, 
 	}
 }
 
-func getComparisonDashboardStats(t *testing.T, ctx context.Context, store *Store, siteID uuid.UUID, day time.Time) *api.SiteStats {
+func getComparisonDashboardStats(t *testing.T, ctx context.Context, store *Store, params api.AnalyticsParams) *api.SiteStats {
 	t.Helper()
-	stats, err := store.GetSiteStats(ctx, api.AnalyticsParams{
-		SiteID:       siteID,
-		Start:        day.AddDate(0, 0, -1),
-		End:          day.AddDate(0, 0, 6),
-		CompareStart: day.AddDate(0, 0, -8),
-		CompareEnd:   day.AddDate(0, 0, -1).Add(-time.Nanosecond),
-	})
+	stats, err := store.GetSiteStats(ctx, params)
 	if err != nil {
 		t.Fatalf("get stats: %v", err)
 	}
 	return stats
 }
 
-func assertImportedComparisonStats(t *testing.T, stats *api.SiteStats) {
+func assertComparedDashboardTotals(t *testing.T, stats *api.SiteStats, pageviews, sessions, conversions int, duration float64) {
 	t.Helper()
-	if stats.TotalPageviews != 20 || stats.UniqueSessions != 10 {
-		t.Fatalf("expected imported traffic with comparison, got pageviews=%d sessions=%d", stats.TotalPageviews, stats.UniqueSessions)
+	previous := stats.Comparison
+	if previous == nil {
+		t.Fatal("expected comparison stats")
 	}
-	if !containsMetric(stats.TopPages, "/pricing", 6) {
-		t.Fatalf("expected imported page dimension with comparison, got %+v", stats.TopPages)
+	if stats.TotalPageviews != pageviews || previous.TotalPageviews != pageviews ||
+		stats.UniqueSessions != sessions || previous.UniqueSessions != sessions ||
+		stats.AvgSessionDuration != duration || previous.AvgSessionDuration != duration ||
+		stats.BounceRate != previous.BounceRate || stats.PagesPerSession != previous.PagesPerSession {
+		t.Fatalf("unexpected period KPIs: current %+v, previous %+v", stats, previous)
 	}
-	if len(stats.Goals) != 1 || stats.Goals[0].Conversions != 4 {
-		t.Fatalf("expected imported event goal conversions with comparison, got %+v", stats.Goals)
+	if totalChartPageviews(stats.ChartData) != pageviews || totalChartPageviews(previous.ChartData) != pageviews {
+		t.Fatalf("unexpected chart counts: current %+v, previous %+v", stats.ChartData, previous.ChartData)
 	}
-	if stats.Comparison == nil {
-		t.Fatal("expected comparison stats to still be returned")
-	}
-	if totalChartPageviews(stats.ChartData) != 20 {
-		t.Fatalf("expected imported chart pageviews with comparison, got %+v", stats.ChartData)
+	if len(stats.Goals) != 1 || len(previous.Goals) != 1 ||
+		stats.Goals[0].Conversions != conversions || stats.Goals[0] != previous.Goals[0] || previous.TotalConversions != conversions {
+		t.Fatalf("unexpected goal comparison: current %+v, previous %+v", stats.Goals, previous.Goals)
 	}
 }
 

@@ -67,13 +67,9 @@ func (s *Store) GetGoalTimeseries(ctx context.Context, params api.AnalyticsParam
 	}
 
 	if window.Leading != nil {
-		edgeEnd := *window.Leading
-		if edgeEnd.After(params.Start) {
-			edgeEnd = edgeEnd.Add(-time.Nanosecond)
-		}
 		edgeParams := params
 		edgeParams.Start = params.Start
-		edgeParams.End = edgeEnd
+		edgeParams.End = *window.Leading
 		if len(pathValues) > 0 {
 			pathCounts, err := s.querySeriesCounts(ctx, "hits", "path", pathValues, edgeParams, truncUnit)
 			if err != nil {
@@ -235,13 +231,9 @@ func (s *Store) GetFunnelTimeseries(ctx context.Context, params api.AnalyticsPar
 	}
 
 	if window.Leading != nil {
-		edgeEnd := *window.Leading
-		if edgeEnd.After(params.Start) {
-			edgeEnd = edgeEnd.Add(-time.Nanosecond)
-		}
 		edgeParams := params
 		edgeParams.Start = params.Start
-		edgeParams.End = edgeEnd
+		edgeParams.End = *window.Leading
 		if len(entryPathValues) > 0 {
 			pathCounts, err := s.querySeriesCounts(ctx, "hits", "path", entryPathValues, edgeParams, truncUnit)
 			if err != nil {
@@ -412,93 +404,36 @@ func (s *Store) GetFunnelStats(ctx context.Context, funnelID uuid.UUID, params a
 	return stats, nil
 }
 
-// GetComparisonStats runs the same KPI and chart queries as GetSiteStats but
-// over the CompareStart/CompareEnd window. Rollups are intentionally skipped
-// so any arbitrary window is supported.
+// GetComparisonStats uses the same period aggregates as the current report.
 func (s *Store) GetComparisonStats(ctx context.Context, params api.AnalyticsParams) (*api.ComparisonStats, error) {
-	cmp := api.AnalyticsParams{
-		SiteID:    params.SiteID,
-		UserID:    params.UserID,
-		Start:     params.CompareStart,
-		End:       params.CompareEnd,
-		Filters:   params.Filters,
-		GoalIDs:   params.GoalIDs,
-		FunnelIDs: params.FunnelIDs,
-	}
-
-	stats := &api.ComparisonStats{
-		ChartData: []api.ChartDataPoint{},
-	}
-
-	truncUnit := truncUnitForRange(cmp.Start, cmp.End)
-	gridStart := truncToUnit(cmp.Start, truncUnit)
-	gridEnd := truncToUnit(cmp.End, truncUnit)
-	filterSQL, filterArgs := buildHitFilters(cmp.Filters, "h")
-	sessionSQL, sessionArgs, err := s.buildSessionFilter(ctx, cmp, "h")
+	params.Start, params.End = params.CompareStart, params.CompareEnd
+	window, err := s.querySiteStatsWindow(ctx, params, SiteStatsSections{Chart: true, Goals: true}, true)
 	if err != nil {
 		return nil, err
 	}
-	filterSQL += sessionSQL
-	filterArgs = append(filterArgs, sessionArgs...)
 
-	if err := s.queryKpis(ctx, cmp, filterSQL, filterArgs, false, rollupHourly,
-		&stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &stats.AvgSessionDuration, &stats.PagesPerSession,
-	); err != nil {
-		return nil, fmt.Errorf("comparison KPI query failed: %w", err)
+	stats := &api.ComparisonStats{
+		TotalPageviews:     window.TotalPageviews,
+		UniqueSessions:     window.UniqueSessions,
+		BounceRate:         window.BounceRate,
+		AvgSessionDuration: window.AvgSessionDuration,
+		PagesPerSession:    window.PagesPerSession,
+		ChartData:          window.ChartData,
+		AIBotHits:          window.AIBotHits,
+		AISourceVisits:     window.AISourceVisits,
+		UTMCampaignHits:    window.UTMCampaignHits,
+		UTMContentHits:     window.UTMContentHits,
+		UTMMediumHits:      window.UTMMediumHits,
+		UTMSourceHits:      window.UTMSourceHits,
+		UTMTermHits:        window.UTMTermHits,
+
+		PaidSignalSessions:         window.PaidSignalSessions,
+		PaidSignalMeasuredSessions: window.PaidSignalMeasuredSessions,
 	}
-
-	if err := s.queryUTMKpis(ctx, cmp, filterSQL, filterArgs,
-		&stats.UTMCampaignHits, &stats.UTMContentHits, &stats.UTMMediumHits, &stats.UTMSourceHits, &stats.UTMTermHits,
-	); err != nil {
-		return nil, fmt.Errorf("comparison UTM KPI query failed: %w", err)
+	for _, goal := range window.Goals {
+		stats.Goals = append(stats.Goals, goal)
+		stats.TotalConversions += goal.Conversions
 	}
-
-	if err := s.queryAIKpis(ctx, cmp, filterSQL, filterArgs, &stats.AIBotHits, &stats.AISourceVisits); err != nil {
-		return nil, fmt.Errorf("comparison AI KPI query failed: %w", err)
-	}
-
-	rows, err := s.queryChartData(ctx, cmp, gridStart, gridEnd, truncUnit, filterSQL, filterArgs, false, rollupHourly)
-	if err != nil {
-		return nil, fmt.Errorf("comparison chart query failed: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var p api.ChartDataPoint
-		if err := rows.Scan(&p.Time, &p.Pageviews, &p.Visitors); err != nil {
-			return nil, err
-		}
-		stats.ChartData = append(stats.ChartData, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read comparison chart rows: %w", err)
-	}
-
-	goals, err := s.GetGoals(ctx, params.SiteID)
-	if err != nil {
-		return nil, fmt.Errorf("comparison goals fetch failed: %w", err)
-	}
-
-	for _, goal := range goals {
-		conversions, err := s.queryGoalConversions(ctx, cmp, goal, filterSQL, filterArgs)
-		if err != nil {
-			return nil, fmt.Errorf("comparison goal conversions query failed: %w", err)
-		}
-
-		rate := 0.0
-		if stats.UniqueSessions > 0 {
-			rate = (float64(conversions) / float64(stats.UniqueSessions)) * 100
-		}
-
-		stats.Goals = append(stats.Goals, api.GoalStats{
-			GoalID:         goal.ID,
-			Name:           goal.Name,
-			Conversions:    conversions,
-			ConversionRate: rate,
-		})
-		stats.TotalConversions += conversions
-	}
-
 	return stats, nil
 }
 

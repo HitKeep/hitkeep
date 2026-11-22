@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"hitkeep/analyticstools"
-
+	"hitkeep/api"
 	json "hitkeep/jsonapi"
 )
 
@@ -213,6 +216,106 @@ func TestMCPPublishedSurfaceAudit(t *testing.T) {
 	}
 	if help.TTLMs != int(time.Hour/time.Millisecond) || help.CacheScope != "private" {
 		t.Fatalf("help resource cache = ttl %d scope %q, want 3600000/private", help.TTLMs, help.CacheScope)
+	}
+}
+
+func TestMCPFunnelStatsAudit(t *testing.T) {
+	store, site, token := setupMCPStore(t)
+	ctx := t.Context()
+	funnel := &api.Funnel{SiteID: site.ID, Name: "Checkout", Steps: []api.FunnelStep{
+		{Type: "path", Value: "/"},
+		{Type: "path", Value: "/checkout"},
+	}}
+	if err := store.CreateFunnel(ctx, funnel); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	sessionID := uuid.New()
+	for i, path := range []string{"/", "/checkout"} {
+		if err := store.CreateHit(ctx, &api.Hit{
+			SiteID: site.ID, SessionID: sessionID, PageID: uuid.New(), Path: path,
+			Timestamp: now.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conf := testMCPConfig(t, "")
+	server := httptest.NewServer(NewHandler(conf, store, nil, nil, testMCPLogger()))
+	defer server.Close()
+	session := connectMCPClient(t, server.URL+conf.MCPPath, token)
+	defer session.Close()
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := findTool(tools.Tools, analyticstools.ToolFunnelStats)
+	if tool == nil {
+		t.Fatal("missing funnel stats tool")
+	}
+	var schema jsonschema.Schema
+	rawSchema, err := json.Marshal(tool.OutputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(rawSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	statsSchema := schema.Properties["stats"]
+	if statsSchema == nil || statsSchema.Properties["funnel_id"] == nil {
+		t.Fatal("output schema missing stats.funnel_id")
+	}
+	if idType := statsSchema.Properties["funnel_id"].Type; idType != "string" {
+		t.Errorf("tools/list stats.funnel_id type = %q, want string", idType)
+	} else {
+		t.Log("tools/list advertises stats.funnel_id as a string")
+	}
+
+	for _, tc := range []struct {
+		name                          string
+		from, to                      time.Time
+		entries, completions, dropoff int
+		rate                          float64
+	}{
+		{"matched traffic", now.Add(-time.Hour), now.Add(time.Hour), 2, 1, 1, 50},
+		{"zero traffic", now.Add(-3 * time.Hour), now.Add(-2 * time.Hour), 0, 0, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			from, to := tc.from.Format(time.RFC3339), tc.to.Format(time.RFC3339)
+			res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+				Name:      tool.Name,
+				Arguments: map[string]any{"site_id": site.ID.String(), "funnel_id": funnel.ID.String(), "from": from, "to": to},
+			})
+			if err != nil {
+				t.Fatalf("tools/call: %v", err)
+			}
+			if res.IsError {
+				t.Fatalf("tools/call: %s", mcpToolErrorText(res))
+			}
+			var got struct {
+				SiteID string           `json:"site_id"`
+				From   string           `json:"from"`
+				To     string           `json:"to"`
+				Stats  *api.FunnelStats `json:"stats"`
+			}
+			if err := json.UnmarshalStrict([]byte(marshalMCPStructuredContent(t, res)), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.SiteID != site.ID.String() || got.From != from || got.To != to {
+				t.Fatalf("unexpected site or range: %+v", got)
+			}
+			want := &api.FunnelStats{
+				FunnelID: funnel.ID, Name: funnel.Name, TotalEntries: tc.entries, TotalCompletions: tc.completions, OverallConversionRate: tc.rate,
+				Steps: []api.FunnelStepStats{
+					{StepIndex: 0, Name: "path: /", Visitors: tc.entries, ConversionRate: 100},
+					{StepIndex: 1, Name: "path: /checkout", Visitors: tc.completions, Dropoff: tc.dropoff, ConversionRate: tc.rate},
+				},
+			}
+			if diff := cmp.Diff(want, got.Stats); diff != "" {
+				t.Fatalf("funnel stats (-want +got):\n%s", diff)
+			}
+			t.Logf("tools/call returned %d entries, %d completions, %.0f%% conversion", got.Stats.TotalEntries, got.Stats.TotalCompletions, got.Stats.OverallConversionRate)
+		})
 	}
 }
 

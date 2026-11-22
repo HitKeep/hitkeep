@@ -76,6 +76,7 @@ type Hit struct {
 	UTMContent     *string    `json:"utm_content"`
 	QRCodeID       *uuid.UUID `json:"qr_code_id"`
 	IsUnique       *bool      `json:"is_unique"`
+	PaidClick      *bool      `json:"paid_click,omitzero"`
 	TrackerSource  string     `json:"-"`
 	TrackerVersion string     `json:"-"`
 }
@@ -803,6 +804,9 @@ type ComparisonStats struct {
 	UTMTermHits        int              `json:"utm_term_hits"`
 	Goals              []GoalStats      `json:"goals"`
 	TotalConversions   int              `json:"total_conversions"`
+
+	PaidSignalSessions         int `json:"paid_signal_sessions"`
+	PaidSignalMeasuredSessions int `json:"paid_signal_measured_sessions"`
 }
 
 type ChartDataPoint struct {
@@ -902,6 +906,9 @@ type SiteStats struct {
 	Funnels             []Funnel                `json:"funnels"`
 	Comparison          *ComparisonStats        `json:"comparison,omitempty"`
 	ImportedExcluded    []ImportExclusionReason `json:"imported_excluded,omitempty"`
+
+	PaidSignalSessions         int `json:"paid_signal_sessions"`
+	PaidSignalMeasuredSessions int `json:"paid_signal_measured_sessions"`
 }
 
 type SiteStatsResetRequest struct {

@@ -24,7 +24,7 @@ import { KPI_PERCENT_FORMAT, KpiCard, KpiCardModel } from '@features/analytics/c
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { injectAIActivityQuery, type AIActivityQueryMode } from '@features/analytics/services/ai-activity-query';
-import { StatsService } from '@features/analytics/services/stats.service';
+import { previousPeriod } from '@core/analytics/comparison-period';
 import { SiteService } from '@features/sites/services/site.service';
 import type { AIFetchCorrelationReport } from '@models/analytics.types';
 import { formatBytes, formatResponseMs } from '@pages/ai-agents/ai-agents-page.utils';
@@ -70,7 +70,6 @@ export class AIAgentsPage {
 
     private readonly siteService = inject(SiteService);
     private readonly analyticsService = inject(AnalyticsService);
-    private readonly statsService = inject(StatsService);
     private readonly transloco = inject(TranslocoService);
     private readonly localeService = inject(TranslocoLocaleService);
     private readonly takeoutDownloadService = inject(TakeoutDownloadService);
@@ -433,7 +432,7 @@ export class AIAgentsPage {
                 from,
                 to,
                 filters,
-                comparison: this.statsService.comparisonRange(from, to),
+                comparison: previousPeriod(from, to),
                 onSuccess: effectiveMode === 'background' ? () => this.kpiUpdateKey.update((key) => key + 1) : undefined
             },
             effectiveMode

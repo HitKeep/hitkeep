@@ -60,6 +60,7 @@ func seedTraffic(ctx context.Context, store *database.Store, siteID uuid.UUID, g
 			region, city, provider, asn, asnOrg := seedGeoNetworkMetadata(country, rng)
 			lang := pickWeighted(rng, languages)
 			utmEntry := pickWeighted(rng, utmCampaigns)
+			paidClick := utmEntry != nil && utmEntry.medium == "cpc" || utmEntry == nil && stats.sessions%12 == 0
 			ref := pickWeighted(rng, referrers)
 
 			vw, vh, sw, sh := pickViewport(rng, uaEntry.kind)
@@ -97,6 +98,7 @@ func seedTraffic(ctx context.Context, store *database.Store, siteID uuid.UUID, g
 					ScreenWidth:    &sw,
 					ScreenHeight:   &sh,
 					IsUnique:       new(i == 0),
+					PaidClick:      &paidClick,
 				}
 
 				if i == 0 {

@@ -566,6 +566,8 @@ func (s *Store) ListAllSites(ctx context.Context) ([]api.Site, error) {
 }
 
 func (s *Store) DeleteSite(ctx context.Context, siteID uuid.UUID) error {
+	s.visibleTimeMu.Lock()
+	defer s.visibleTimeMu.Unlock()
 	// Best-effort domain read for cache invalidation; tenant-store mirrors
 	// carry a reduced sites schema, so only the domain column is portable.
 	var domain string

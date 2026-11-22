@@ -978,6 +978,16 @@
     "unknown": "Unbekannt"
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Sichtbare Zeit pro Seite",
+      "description": "Die meistbesuchten Seiten nach erfassten Aufrufen im ausgewählten Zeitraum. Der Durchschnitt umfasst nur Aufrufe mit Messwert.",
+      "average": "Ø sichtbare Zeit",
+      "coverage": "Gemessene / erfasste Aufrufe",
+      "missing": "Kein Messwert",
+      "empty": "Für diese Auswahl gibt es keine erfassten Seitenaufrufe.",
+      "unavailable": "Die sichtbare Zeit ist vorübergehend nicht verfügbar.",
+      "forbidden": "Du hast keinen Zugriff auf diesen Bericht."
+    },
     "conversions": { "title": "Conversions", "description": "Filtere den gesamten Arbeitsbereich nach einer Ziel- oder Funnel-Kohorte.", "filters": { "goal": "Ziel: {{name}}", "funnel": "Funnel: {{name}}" }, "invalidSubject": "Dieses Ziel oder dieser Funnel ist für diese Seite nicht mehr verfügbar." },
     "breadcrumbOverview": "Übersicht",
     "filteredBadge": "Gefiltert",
@@ -1180,6 +1190,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Signale für bezahlten Traffic",
+      "scope": "Die Zahlen beziehen sich auf passende, direkt von HitKeep erfasste Sitzungen mit aktivierter Signalmessung, mit oder ohne UTM-Tags. Sitzungen mit UTM-Tags können auch in den UTM-Metriken erscheinen.",
+      "observed": "Signal für bezahlten Traffic erkannt",
+      "count": "{{ observed }} von {{ measured }} gemessenen Sitzungen",
+      "unobserved": "Kein Signal für bezahlten Traffic erkannt",
+      "unobservedHint": "Sitzungen ohne erkanntes Signal können aus bezahltem oder organischem Traffic stammen.",
+      "noMeasurement": "Für diesen Zeitraum und diese Filter liegen keine gemessenen Sitzungen vor.",
+      "unavailable": "Die Anzahl der Sitzungen mit Signalen konnte nicht geladen werden."
+    },
     "noSiteDescription": "Wähle eine Seite aus oder erstelle eine, um UTM-Metriken zu sehen.",
     "series": {
       "title": "UTM-Performance",
@@ -1905,7 +1925,13 @@
         },
         "script": {
           "description": "Kopiere den folgenden Code und füge ihn in das HTML deiner Website ein. Automatisches Tracking für ausgehende Klicks, Downloads und Formularübermittlungen ist standardmäßig aktiviert.",
-          "docsAction": "Tracker-Anleitung"
+          "docsAction": "Tracker-Anleitung",
+          "declarativeEventsLabel": "Markierte Klicks und Formularübermittlungen erfassen",
+          "declarativeEventsDescription": "Sendet benutzerdefinierte Ereignisse bei Klicks auf markierte Elemente und beim Absenden markierter Formulare. Verwende data-hk-event oder data-hitkeep-event zur Markierung."
+        },
+        "assistant": {
+          "copyAction": "Prompt für Coding-Assistenten kopieren",
+          "prompt": "Installiere den HitKeep-Tracker auf {{ domain }}. Prüfe zuerst, ob das Projekt HitKeep bereits eingebunden hat. Aktualisiere die vorhandene Einbindung nur bei Bedarf. Füge andernfalls das folgende Skript einmal in die gemeinsame Seitenvorlage ein. Übernimm die Skript-URL und alle Attribute genau wie gezeigt und behalte das Einwilligungsverhalten der Website bei.\n\n{{ snippet }}\n\nÖffne eine Seite unter dem vorgesehenen Hostnamen. Prüfe im Netzwerk-Tab des Browsers, ob das Tracker-Skript geladen wird und die Seitenaufruf-Anfrage erfolgreich ist. Löse aktivierte automatische Ereignisse durch die entsprechenden Aktionen aus und prüfe die Ereignisanfragen. Bestätige in HitKeep unter „{{ verifier }}“, dass kürzlich ein Hit akzeptiert wurde. Berichte, was du prüfen konntest und was noch offen ist."
         },
         "npm": {
           "description": "Binde den typisierten Tracker in eine React-, Vue-, Angular- oder Astro-App ein. Kein Script-Tag, vollständige TypeScript-Typen, und Contentblocker filtern ihn nicht.",
@@ -1934,10 +1960,14 @@
         "badge": "{{ count }} geändert",
         "deliveryTitle": "Auslieferung und Datenschutz"
       },
+      "paidSignalsLabel": "Signale für bezahlten Traffic",
+      "paidSignalsDescription": "Erkennt unterstützte Anzeigenklick-IDs auf erfassten Seiten. Der Tracker übermittelt nur, ob eine solche ID vorhanden ist.",
       "collectDntLabel": "DNT erfassen",
       "collectDntDescription": "Nutzer erfassen, auch wenn im Browser \"Do Not Track\" aktiviert ist.",
       "disableBeaconLabel": "sendBeacon deaktivieren",
       "disableBeaconDescription": "Standard-Fetch-Anfragen statt navigator.sendBeacon verwenden.",
+      "visibleTimeLabel": "Sichtbare Zeit messen",
+      "visibleTimeDescription": "Ergänzt den Code um eine Option, die misst, wie lange jede Seite im Browser sichtbar ist.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Lädt das separate Web-Vitals-Bundle und sendet LCP-, INP-, CLS-, FCP- und TTFB-Samples. Standardmäßig deaktiviert.",
       "autoTrackingTitle": "Automatisches Event-Tracking",
@@ -1962,7 +1992,10 @@
           "dormant": "Inaktiv",
           "domain_mismatch": "Domain-Abweichung"
         },
-        "waitingHint": "Wartet auf den ersten akzeptierten Hit. Dieses Panel aktualisiert sich zwei Minuten lang automatisch.",
+        "waitingBrowser": "Stelle den Tracker bereit und öffne dann eine veröffentlichte Seite auf {{ domain }}, auf der Tracking zulässig ist. Wenn die Prüfung weiterhin „Wartet“ anzeigt, prüfe, ob der Tracker geladen wird, sowie die Einstellungen für Do Not Track, Einwilligung und Ausschlüsse.",
+        "waitingServer": "Sende über deine Serverintegration einen Seitenaufruf für einen echten Besuch auf {{ domain }}. Wenn die Prüfung weiterhin „Wartet“ anzeigt, prüfe die Antwort der Integration und ihren Zugriff auf diese Website.",
+        "waitingHint": "Die Prüfung läuft bis zu zwei Minuten automatisch. Du kannst sie jederzeit manuell aktualisieren.",
+        "unavailable": "Der Tracking-Status ist nicht verfügbar. Versuche es über „Aktualisieren“ erneut.",
         "mismatchHint": "Der zuletzt erkannte Hostname passt nicht zur konfigurierten Domain dieser Seite.",
         "fields": {
           "firstHit": "Erster Hit",
@@ -3179,6 +3212,19 @@
     }
   },
   "comparison": {
+    "details": "Zeitraumvergleich",
+    "metric": "Kennzahl",
+    "currentPeriod": "Aktueller Zeitraum",
+    "previousPeriod": "Vorheriger Zeitraum",
+    "relativeChange": "Relative Änderung",
+    "unavailable": "Nicht verfügbar",
+    "zeroBaseline": "Nicht definiert (vorheriger Wert ist null)",
+    "elapsedRule": "Der vorherige Zeitraum endet unmittelbar vor dem aktuellen Zeitraum und ist genauso lang. Die relative Änderung bezieht sich auf den vorherigen Wert.",
+    "liveOnly": "Live-Besucher erfasst die letzten fünf Minuten und hat keinen Vergleichswert.",
+    "currentOnlyBreakdowns": "Aufschlüsselungen und Zugriffsprotokolle zeigen nur den aktuellen Zeitraum.",
+    "seriesLabel": "{{metric}} (vorher)",
+    "bucketOrder": "Die Reihen sind nach der Reihenfolge der Zeitintervalle ausgerichtet. Die Achse zeigt das Datum im aktuellen Zeitraum.",
+    "gridMismatch": "Der vorherige Zeitraum verwendet andere Zeitintervalle. Seine Datenreihe wird ausgeblendet.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Seitenaufrufe (vor.)",
     "visitorsLabel": "Besucher (vor.)"

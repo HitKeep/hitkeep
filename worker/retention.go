@@ -206,13 +206,13 @@ func (w *RetentionWorker) processSitePolicy(ctx context.Context, policy retentio
 		return
 	}
 
-	if err := w.exportSiteArchive(ctx, db, policy.ID, cutoff, filename); err != nil {
-		hklog.LoggerFromContext(ctx).Error("Failed to export data to parquet", "error", err, "site_id", policy.ID)
-		return
-	}
-
-	if err := pruneRetainedRows(ctx, db, policy.ID, cutoff, counts); err != nil {
-		hklog.LoggerFromContext(ctx).Error("Failed to prune retained rows", "error", err, "site_id", policy.ID)
+	if err := tenantStore.WithPageVisibleTimeRetention(func() error {
+		if err := w.exportSiteArchive(ctx, db, policy.ID, cutoff, filename); err != nil {
+			return fmt.Errorf("export data to parquet: %w", err)
+		}
+		return pruneRetainedRows(ctx, db, policy.ID, cutoff, counts)
+	}); err != nil {
+		hklog.LoggerFromContext(ctx).Error("Failed to archive and prune retained rows", "error", err, "site_id", policy.ID)
 		return
 	}
 
@@ -335,10 +335,10 @@ func (w *RetentionWorker) exportSiteArchive(ctx context.Context, db *sql.DB, sit
 }
 
 func buildRetentionExportQuery(siteID uuid.UUID, cutoff time.Time, filename string) string {
-	timestampCutoff := cutoff.Format(time.RFC3339)
+	timestampCutoff := cutoff.Format(time.RFC3339Nano)
 	dateCutoff := cutoff.Format(time.DateOnly)
 	safeFilename := strings.ReplaceAll(filename, "'", "''")
-	parts := make([]string, 0, len(retentionArchiveSources))
+	parts := make([]string, 0, len(retentionArchiveSources)+1)
 	for _, source := range retentionArchiveSources {
 		cutoffValue := timestampCutoff
 		if source.cutoffColumn == "date" {
@@ -350,6 +350,16 @@ func buildRetentionExportQuery(siteID uuid.UUID, cutoff time.Time, filename stri
 			source.table, source.table, siteID, source.cutoffColumn, cutoffValue,
 		))
 	}
+	// #nosec G201 -- the site ID and timestamp are formatted from typed values.
+	parts = append(parts, fmt.Sprintf(`
+		SELECT 'page_visible_time' AS _source, p.*
+		FROM page_visible_time p
+		JOIN (
+			SELECT page_id FROM hits WHERE site_id = '%[1]s'
+			GROUP BY page_id HAVING max(timestamp) < '%[2]s'
+		) expired USING (page_id)
+		WHERE p.site_id = '%[1]s'
+	`, siteID, timestampCutoff))
 	return fmt.Sprintf("COPY (%s) TO '%s' (FORMAT PARQUET, COMPRESSION 'SNAPPY');",
 		strings.Join(parts, " UNION BY NAME "), safeFilename)
 }
@@ -362,6 +372,18 @@ func pruneRetainedRows(ctx context.Context, db *sql.DB, siteID uuid.UUID, cutoff
 	if err := execRetentionDeletes(ctx, tx, siteID, cutoff, retentionDeleteQueries(counts)); err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+	if counts.Hits > 0 {
+		// A retried pageview can share a page ID with a hit that is still retained.
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM page_visible_time p WHERE p.site_id = ?
+				AND NOT EXISTS (
+					SELECT 1 FROM hits h WHERE h.site_id = p.site_id AND h.page_id = p.page_id
+				)
+		`, siteID); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("prune page visible time: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit deletion: %w", err)

@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { SelectModule } from '@openng/optimus-ui/select';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
@@ -14,8 +13,10 @@ import { MetricCardConfig, MetricCardGroup, MetricCardGroupRowClick, MetricCardG
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { SeriesChart, SeriesDefinition, SeriesChartPoint } from '@features/analytics/components/series-chart';
 import { MetricStat, EventSeriesPoint, EventAudience } from '@models/analytics.types';
-import { finalize } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { injectActiveLang } from '@core/i18n/active-lang';
+import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta } from '@core/analytics/delta-utils';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_EVENT_KINDS } from '@services/realtime.service';
@@ -61,15 +62,12 @@ export class Events {
     protected readonly customEventsDocsUrl = 'https://hitkeep.com/guides/tracking/custom-events/';
     private siteService = inject(SiteService);
     private analyticsService = inject(AnalyticsService);
-    private localeService = inject(TranslocoLocaleService);
     private transloco = inject(TranslocoService);
     private destroyRef = inject(DestroyRef);
     private realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
     private readonly reportRange = injectReportRange();
     private readonly activeLanguage = injectActiveLang();
-
-    protected readonly isShortRange = this.reportRange.isShortRange;
 
     protected eventNames = signal<string[]>([]);
     /** Names the site actually reported, before the automatic ones get merged in; `null` until the first answer. */
@@ -89,17 +87,21 @@ export class Events {
     protected isLoadingKeys = signal(false);
     protected isLoadingBreakdown = signal(false);
     protected isLoadingEventSeries = signal(false);
-    protected isLoadingComparisonSeries = signal(false);
     protected isLoadingAudience = signal(false);
 
-    private comparisonRange = signal<{ from: string; to: string } | null>(null);
+    private seriesRequest?: Subscription;
+    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
+    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
+    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
 
     protected readonly eventSeriesChart = computed<SeriesChartPoint[]>(() => this.eventSeries().map((p) => ({ time: p.time, count: p.count })));
     protected readonly comparisonEventSeriesChart = computed<SeriesChartPoint[]>(() => this.comparisonEventSeries().map((p) => ({ time: p.time, count: p.count })));
     protected readonly totalEventCount = computed(() => this.eventSeries().reduce((sum, p) => sum + p.count, 0));
     protected readonly comparisonTotalCount = computed(() => this.comparisonEventSeries().reduce((sum, p) => sum + p.count, 0));
     protected readonly totalEventDelta = computed(() => this.calcDelta(this.totalEventCount(), this.comparisonTotalCount()));
-    protected readonly isLoading = computed(() => this.isLoadingNames() || this.isLoadingEventSeries() || this.isLoadingComparisonSeries());
+    protected readonly isLoading = computed(() => this.isLoadingNames() || this.isLoadingEventSeries());
     protected readonly showEventTotalSkeleton = injectSkeletonGate(this.isLoadingEventSeries, () => this.eventSeries().length > 0);
 
     protected readonly activeSite = computed(() => this.siteService.activeSite());
@@ -126,16 +128,6 @@ export class Events {
         })
     );
     protected propertyOptions = computed(() => this.propertyKeys().map((key) => ({ label: key, value: key })));
-
-    protected comparisonLabel = computed(() => {
-        this.activeLanguage();
-        const r = this.comparisonRange();
-        if (!r) return '';
-        const showYear = new Date(r.from).getFullYear() !== new Date().getFullYear();
-        const opts = showYear ? ({ month: 'short', day: 'numeric', year: 'numeric' } as const) : ({ month: 'short', day: 'numeric' } as const);
-        const fmt = (d: string) => this.localeService.localizeDate(new Date(d), undefined, opts);
-        return `${fmt(r.from)} – ${fmt(r.to)}`;
-    });
 
     protected readonly eventSeriesConfig = computed<SeriesDefinition[]>(() => {
         this.activeLanguage();
@@ -370,21 +362,19 @@ export class Events {
             this.realtimeRefreshKey();
 
             if (!site || !eventName) {
+                this.seriesRequest?.unsubscribe();
                 this.eventSeries.set([]);
                 this.comparisonEventSeries.set([]);
+                this.seriesRange.set(null);
                 this.comparisonRange.set(null);
                 return;
             }
             const dates = this.getCurrentDateRange();
             if (!dates) return;
 
-            const cmpRange = this.computeComparisonPeriod(dates.from, dates.to);
-            this.comparisonRange.set(cmpRange);
-
             const filterKey = propKey && propValue ? propKey : undefined;
             const filterVal = propKey && propValue ? propValue : undefined;
             this.loadEventTimeseries(site.id, dates.from, dates.to, eventName, filterKey, filterVal, dimFilters);
-            this.loadComparisonEventTimeseries(site.id, cmpRange.from, cmpRange.to, eventName, filterKey, filterVal, dimFilters);
         });
 
         // Load breakdown when event/propertyKey/range changes
@@ -438,17 +428,6 @@ export class Events {
     protected clearAllFilters() {
         this.selectedPropertyValue.set(null);
         this.audienceDimFilters.set([]);
-    }
-
-    private computeComparisonPeriod(from: string, to: string): { from: string; to: string } {
-        const start = new Date(from);
-        const end = new Date(to);
-        const duration = end.getTime() - start.getTime();
-        const cmpEnd = new Date(start.getTime() - 1);
-        return {
-            from: new Date(cmpEnd.getTime() - duration).toISOString(),
-            to: cmpEnd.toISOString()
-        };
     }
 
     protected togglePropertyValueFilter(value: string) {
@@ -551,24 +530,30 @@ export class Events {
     }
 
     private loadEventTimeseries(siteId: string, from: string, to: string, eventName: string, propertyKey?: string, propertyValue?: string, filters: EventDimensionFilter[] = []) {
+        this.seriesRequest?.unsubscribe();
         this.isLoadingEventSeries.set(true);
-        this.analyticsService
-            .getEventTimeseries(siteId, from, to, eventName, propertyKey, propertyValue, filters)
-            .pipe(finalize(() => this.isLoadingEventSeries.set(false)))
+        const comparison = previousPeriod(from, to);
+        this.seriesRequest = forkJoin({
+            current: this.analyticsService.getEventTimeseries(siteId, from, to, eventName, propertyKey, propertyValue, filters),
+            previous: this.analyticsService.getEventTimeseries(siteId, comparison.from, comparison.to, eventName, propertyKey, propertyValue, filters).pipe(catchError(() => of(null)))
+        })
+            .pipe(
+                takeUntilDestroyed(this.destroyRef),
+                finalize(() => this.isLoadingEventSeries.set(false))
+            )
             .subscribe({
-                next: (data) => this.eventSeries.set(data ?? []),
-                error: () => this.eventSeries.set([])
-            });
-    }
-
-    private loadComparisonEventTimeseries(siteId: string, from: string, to: string, eventName: string, propertyKey?: string, propertyValue?: string, filters: EventDimensionFilter[] = []) {
-        this.isLoadingComparisonSeries.set(true);
-        this.analyticsService
-            .getEventTimeseries(siteId, from, to, eventName, propertyKey, propertyValue, filters)
-            .pipe(finalize(() => this.isLoadingComparisonSeries.set(false)))
-            .subscribe({
-                next: (data) => this.comparisonEventSeries.set(data ?? []),
-                error: () => this.comparisonEventSeries.set([])
+                next: ({ current, previous }) => {
+                    this.eventSeries.set(current ?? []);
+                    this.comparisonEventSeries.set(previous ?? []);
+                    this.seriesRange.set({ from, to });
+                    this.comparisonRange.set(previous ? comparison : null);
+                },
+                error: () => {
+                    this.eventSeries.set([]);
+                    this.comparisonEventSeries.set([]);
+                    this.seriesRange.set(null);
+                    this.comparisonRange.set(null);
+                }
             });
     }
 

@@ -1,9 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { finalize, forkJoin } from 'rxjs';
+import { catchError, finalize, forkJoin, map, of, Subscription } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { SelectModule } from '@openng/optimus-ui/select';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { CardModule } from '@openng/optimus-ui/card';
@@ -20,12 +19,13 @@ import { KPI_PERCENT_FORMAT, KpiCard, KpiCardModel } from '@features/analytics/c
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { EventAudience, MetricStat } from '@models/analytics.types';
 import { injectActiveLang } from '@core/i18n/active-lang';
+import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { calcDelta, safeRate } from '@core/analytics/delta-utils';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { SetupStateService } from '@services/setup-state.service';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
 import { EmbedService } from '@services/embed.service';
-import { ChatbotMetricKey, ChatbotSeriesState, computeComparisonPeriod, createEmptySeries, mergeChatbotChartSeries, totalFor } from '@pages/ai-chatbots/ai-chatbots.utils';
+import { ChatbotMetricKey, ChatbotSeriesState, createEmptySeries, mergeChatbotChartSeries, totalFor } from '@pages/ai-chatbots/ai-chatbots.utils';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
@@ -60,7 +60,6 @@ export class AIChatbots {
     protected readonly docsUrl = 'https://hitkeep.com/guides/analytics/ai-chatbot-analytics/';
     private readonly siteService = inject(SiteService);
     private readonly analyticsService = inject(AnalyticsService);
-    private readonly localeService = inject(TranslocoLocaleService);
     private readonly transloco = inject(TranslocoService);
     private readonly takeoutDownloadService = inject(TakeoutDownloadService);
     private readonly setupState = inject(SetupStateService);
@@ -69,10 +68,11 @@ export class AIChatbots {
     private readonly reportRange = injectReportRange();
     private readonly activeLanguage = injectActiveLang();
 
-    protected readonly comparisonRange = signal<{
-        from: string;
-        to: string;
-    } | null>(null);
+    private seriesRequest?: Subscription;
+    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
+    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
     protected readonly kpiUpdateKey = signal(0);
 
     protected readonly selectedScopeKey = signal<ScopeKey>('provider');
@@ -94,14 +94,13 @@ export class AIChatbots {
 
     protected readonly isLoadingBreakdowns = signal(false);
     protected readonly isLoadingSeries = signal(false);
-    protected readonly isLoadingComparison = signal(false);
     protected readonly isLoadingAudience = signal(false);
     protected readonly isExporting = signal(false);
     protected readonly exportState = signal<'idle' | 'success' | 'error'>('idle');
 
     protected readonly activeSite = computed(() => this.siteService.activeSite());
     protected readonly noSite = computed(() => !this.activeSite());
-    protected readonly isLoading = computed(() => this.isLoadingSeries() || this.isLoadingComparison() || this.isLoadingBreakdowns() || this.isLoadingAudience());
+    protected readonly isLoading = computed(() => this.isLoadingSeries() || this.isLoadingBreakdowns() || this.isLoadingAudience());
 
     /**
      * True only once the shared setup state confirms the site never sent a
@@ -133,7 +132,7 @@ export class AIChatbots {
     });
     protected readonly scopeValueOptions = computed(() => this.scopeValues().map((item) => ({ label: item.name, value: item.name })));
 
-    protected readonly isShortRange = this.reportRange.isShortRange;
+    protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
 
     protected readonly chartSeries = computed<SeriesChartPoint[]>(() => mergeChatbotChartSeries(this.series()));
 
@@ -171,16 +170,6 @@ export class AIChatbots {
                 gradientTo: 'rgba(161, 98, 7, 0.0)'
             }
         ];
-    });
-
-    protected readonly comparisonLabel = computed(() => {
-        this.activeLanguage();
-        const range = this.comparisonRange();
-        if (!range) return '';
-        const showYear = new Date(range.from).getFullYear() !== new Date().getFullYear();
-        const options = showYear ? ({ month: 'short', day: 'numeric', year: 'numeric' } as const) : ({ month: 'short', day: 'numeric' } as const);
-        const format = (value: string) => this.localeService.localizeDate(new Date(value), undefined, options);
-        return `${format(range.from)} – ${format(range.to)}`;
     });
 
     protected readonly filterChips = computed<FilterChipItem[]>(() => {
@@ -423,6 +412,8 @@ export class AIChatbots {
             const scopeFilter = this.activeScopeFilter();
             const dimFilters = this.audienceDimFilters();
             if (!site) {
+                this.seriesRequest?.unsubscribe();
+                this.seriesRange.set(null);
                 this.series.set(createEmptySeries());
                 this.comparisonSeries.set(createEmptySeries());
                 this.topIntents.set([]);
@@ -435,10 +426,7 @@ export class AIChatbots {
 
             const dates = this.getCurrentDateRange();
             if (!dates) return;
-            const comparison = computeComparisonPeriod(dates.from, dates.to);
-            this.comparisonRange.set(comparison);
-
-            this.loadPrimaryData(site.id, dates.from, dates.to, scopeFilter, dimFilters, 'blocking', () => this.loadComparisonData(site.id, comparison.from, comparison.to, scopeFilter, dimFilters));
+            untracked(() => this.loadPrimaryData(site.id, dates.from, dates.to, scopeFilter, dimFilters));
             this.loadAudience(site.id, dates.from, dates.to, scopeFilter, dimFilters);
         });
         this.realtimeRefresh.registerUntilDestroyed(this.destroyRef, {
@@ -494,97 +482,71 @@ export class AIChatbots {
 
         const scopeFilter = this.activeScopeFilter();
         const dimFilters = this.audienceDimFilters();
-        const comparison = computeComparisonPeriod(dates.from, dates.to);
         this.loadScopeValues(site.id, dates.from, dates.to, this.selectedScopeKey(), mode);
-        // The previous-period window only moves when the site, range or filters
-        // change, so background realtime refreshes leave the baseline alone.
-        const reloadComparison = mode === 'blocking' ? () => this.loadComparisonData(site.id, comparison.from, comparison.to, scopeFilter, dimFilters) : undefined;
-        this.loadPrimaryData(site.id, dates.from, dates.to, scopeFilter, dimFilters, mode, reloadComparison);
+        this.loadPrimaryData(site.id, dates.from, dates.to, scopeFilter, dimFilters, mode);
         this.loadAudience(site.id, dates.from, dates.to, scopeFilter, dimFilters, mode);
     }
 
-    private loadPrimaryData(siteId: string, from: string, to: string, scopeFilter: ScopeFilter | null, filters: EventDimensionFilter[] = [], mode: DataLoadMode = 'blocking', onSettled?: () => void) {
+    private loadPrimaryData(siteId: string, from: string, to: string, scopeFilter: ScopeFilter | null, filters: EventDimensionFilter[] = [], mode: DataLoadMode = 'blocking') {
         const blocking = mode === 'blocking' || this.isLoadingSeries();
+        this.seriesRequest?.unsubscribe();
         if (blocking) {
             this.isLoadingSeries.set(true);
             this.isLoadingBreakdowns.set(true);
         }
-        const propertyKey = scopeFilter?.key;
-        const propertyValue = scopeFilter?.value;
 
-        forkJoin({
-            started: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.started, propertyKey, propertyValue, filters),
-            sent: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.sent, propertyKey, propertyValue, filters),
-            rendered: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.rendered, propertyKey, propertyValue, filters),
-            clicked: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.clicked, propertyKey, propertyValue, filters),
-            handoff: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.handoff, propertyKey, propertyValue, filters),
-            assisted: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.assisted, propertyKey, propertyValue, filters),
+        const comparison = previousPeriod(from, to);
+        const loadedComparison = this.comparisonRange();
+        const reuseComparison = !blocking && loadedComparison?.from === comparison.from && loadedComparison.to === comparison.to;
+        const loadSeries = (period: ComparisonPeriod) => {
+            const timeseries = (event: string) => this.analyticsService.getEventTimeseries(siteId, period.from, period.to, event, scopeFilter?.key, scopeFilter?.value, filters).pipe(map((data) => data ?? []));
+            return forkJoin({
+                started: timeseries(CHATBOT_EVENTS.started),
+                sent: timeseries(CHATBOT_EVENTS.sent),
+                rendered: timeseries(CHATBOT_EVENTS.rendered),
+                clicked: timeseries(CHATBOT_EVENTS.clicked),
+                handoff: timeseries(CHATBOT_EVENTS.handoff),
+                assisted: timeseries(CHATBOT_EVENTS.assisted)
+            });
+        };
+        this.seriesRequest = forkJoin({
+            current: loadSeries({ from, to }),
+            previous: reuseComparison ? of(this.comparisonSeries()) : loadSeries(comparison).pipe(catchError(() => of(null))),
             intents: this.analyticsService.getEventPropertyBreakdown(siteId, from, to, CHATBOT_EVENTS.sent, 'intent'),
             providers: this.analyticsService.getEventPropertyBreakdown(siteId, from, to, CHATBOT_EVENTS.started, 'provider'),
             surfaces: this.analyticsService.getEventPropertyBreakdown(siteId, from, to, CHATBOT_EVENTS.started, 'surface')
         })
             .pipe(
+                takeUntilDestroyed(this.destroyRef),
                 finalize(() => {
                     if (blocking) {
                         this.isLoadingSeries.set(false);
                         this.isLoadingBreakdowns.set(false);
                     }
-                    onSettled?.();
                 })
             )
             .subscribe({
-                next: (data) => {
-                    this.series.set({
-                        started: data.started ?? [],
-                        sent: data.sent ?? [],
-                        rendered: data.rendered ?? [],
-                        clicked: data.clicked ?? [],
-                        handoff: data.handoff ?? [],
-                        assisted: data.assisted ?? []
-                    });
-                    this.topIntents.set(data.intents ?? []);
-                    this.topProviders.set(data.providers ?? []);
-                    this.topSurfaces.set(data.surfaces ?? []);
+                next: ({ current, previous, intents, providers, surfaces }) => {
+                    this.series.set(current);
+                    this.comparisonSeries.set(previous ?? createEmptySeries());
+                    this.seriesRange.set({ from, to });
+                    this.comparisonRange.set(previous ? comparison : null);
+                    this.topIntents.set(intents ?? []);
+                    this.topProviders.set(providers ?? []);
+                    this.topSurfaces.set(surfaces ?? []);
                     if (!blocking) this.kpiUpdateKey.update((key) => key + 1);
                 },
                 error: () => {
                     if (blocking) {
                         this.series.set(createEmptySeries());
+                        this.comparisonSeries.set(createEmptySeries());
+                        this.seriesRange.set(null);
+                        this.comparisonRange.set(null);
                         this.topIntents.set([]);
                         this.topProviders.set([]);
                         this.topSurfaces.set([]);
                     }
                 }
-            });
-    }
-
-    /** Previous-period baseline for the KPI deltas; only blocking loads move the window. */
-    private loadComparisonData(siteId: string, from: string, to: string, scopeFilter: ScopeFilter | null, filters: EventDimensionFilter[] = []) {
-        this.isLoadingComparison.set(true);
-        const propertyKey = scopeFilter?.key;
-        const propertyValue = scopeFilter?.value;
-
-        forkJoin({
-            started: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.started, propertyKey, propertyValue, filters),
-            sent: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.sent, propertyKey, propertyValue, filters),
-            rendered: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.rendered, propertyKey, propertyValue, filters),
-            clicked: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.clicked, propertyKey, propertyValue, filters),
-            handoff: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.handoff, propertyKey, propertyValue, filters),
-            assisted: this.analyticsService.getEventTimeseries(siteId, from, to, CHATBOT_EVENTS.assisted, propertyKey, propertyValue, filters)
-        })
-            .pipe(finalize(() => this.isLoadingComparison.set(false)))
-            .subscribe({
-                next: (data) => {
-                    this.comparisonSeries.set({
-                        started: data.started ?? [],
-                        sent: data.sent ?? [],
-                        rendered: data.rendered ?? [],
-                        clicked: data.clicked ?? [],
-                        handoff: data.handoff ?? [],
-                        assisted: data.assisted ?? []
-                    });
-                },
-                error: () => this.comparisonSeries.set(createEmptySeries())
             });
     }
 

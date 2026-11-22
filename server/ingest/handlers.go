@@ -56,10 +56,15 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		RateLimiter: ctx.IngestLimiter,
 	}, h.handleIngestWebVitals())))
 
+	ingestRoutes.HandleFunc("POST "+visibleTimePath, dropSpeculativeBrowserIngest(ctx.Handler(shared.HandlerConfig{
+		RateLimiter: ctx.IngestLimiter,
+	}, h.handleVisibleTime(newVisibleTimeQuota()))))
+
 	corsHandler := newIngestCORS().Handler(ingestRoutes)
 	mux.Handle("/ingest", corsHandler)
 	mux.Handle("/ingest/event", corsHandler)
 	mux.Handle("/ingest/web-vitals", corsHandler)
+	mux.Handle(visibleTimePath, corsHandler)
 }
 
 func dropSpeculativeBrowserIngest(next http.HandlerFunc) http.HandlerFunc {
@@ -121,6 +126,7 @@ type browserIngestPayload struct {
 	UTMTerm        *string    `json:"u_trm"`
 	UTMCont        *string    `json:"u_cnt"`
 	QRCodeID       *uuid.UUID `json:"qr"`
+	PaidClick      *bool      `json:"pc"`
 	TrackerSource  string     `json:"tsrc"`
 	TrackerVersion string     `json:"tv"`
 	IsUnique       bool       `json:"unique"`
@@ -586,6 +592,13 @@ func intPtrIfPositive(value int) *int {
 	return &value
 }
 
+func stripQueryAndFragment(value string) string {
+	if end := strings.IndexAny(value, "?#"); end >= 0 {
+		return value[:end]
+	}
+	return value
+}
+
 func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -634,6 +647,10 @@ func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 		h.recordRejection()
 		http.Error(w, "Bad request body", http.StatusBadRequest)
 		return
+	}
+	payload.Path = stripQueryAndFragment(payload.Path)
+	if payload.Referrer != nil {
+		payload.Referrer = stringPtrIfNotEmpty(stripQueryAndFragment(*payload.Referrer))
 	}
 	if h.ctx.IPFilter != nil && h.ctx.IPFilter.EvaluateTraffic(site.ID, blocking.TrafficExclusionContext{
 		IP:          userIP,
@@ -688,6 +705,7 @@ func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 		UTMTerm:        payload.UTMTerm,
 		UTMContent:     payload.UTMCont,
 		QRCodeID:       payload.QRCodeID,
+		PaidClick:      payload.PaidClick,
 		IsUnique:       &payload.IsUnique,
 		TrackerSource:  payload.TrackerSource,
 		TrackerVersion: payload.TrackerVersion,
@@ -727,6 +745,15 @@ func (h *handler) forwardToLeader(w http.ResponseWriter, r *http.Request, target
 			proxyReq.SetXForwarded()
 			proxyReq.Out.Host = proxyReq.In.Host
 			proxyReq.Out.Header.Set("X-Forwarded-Host", proxyReq.In.Host)
+		},
+		ModifyResponse: func(response *http.Response) error {
+			// The follower already handled CORS before forwarding the POST.
+			for _, name := range []string{"Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"} {
+				if w.Header().Get(name) != "" {
+					response.Header.Del(name)
+				}
+			}
+			return nil
 		},
 		Transport: leaderForwardTransport,
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
@@ -1074,7 +1101,7 @@ func (h *handler) recordRejection() {
 
 func buildForwardURL(leaderAddr, httpAddr, targetPath string) (*url.URL, error) {
 	switch targetPath {
-	case "/ingest", "/ingest/event", "/ingest/web-vitals", "/api/ingest/server/pageview", "/api/ingest/server/event":
+	case "/ingest", "/ingest/event", "/ingest/web-vitals", visibleTimePath, "/api/ingest/server/pageview", "/api/ingest/server/event":
 	default:
 		return nil, fmt.Errorf("invalid forward target")
 	}

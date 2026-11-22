@@ -14,7 +14,7 @@ http:
         certResolver: letsencrypt
 
     hitkeep-tracking:
-      rule: "(Host(`tracker.customer-one.example`) || Host(`tracker.customer-two.example`)) && (Path(`/hk.js`) || Path(`/hk-vitals.js`) || Path(`/ingest`) || Path(`/ingest/event`) || Path(`/ingest/web-vitals`))"
+      rule: "(Host(`tracker.customer-one.example`) || Host(`tracker.customer-two.example`)) && (Path(`/hk.js`) || Path(`/hk-vitals.js`) || Path(`/ingest`) || Path(`/ingest/event`) || Path(`/ingest/web-vitals`) || Path(`/ingest/visible-time`))"
       entryPoints:
         - websecure
       service: hitkeep

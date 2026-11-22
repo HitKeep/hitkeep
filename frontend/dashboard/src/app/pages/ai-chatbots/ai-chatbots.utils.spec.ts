@@ -1,4 +1,5 @@
-import { computeComparisonPeriod, createEmptySeries, mergeChatbotChartSeries, totalFor } from '@pages/ai-chatbots/ai-chatbots.utils';
+import { previousPeriod } from '@core/analytics/comparison-period';
+import { createEmptySeries, mergeChatbotChartSeries, totalFor } from '@pages/ai-chatbots/ai-chatbots.utils';
 
 describe('AI chatbot utils', () => {
     it('creates an empty series state', () => {
@@ -13,7 +14,7 @@ describe('AI chatbot utils', () => {
     });
 
     it('computes the previous comparison window', () => {
-        expect(computeComparisonPeriod('2026-03-10T00:00:00.000Z', '2026-03-20T00:00:00.000Z')).toEqual({
+        expect(previousPeriod('2026-03-10T00:00:00.000Z', '2026-03-20T00:00:00.000Z')).toEqual({
             from: '2026-02-27T23:59:59.999Z',
             to: '2026-03-09T23:59:59.999Z'
         });

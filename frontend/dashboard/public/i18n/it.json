@@ -978,6 +978,16 @@
     "unknown": "Sconosciuto"
   },
   "dashboard": {
+    "visibleTime": {
+      "title": "Tempo di visibilità per pagina",
+      "description": "Pagine con più visualizzazioni registrate nell’intervallo selezionato. La media include solo le visualizzazioni con una misurazione.",
+      "average": "Tempo di visibilità medio",
+      "coverage": "Visualizzazioni misurate / registrate",
+      "missing": "Nessuna misurazione",
+      "empty": "Nessuna visualizzazione di pagina registrata corrisponde alla selezione.",
+      "unavailable": "Il tempo di visibilità non è disponibile al momento.",
+      "forbidden": "Non hai accesso a questo report."
+    },
     "conversions": { "title": "Conversioni", "description": "Filtra l’intero spazio di lavoro per una coorte di obiettivo o funnel.", "filters": { "goal": "Obiettivo: {{name}}", "funnel": "Funnel: {{name}}" }, "invalidSubject": "Questo obiettivo o funnel non è più disponibile per il sito." },
     "breadcrumbOverview": "Panoramica",
     "filteredBadge": "Filtrato",
@@ -1162,6 +1172,16 @@
     }
   },
   "utm": {
+    "paidSignals": {
+      "title": "Segnali di traffico a pagamento",
+      "scope": "I conteggi riguardano le sessioni corrispondenti rilevate direttamente da HitKeep con la misurazione dei segnali attiva, con o senza tag UTM. Le sessioni con tag possono comparire anche nelle metriche UTM.",
+      "observed": "Segnale di traffico a pagamento rilevato",
+      "count": "{{ observed }} su {{ measured }} sessioni misurate",
+      "unobserved": "Nessun segnale di traffico a pagamento rilevato",
+      "unobservedHint": "Le sessioni senza un segnale rilevato possono provenire da traffico a pagamento o organico.",
+      "noMeasurement": "Nessuna sessione misurata corrisponde a questo intervallo di date e a questi filtri.",
+      "unavailable": "Impossibile caricare i conteggi dei segnali di traffico a pagamento."
+    },
     "noSiteDescription": "Seleziona o crea un sito per vedere le metriche UTM.",
     "series": {
       "title": "Performance UTM",
@@ -1863,7 +1883,13 @@
         },
         "script": {
           "description": "Copia e incolla il codice qui sotto nell'HTML del tuo sito. Il tracciamento automatico di clic in uscita, download e invii di moduli è attivo per impostazione predefinita.",
-          "docsAction": "Guida al tracker"
+          "docsAction": "Guida al tracker",
+          "declarativeEventsLabel": "Traccia i clic e gli invii di moduli contrassegnati",
+          "declarativeEventsDescription": "Invia eventi personalizzati per i clic sugli elementi contrassegnati e per gli invii dei moduli contrassegnati. Usa data-hk-event o data-hitkeep-event per contrassegnarli."
+        },
+        "assistant": {
+          "copyAction": "Copia il prompt per l’assistente di codice",
+          "prompt": "Installa il tracker di HitKeep su {{ domain }}. Controlla se il progetto ha già un’integrazione con HitKeep. Se esiste, aggiornala solo se necessario. Altrimenti, aggiungi il seguente script una sola volta nel modello di pagina condiviso. Mantieni l’URL e tutti gli attributi dello script esattamente come indicato, e conserva la gestione del consenso del sito.\n\n{{ snippet }}\n\nApri una pagina sul nome host previsto. Nel pannello Rete del browser, verifica che lo script venga caricato e che la richiesta di visualizzazione della pagina vada a buon fine. Prova gli eventi automatici abilitati eseguendo le azioni corrispondenti e controllando le relative richieste. In HitKeep, usa «{{ verifier }}» per confermare che sia stato accettato un hit recente. Indica cosa hai verificato e cosa resta da controllare."
         },
         "npm": {
           "description": "Includi il tracker tipizzato in un'app React, Vue, Angular o Astro. Nessun tag script, tipi TypeScript completi e nessun filtraggio da parte dei blocchi dei contenuti.",
@@ -1892,10 +1918,14 @@
         "badge": "{{ count }} modificate",
         "deliveryTitle": "Consegna e privacy"
       },
+      "paidSignalsLabel": "Segnali di traffico a pagamento",
+      "paidSignalsDescription": "Rileva gli ID di clic sugli annunci supportati nelle pagine monitorate. Il tracker indica solo se è presente un ID.",
       "collectDntLabel": "Raccogli DNT",
       "collectDntDescription": "Traccia gli utenti anche se \"Do Not Track\" è attivo nel browser.",
       "disableBeaconLabel": "Disabilita sendBeacon",
       "disableBeaconDescription": "Usa richieste fetch standard invece di navigator.sendBeacon.",
+      "visibleTimeLabel": "Misura il tempo di visibilità",
+      "visibleTimeDescription": "Aggiunge un’opzione per misurare quanto tempo ogni pagina rimane visibile nel browser.",
       "webVitalsLabel": "Web Vitals",
       "webVitalsDescription": "Carica il bundle Web Vitals separato e invia campioni LCP, INP, CLS, FCP e TTFB. Disattivato per impostazione predefinita.",
       "autoTrackingTitle": "Tracciamento automatico degli eventi",
@@ -1920,7 +1950,10 @@
           "dormant": "Dormiente",
           "domain_mismatch": "Dominio diverso"
         },
-        "waitingHint": "In attesa del primo hit accettato. Questo pannello si aggiorna automaticamente per due minuti.",
+        "waitingBrowser": "Distribuisci il tracker, poi apri una pagina pubblicata su {{ domain }} dove il tracciamento è consentito. Se lo stato resta in attesa, verifica che il tracker si carichi e controlla Do Not Track, il consenso e le esclusioni.",
+        "waitingServer": "Invia tramite l’integrazione server una visualizzazione di pagina relativa a una visita reale su {{ domain }}. Se lo stato resta in attesa, controlla la risposta dell’integrazione e il suo accesso al sito.",
+        "waitingHint": "La verifica avviene automaticamente per un massimo di due minuti. Puoi aggiornarla in qualsiasi momento.",
+        "unavailable": "Lo stato del tracking non è disponibile. Usa il pulsante di aggiornamento per riprovare.",
         "mismatchHint": "L’ultimo hostname rilevato non corrisponde al dominio configurato per questo sito.",
         "fields": {
           "firstHit": "Primo hit",
@@ -3137,6 +3170,19 @@
     }
   },
   "comparison": {
+    "details": "Confronto tra periodi",
+    "metric": "Metrica",
+    "currentPeriod": "Periodo attuale",
+    "previousPeriod": "Periodo precedente",
+    "relativeChange": "Variazione relativa",
+    "unavailable": "Non disponibile",
+    "zeroBaseline": "Non definita (il valore precedente è zero)",
+    "elapsedRule": "Il periodo precedente termina subito prima di quello attuale e ha la stessa durata. La variazione relativa si calcola rispetto al valore precedente.",
+    "liveOnly": "I visitatori in tempo reale riguardano gli ultimi cinque minuti e non hanno un confronto.",
+    "currentOnlyBreakdowns": "Le ripartizioni e i registri del traffico mostrano solo il periodo attuale.",
+    "seriesLabel": "{{metric}} (precedente)",
+    "bucketOrder": "Le serie sono allineate in base all’ordine degli intervalli. L’asse mostra le date del periodo attuale.",
+    "gridMismatch": "Il periodo precedente usa intervalli diversi e la sua serie è nascosta.",
     "vsLabel": "vs.",
     "pageviewsLabel": "Visualizzazioni (prec.)",
     "visitorsLabel": "Visitatori (prec.)"

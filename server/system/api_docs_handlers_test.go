@@ -1298,6 +1298,33 @@ func TestOpenAPISpecV1IncludesSearchConsoleReportPaths(t *testing.T) {
 	}
 }
 
+func TestOpenAPISpecV1DocumentsPaidSignal(t *testing.T) {
+	spec := openAPISpecV1("https://hitkeep.test")
+	paths := requireMap(t, spec, "paths")
+	ingest := requireMap(t, requireMap(t, paths, "/ingest"), "post")
+	ingestSchema := requestJSONSchema(t, ingest)
+	if required := asStringSlice(t, ingestSchema["required"]); slices.Contains(required, "pc") {
+		t.Fatal("browser ingest pc must be optional")
+	}
+	pc := requireMap(t, requireMap(t, ingestSchema, "properties"), "pc")
+	if got := asStringSlice(t, pc["type"]); !slices.Equal(got, []string{"boolean", "null"}) {
+		t.Fatalf("pc type = %v, want nullable boolean", got)
+	}
+	schemas := requireMap(t, requireMap(t, spec, "components"), "schemas")
+	paidClick := requireMap(t, requireMap(t, requireMap(t, schemas, "Hit"), "properties"), "paid_click")
+	if got := paidClick["type"]; got != "boolean" {
+		t.Fatalf("paid_click type = %v, want boolean", got)
+	}
+	for _, schema := range []string{"SiteStats", "ComparisonStats"} {
+		props := requireMap(t, requireMap(t, schemas, schema), "properties")
+		for _, name := range []string{"paid_signal_sessions", "paid_signal_measured_sessions"} {
+			if got := requireMap(t, props, name)["type"]; got != "integer" {
+				t.Fatalf("%s.%s type = %v, want integer", schema, name, got)
+			}
+		}
+	}
+}
+
 func TestOpenAPISpecV1IncludesServerSideIngestPaths(t *testing.T) {
 	spec := openAPISpecV1("http://localhost:8080")
 	paths := requireMap(t, spec, "paths")
@@ -1485,6 +1512,9 @@ func assertServerSideIngestProperties(t *testing.T, path string, properties map[
 			t.Fatalf("did not expect %s request schema to expose %s; UTM values come from url", path, field)
 		}
 	}
+	if _, ok := properties["pc"]; ok {
+		t.Fatalf("did not expect %s request schema to expose browser-only pc", path)
+	}
 }
 
 func hasFormatParamRef(params []any) bool {
@@ -1665,5 +1695,17 @@ func TestOpenAPISpecV1DocumentsSiteSetupState(t *testing.T) {
 		if flag["type"] != "boolean" {
 			t.Fatalf("expected %s to be a boolean flag, got %#v", field, flag["type"])
 		}
+	}
+}
+
+func TestOpenAPISpecV1VisibleTimeIngestDocumentsTrackerMediaType(t *testing.T) {
+	paths := requireMap(t, openAPISpecV1("http://localhost:8080"), "paths")
+	route := requireMap(t, paths, "/ingest/visible-time")
+	post := requireMap(t, route, "post")
+	content := requireMap(t, requireMap(t, post, "requestBody"), "content")
+	plain := requireMap(t, requireMap(t, content, "text/plain"), "schema")
+	schema := requireMap(t, requireMap(t, content, "application/json"), "schema")
+	if plain["contentMediaType"] != "application/json" || schema["additionalProperties"] != false {
+		t.Fatalf("unexpected visible time wire contract: plain=%v json=%v", plain, schema)
 	}
 }

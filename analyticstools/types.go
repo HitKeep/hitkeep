@@ -208,10 +208,19 @@ type aiFetchSeriesPoint struct {
 }
 
 type FunnelStatsOutput struct {
-	SiteID string           `json:"site_id"`
-	From   string           `json:"from"`
-	To     string           `json:"to"`
-	Stats  *api.FunnelStats `json:"stats"`
+	SiteID string       `json:"site_id"`
+	From   string       `json:"from"`
+	To     string       `json:"to"`
+	Stats  *funnelStats `json:"stats"`
+}
+
+type funnelStats struct {
+	FunnelID              string                `json:"funnel_id"`
+	Name                  string                `json:"name"`
+	Steps                 []api.FunnelStepStats `json:"steps"`
+	TotalEntries          int                   `json:"total_entries"`
+	TotalCompletions      int                   `json:"total_completions"`
+	OverallConversionRate float64               `json:"overall_conversion_rate"`
 }
 
 type QrCampaignsOutput struct {
@@ -384,6 +393,20 @@ func toGoals(goals []api.GoalStats) []goalStats {
 		out = append(out, goalStats{GoalID: goal.GoalID.String(), Name: goal.Name, Conversions: goal.Conversions, ConversionRate: goal.ConversionRate})
 	}
 	return out
+}
+
+func toFunnelStats(stats *api.FunnelStats) *funnelStats {
+	if stats == nil {
+		return nil
+	}
+	return &funnelStats{
+		FunnelID:              stats.FunnelID.String(),
+		Name:                  stats.Name,
+		Steps:                 stats.Steps,
+		TotalEntries:          stats.TotalEntries,
+		TotalCompletions:      stats.TotalCompletions,
+		OverallConversionRate: stats.OverallConversionRate,
+	}
 }
 
 func toAnnotations(annotations []api.Annotation) []annotation {

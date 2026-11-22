@@ -542,20 +542,22 @@ func TestServerRoutesPrefixedIngestPreflight(t *testing.T) {
 		_ = srv.Shutdown(context.Background())
 	}()
 
-	req := httptest.NewRequest(http.MethodOptions, "/hitkeep/ingest", nil)
-	req.Host = "www.example.net"
-	req.Header.Set("Origin", "https://app.example")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	req.Header.Set("Access-Control-Request-Headers", "content-type")
-	rec := httptest.NewRecorder()
+	for _, path := range []string{"/hitkeep/ingest", "/hitkeep/ingest/visible-time"} {
+		req := httptest.NewRequest(http.MethodOptions, path, nil)
+		req.Host = "www.example.net"
+		req.Header.Set("Origin", "https://app.example")
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		req.Header.Set("Access-Control-Request-Headers", "content-type")
+		rec := httptest.NewRecorder()
 
-	srv.httpServer.Handler.ServeHTTP(rec, req)
+		srv.httpServer.Handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected prefixed ingest preflight, got status %d body %q", rec.Code, rec.Body.String())
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example" {
-		t.Fatalf("expected echoed origin, got %q", got)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("expected prefixed ingest preflight for %s, got status %d body %q", path, rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example" {
+			t.Fatalf("expected echoed origin for %s, got %q", path, got)
+		}
 	}
 }
 
@@ -679,6 +681,7 @@ func TestServerCustomTrackingHostServesOnlyTrackerRoutes(t *testing.T) {
 		{name: "tracker asset", method: http.MethodGet, path: "/hk.js", wantStatus: http.StatusOK, wantBody: "tracker asset"},
 		{name: "vitals asset", method: http.MethodHead, path: "/hk-vitals.js", wantStatus: http.StatusOK},
 		{name: "ingest preflight", method: http.MethodOptions, path: "/ingest", wantStatus: http.StatusNoContent},
+		{name: "visible time preflight", method: http.MethodOptions, path: "/ingest/visible-time", wantStatus: http.StatusNoContent},
 		{name: "cross-site ingest", method: http.MethodPost, path: "/ingest", wantStatus: http.StatusAccepted},
 		{name: "api denied", method: http.MethodGet, path: "/api/status", wantStatus: http.StatusNotFound},
 		{name: "dashboard denied", method: http.MethodGet, path: "/", wantStatus: http.StatusNotFound},

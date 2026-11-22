@@ -18,7 +18,7 @@ import (
 
 func deleteSiteAnalyticsData(ctx context.Context, store *database.Store, siteID uuid.UUID) {
 	tables := []string{
-		"hits", "events", "web_vitals", "ai_fetches", "qr_code_opens", "rollup_dirty_buckets",
+		"hits", "events", "web_vitals", "page_visible_time", "ai_fetches", "qr_code_opens", "rollup_dirty_buckets",
 		"hit_rollups_hourly", "hit_rollups_daily", "hit_rollups_monthly",
 		"session_rollups_hourly", "session_rollups_daily", "session_rollups_monthly",
 		"goal_rollups_hourly", "goal_rollups_daily", "goal_rollups_monthly",

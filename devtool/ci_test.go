@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -158,11 +159,31 @@ func TestCIQAMatrixUsesCanonicalStableGateIDs(t *testing.T) {
 	}
 }
 
-func TestRaceTestArgsUseGateBoundedPackageTimeout(t *testing.T) {
-	got := raceTestArgs([]string{"hitkeep/database"})
-	want := []string{"go", "test", "-race", "-count=1", "-timeout", "20m", "hitkeep/database"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("race arguments = %v, want %v", got, want)
+func TestRaceTestArgsPreserveDeadlineAndBoundRestParallelism(t *testing.T) {
+	for _, tc := range []struct {
+		name, shard, slots, parallelFlag string
+		procs                            int
+		packages                         []string
+	}{
+		{"database", "database", "8", "", 8, []string{"hitkeep/database"}},
+		{"server", "server", "8", "", 8, []string{"hitkeep/server"}},
+		{"rest", "rest", "8", "-p=2", 8, []string{"hitkeep/cmd/hitkeep", "hitkeep/mailer"}},
+		{"one QA slot", "rest", "1", "-p=1", 8, []string{"hitkeep/cmd/hitkeep"}},
+		{"one Go processor", "rest", "8", "-p=1", 1, []string{"hitkeep/cmd/hitkeep"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HK_QA_SLOTS", tc.slots)
+			previous := runtime.GOMAXPROCS(tc.procs)
+			t.Cleanup(func() { runtime.GOMAXPROCS(previous) })
+			want := []string{"go", "test", "-race", "-count=1", "-timeout", "20m"}
+			if tc.parallelFlag != "" {
+				want = append(want, tc.parallelFlag)
+			}
+			want = append(want, tc.packages...)
+			if got := raceTestArgs(tc.shard, tc.packages); !slices.Equal(got, want) {
+				t.Fatalf("race arguments = %v, want %v", got, want)
+			}
+		})
 	}
 }
 

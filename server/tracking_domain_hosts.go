@@ -98,7 +98,7 @@ func isCustomTrackingIngestRoute(r *http.Request) bool {
 		return false
 	}
 	switch r.URL.Path {
-	case "/ingest", "/ingest/event", "/ingest/web-vitals":
+	case "/ingest", "/ingest/event", "/ingest/web-vitals", "/ingest/visible-time":
 		return true
 	default:
 		return false

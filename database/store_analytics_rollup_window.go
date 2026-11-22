@@ -122,12 +122,12 @@ func buildRollupWindow(start time.Time, end time.Time, truncUnit string) rollupW
 	}
 
 	if start.Before(fullStart) {
-		leadEnd := fullStart
+		leadEnd := fullStart.Add(-time.Nanosecond)
 		window.Leading = &leadEnd
 	}
 
 	trailingStart := addUnit(fullEnd, truncUnit, 1)
-	if end.After(trailingStart) {
+	if !end.Before(trailingStart) {
 		window.Trailing = &trailingStart
 	}
 
