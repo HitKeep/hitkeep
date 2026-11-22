@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -138,6 +139,113 @@ func TestEventGoalsIncludeImportedAggregateVisitors(t *testing.T) {
 	}
 	if len(stats.Goals) != 1 || stats.Goals[0].Conversions != 3 {
 		t.Fatalf("expected imported visitors to count as event goal conversions, got %+v", stats.Goals)
+	}
+}
+
+func TestSiteStatsMixedGoalConversions(t *testing.T) {
+	store, userID := setupEventBreakdownStore(t)
+	ctx := t.Context()
+	site, err := store.CreateSite(ctx, userID, "mixed-goals.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstDay := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	goals := []api.Goal{
+		{Name: "Signup", Type: "event", Value: "signup"},
+		{Name: "Signup page", Type: "path", Value: "/signup"},
+		{Name: "Checkout", Type: "event", Value: "check'out"},
+		{Name: "Signup duplicate", Type: "event", Value: "signup"},
+		{Name: "Signup page duplicate", Type: "path", Value: "/signup"},
+		{Name: "Missing page", Type: "path", Value: "/missing"},
+		{Name: "Missing event", Type: "event", Value: "missing"},
+	}
+	for i := range goals {
+		goals[i].SiteID = site.ID
+		goals[i].CreatedAt = firstDay.Add(-time.Duration(i) * time.Second)
+		if err := store.CreateGoal(ctx, &goals[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// June 2 and 4 are complete comparison days. June 6 and 7 are complete current days.
+	for _, offset := range []int{0, 1, 3, 4, 5, 6, 7} {
+		putImportedComparisonRows(t, ctx, store, site.ID, firstDay.AddDate(0, 0, offset))
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO imported_event_daily (site_id, import_id, date, event_name, visitors, source_file)
+		SELECT ?, uuid(), DATE '2026-06-07', ?, visitors, 'fixture' FROM (VALUES (1), (2)) AS rows(visitors)`,
+		site.ID, "check'out"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, visit := range []struct {
+		offset int
+		paths  []string
+		events []string
+	}{
+		{2, []string{"/pricing", "/signup", "/signup"}, []string{"signup", "signup"}},
+		{2, []string{"/other"}, []string{"check'out"}},
+		{4, []string{"/pricing", "/signup", "/signup"}, []string{"signup", "signup"}},
+		{4, []string{"/signup"}, []string{"signup"}},
+		{4, []string{"/pricing"}, []string{"check'out"}},
+	} {
+		session, at := uuid.New(), firstDay.AddDate(0, 0, visit.offset).Add(13*time.Hour)
+		for i, path := range visit.paths {
+			hit := api.Hit{SiteID: site.ID, SessionID: session, PageID: uuid.New(), Timestamp: at.Add(time.Duration(i) * time.Minute), Path: path}
+			if err := store.CreateHit(ctx, &hit); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i, name := range visit.events {
+			event := api.Event{SiteID: site.ID, SessionID: session, Timestamp: at.Add(time.Duration(i) * time.Minute), Name: name}
+			if err := store.CreateEvent(ctx, &event); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	params := api.AnalyticsParams{
+		SiteID:       site.ID,
+		Start:        firstDay.AddDate(0, 0, 4).Add(12 * time.Hour),
+		End:          firstDay.AddDate(0, 0, 7).Add(12 * time.Hour),
+		CompareStart: firstDay.Add(12 * time.Hour),
+		CompareEnd:   firstDay.AddDate(0, 0, 4).Add(-time.Millisecond),
+	}
+	assertGoals := func(t *testing.T, got []api.GoalStats, counts []int, sessions int) {
+		t.Helper()
+		want := make([]api.GoalStats, len(goals))
+		for i, goal := range goals {
+			want[i] = api.GoalStats{GoalID: goal.ID, Name: goal.Name, Conversions: counts[i], ConversionRate: (float64(counts[i]) / float64(sessions)) * 100}
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("goals = %+v, want %+v", got, want)
+		}
+	}
+	for _, tc := range []struct {
+		name                          string
+		filters                       []api.Filter
+		current, previous             []int
+		currentSessions, prevSessions int
+		previousTotal                 int
+	}{
+		{"with complete imported days", nil, []int{10, 2, 4, 10, 2, 0, 0}, []int{9, 1, 1, 9, 1, 0, 0}, 23, 22, 21},
+		{"filtered session cohort", []api.Filter{{Type: "path", Value: "/pricing"}}, []int{1, 1, 1, 1, 1, 0, 0}, []int{1, 1, 0, 1, 1, 0, 0}, 2, 1, 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params.Filters = tc.filters
+			stats := getComparisonDashboardStats(t, t.Context(), store, params)
+			if stats.Comparison == nil {
+				t.Fatal("missing comparison")
+			}
+			if stats.UniqueSessions != tc.currentSessions || stats.Comparison.UniqueSessions != tc.prevSessions {
+				t.Errorf("sessions = %d current and %d previous, want %d and %d", stats.UniqueSessions, stats.Comparison.UniqueSessions, tc.currentSessions, tc.prevSessions)
+			}
+			assertGoals(t, stats.Goals, tc.current, tc.currentSessions)
+			assertGoals(t, stats.Comparison.Goals, tc.previous, tc.prevSessions)
+			if stats.Comparison.TotalConversions != tc.previousTotal {
+				t.Errorf("previous total conversions = %d, want %d", stats.Comparison.TotalConversions, tc.previousTotal)
+			}
+		})
 	}
 }
 

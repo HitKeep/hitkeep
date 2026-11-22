@@ -121,3 +121,82 @@ func BenchmarkComparisonAndBreakdown(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkSiteGoalConversions(b *testing.B) {
+	store, params := benchmarkSiteStats(b)
+	ctx := b.Context()
+	// Seed events across both windows and daily imports for all four event goals.
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO events (site_id, session_id, name, timestamp)
+		SELECT site_id, session_id, 'event-' || (hash(session_id) % 12), timestamp
+		FROM hits WHERE hash(page_id) % 5 = 0`); err != nil {
+		b.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO imported_event_daily (site_id, import_id, date, event_name, visitors, source_file)
+		SELECT ?, uuid(), day, 'event-' || name, 10, 'benchmark'
+		FROM range(CAST(? AS DATE), CAST(? AS DATE), INTERVAL 1 DAY) AS dates(day), range(4) AS names(name)`,
+		params.SiteID, params.Start, params.End); err != nil {
+		b.Fatal(err)
+	}
+
+	previous := params
+	params.Start = params.Start.AddDate(0, 0, 15)
+	previous.End = params.Start.Add(-time.Millisecond)
+	for _, size := range []int{1, 10} {
+		from := 0
+		if size == 10 {
+			from = 1
+		}
+		for i := from; i < size; i++ {
+			goal := api.Goal{SiteID: params.SiteID, Type: "event", Value: fmt.Sprintf("event-%d", i)}
+			if i >= 4 {
+				goal.Type, goal.Value = "path", fmt.Sprintf("/page-%d", i)
+			}
+			goal.Name = goal.Value
+			if err := store.CreateGoal(ctx, &goal); err != nil {
+				b.Fatal(err)
+			}
+		}
+		for _, filtered := range []bool{false, true} {
+			b.Run(fmt.Sprintf("goals=%d/filtered=%t", size, filtered), func(b *testing.B) {
+				ctx := b.Context()
+				windows := []api.AnalyticsParams{params, previous}
+				if filtered {
+					for i := range windows {
+						windows[i].Filters = []api.Filter{{Type: "path", Value: "/page-0"}}
+					}
+				}
+				filterSQL, filterArgs := buildHitFilters(windows[0].Filters, "h")
+				run := func() {
+					for _, window := range windows {
+						if err := store.querySiteGoals(ctx, window, "day", filterSQL, filterArgs, &api.SiteStats{}); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+				if _, err := store.db.ExecContext(ctx, `CALL truncate_duckdb_logs()`); err != nil {
+					b.Fatal(err)
+				}
+				if _, err := store.db.ExecContext(ctx, `CALL enable_logging('QueryLog')`); err != nil {
+					b.Fatal(err)
+				}
+				run()
+				if _, err := store.db.ExecContext(ctx, `CALL disable_logging()`); err != nil {
+					b.Fatal(err)
+				}
+				var statements int
+				if err := store.db.QueryRowContext(ctx, `
+					SELECT COUNT(DISTINCT query_id) FROM duckdb_logs
+					WHERE type = 'QueryLog' AND message NOT LIKE '%disable_logging%'`).Scan(&statements); err != nil {
+					b.Fatal(err)
+				}
+				for b.Loop() {
+					run()
+				}
+				// The driver logs each parameterized statement once at prepare and once at execution.
+				b.ReportMetric(float64(statements)/2, "sql/op")
+			})
+		}
+	}
+}
