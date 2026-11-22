@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { rxResource, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin, Subscription } from 'rxjs';
@@ -92,7 +92,6 @@ export class WebVitalsPage {
     protected readonly summary = signal<WebVitalSummaryMetric[]>([]);
     private readonly metricSeries = signal<{ metric: WebVitalMetric; points: WebVitalSeriesPoint[] } | null>(null);
     protected readonly pages = signal<WebVitalPageRow[]>([]);
-    protected readonly dimensionRows = signal<WebVitalDimensionRow[]>([]);
     protected readonly isLoading = signal(false);
     protected readonly errorKey = signal<string | null>(null);
     /** Set once a report arrived so the setup callout never fires on a pristine page. */
@@ -283,41 +282,46 @@ export class WebVitalsPage {
         return chips;
     });
     protected readonly hasCustomFilters = computed(() => this.selectedRating() !== null || this.pathFilter() !== DEFAULT_WEB_VITAL_PATH);
-    private readonly realtimeRefreshKey = signal(0);
+    private readonly refreshKey = signal(0);
+    private readonly reportParams = computed(() => {
+        this.refreshKey();
+        const site = this.siteService.activeSite();
+        const range = this.reportRange.currentDateRange();
+        return site && range ? { siteId: site.id, ...range, metric: this.selectedMetric(), rating: this.selectedRating(), path: this.pathFilter() } : undefined;
+    });
+
+    protected readonly breakdown = rxResource({
+        params: () => {
+            const dimension = this.activeBreakdownTab();
+            const report = this.reportParams();
+            return dimension !== 'pages' && report ? { ...report, dimension } : undefined;
+        },
+        stream: ({ params }) => this.analyticsService.getWebVitalsBreakdown(params.siteId, params.from, params.to, params.metric, params.dimension, params.path, params.rating, 25)
+    });
 
     constructor() {
         effect(() => {
-            const site = this.siteService.activeSite();
-            const dates = this.getCurrentDateRange();
-            const metric = this.selectedMetric();
-            const rating = this.selectedRating();
-            const path = this.pathFilter();
-            this.activeBreakdownTab();
-            this.realtimeRefreshKey();
-            if (!site || !dates) {
+            const params = this.reportParams();
+            if (!params) {
                 this.reportRequest?.unsubscribe();
                 this.summary.set([]);
                 this.metricSeries.set(null);
                 this.pages.set([]);
-                this.dimensionRows.set([]);
                 return;
             }
-            this.loadData(site.id, dates.from, dates.to, metric, path, rating);
+            this.loadData(params.siteId, params.from, params.to, params.metric, params.path, params.rating);
         });
         this.realtimeRefresh.registerSignalUntilDestroyed(this.destroyRef, {
             siteId: () => this.siteService.activeSite()?.id ?? null,
             kinds: [REALTIME_KINDS.webVitals],
-            enabled: () => !!this.siteService.activeSite() && !!this.getCurrentDateRange(),
-            signal: this.realtimeRefreshKey,
+            enabled: () => !!this.siteService.activeSite() && !!this.reportRange.currentDateRange(),
+            signal: this.refreshKey,
             debounceMs: 700
         });
     }
 
     protected refreshData() {
-        const site = this.siteService.activeSite();
-        const dates = this.getCurrentDateRange();
-        if (!site || !dates) return;
-        this.loadData(site.id, dates.from, dates.to, this.selectedMetric(), this.pathFilter(), this.selectedRating());
+        this.refreshKey.update((key) => key + 1);
     }
 
     protected selectMetric(metric: WebVitalMetric) {
@@ -467,25 +471,21 @@ export class WebVitalsPage {
         this.reportRequest?.unsubscribe();
         this.isLoading.set(true);
         this.errorKey.set(null);
-        const activeTab = this.activeBreakdownTab();
-        const dimension: WebVitalDimension = activeTab === 'pages' ? 'country' : activeTab;
         this.reportRequest = forkJoin({
             summary: this.analyticsService.getWebVitalsSummary(siteId, from, to, null, null, null),
             series: this.analyticsService.getWebVitalsTimeseries(siteId, from, to, metric, path, rating),
-            pages: this.analyticsService.getWebVitalsPages(siteId, from, to, metric, null, rating, 100),
-            dimensions: this.analyticsService.getWebVitalsBreakdown(siteId, from, to, metric, dimension, path, rating, 25)
+            pages: this.analyticsService.getWebVitalsPages(siteId, from, to, metric, null, rating, 100)
         })
             .pipe(
                 takeUntilDestroyed(this.destroyRef),
                 finalize(() => this.isLoading.set(false))
             )
             .subscribe({
-                next: ({ summary, series, pages, dimensions }) => {
+                next: ({ summary, series, pages }) => {
                     this.reportLoaded.set(true);
                     this.summary.set(summary);
                     this.metricSeries.set({ metric, points: series });
                     this.pages.set(pages);
-                    this.dimensionRows.set(dimensions);
                 },
                 error: (error) => {
                     console.error(error);
@@ -493,12 +493,7 @@ export class WebVitalsPage {
                     this.summary.set([]);
                     this.metricSeries.set(null);
                     this.pages.set([]);
-                    this.dimensionRows.set([]);
                 }
             });
-    }
-
-    private getCurrentDateRange() {
-        return this.reportRange.currentDateRange();
     }
 }
