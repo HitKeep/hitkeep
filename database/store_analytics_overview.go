@@ -32,15 +32,9 @@ func (s *Store) GetSiteOverviewStats(ctx context.Context, params api.AnalyticsPa
 		useRollups = false
 	}
 
-	if useRollups {
-		if err := s.refreshDirtyRollupsInRange(ctx, params.SiteID, dirtyRollupSession, rollupKind, gridStart, gridEnd); err != nil {
-			return nil, fmt.Errorf("failed to refresh session rollups: %w", err)
-		}
-	}
-
 	var avgSessionDuration float64
 	var pagesPerSession float64
-	if err := s.queryKpis(ctx, params, filterSQL, filterArgs, useRollups, rollupKind, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &avgSessionDuration, &pagesPerSession); err != nil {
+	if err := s.queryKpis(ctx, params, filterSQL, filterArgs, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &avgSessionDuration, &pagesPerSession); err != nil {
 		return nil, fmt.Errorf("failed to calc overview KPIs: %w", err)
 	}
 

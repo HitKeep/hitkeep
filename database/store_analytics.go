@@ -118,13 +118,7 @@ func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsPa
 		useRollups = false
 	}
 
-	if !comparison && useRollups {
-		if err := s.refreshDirtyRollupsInRange(ctx, params.SiteID, dirtyRollupSession, rollupKind, gridStart, gridEnd); err != nil {
-			return nil, fmt.Errorf("failed to refresh session rollups: %w", err)
-		}
-	}
-
-	err = s.queryKpis(ctx, params, filterSQL, filterArgs, useRollups, rollupKind, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &stats.AvgSessionDuration, &stats.PagesPerSession)
+	err = s.queryKpis(ctx, params, filterSQL, filterArgs, &stats.TotalPageviews, &stats.UniqueSessions, &stats.BounceRate, &stats.AvgSessionDuration, &stats.PagesPerSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calc KPIs: %w", err)
 	}

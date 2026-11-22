@@ -79,6 +79,10 @@ func (s *Store) augmentImportedSiteOverviewStats(ctx context.Context, params api
 	if stats == nil || !canIncludeImportedSiteAggregates(params, truncUnit) {
 		return nil
 	}
+	params.Start, params.End = fullImportedDates(params.Start, params.End)
+	if params.End.Before(params.Start) {
+		return nil
+	}
 
 	var (
 		pageviews sql.NullInt64
