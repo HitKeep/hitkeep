@@ -43,6 +43,12 @@ describe('TrafficChart', () => {
         expect(component).toBeTruthy();
     });
 
+    it('uses the same neutral range-empty state regardless of tracking history', () => {
+        const empty = fixture.nativeElement.querySelector('[role="group"]') as HTMLElement;
+        expect(empty.textContent).toContain('common.empty.noDataDescription');
+        expect(empty.querySelector('button')).toBeNull();
+    });
+
     it('A11Y: populated plot should have an accessible name and keyboard focus target', () => {
         fixture.componentRef.setInput('data', [{ time: '2026-11-12T00:00:00Z', pageviews: 1, visitors: 1 }]);
         fixture.detectChanges();

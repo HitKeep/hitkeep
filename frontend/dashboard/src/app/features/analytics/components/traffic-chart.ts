@@ -1,11 +1,9 @@
-import { Component, input, output, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 
-import { ButtonModule } from '@openng/optimus-ui/button';
-import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 import type { HitkeepChartDesign } from '@core/charts/hitkeep-chart-options';
 import type { ComparisonPeriod } from '@core/analytics/comparison-period';
-import { EmbedService } from '@services/embed.service';
 import { ChartDataPoint } from '@models/analytics.types';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart';
 
@@ -13,7 +11,7 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
 @Component({
     selector: 'app-traffic-chart',
     standalone: true,
-    imports: [ButtonModule, SeriesChart, TranslocoPipe],
+    imports: [SeriesChart],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <app-series-chart
@@ -27,17 +25,10 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [design]="design() ?? (isShortRange() ? 'bar' : 'area')"
             [showDesignSelector]="showDesignSelector()"
             ariaLabelKey="dashboard.trafficChartAria"
-            [emptyTitle]="(waitingForTracking() ? 'dashboard.empty.noTrafficTitle' : 'common.empty.noDataTitle') | transloco"
-            [emptyDescription]="(waitingForTracking() ? 'dashboard.empty.noTrafficDescription' : 'common.empty.noDataDescription') | transloco"
-        >
-            @if (waitingForTracking() && showTrackingAction() && !embed.isEmbedMode()) {
-                <p-button chart-empty-actions [label]="'dashboard.empty.getTrackingCode' | transloco" icon="pi pi-code" size="small" (onClick)="snippetClicked.emit()" />
-            }
-        </app-series-chart>
+        />
     `
 })
 export class TrafficChart {
-    protected readonly embed = inject(EmbedService);
     data = input.required<ChartDataPoint[]>();
     comparisonData = input<ChartDataPoint[]>([]);
     isLoading = input<boolean>(false);
@@ -46,10 +37,6 @@ export class TrafficChart {
     previousPeriod = input<ComparisonPeriod | null>(null);
     design = input<HitkeepChartDesign>();
     showDesignSelector = input<boolean>(true);
-    waitingForTracking = input(false);
-    showTrackingAction = input(true);
-
-    snippetClicked = output<void>();
 
     private transloco = inject(TranslocoService);
     private activeLanguage = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });

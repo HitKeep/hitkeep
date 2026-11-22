@@ -46,9 +46,6 @@
                 [isShortRange]="isShortRange()"
                 [currentPeriod]="seriesRange()"
                 [previousPeriod]="comparisonRange()"
-                [waitingForTracking]="waitingForSiteTracking()"
-                [showTrackingAction]="!showOnboarding() || currentOnboardingStep()?.key !== 'verify_tracking'"
-                (snippetClicked)="openTrackingSettings()"
             />
         </p-card>
     </div>
