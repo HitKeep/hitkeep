@@ -3189,7 +3189,6 @@
     "absoluteChange": "Variazione assoluta",
     "relativeChange": "Variazione relativa",
     "percentagePoints": "{{value}} punti percentuali",
-    "inspectChart": "Esamina il grafico",
     "pointUnavailable": "Nessun valore visibile in questo punto.",
     "inspectChartHint": "Usa le frecce sinistra e destra per passare da un punto all’altro. Premi Esc per chiudere."
   },

@@ -3426,7 +3426,6 @@
     "absoluteChange": "Cambio absoluto",
     "relativeChange": "Cambio relativo",
     "percentagePoints": "{{value}} pp",
-    "inspectChart": "Explorar gráfico",
     "pointUnavailable": "No hay valores visibles en este punto.",
     "inspectChartHint": "Usa las flechas izquierda y derecha para cambiar de punto. Pulsa Escape para cerrar."
   },

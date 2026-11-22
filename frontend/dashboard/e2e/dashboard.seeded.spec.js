@@ -789,12 +789,17 @@ for (const mobile of [false, true]) {
             await pageviews.press("Space");
             await expect(pageviews).toHaveAttribute("aria-pressed", "false");
 
-            const inspect = chart.getByRole("button", { name: mobile ? "Diagramm prüfen" : "Inspect chart" });
-            await inspect.focus();
+            await expect(chart.getByRole("button", { name: mobile ? "Diagramm prüfen" : "Inspect chart" })).toHaveCount(0);
+            const inspect = chart.getByRole("application");
+            await pageviews.press("Shift+Tab");
+            await expect(inspect).toBeFocused();
             await inspect.press("ArrowRight");
             await expect(chart.getByRole("status")).toContainText(mobile ? "Vorheriger Zeitraum" : "Previous period");
             await inspect.press("Escape");
             await expect(tooltip).toBeHidden();
+            await expect(inspect).toBeFocused();
+            await inspect.press("Tab");
+            await expect(pageviews).toBeFocused();
         });
     });
 }

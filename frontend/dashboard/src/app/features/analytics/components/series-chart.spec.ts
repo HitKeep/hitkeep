@@ -55,7 +55,7 @@ describe('SeriesChart', () => {
                                 previousPeriod: 'Previous period',
                                 gridMismatch: 'Different bucket grids',
                                 bucketStart: 'Bucket starting {{time}}',
-                                inspectChart: 'Inspect chart'
+                                inspectChartHint: 'Use arrow keys'
                             }
                         },
                         de: {
@@ -64,7 +64,7 @@ describe('SeriesChart', () => {
                                 currentPeriod: 'Aktueller Zeitraum',
                                 previousPeriod: 'Vorheriger Zeitraum',
                                 bucketStart: 'Intervallbeginn {{time}}',
-                                inspectChart: 'Diagramm prüfen'
+                                inspectChartHint: 'Pfeiltasten verwenden'
                             }
                         }
                     },
@@ -131,7 +131,7 @@ describe('SeriesChart', () => {
         fixture.componentRef.setInput('valueFormatter', (value: number) => `${value} ms`);
         fixture.componentRef.setInput('showZeroValues', true);
         fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('button[aria-keyshortcuts]')).toBeTruthy();
+        expect(fixture.nativeElement.querySelector('[tabindex="0"][aria-keyshortcuts]')).toBeTruthy();
         const read = (dataIndex: number) => tooltipFormatter()([{ dataIndex, seriesId: 'value' }]).textContent;
         expect(read(0)).toBe('');
         expect(read(1)).toContain('Nov 13, 2026');
@@ -193,7 +193,7 @@ describe('SeriesChart', () => {
         const options = (component as unknown as { chartMergeOptions: () => { series: { name: string; data: (number | null)[]; connectNulls?: boolean }[] } }).chartMergeOptions;
         expect(fixture.debugElement.query(By.css('[echarts]'))).toBeTruthy();
         expect(fixture.nativeElement.querySelector('app-comparison-periods')).toBeNull();
-        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).toContain('Current period');
+        expect(fixture.nativeElement.querySelector('[role="application"]').getAttribute('aria-label')).toContain('Current period');
         expect(options().series[0]).toMatchObject({ data: [0, null], connectNulls: false });
         expect(options().series[2]).toMatchObject({ name: '<b>Events</b> (previous)', data: [5, 6] });
         expect(options().series[3]).toMatchObject({ data: [null, null], connectNulls: false });
@@ -234,13 +234,13 @@ describe('SeriesChart', () => {
         await fixture.whenStable();
         const chart = liveChart();
         (component as unknown as { onChartInit: (chart: unknown) => void }).onChartInit(chart);
-        const button = fixture.nativeElement.querySelector('button[aria-keyshortcuts]') as HTMLButtonElement;
+        const plot = fixture.nativeElement.querySelector('[tabindex="0"][aria-keyshortcuts]') as HTMLElement;
         const status = fixture.nativeElement.querySelector('[role="status"]') as HTMLElement;
         const press = (key: string) => {
-            button.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+            plot.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
             fixture.detectChanges();
         };
-        button.click();
+        plot.focus();
         await fixture.whenStable();
         expect(status.textContent).toContain('Events: 3');
         press('ArrowRight');
@@ -253,7 +253,7 @@ describe('SeriesChart', () => {
         expect(tooltipFormatter()([{ dataIndex: 1, seriesId: 'count-comparison' }]).textContent).toBe('');
         press('Escape');
         await vi.waitFor(() => {
-            expect(button.getAttribute('aria-pressed')).toBe('false');
+            expect(document.activeElement).toBe(plot);
             expect(status.textContent).toBe('');
         });
     });
@@ -277,7 +277,7 @@ describe('SeriesChart', () => {
 
         const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions();
         expect(merge.series.map((series) => series.name)).toEqual(['Events']);
-        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).toContain('Different bucket grids');
+        expect(fixture.nativeElement.querySelector('[role="application"]').getAttribute('aria-label')).toContain('Different bucket grids');
         const tip = tooltipFormatter()([
             { dataIndex: 0, seriesId: 'count' },
             { dataIndex: 0, seriesId: 'count-comparison' }
@@ -295,7 +295,7 @@ describe('SeriesChart', () => {
 
         const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions;
         expect(merge().series.map((series) => series.name)).toEqual(['Trend']);
-        expect(fixture.nativeElement.querySelector('[role="img"]').getAttribute('aria-label')).not.toContain('Previous period');
+        expect(fixture.nativeElement.querySelector('[role="application"]').getAttribute('aria-label')).not.toContain('Previous period');
 
         fixture.componentRef.setInput('series', [{ key: 'count', label: 'Events', color: '#2563eb' }]);
         fixture.detectChanges();
@@ -419,13 +419,13 @@ describe('SeriesChart', () => {
             (component as unknown as { onChartInit: (chart: unknown) => void }).onChartInit(chart);
 
             chart.handlers.get('click')?.({ componentType: 'markArea', dataIndex: 0 });
-            expect(notes.openExisting).toHaveBeenCalledWith(campaign, 'day', expect.any(HTMLButtonElement));
+            expect(notes.openExisting).toHaveBeenCalledWith(campaign, 'day', expect.any(HTMLElement));
         });
 
         it('counts notes in the chart label', () => {
             notes.annotations.set([launch]);
             fixture.detectChanges();
-            const label = fixture.debugElement.query(By.css('div[role="img"]')).nativeElement.getAttribute('aria-label');
+            const label = fixture.debugElement.query(By.css('div[role="application"]')).nativeElement.getAttribute('aria-label');
             expect(label).toContain('annotations.chart.aria');
         });
     });

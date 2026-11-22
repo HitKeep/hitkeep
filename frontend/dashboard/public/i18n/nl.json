@@ -3175,7 +3175,6 @@
     "absoluteChange": "Absolute verandering",
     "relativeChange": "Relatieve verandering",
     "percentagePoints": "{{value}} procentpunt",
-    "inspectChart": "Grafiek verkennen",
     "pointUnavailable": "Geen zichtbare waarden op dit punt.",
     "inspectChartHint": "Gebruik de pijltjes links en rechts om tussen punten te bewegen. Druk op Escape om te sluiten."
   },

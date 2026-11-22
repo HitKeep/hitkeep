@@ -51,22 +51,9 @@ interface InspectedPeriod {
     imports: [ChartLegend, AnnotationStrip, ButtonModule, ChartDesignToggle, NgxEchartsDirective, TranslocoPipe],
     providers: [provideHitkeepEcharts()],
     template: `
-        @if (!showSkeleton() && hasData()) {
+        @let inspectable = hasData() && !showSkeleton();
+        @if (inspectable && (notes.canWrite() || showDesignSelector())) {
             <div class="mb-2 flex flex-wrap items-center justify-end gap-2">
-                <button
-                    type="button"
-                    class="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-color hover:bg-surface-100 aria-pressed:bg-surface-100 dark:hover:bg-surface-800 dark:aria-pressed:bg-surface-800"
-                    [attr.aria-pressed]="inspectionIndex() !== null"
-                    [attr.aria-description]="'comparison.inspectChartHint' | transloco"
-                    aria-keyshortcuts="ArrowLeft ArrowRight Escape"
-                    (click)="toggleInspection()"
-                    (keydown)="onInspectionKey($event)"
-                    (blur)="closeInspection()"
-                >
-                    <i class="pi pi-search" aria-hidden="true"></i>
-                    {{ 'comparison.inspectChart' | transloco }}
-                </button>
-                <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
                 @if (notes.canWrite()) {
                     <p-button
                         class="chart-note-button"
@@ -85,7 +72,18 @@ interface InspectedPeriod {
                 }
             </div>
         }
-        <div class="h-64 sm:h-72 min-w-0 w-full relative" [attr.role]="hasData() ? 'img' : 'group'" [attr.aria-label]="accessibilityLabel()">
+        <div
+            #plot
+            class="h-64 sm:h-72 min-w-0 w-full relative rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+            [attr.role]="inspectable ? 'application' : 'group'"
+            [attr.tabindex]="inspectable ? 0 : null"
+            [attr.aria-label]="accessibilityLabel()"
+            [attr.aria-description]="inspectable ? ('comparison.inspectChartHint' | transloco) : null"
+            [attr.aria-keyshortcuts]="inspectable ? 'ArrowLeft ArrowRight Escape' : null"
+            (focus)="plot.matches(':focus-visible') && inspectionIndex.set(0)"
+            (keydown)="inspectable && onInspectionKey($event)"
+            (blur)="closeInspection()"
+        >
             @if (showSkeleton()) {
                 <div class="flex items-center justify-center h-full" aria-live="polite">
                     <i class="pi pi-spin pi-spinner text-4xl text-[var(--p-primary-color)]" aria-hidden="true"></i>
@@ -102,7 +100,8 @@ interface InspectedPeriod {
                 </div>
             }
         </div>
-        @if (!showSkeleton() && hasData()) {
+        @if (inspectable) {
+            <span class="sr-only" role="status">{{ inspectionAnnouncement() }}</span>
             <app-chart-legend [series]="renderedSeries()" [instance]="chartInstance()" [hidden]="hiddenSeries()" />
             <app-annotation-strip [annotations]="markers().visible" [granularity]="granularity()" (selected)="notes.openExisting($event, granularity())" />
         }
@@ -327,11 +326,6 @@ export class SeriesChart {
         };
     });
 
-    protected toggleInspection(): void {
-        if (this.inspectionIndex() === null) this.inspectionIndex.set(0);
-        else this.closeInspection();
-    }
-
     protected onInspectionKey(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
             this.closeInspection();
@@ -417,7 +411,7 @@ export class SeriesChart {
     }
 
     private noteTrigger(): HTMLElement | null {
-        return this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button') ?? this.host.nativeElement.querySelector<HTMLElement>('button[aria-keyshortcuts]');
+        return this.host.nativeElement.querySelector<HTMLElement>('.chart-note-button button') ?? this.host.nativeElement.querySelector<HTMLElement>('[aria-keyshortcuts]');
     }
 
     private openNewNote(start: number, end: number | null): void {

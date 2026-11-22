@@ -3294,7 +3294,6 @@
     "absoluteChange": "Absolute change",
     "relativeChange": "Relative change",
     "percentagePoints": "{{value}} pp",
-    "inspectChart": "Inspect chart",
     "pointUnavailable": "No visible values at this point.",
     "inspectChartHint": "Use the left and right arrow keys to move between points. Press Escape to close."
   },

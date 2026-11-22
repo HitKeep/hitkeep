@@ -3231,7 +3231,6 @@
     "absoluteChange": "Absolute Änderung",
     "relativeChange": "Relative Änderung",
     "percentagePoints": "{{value}} Prozentpunkte",
-    "inspectChart": "Diagramm prüfen",
     "pointUnavailable": "An diesem Punkt sind keine Werte sichtbar.",
     "inspectChartHint": "Mit der linken und rechten Pfeiltaste zwischen Punkten wechseln. Zum Schließen Escape drücken."
   },
