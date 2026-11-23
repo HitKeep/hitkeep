@@ -90,6 +90,7 @@ describe('MainLayout', () => {
                                 confirmAction: 'Team: {{team}}\nAction: {{action}}\n{{details}}'
                             },
                             nav: {
+                                primaryNavigationAria: 'Primary navigation',
                                 resizeSidebar: 'Resize sidebar',
                                 dashboard: 'Dashboard',
                                 overview: 'Overview',
@@ -105,6 +106,7 @@ describe('MainLayout', () => {
                                 expandItem: 'Expand {{item}}',
                                 collapseItem: 'Collapse {{item}}'
                             },
+                            common: { actions: { close: 'Close' } },
                             askAi: {
                                 triggerPlaceholder: 'Ask AI',
                                 triggerAria: 'Ask AI about this site',
@@ -548,7 +550,12 @@ describe('MainLayout', () => {
         layoutContext.isMobileDrawerOpen.set(true);
         await fixture.whenStable();
 
-        const trigger = document.body.querySelector('.focus-navigation-drawer .ask-ai-trigger') as HTMLButtonElement;
+        const drawer = document.body.querySelector<HTMLElement>('#focus-mobile-navigation')!;
+        expect(drawer.getAttribute('aria-label')).toBe('Primary navigation');
+        expect(drawer.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
+        expect(drawer.textContent).not.toContain('Primary navigation');
+        expect(drawer.querySelector('.p-drawer-header button')?.getAttribute('aria-label')).toBe('Close');
+        const trigger = drawer.querySelector('.ask-ai-trigger') as HTMLButtonElement;
         expect(trigger).toBeTruthy();
         expect(document.activeElement).toBe(trigger);
         trigger.click();

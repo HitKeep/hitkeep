@@ -6,7 +6,7 @@ import { inject } from '@angular/core';
 import { provideRouter, Router } from '@angular/router';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
-import { EMPTY, Subject, of } from 'rxjs';
+import { EMPTY, ReplaySubject, Subject, of } from 'rxjs';
 import { vi } from 'vitest';
 
 import { Dashboard } from '@pages/dashboard/dashboard';
@@ -81,13 +81,19 @@ describe('Dashboard', () => {
                 TranslocoTestingModule.forRoot({
                     langs: {
                         en: {
-                            common: { loadingSiteData: 'Loading site data' },
+                            common: { loadingSiteData: 'Loading site data', actions: { close: 'Close' }, durationMinutesSeconds: '{{minutes}}m {{seconds}}s', durationSeconds: '{{seconds}}s' },
+                            dashboard: { kpis: { pageviews: 'Pageviews', bounceRate: 'Bounce rate', avgDuration: 'Avg. duration' } },
                             comparison: {
-                                details: 'Period comparison',
+                                openMetric: 'Compare {{metric}}',
+                                compare: 'Compare',
+                                absoluteChange: 'Absolute change',
+                                percentagePoints: '{{value}} pp',
                                 unavailable: 'Unavailable',
-                                zeroBaseline: 'Undefined (previous value is zero)',
-                                relativeChange: 'Relative change',
-                                liveOnly: 'Live visitors covers the last five minutes'
+                                zeroBaseline: 'Percentage change is unavailable when the previous value is zero.',
+                                relativeChange: 'Change',
+                                liveOnly: 'The live visitor count covers the last five minutes',
+                                exactTimes: 'Exact times',
+                                sameElapsedTime: 'The previous period ends just before the current period and covers the same elapsed time.'
                             }
                         }
                     },
@@ -176,46 +182,64 @@ describe('Dashboard', () => {
         expect(disclosure()).toBeNull();
     });
 
-    it('opens an accessible comparison with distinct loading, zero and missing baselines', async () => {
-        const stats = new Subject<SiteStats>();
-        vi.mocked(TestBed.inject(StatsService).fetchStats).mockReturnValue(stats);
-        vi.spyOn(TestBed.inject(HitService), 'loadHits').mockImplementation(() => undefined);
-        TestBed.inject(SiteService).activeSite.set({ id: 'site-1', user_id: 'user-1', domain: 'example.com', created_at: '2026-01-01T00:00:00Z' });
-        fixture.detectChanges();
+    it('opens one KPI at a time and distinguishes signed changes, zero and missing values', async () => {
+        const stats = new ReplaySubject<SiteStats>(1);
+        const fetchStats = vi.mocked(TestBed.inject(StatsService).fetchStats);
+        fetchStats.mockReturnValue(stats);
+        startTrackingSite();
+        const buttons = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('app-kpi-card button[aria-haspopup="dialog"]'));
+        const details = () => document.body.querySelector<HTMLElement>('[data-testid="kpi-comparison"]')!;
+        const values = () => Array.from(details().querySelectorAll('dl:first-child dd, :scope > dl dd'), (cell) => cell.textContent?.trim());
+        const close = async () => {
+            document.body.querySelector<HTMLButtonElement>('.dialog-shell-footer button')!.click();
+            fixture.detectChanges();
+            await vi.waitFor(() => expect(details()).toBeNull());
+        };
+        expect(buttons()).toHaveLength(0);
 
-        const details: HTMLDetailsElement = fixture.nativeElement.querySelector('[data-testid="period-comparison"]');
-        const summary = details.querySelector('summary')!;
-        expect(summary.textContent).toContain('Period comparison');
-        expect(details.open).toBe(false);
-        summary.click();
-        expect(details.open).toBe(true);
-        expect(details.querySelector('[role="status"]')?.textContent).toContain('Loading site data');
-        expect(details.querySelector('table')).toBeNull();
-
-        const previous = { ...emptySiteStats({ bounce_rate: 40, unique_sessions: 10 }), total_conversions: 0 };
-        stats.next(emptySiteStats({ bounce_rate: 50, total_pageviews: 12, comparison: previous }));
-        await fixture.whenStable();
-
-        const valueLabel = (cell: HTMLTableCellElement) => (cell.querySelector('number-flow-ng') as (HTMLElement & { _internals?: ElementInternals }) | null)?._internals?.ariaLabel;
-        const rows = Array.from(details.querySelectorAll<HTMLTableRowElement>('tbody tr'));
-        expect(rows).toHaveLength(5);
-        expect(details.querySelector('th[scope="col"]:last-child')?.textContent).toContain('Relative change');
-        expect(valueLabel(rows[0].cells[1])).toBe('12');
-        expect(valueLabel(rows[0].cells[2])).toBe('0');
-        expect(rows[0].cells[3].textContent).toContain('Undefined (previous value is zero)');
-        expect(valueLabel(rows[1].cells[3])).toBe('-100.0%');
-        expect(valueLabel(rows[2].cells[3])).toBe('+25.0%');
-        expect(details.querySelectorAll('dd')).toHaveLength(2);
-        expect(details.textContent).toContain('Live visitors covers the last five minutes');
-
-        stats.next(emptySiteStats({ total_pageviews: 12 }));
-        await fixture.whenStable();
-
-        expect(details.querySelectorAll('dd')[1].textContent).toContain('Unavailable');
-        expect(valueLabel(rows[0].cells[2])).toBeUndefined();
-        expect(rows[0].cells[2].textContent).toContain('Unavailable');
-        expect(rows[0].cells[3].textContent).not.toContain('previous value is zero');
+        const previous = { ...emptySiteStats({ bounce_rate: 40, avg_session_duration: 89 }), total_conversions: 0 };
+        const bothPeriods = emptySiteStats({ bounce_rate: 50, avg_session_duration: 83, total_pageviews: 12, comparison: previous });
+        stats.next(bothPeriods);
         stats.complete();
+        await fixture.whenStable();
+
+        expect(buttons()).toHaveLength(5);
+        expect(buttons()[0].textContent).toContain('Compare');
+        buttons()[0].click();
+        await fixture.whenStable();
+        expect(details().closest('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+        expect(values()).toEqual(['12', '0', '+12', 'Unavailable']);
+        expect(details().textContent).toContain('Percentage change is unavailable when the previous value is zero.');
+        const exact = details().querySelector('details')!;
+        expect(exact.open).toBe(false);
+        exact.querySelector('summary')!.click();
+        expect(exact.open).toBe(true);
+        expect(exact.textContent).toContain('covers the same elapsed time');
+
+        fetchStats.mockReturnValue(of(emptySiteStats({ total_pageviews: 12 })));
+        component.refreshAll();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(values()).toEqual(['12', 'Unavailable', 'Unavailable', 'Unavailable']);
+        expect(details().textContent).not.toContain('covers the same elapsed time');
+        expect(details().textContent).not.toContain('the previous value is zero.');
+        await close();
+        expect(document.activeElement).toBe(buttons()[0]);
+
+        fetchStats.mockReturnValue(of(bothPeriods));
+        component.refreshAll();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(buttons()[2].getAttribute('aria-label')).toContain('Compare Bounce rate · +25.0%');
+        buttons()[2].click();
+        await fixture.whenStable();
+        expect(values()).toEqual(['50.0%', '40.0%', '+10.0 pp', '+25.0%']);
+        await close();
+
+        buttons()[3].click();
+        await fixture.whenStable();
+        expect(values()).toEqual(['1m 23s', '1m 29s', '-6 sec', '-6.7%']);
+        await close();
     });
 
     it('presents dashboard conversions as one card with goal and funnel tabs', () => {
@@ -260,6 +284,7 @@ describe('Dashboard', () => {
         const duration = cards.find((card) => card.id === 'avg_session_duration');
         const pages = cards.find((card) => card.id === 'pages_per_session');
 
+        expect(cards[0]?.id).toBe('live_visitors');
         expect(live?.value).toBe(3);
         expect(live?.valueClass).not.toContain('animate-pulse');
         expect(bounce?.value).toBe(41.25);

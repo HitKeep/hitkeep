@@ -19,7 +19,7 @@ function mockTokensUnset(): void {
 
 afterEach(() => {
     vi.restoreAllMocks();
-    document.documentElement.style.removeProperty('--p-primary-500');
+    document.documentElement.style.removeProperty('--p-indigo-500');
 });
 
 describe('resolveChartColor', () => {
@@ -28,7 +28,7 @@ describe('resolveChartColor', () => {
     });
 
     it('resolves mapped colors from the design token when set', () => {
-        document.documentElement.style.setProperty('--p-primary-500', '#ff0000');
+        document.documentElement.style.setProperty('--p-indigo-500', '#ff0000');
 
         expect(resolveChartColor('#6366f1')).toBe('#ff0000');
     });
@@ -42,14 +42,14 @@ describe('resolveChartColor', () => {
 
 describe('HITKEEP_CHART_PALETTE', () => {
     it('resolves through the token map', () => {
-        document.documentElement.style.setProperty('--p-primary-500', '#ff0000');
+        document.documentElement.style.setProperty('--p-indigo-500', '#ff0000');
         expect(HITKEEP_CHART_PALETTE.primary).toBe('#ff0000');
     });
 
     it('falls back to the default palette when tokens are unset', () => {
         mockTokensUnset();
 
-        expect(HITKEEP_CHART_PALETTE.primary).toBe('#10b981');
+        expect(HITKEEP_CHART_PALETTE.primary).toBe('#6366f1');
         expect(HITKEEP_CHART_PALETTE.secondary).toBe('#14b8a6');
         expect(HITKEEP_CHART_PALETTE.warning).toBe('#a16207');
     });

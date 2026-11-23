@@ -7,7 +7,7 @@ func openAPIV1WebVitalPaths() map[string]any {
 				map[string]any{"200": jsonSchemaResp("Web Vitals summary", map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/WebVitalSummaryMetric"}})}),
 		},
 		"/api/sites/{id}/web-vitals/timeseries": map[string]any{
-			"get": op([]string{"Sites"}, "Get Web Vitals timeseries", "Returns p75 and rating counts bucketed by hour or day for one Web Vital metric.", secAnyAuth(), webVitalsParams(true), nil,
+			"get": op([]string{"Sites"}, "Get Web Vitals timeseries", "Returns p75 and rating counts for one Web Vital metric in each time interval. The interval depends on the selected date range.", secAnyAuth(), webVitalsParams(true), nil,
 				map[string]any{"200": jsonSchemaResp("Web Vitals timeseries", map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/WebVitalSeriesPoint"}})}),
 		},
 		"/api/sites/{id}/web-vitals/pages": map[string]any{

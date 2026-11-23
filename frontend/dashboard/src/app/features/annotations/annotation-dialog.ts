@@ -39,6 +39,7 @@ function toFormModel(draft: AnnotationDraft | null): AnnotationFormModel {
             [title]="title() | transloco"
             [visible]="draft() !== null"
             (visibleChange)="$event || close()"
+            (closed)="annotations.restoreFocus()"
             [secondaryLabel]="(canWrite() ? 'common.actions.cancel' : 'common.actions.close') | transloco"
             [primaryLabel]="'common.actions.save' | transloco"
             [showPrimary]="canWrite()"
@@ -138,7 +139,7 @@ function toFormModel(draft: AnnotationDraft | null): AnnotationFormModel {
     `
 })
 export class AnnotationDialog {
-    private readonly annotations = inject(SiteAnnotationsService);
+    protected readonly annotations = inject(SiteAnnotationsService);
     private readonly locale = inject(TranslocoLocaleService);
 
     protected readonly draft = this.annotations.draft;

@@ -292,6 +292,7 @@
     }
   },
   "askAi": {
+    "viewChartData": "View chart data",
     "triggerPlaceholder": "Ask AI",
     "triggerAria": "Ask AI about this site",
     "submitAria": "Send Ask AI question",
@@ -786,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filters",
     "aiCategories": {
       "ai_training_crawler": "Training crawlers",
       "ai_search_indexer": "AI search crawlers",
@@ -925,6 +927,7 @@
     "selectDateRange": "Select date range",
     "seriesChartAria": "Time series chart with data for the last {{count}} intervals",
     "chartDesign": {
+      "series": "Chart series",
       "label": "Chart style",
       "area": "Area",
       "line": "Line",
@@ -1010,7 +1013,7 @@
     "trafficChartAria": "Traffic chart with data for the last {{count}} intervals",
     "traffic": {
       "visitors": "Visitors",
-      "trendLine": "Trend line"
+      "trendLine": "Visitor trend"
     },
     "kpis": {
       "liveVisitors": "Live visitors",
@@ -1029,6 +1032,7 @@
       "createSite": "Create site"
     },
     "onboarding": {
+      "checklist": "Setup checklist",
       "title": "Installation checklist",
       "progress": "{{complete}} of {{total}} complete",
       "dismiss": "Dismiss checklist",
@@ -3275,22 +3279,25 @@
     }
   },
   "comparison": {
-    "details": "Period comparison",
-    "metric": "Metric",
+    "countedFrom": "Counted from {{time}}",
     "currentPeriod": "Current period",
     "previousPeriod": "Previous period",
-    "relativeChange": "Relative change",
     "unavailable": "Unavailable",
-    "zeroBaseline": "Undefined (previous value is zero)",
-    "elapsedRule": "The previous period ends immediately before the current period and covers the same elapsed time. Relative change is measured against the previous value.",
-    "liveOnly": "Live visitors covers the last five minutes and has no comparison.",
-    "currentOnlyBreakdowns": "Breakdowns and traffic records show the current period only.",
-    "seriesLabel": "{{metric}} (previous)",
-    "bucketOrder": "The lines are aligned by bucket order. The axis shows current-period dates.",
-    "gridMismatch": "The previous period uses a different bucket grid, so its series is hidden.",
+    "zeroBaseline": "Percentage change is unavailable when the previous value is zero.",
+    "liveOnly": "The live visitor count covers the last five minutes.",
+    "currentOnlyBreakdowns": "Breakdowns and traffic records cover the current period.",
+    "seriesLabel": "{{metric}} (prev.)",
+    "gridMismatch": "The previous intervals differ, so there is no previous series on this chart.",
     "vsLabel": "vs.",
-    "pageviewsLabel": "Pageviews (prev.)",
-    "visitorsLabel": "Visitors (prev.)"
+    "exactTimes": "Exact times",
+    "sameElapsedTime": "The previous period ends just before the current period and covers the same elapsed time.",
+    "compare": "Compare",
+    "openMetric": "Compare {{metric}}",
+    "absoluteChange": "Absolute change",
+    "relativeChange": "Relative change",
+    "percentagePoints": "{{value}} pp",
+    "pointUnavailable": "No visible values at this point.",
+    "inspectChartHint": "Use the left and right arrow keys to move between points. Press Escape to close."
   },
   "events": {
     "setup": {
@@ -4017,7 +4024,7 @@
     },
     "chart": {
       "title": "{{metric}} p75 trend",
-      "description": "The 75th percentile over the selected range, bucketed for fast incident review.",
+      "description": "Each point shows the 75th percentile for that time interval.",
       "p75": "{{metric}} p75"
     },
     "distribution": {

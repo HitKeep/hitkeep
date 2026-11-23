@@ -11,15 +11,18 @@ import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 import { MessageModule } from '@openng/optimus-ui/message';
 import { catchError, EMPTY, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
-import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
+import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
+import { safeRate } from '@core/analytics/delta-utils';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
 import { PageState } from '@components/page-state/page-state';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
-import { KpiCard, KpiCardModel, KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
+import { injectConversionDefinitions } from '@features/analytics/services/conversion-definitions';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -41,7 +44,23 @@ import { injectActiveLang } from '@core/i18n/active-lang';
 @Component({
     selector: 'app-goals',
     standalone: true,
-    imports: [ButtonModule, CardModule, ConfirmDialogModule, ConversionSubjectCard, GoalManager, KpiCard, MessageModule, PageState, ReportRangeToolbar, SeriesChart, AppTable, AppTableCell, TrafficRecordsCard, TranslocoDecimalPipe, TranslocoPipe],
+    imports: [
+        ButtonModule,
+        CardModule,
+        ConfirmDialogModule,
+        ConversionSubjectCard,
+        GoalManager,
+        KpiComparisonCards,
+        MessageModule,
+        PageState,
+        ReportRangeToolbar,
+        SeriesChart,
+        AppTable,
+        AppTableCell,
+        TrafficRecordsCard,
+        TranslocoDecimalPipe,
+        TranslocoPipe
+    ],
     providers: [ConfirmationService],
     templateUrl: './goals.html',
     styleUrl: './goals.css',
@@ -67,9 +86,10 @@ export class Goals {
     private createRequested = false;
     private reportingRequest: Subscription | null = null;
 
-    protected goals = signal<Goal[]>([]);
-    protected goalsLoading = signal(false);
-    protected goalsError = signal(false);
+    private readonly definitions = injectConversionDefinitions((siteId) => this.analytics.getGoals(siteId));
+    protected readonly goals = this.definitions.items;
+    protected readonly goalsLoading = this.definitions.loading;
+    protected readonly goalsError = this.definitions.error;
     protected selectedGoalId = signal<string | null>(null);
     protected selectedGoal = computed(() => this.goals().find((goal) => goal.id === this.selectedGoalId()) ?? null);
     protected readonly goalRows = computed(() =>
@@ -107,11 +127,9 @@ export class Goals {
     protected seriesLoading = signal(false);
     protected trafficRefreshKey = signal(0);
     protected isRefreshing = computed(() => this.goalsLoading() || this.seriesLoading());
-    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
-    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    protected readonly comparisonRange = signal<ComparisonPeriod | null>(null);
     protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
-    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
-    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
     protected canManage = computed(() => {
         const site = this.siteService.activeSite();
         return !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageGoals);
@@ -119,7 +137,9 @@ export class Goals {
     protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficGoalIds = computed(() => {
         const selected = this.selectedGoalId();
-        return selected ? [selected] : this.goals().map((goal) => goal.id);
+        return this.goals()
+            .filter((goal) => !selected || goal.id === selected)
+            .map((goal) => goal.id);
     });
     protected trafficEnabled = computed(() => this.trafficGoalIds().length > 0);
     protected trafficDescriptionKey = computed(() => (this.selectedGoalId() ? 'goals.traffic.selectedDescription' : 'goals.traffic.allDescription'));
@@ -159,37 +179,44 @@ export class Goals {
             }
         ];
     });
-    protected kpis = computed<KpiCardModel[]>(() => {
+    protected kpis = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         const conversions = this.goalSeries().reduce((sum, point) => sum + point.conversions, 0);
         const comparisonConversions = this.comparisonGoalSeries().reduce((sum, point) => sum + point.conversions, 0);
         const convertingSessions = this.stats()?.unique_sessions ?? 0;
-        const comparisonConvertingSessions = this.stats()?.comparison?.unique_sessions ?? 0;
+        const comparisonConvertingSessions = this.stats()?.comparison?.unique_sessions;
         const allSessions = this.baselineStats()?.unique_sessions ?? 0;
-        const comparisonAllSessions = this.baselineStats()?.comparison?.unique_sessions ?? 0;
-        const rate = allSessions ? (convertingSessions / allSessions) * 100 : 0;
-        const comparisonRate = comparisonAllSessions ? (comparisonConvertingSessions / comparisonAllSessions) * 100 : 0;
+        const comparisonAllSessions = this.baselineStats()?.comparison?.unique_sessions;
+        const rate = safeRate(convertingSessions, allSessions);
+        const comparisonRate = comparisonConvertingSessions == null || comparisonAllSessions == null ? null : safeRate(comparisonConvertingSessions, comparisonAllSessions);
+        const seriesPeriod = this.comparisonRange();
+        const currentPeriod = this.seriesRange();
+        // Cohort and baseline stats use the same bounds but can succeed without the previous series.
+        const statsPeriod = currentPeriod ? previousPeriod(currentPeriod.from, currentPeriod.to) : null;
         const loading = this.seriesLoading();
         return [
             {
+                id: 'conversions',
                 label: this.transloco.translate('goals.kpis.conversions'),
                 value: conversions,
                 loading,
-                delta: calcDelta(conversions, comparisonConversions)
+                previous: kpiBaseline(seriesPeriod, comparisonConversions)
             },
             {
+                id: 'converting_sessions',
                 label: this.transloco.translate('goals.kpis.convertingSessions'),
                 value: convertingSessions,
                 loading,
-                delta: calcDelta(convertingSessions, comparisonConvertingSessions)
+                previous: kpiBaseline(statsPeriod, comparisonConvertingSessions)
             },
             {
+                id: 'conversion_rate',
                 label: this.transloco.translate('common.kpis.conversionRate'),
                 value: rate,
                 loading,
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: calcDelta(rate, comparisonRate)
+                previous: kpiBaseline(statsPeriod, comparisonRate)
             }
         ];
     });
@@ -204,7 +231,9 @@ export class Goals {
     constructor() {
         this.destroyRef.onDestroy(() => this.reportingRequest?.unsubscribe());
         this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-            this.selectedGoalId.set(params.get('goal'));
+            const id = params.get('goal');
+            this.selectedGoalId.set(id);
+            this.subjectControl.setValue(id, { emitEvent: false });
             this.createRequested = params.get('create') === '1';
         });
         effect(() => {
@@ -220,8 +249,6 @@ export class Goals {
                 });
             }
             this.lastSiteId = site?.id ?? null;
-            if (site) this.loadGoals(site.id);
-            else this.goals.set([]);
         });
         effect(() => {
             const site = this.siteService.activeSite();
@@ -307,20 +334,18 @@ export class Goals {
             .pipe(finalize(() => this.deletingGoalId.set(null)))
             .subscribe({
                 next: () => {
+                    if (site.id !== this.siteService.activeSite()?.id) return;
                     if (this.selectedGoalId() === goal.id) this.selectGoal(null);
-                    this.loadGoals(site.id);
+                    this.definitions.reload();
                 }
             });
     }
-    protected onDefinitionsChanged() {
-        const site = this.siteService.activeSite();
-        if (site) this.loadGoals(site.id);
-    }
+    protected readonly onDefinitionsChanged = this.definitions.reload;
     protected refresh(mode: StatsQueryMode = 'blocking') {
         const site = this.siteService.activeSite();
         if (!site || this.goalsLoading()) return;
         if (this.goalsError()) {
-            if (mode === 'blocking') this.loadGoals(site.id);
+            if (mode === 'blocking') this.definitions.reload();
             return;
         }
         const dates = this.reportRange.currentDateRange();
@@ -328,25 +353,6 @@ export class Goals {
         this.trafficRefreshKey.update((key) => key + 1);
         const selected = this.selectedGoalId();
         this.loadReporting(site.id, dates.from, dates.to, selected ? [selected] : this.goals().map((goal) => goal.id), selected ? [selected] : [], mode);
-    }
-    private loadGoals(siteId: string) {
-        this.goalsLoading.set(true);
-        this.goalsError.set(false);
-        this.analytics
-            .getGoals(siteId)
-            .pipe(finalize(() => this.goalsLoading.set(false)))
-            .subscribe({
-                next: (goals) => {
-                    this.goals.set(goals ?? []);
-                    this.subjectControl.setValue(this.selectedGoalId(), {
-                        emitEvent: false
-                    });
-                },
-                error: () => {
-                    this.goals.set([]);
-                    this.goalsError.set(true);
-                }
-            });
     }
     private loadReporting(siteId: string, from: string, to: string, cohortIds: string[], seriesIds: string[], mode: StatsQueryMode = 'blocking') {
         this.reportingRequest?.unsubscribe();

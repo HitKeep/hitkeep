@@ -10,29 +10,49 @@
             @for (chart of result.charts; track chart.title) {
             <div class="ai-chart">
                 <h4>{{ chart.title }}</h4>
+                <ng-template #dataTable>
+                    <div class="ai-table">
+                        <table [attr.aria-label]="chart.title">
+                            <thead>
+                                <tr>
+                                    @for (column of tableColumns(chart); track column) {
+                                    <th scope="col">{{ formatColumnHeader(column) }}</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (row of chart.rows; track $index) {
+                                <tr>
+                                    @for (column of tableColumns(chart); track column) {
+                                    <td>{{ formatCell(row[column]) }}</td>
+                                    }
+                                </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </ng-template>
                 @if (isTable(chart)) {
-                <div class="ai-table">
-                    <table [attr.aria-label]="chart.title">
-                        <thead>
-                            <tr>
-                                @for (column of tableColumns(chart); track column) {
-                                <th scope="col">{{ formatColumnHeader(column) }}</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (row of chart.rows; track $index) {
-                            <tr>
-                                @for (column of tableColumns(chart); track column) {
-                                <td>{{ formatCell(row[column]) }}</td>
-                                }
-                            </tr>
-                            }
-                        </tbody>
-                    </table>
+                <ng-container [ngTemplateOutlet]="dataTable" />
+                } @else if (chartOptionCache().get(chart); as plot) {
+                <div class="ai-canvas" role="img" [attr.aria-label]="chart.title">
+                    <div
+                        echarts
+                        aria-hidden="true"
+                        class="ai-echarts"
+                        [options]="plot.options"
+                        [merge]="plot.merge"
+                        (chartInit)="legend.instance.set($event)"
+                        (chartLegendSelectChanged)="legend.syncSelection($event.selected)"
+                        [initOpts]="chartInitOptions"
+                        [autoResize]="true"
+                    ></div>
                 </div>
-                } @else {
-                <div class="ai-canvas" role="img" [attr.aria-label]="chart.title"><div echarts class="ai-echarts" [options]="chartOptions(chart)" [merge]="chartMergeOptions(chart)" [initOpts]="chartInitOptions" [autoResize]="true"></div></div>
+                <app-chart-legend #legend [series]="plot.series" />
+                <details class="mt-2 text-sm">
+                    <summary class="cursor-pointer">{{ 'askAi.viewChartData' | transloco }}</summary>
+                    <ng-container [ngTemplateOutlet]="dataTable" />
+                </details>
                 }
             </div>
             }

@@ -2,6 +2,7 @@
     [header]="title()"
     [visible]="visible()"
     (visibleChange)="onVisibleChange($event)"
+    (onHide)="closed.emit()"
     [modal]="true"
     [closable]="closable() && !busy()"
     [closeOnEscape]="closeOnEscape() && !busy()"

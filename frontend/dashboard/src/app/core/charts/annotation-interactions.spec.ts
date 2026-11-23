@@ -106,6 +106,10 @@ describe('bindAnnotationInteractions', () => {
         writer.press(100, 400);
         writer.press(100, 100, { touches: [] });
         writer.release();
+        writer.press(100, 100, { pointerType: 'touch' });
+        writer.release();
+        writer.press(100, 100, { sourceCapabilities: { firesTouchEvents: true } });
+        writer.release();
         expect(options.onAdd).not.toHaveBeenCalled();
     });
 

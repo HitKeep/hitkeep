@@ -148,7 +148,7 @@ export function init(config: TrackerConfig, win?: HitKeepWindow): TrackerHandle 
 
     activeHandle = createTracker(targetWindow, runtimeConfig);
     if (!activeHandle) {
-        debugLog('tracker not started (already bootstrapped, blocked, or opted out)');
+        debugLog('tracker already bootstrapped on this window');
         return publicHandle;
     }
 

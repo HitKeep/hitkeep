@@ -4,12 +4,16 @@
     <div class="grid gap-4">
         @if (isSettingsPage()) {
         <p-tabs [(value)]="activeSettingsTab" class="hk-admin-tabs">
-            <p-tablist>
-                <p-tab value="users">{{ "admin.tabs.users" | transloco }}</p-tab>
-                <p-tab value="sites">{{ "admin.tabs.sites" | transloco }}</p-tab>
-                <p-tab value="teams">{{ "admin.tabs.teams" | transloco }}</p-tab>
-                <p-tab value="globalFilters">{{ "admin.tabs.globalFilters" | transloco }}</p-tab>
-            </p-tablist>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p-tablist class="min-w-0 flex-1">
+                    <p-tab value="users">{{ "admin.tabs.users" | transloco }}</p-tab>
+                    <p-tab value="sites">{{ "admin.tabs.sites" | transloco }}</p-tab>
+                    <p-tab value="teams">{{ "admin.tabs.teams" | transloco }}</p-tab>
+                </p-tablist>
+                @if (canManageExclusions()) {
+                <a pButton routerLink="/admin/exclusions" severity="secondary" [text]="true">{{ "admin.tabs.globalFilters" | transloco }}</a>
+                }
+            </div>
 
             <p-tabpanels>
                 <p-tabpanel value="users">
@@ -110,12 +114,6 @@
                             </ng-template>
                         </app-table>
                     </app-admin-panel>
-                </p-tabpanel>
-
-                <p-tabpanel value="globalFilters">
-                    @if (activeSettingsTab() === "globalFilters") {
-                    <app-admin-global-exclusion-settings />
-                    }
                 </p-tabpanel>
             </p-tabpanels>
         </p-tabs>

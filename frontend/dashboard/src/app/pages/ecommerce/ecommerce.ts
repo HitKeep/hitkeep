@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
@@ -10,6 +10,7 @@ import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { CardModule } from '@openng/optimus-ui/card';
 import { MessageModule } from '@openng/optimus-ui/message';
+import { SelectButtonModule } from '@openng/optimus-ui/selectbutton';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TabsModule } from '@openng/optimus-ui/tabs';
 import { SiteService } from '@features/sites/services/site.service';
@@ -28,6 +29,7 @@ import { injectReportRange } from '@services/report-range-preferences.service';
 import { SetupStateService } from '@services/setup-state.service';
 
 type MetricFilterType = 'referrer' | 'device' | 'country' | 'city' | 'provider' | 'asn' | 'utm_source';
+type EcommerceChartMetric = 'revenue' | 'orders';
 
 interface MetricFilter {
     type: MetricFilterType;
@@ -43,7 +45,25 @@ type DataLoadMode = 'blocking' | 'background';
 
 @Component({
     selector: 'app-ecommerce',
-    imports: [NgOptimizedImage, ReactiveFormsModule, TranslocoPipe, ButtonModule, CardModule, MessageModule, AppTable, AppTableCell, TabsModule, ReportRangeToolbar, KpiCard, MetricCardGroup, SeriesChart, NoSiteSelected, SetupCallout],
+    imports: [
+        NgOptimizedImage,
+        FormsModule,
+        ReactiveFormsModule,
+        TranslocoPipe,
+        ButtonModule,
+        CardModule,
+        MessageModule,
+        SelectButtonModule,
+        AppTable,
+        AppTableCell,
+        TabsModule,
+        ReportRangeToolbar,
+        KpiCard,
+        MetricCardGroup,
+        SeriesChart,
+        NoSiteSelected,
+        SetupCallout
+    ],
     templateUrl: './ecommerce.html',
     styleUrl: './ecommerce.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -102,6 +122,7 @@ export class EcommercePage {
     protected readonly selectedProduct = signal<ProductFilter | null>(null);
     protected readonly hasFilters = computed(() => this.activeFilters().length > 0 || this.selectedProduct() !== null);
     protected readonly summaryCurrency = computed(() => this.resolveCurrency(this.summary()?.currency));
+    protected readonly selectedChartMetric = signal<EcommerceChartMetric>('revenue');
 
     protected readonly kpiCards = computed<KpiCardModel[]>(() => {
         this.activeLanguage();
@@ -152,14 +173,11 @@ export class EcommercePage {
             }
         ];
     });
-    protected readonly chartData = computed<SeriesChartPoint[]>(() =>
-        this.series().map((point) => ({
-            time: point.time,
-            revenue: point.revenue,
-            orders: point.orders
-        }))
-    );
-    protected readonly chartConfig = computed<SeriesDefinition[]>(() => {
+    protected readonly chartData = computed<SeriesChartPoint[]>(() => {
+        const metric = this.selectedChartMetric();
+        return this.series().map((point) => ({ time: point.time, [metric]: point[metric] }));
+    });
+    protected readonly chartMetrics = computed<SeriesDefinition[]>(() => {
         this.activeLanguage();
         return [
             {
@@ -177,6 +195,14 @@ export class EcommercePage {
                 gradientTo: 'rgba(37, 99, 235, 0.0)'
             }
         ];
+    });
+    protected readonly chartConfig = computed(() => this.chartMetrics().filter((series) => series.key === this.selectedChartMetric()));
+    protected readonly hasChartActivity = computed(() => this.series().some((point) => point.revenue !== 0 || point.orders > 0));
+    protected readonly chartValueFormatter = computed(() => {
+        this.activeLanguage();
+        const metric = this.selectedChartMetric();
+        const currency = this.summaryCurrency();
+        return (value: number) => (metric === 'revenue' ? this.formatMoney(value, currency) : this.formatNumber(value));
     });
     protected readonly filterChips = computed(() => {
         this.activeLanguage();

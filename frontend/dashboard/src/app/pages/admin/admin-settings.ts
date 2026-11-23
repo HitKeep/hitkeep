@@ -16,7 +16,7 @@ import { TagModule } from '@openng/optimus-ui/tag';
 import { TooltipModule } from '@openng/optimus-ui/tooltip';
 import { HttpClient } from '@angular/common/http';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { dialogCancelButton, dialogDangerButton, dialogWarnButton } from '@components/dialog-actions/dialog-actions';
 import { CopyControl } from '@components/copy-control/copy-control';
@@ -32,7 +32,6 @@ import { TeamService } from '@services/team.service';
 import { UserProfileService } from '@services/user-profile.service';
 import { AdminPageFrame } from './components/admin-page-frame';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
-import { AdminGlobalExclusionSettings } from './components/admin-global-exclusion-settings';
 import { AdminItemList, type AdminItemListEntry } from './components/admin-item-list';
 import { AdminPanel } from './components/admin-panel';
 import { SystemStatusCard } from './components/system-status-card';
@@ -60,7 +59,7 @@ import { formatBytes } from '@pages/ai-agents/ai-agents-page.utils';
 import { finalize } from 'rxjs';
 
 type AdminStatusTab = 'runtime' | 'operations' | 'activation' | 'audit';
-type AdminSettingsTab = 'users' | 'sites' | 'teams' | 'globalFilters';
+type AdminSettingsTab = 'users' | 'sites' | 'teams';
 
 interface User {
     id: string;
@@ -123,6 +122,7 @@ interface StatusState {
     imports: [
         DecimalPipe,
         ReactiveFormsModule,
+        RouterLink,
         ConfirmDialogModule,
         ButtonModule,
         SelectModule,
@@ -134,7 +134,6 @@ interface StatusState {
         TagModule,
         TooltipModule,
         AdminPageFrame,
-        AdminGlobalExclusionSettings,
         AdminItemList,
         AdminPanel,
         SystemStatusCard,
@@ -498,6 +497,8 @@ export class AdminSettings implements OnInit {
     protected readonly userActionStatusMessage = computed(() => this.actionStatusMessage(this.userActionStatus()));
     protected readonly siteActionStatusMessage = computed(() => this.actionStatusMessage(this.siteActionStatus()));
     protected readonly teamActionStatusMessage = computed(() => this.actionStatusMessage(this.teamActionStatus()));
+    protected readonly canManageExclusions = computed(() => this.access.hasInstance(INSTANCE_CAPABILITIES.manageSiteExclusions));
+
     protected readonly canManageUsers = computed(() => this.access.hasInstance(INSTANCE_CAPABILITIES.manageUsers));
     protected readonly canRunMaintenance = computed(() => this.access.hasInstance(INSTANCE_CAPABILITIES.runMaintenance));
     protected readonly canViewActivation = computed(() => this.access.hasInstance(INSTANCE_CAPABILITIES.viewActivation));

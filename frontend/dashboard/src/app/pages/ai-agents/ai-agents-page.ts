@@ -13,18 +13,20 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { SetupCallout } from '@components/setup-callout/setup-callout';
 import { StatGroup, StatGroups } from '@components/stat-groups/stat-groups';
 import { toggleDimensionFilter } from '@core/analytics/filter-utils';
-import { calcDelta, safeRate } from '@core/analytics/delta-utils';
+import { safeRate } from '@core/analytics/delta-utils';
 import { buildTakeoutExportFilename, DEFAULT_HITS_EXPORT_FORMAT, TakeoutExportFormat, withTakeoutExportFormat } from '@core/export/export-formats';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { localeForLanguage } from '@core/i18n/duration-format';
 import { AnalyticsService } from '@core/services/analytics.service';
 import { AIActivityFilterType, buildAIActivityCardGroups, type AICorrelationRows } from '@features/analytics/ai-activity-cards';
 import { aiFilterChipLabel } from '@features/analytics/ai-category-labels';
-import { KPI_PERCENT_FORMAT, KpiCard, KpiCardModel } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { injectAIActivityQuery, type AIActivityQueryMode } from '@features/analytics/services/ai-activity-query';
-import { previousPeriod } from '@core/analytics/comparison-period';
+import { previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { SiteService } from '@features/sites/services/site.service';
 import type { AIFetchCorrelationReport } from '@models/analytics.types';
 import { formatBytes, formatResponseMs } from '@pages/ai-agents/ai-agents-page.utils';
@@ -39,7 +41,7 @@ import { TakeoutDownloadService } from '@services/takeout-download.service';
 
 type AIAgentKpiID = 'ai_requests' | 'referral_visits' | 'paths_crawled' | 'share_of_pageviews';
 
-interface AIAgentKpiCard extends KpiCardModel {
+interface AIAgentKpiCard extends KpiComparisonCard {
     id: AIAgentKpiID;
 }
 
@@ -60,7 +62,7 @@ interface AIPageFilter {
  */
 @Component({
     selector: 'app-ai-agents-page',
-    imports: [TranslocoPipe, ButtonModule, CardModule, StatGroups, ReportRangeToolbar, NoSiteSelected, SetupCallout, FilterChipRow, KpiCard, SeriesChart, MetricCardGroup, ExportSplitButton, ExportStatusBanner],
+    imports: [TranslocoPipe, ButtonModule, CardModule, StatGroups, ReportRangeToolbar, NoSiteSelected, SetupCallout, FilterChipRow, KpiComparisonCards, SeriesChart, MetricCardGroup, ExportSplitButton, ExportStatusBanner],
     templateUrl: './ai-agents-page.html',
     styleUrl: './ai-agents-page.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -87,6 +89,8 @@ export class AIAgentsPage {
     private readonly embed = inject(EmbedService);
     protected readonly shareMode = computed(() => this.share.isShareMode() || this.embed.isEmbedMode());
     protected readonly report = this.activityQuery.report;
+    private readonly reportPeriods = signal<{ current: ComparisonPeriod; previous: ComparisonPeriod } | null>(null);
+    protected readonly loadedPeriod = computed(() => (this.report() ? (this.reportPeriods()?.current ?? null) : null));
     protected readonly isLoading = this.activityQuery.isLoading;
     protected readonly isShortRange = this.reportRange.isShortRange;
     protected readonly kpiUpdateKey = signal(0);
@@ -173,7 +177,8 @@ export class AIAgentsPage {
     protected readonly kpiCards = computed<AIAgentKpiCard[]>(() => {
         this.activeLanguage();
         const report = this.report();
-        const previous = report?.comparison ?? null;
+        const previous = report?.comparison;
+        const period = this.reportPeriods()?.previous ?? null;
         const loading = this.isLoading();
         const updateKey = this.kpiUpdateKey();
         const aiRequests = report?.ai_requests ?? 0;
@@ -185,7 +190,7 @@ export class AIAgentsPage {
                 value: aiRequests,
                 loading,
                 updateKey,
-                delta: previous ? calcDelta(aiRequests, previous.ai_requests) : null
+                previous: kpiBaseline(period, previous?.ai_requests)
             },
             {
                 id: 'referral_visits',
@@ -193,7 +198,7 @@ export class AIAgentsPage {
                 value: report?.referral_visits ?? 0,
                 loading,
                 updateKey,
-                delta: previous ? calcDelta(report?.referral_visits ?? 0, previous.referral_visits) : null
+                previous: kpiBaseline(period, previous?.referral_visits)
             },
             {
                 id: 'paths_crawled',
@@ -201,7 +206,7 @@ export class AIAgentsPage {
                 value: report?.paths_crawled ?? 0,
                 loading,
                 updateKey,
-                delta: previous ? calcDelta(report?.paths_crawled ?? 0, previous.paths_crawled) : null
+                previous: kpiBaseline(period, previous?.paths_crawled)
             },
             {
                 id: 'share_of_pageviews',
@@ -211,7 +216,7 @@ export class AIAgentsPage {
                 updateKey,
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: previous ? calcDelta(shareOfPageviews, safeRate(previous.ai_requests, previous.pageviews)) : null
+                previous: kpiBaseline(period, previous ? safeRate(previous.ai_requests, previous.pageviews) : null)
             }
         ];
     });
@@ -426,14 +431,18 @@ export class AIAgentsPage {
         // Reading `report()` behind the `background` guard keeps the loading
         // effect from re-triggering itself on every committed result.
         const effectiveMode: AIActivityQueryMode = mode === 'background' && this.report() && !this.isLoading() ? 'background' : 'blocking';
+        const previous = previousPeriod(from, to);
         this.activityQuery.load(
             {
                 siteId,
                 from,
                 to,
                 filters,
-                comparison: previousPeriod(from, to),
-                onSuccess: effectiveMode === 'background' ? () => this.kpiUpdateKey.update((key) => key + 1) : undefined
+                comparison: previous,
+                onSuccess: () => {
+                    this.reportPeriods.set({ current: { from, to }, previous });
+                    if (effectiveMode === 'background') this.kpiUpdateKey.update((key) => key + 1);
+                }
             },
             effectiveMode
         );

@@ -1,22 +1,28 @@
+import { signal } from '@angular/core';
+import { SiteService } from '@features/sites/services/site.service';
+import { ConfirmationService } from '@openng/optimus-ui/api';
+import { By } from '@angular/platform-browser';
+import { ExclusionEditor } from '@features/exclusions/exclusion-editor';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { SiteExclusionSettings } from './site-exclusion-settings';
+import { SiteFilteringSettingsPage } from './site-filtering-settings-page';
 import { ExclusionsService } from '@services/exclusions.service';
 import { IPExclusion, Site } from '@models/analytics.types';
 
-describe('SiteExclusionSettings', () => {
-    let fixture: ComponentFixture<SiteExclusionSettings>;
+describe('SiteFilteringSettingsPage', () => {
+    let editor: ExclusionEditor;
+    let fixture: ComponentFixture<SiteFilteringSettingsPage>;
 
     const exclusionsService = {
         getCurrentIP: vi.fn(() => of({ ip: '203.0.113.10', cidr: '203.0.113.10/32' })),
         listSiteExclusions: vi.fn((siteID: string, effective: boolean) => {
             void siteID;
             void effective;
-            return of([]);
+            return of<IPExclusion[]>([]);
         }),
         createSiteExclusion: vi.fn(() =>
             of<IPExclusion>({
@@ -37,12 +43,14 @@ describe('SiteExclusionSettings', () => {
         created_at: '2026-05-01T00:00:00Z'
     };
 
+    const activeSite = signal<Site | null>(site);
+
     beforeEach(async () => {
         vi.clearAllMocks();
 
         await TestBed.configureTestingModule({
             imports: [
-                SiteExclusionSettings,
+                SiteFilteringSettingsPage,
                 TranslocoTestingModule.forRoot({
                     langs: {
                         en: {
@@ -57,6 +65,7 @@ describe('SiteExclusionSettings', () => {
                                     ariaLabel: 'Copy to clipboard'
                                 }
                             },
+                            settings: { apiClients: { actions: { refresh: 'Refresh' } } },
                             share: { dialog: { deleteAction: 'Delete' } },
                             sites: {
                                 settings: { tabs: { filtering: 'Filtering' } },
@@ -122,13 +131,15 @@ describe('SiteExclusionSettings', () => {
                         en: 'en-US'
                     }
                 }),
+                { provide: SiteService, useValue: { activeSite } },
                 { provide: ExclusionsService, useValue: exclusionsService }
             ]
         }).compileComponents();
 
-        fixture = TestBed.createComponent(SiteExclusionSettings);
-        fixture.componentRef.setInput('site', site);
+        fixture = TestBed.createComponent(SiteFilteringSettingsPage);
+        activeSite.set(site);
         fixture.detectChanges();
+        editor = fixture.debugElement.query(By.directive(ExclusionEditor)).componentInstance;
     });
 
     afterEach(() => {
@@ -154,7 +165,7 @@ describe('SiteExclusionSettings', () => {
             inherited: true,
             created_at: '2026-05-01T00:00:00Z'
         };
-        fixture.componentInstance['exclusions'].set([inherited]);
+        editor['exclusions'].set([inherited]);
         fixture.detectChanges();
 
         expect(exclusionsService.listSiteExclusions).toHaveBeenCalledWith('site-1', true);
@@ -162,18 +173,66 @@ describe('SiteExclusionSettings', () => {
         expect(fixture.nativeElement.textContent).toContain('Instance');
         expect(fixture.nativeElement.textContent).toContain('Inherited');
         expect(fixture.nativeElement.querySelector('app-table-row-actions')).toBeNull();
-        expect(fixture.componentInstance['ruleActions'](inherited)).toEqual([]);
+        expect(editor['ruleActions'](inherited)).toEqual([]);
+    });
+
+    it('cancels the old list on site switch, and shows retry instead of an empty state after failure', () => {
+        const oldRead = new Subject<IPExclusion[]>();
+        exclusionsService.listSiteExclusions.mockReturnValueOnce(oldRead);
+        editor['reload']();
+        expect(oldRead.observed).toBe(true);
+        exclusionsService.listSiteExclusions.mockReturnValueOnce(throwError(() => new Error('offline')));
+        activeSite.set({ ...site, id: 'site-2' });
+        fixture.detectChanges();
+        expect(oldRead.observed).toBe(false);
+        expect(exclusionsService.listSiteExclusions).toHaveBeenLastCalledWith('site-2', true);
+        expect(fixture.nativeElement.textContent).toContain('Load failed');
+        expect(fixture.nativeElement.textContent).not.toContain('No exclusions');
+        clickButton('Refresh');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('No exclusions');
+        expect(fixture.nativeElement.textContent).not.toContain('Load failed');
+    });
+
+    it('discards a pending create and its dialog when switching sites', () => {
+        const oldWrite = new Subject<IPExclusion>();
+        exclusionsService.createSiteExclusion.mockReturnValueOnce(oldWrite);
+        editor['openAddDialog']('192.0.2.1/32');
+        editor['addRule']();
+        activeSite.set({ ...site, id: 'site-2' });
+        fixture.detectChanges();
+        oldWrite.next({ id: 'old', type: 'cidr', cidr: '192.0.2.1/32', created_at: '2026-01-01T00:00:00Z' });
+        expect(editor['isAddDialogVisible']()).toBe(false);
+        expect(editor['isSaving']()).toBe(false);
+        expect(editor['exclusions']()).toEqual([]);
+        expect(editor['actionStatus']()).toBeNull();
+    });
+
+    it('closes an open deletion confirmation and ignores its old accept callback after switching sites', () => {
+        const confirmation = fixture.debugElement.query(By.directive(ExclusionEditor)).injector.get(ConfirmationService);
+        const confirm = vi.spyOn(confirmation, 'confirm');
+        const close = vi.spyOn(confirmation, 'close');
+        editor['confirmDeleteRule']({ id: 'old', type: 'user_agent', user_agent: 'Monitor <office>', created_at: '2026-01-01T00:00:00Z' });
+        fixture.detectChanges();
+        expect(document.body.textContent).toContain('Monitor <office>');
+        const dialog = confirm.mock.calls[0][0];
+        expect(dialog.header).toBe(site.domain);
+        activeSite.set({ ...site, id: 'site-2', domain: 'second.example.test' });
+        fixture.detectChanges();
+        expect(close).toHaveBeenCalled();
+        dialog.accept?.();
+        expect(exclusionsService.deleteSiteExclusion).not.toHaveBeenCalled();
     });
 
     it('shows the exclusions table surface first and opens add form in a dialog', async () => {
-        expect(fixture.nativeElement.querySelector('.site-exclusions__form')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.site-settings-dialog-form')).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Add exclusion');
 
         clickButton('Add exclusion');
         fixture.detectChanges();
         await fixture.whenStable();
 
-        expect(document.body.querySelector('.site-exclusions__form')).not.toBeNull();
+        expect(document.body.querySelector('.site-settings-dialog-form')).not.toBeNull();
         expect(document.body.textContent).toContain('CIDR');
     });
 
@@ -187,7 +246,7 @@ describe('SiteExclusionSettings', () => {
         (document.body.querySelector('#site-exclusion-description') as HTMLInputElement).value = 'Office';
         (document.body.querySelector('#site-exclusion-description') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
 
         const createCalls = (exclusionsService.createSiteExclusion as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -202,7 +261,7 @@ describe('SiteExclusionSettings', () => {
                 description: 'Office'
             }
         ]);
-        expect(fixture.componentInstance['isAddDialogVisible']()).toBe(false);
+        expect(editor['isAddDialogVisible']()).toBe(false);
         expect(fixture.nativeElement.textContent).toContain('203.0.113.10/32');
         expect(fixture.nativeElement.textContent).toContain('Created 203.0.113.10/32');
     });
@@ -210,7 +269,7 @@ describe('SiteExclusionSettings', () => {
     it('shows row loading and success feedback while deleting a site exclusion', () => {
         const pending = new Subject<void>();
         exclusionsService.deleteSiteExclusion.mockReturnValueOnce(pending.asObservable());
-        fixture.componentInstance['exclusions'].set([
+        editor['exclusions'].set([
             {
                 id: 'rule-1',
                 type: 'cidr',
@@ -221,7 +280,7 @@ describe('SiteExclusionSettings', () => {
         ]);
         fixture.detectChanges();
 
-        fixture.componentInstance['deleteRule']('site-1', {
+        editor['deleteRule']({
             id: 'rule-1',
             type: 'cidr',
             cidr: '203.0.113.10/32',
@@ -230,13 +289,13 @@ describe('SiteExclusionSettings', () => {
         });
         fixture.detectChanges();
 
-        expect(fixture.componentInstance['deletingRuleID']()).toBe('rule-1');
+        expect(editor['deletingRuleID']()).toBe('rule-1');
 
         pending.next();
         pending.complete();
         fixture.detectChanges();
 
-        expect(fixture.componentInstance['deletingRuleID']()).toBeNull();
+        expect(editor['deletingRuleID']()).toBeNull();
         expect(fixture.nativeElement.textContent).toContain('Deleted 203.0.113.10/32');
     });
 
@@ -250,8 +309,8 @@ describe('SiteExclusionSettings', () => {
         (document.body.querySelector('#site-exclusion-cidr') as HTMLInputElement).value = '203.0.113.10/32';
         (document.body.querySelector('#site-exclusion-cidr') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
+        editor['addRule']();
 
         expect(exclusionsService.createSiteExclusion).toHaveBeenCalledTimes(1);
         pending.complete();
@@ -271,11 +330,11 @@ describe('SiteExclusionSettings', () => {
         fixture.detectChanges();
         await fixture.whenStable();
 
-        fixture.componentInstance['form'].controls.type.setValue('country');
-        fixture.componentInstance['form'].controls.countryCode.setValue('DE');
-        fixture.componentInstance['form'].controls.description.setValue('Germany');
+        editor['form'].controls.type.setValue('country');
+        editor['form'].controls.countryCode.setValue('DE');
+        editor['form'].controls.description.setValue('Germany');
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
 
         const createCalls = (exclusionsService.createSiteExclusion as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -302,7 +361,7 @@ describe('SiteExclusionSettings', () => {
         (document.body.querySelector('#site-exclusion-cidr') as HTMLInputElement).value = '203.0.113.10/32';
         (document.body.querySelector('#site-exclusion-cidr') as HTMLInputElement).dispatchEvent(new Event('input'));
 
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         fixture.detectChanges();
         await fixture.whenStable();
 

@@ -161,12 +161,17 @@ func (a *App) RunCloudTests(ctx context.Context, writer io.Writer) (GoTestResult
 	if len(packages) == 0 {
 		return result, errors.New("cloud test selected no repository packages")
 	}
-	args := append([]string{"go", "test"}, packages...)
+	args := cloudTestArgs(packages)
 	environment := []string{"GOFLAGS=" + goFlagsForTags(cloud.BuildTags)}
 	if err := a.runCommand(ctx, writer, commandSpec{Args: args, Env: environment, Display: fmt.Sprintf("go test [cloud variant: %d repository packages]", len(packages))}); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func cloudTestArgs(packages []string) []string {
+	// The database suite can exceed Go's default 10 minutes inside the 30-minute gate.
+	return append([]string{"go", "test", "-timeout", "20m"}, packages...)
 }
 
 func (a *App) listGoPackages(ctx context.Context, variant Variant) ([]string, error) {

@@ -43,8 +43,16 @@ describe('TrafficChart', () => {
         expect(component).toBeTruthy();
     });
 
-    it('A11Y: container should have img role and accessible label', () => {
-        const container = fixture.debugElement.query(By.css('div[role="img"]'));
+    it('uses the same neutral range-empty state regardless of tracking history', () => {
+        const empty = fixture.nativeElement.querySelector('[role="group"]') as HTMLElement;
+        expect(empty.textContent).toContain('common.empty.noDataDescription');
+        expect(empty.querySelector('button')).toBeNull();
+    });
+
+    it('A11Y: populated plot should have an accessible name and keyboard focus target', () => {
+        fixture.componentRef.setInput('data', [{ time: '2026-11-12T00:00:00Z', pageviews: 1, visitors: 1 }]);
+        fixture.detectChanges();
+        const container = fixture.debugElement.query(By.css('div[role="application"]'));
         expect(container).toBeTruthy();
         expect(container.nativeElement.getAttribute('aria-label')).toBeTruthy();
     });
@@ -84,16 +92,23 @@ describe('TrafficChart', () => {
             { time: '2026-07-02T00:00:00Z', pageviews: 18, visitors: 10 }
         ]);
         fixture.componentRef.setInput('design', 'bar');
+        fixture.componentRef.setInput('comparisonData', [
+            { time: '2026-06-29T00:00:00Z', pageviews: 10, visitors: 3 },
+            { time: '2026-06-30T00:00:00Z', pageviews: 17, visitors: 8 }
+        ]);
         fixture.detectChanges();
 
         const inspectable = fixture.debugElement.query(By.directive(SeriesChart)).componentInstance as unknown as {
-            chartFrameOptions: () => { series: { data: number[] }[] };
-            chartMergeOptions: () => { xAxis: { data: string[] }; series: { name: string; type: string; data: number[] }[] };
+            chartFrameOptions: () => { legend: { icon?: string }; series: { data: number[] }[] };
+            chartMergeOptions: () => { xAxis: { data: string[] }; series: { id: string; name: string; type: string; data: number[]; lineStyle?: { type: string } }[] };
         };
         const frame = inspectable.chartFrameOptions();
         const merge = inspectable.chartMergeOptions();
         expect(merge.series.find((series) => series.name === 'dashboard.kpis.pageviews')?.type).toBe('bar');
         expect(merge.series.find((series) => series.name === 'dashboard.traffic.trendLine')?.type).toBe('line');
+        expect(merge.series.find((series) => series.id === 'visitors-comparison')).toMatchObject({ type: 'line', lineStyle: { type: 'dashed' }, data: [3, 8] });
+        expect(merge.series.map((series) => series.id)).not.toContain('visitors-trend-comparison');
+        expect(frame.legend.icon).toBeUndefined();
         expect(frame.series.find((series) => series.data.length > 0)).toBeUndefined();
         expect(merge.xAxis.data.length).toBe(2);
         expect(merge.series.find((series) => series.name === 'dashboard.kpis.pageviews')?.data).toEqual([12, 18]);

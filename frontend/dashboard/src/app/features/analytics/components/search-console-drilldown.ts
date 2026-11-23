@@ -320,7 +320,22 @@ export class SearchConsoleDrilldown {
         const state = this.mapping()?.sync_status?.state;
         return state === 'pending' || state === 'running';
     });
-    protected readonly hasRows = computed(() => Boolean(this.series().length || this.queries().length || this.pages().length || this.countries().length || this.devices().length));
+    protected readonly emptyReport = computed(() => {
+        const overview = this.overview();
+        return (
+            !this.loading() &&
+            !!overview &&
+            !overview.clicks &&
+            !overview.impressions &&
+            !overview.ctr &&
+            !overview.average_position &&
+            !this.series().length &&
+            !this.queries().length &&
+            !this.pages().length &&
+            !this.countries().length &&
+            !this.devices().length
+        );
+    });
     protected readonly kpiCards = computed<KpiCardData[]>(() => {
         this.activeLanguage();
         const overview = this.overview();
@@ -348,7 +363,7 @@ export class SearchConsoleDrilldown {
     });
     protected readonly chartData = computed<SeriesChartPoint[]>(() =>
         this.series().map((point) => ({
-            time: `${point.date}T00:00:00Z`,
+            time: point.date,
             clicks: point.clicks,
             impressions: point.impressions
         }))
@@ -574,7 +589,7 @@ export class SearchConsoleDrilldown {
             year: 'numeric',
             timeZone: 'UTC'
         }).format(to);
-        return `${start} - ${end}`;
+        return `${start} – ${end} (UTC)`;
     }
 
     private parseDate(value: string | null): Date | null {

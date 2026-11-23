@@ -18,7 +18,7 @@ export interface AnnotationInteractionOptions {
 interface ZrPointerEvent {
     offsetX: number;
     offsetY: number;
-    event?: { button?: number; pointerType?: string; touches?: unknown };
+    event?: { button?: number; pointerType?: string; touches?: unknown; zrByTouch?: boolean; sourceCapabilities?: { firesTouchEvents?: boolean } };
 }
 
 interface MarkerEventParams {
@@ -139,7 +139,8 @@ export function bindAnnotationInteractions(chart: ECharts, options: AnnotationIn
             return;
         }
         // A tap is how touch readers get the tooltip; they add notes from the button instead.
-        if (event.event?.touches !== undefined || event.event?.pointerType === 'touch') {
+        const source = event.event;
+        if (source?.touches !== undefined || source?.pointerType === 'touch' || source?.zrByTouch || source?.sourceCapabilities?.firesTouchEvents) {
             return;
         }
         if (!chart.containPixel('grid', [event.offsetX, event.offsetY])) {

@@ -24,11 +24,7 @@
         (subjectChanged)="selectGoal($event)"
     />
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        @for (card of kpis(); track card.label) {
-        <app-kpi-card [label]="card.label" [value]="card.value" [loading]="card.loading" [format]="card.format" [suffix]="card.suffix" [delta]="card.delta ?? null" />
-        }
-    </div>
+    <app-kpi-comparison-cards [cards]="kpis()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 sm:grid-cols-3" class="mb-6" />
 
     <p-card styleClass="mb-6">
         <div class="mb-4">
@@ -43,8 +39,8 @@
             [isShortRange]="isShortRange()"
             [emptyTitle]="'goals.series.emptyTitle' | transloco"
             [emptyDescription]="'goals.series.emptyDescription' | transloco"
-            [currentPeriodLabel]="currentPeriodLabel()"
-            [comparisonLabel]="comparisonLabel()"
+            [currentPeriod]="seriesRange()"
+            [previousPeriod]="comparisonRange()"
         />
     </p-card>
 

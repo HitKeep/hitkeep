@@ -68,11 +68,15 @@ createApp(App).mount('#app');
 ### Angular
 
 ```ts
-import { ApplicationConfig, provideAppInitializer } from '@angular/core';
+import { type ApplicationConfig, provideAppInitializer } from '@angular/core';
 import { init } from '@hitkeep/tracker';
 
 export const appConfig: ApplicationConfig = {
-    providers: [provideAppInitializer(() => init({ host: 'https://your-hitkeep.example.com' }))]
+    providers: [
+        provideAppInitializer(() => {
+            init({ host: 'https://your-hitkeep.example.com' });
+        })
+    ]
 };
 ```
 
@@ -95,7 +99,7 @@ Full walkthroughs for each framework, including Next.js App Router and Astro vie
 | `init(config)` | Start the tracker and return a handle. Idempotent. |
 | `track(name, properties?)` | Record a custom event. Calls before `init` are queued. |
 | `trackPageview()` | Send a manual pageview. |
-| `cleanup()` | Remove listeners and allow re-initialization. |
+| `cleanup()` | Stop the active tracker and allow another call to `init()`, even if the initial tracker was blocked. |
 | `blockTrackingForMe()` / `enableTrackingForMe()` / `isTrackingEnabled()` | Visitor opt-out controls. |
 | `trackViewItem` / `trackAddToCart` / `trackBeginCheckout` / `trackPurchase` | Typed [e-commerce events](https://hitkeep.com/guides/analytics/ecommerce/). |
 
@@ -121,6 +125,12 @@ init({
 ```
 
 Each option maps to a `hk.js` data attribute where one exists — see the [tracker architecture guide](https://hitkeep.com/guides/tracking/tracker-architecture/) for the delivery, retry, and storage behavior shared by both.
+
+### Remounting the tracker
+
+Call `cleanup()` when a component that owns the tracker unmounts, then call `init()` on the next mount. If the first initialization was blocked by Do Not Track or visitor opt-out, cleanup still lets the next initialization check the current settings.
+
+Web Vitals observers register once per document. Samples go to the currently active tracker only while it has `webVitals: true`.
 
 ### Visible time
 

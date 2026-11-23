@@ -7,11 +7,7 @@
         <span>{{ "common.loadingSiteData" | transloco }}</span>
     </div>
     } @else if (siteService.activeSite()) {
-    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-        @for (card of utmKpis(); track card.label) {
-        <app-kpi-card [label]="card.label" [value]="card.value" [loading]="card.loading" [updateKey]="card.updateKey" [valueClass]="card.valueClass" [delta]="card.delta ?? null" />
-        }
-    </div>
+    <app-kpi-comparison-cards [cards]="utmKpis()" [currentPeriod]="seriesRange()" gridClass="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5" class="mb-6" />
 
     <div class="mb-6">
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">
@@ -29,8 +25,8 @@
                 [isShortRange]="isShortRange()"
                 [emptyTitle]="'utm.series.emptyTitle' | transloco"
                 [emptyDescription]="'utm.series.emptyDescription' | transloco"
-                [currentPeriodLabel]="currentPeriodLabel()"
-                [comparisonLabel]="comparisonLabel()"
+                [currentPeriod]="seriesRange()"
+                [previousPeriod]="comparisonRange()"
             />
         </p-card>
     </div>

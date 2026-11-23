@@ -43,16 +43,15 @@
         }
     </div>
 
+    @if (emptyReport()) {
+    <p class="text-sm text-muted-color" data-testid="search-console-empty">{{ 'searchConsole.states.empty' | transloco }}</p>
+    } @else {
     <section class="search-console-drilldown__chart" aria-labelledby="search-console-trend-title">
         <h4 id="search-console-trend-title" class="search-console-drilldown__section-title">{{ "searchConsole.sections.trend" | transloco }}</h4>
         <app-series-chart [data]="chartData()" [series]="chartSeries()" [isLoading]="loading()" [emptyTitle]="'searchConsole.states.empty' | transloco" />
     </section>
 
-    @if (!loading() && !hasRows()) {
-    <p-message severity="info" styleClass="w-full" [text]="'searchConsole.states.empty' | transloco" />
-    }
-
     <app-metric-card-group class="search-console-drilldown__content" [tabs]="metricCardTabs()" />
-    }
+    } }
 </p-card>
 }

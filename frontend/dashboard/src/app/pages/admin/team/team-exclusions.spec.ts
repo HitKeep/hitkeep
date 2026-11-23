@@ -1,3 +1,5 @@
+import { By } from '@angular/platform-browser';
+import { ExclusionEditor } from '@features/exclusions/exclusion-editor';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
@@ -11,6 +13,7 @@ import { TeamService } from '@services/team.service';
 import { TeamExclusionsPage } from './team-exclusions';
 
 describe('TeamExclusionsPage', () => {
+    let editor: ExclusionEditor;
     let fixture: ComponentFixture<TeamExclusionsPage>;
     const activeTeam = signal<Team>({ id: 'team-1', name: 'Acme', logo_url: '', role: 'owner', created_at: '2026-01-01T00:00:00Z' });
     const inheritedRule: IPExclusion = {
@@ -111,6 +114,7 @@ describe('TeamExclusionsPage', () => {
 
         fixture = TestBed.createComponent(TeamExclusionsPage);
         fixture.detectChanges();
+        editor = fixture.debugElement.query(By.directive(ExclusionEditor)).componentInstance;
     });
 
     afterEach(() => {
@@ -123,20 +127,20 @@ describe('TeamExclusionsPage', () => {
         expect(fixture.nativeElement.textContent).toContain('Instance');
         expect(fixture.nativeElement.textContent).toContain('Inherited');
         expect(fixture.nativeElement.querySelector('app-table-row-actions')).toBeNull();
-        expect(fixture.componentInstance['ruleActions'](inheritedRule)).toEqual([]);
+        expect(editor['ruleActions'](inheritedRule)).toEqual([]);
     });
 
     it('validates and creates user-agent and path filters with type-specific values', () => {
-        const form = fixture.componentInstance['form'];
+        const form = editor['form'];
 
         form.controls.type.setValue('user_agent');
         form.controls.userAgent.setValue('   ');
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         expect(exclusionsService.createTeamExclusion).not.toHaveBeenCalled();
         expect(form.controls.userAgent.hasError('required')).toBe(true);
 
         form.controls.userAgent.setValue('HealthCheck');
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         expect(exclusionsService.createTeamExclusion.mock.calls.at(-1)).toEqual([
             'team-1',
             {
@@ -151,7 +155,7 @@ describe('TeamExclusionsPage', () => {
 
         form.controls.type.setValue('path');
         form.controls.path.setValue('/admin//users/');
-        fixture.componentInstance['addRule']();
+        editor['addRule']();
         expect(exclusionsService.createTeamExclusion.mock.calls.at(-1)).toEqual([
             'team-1',
             {

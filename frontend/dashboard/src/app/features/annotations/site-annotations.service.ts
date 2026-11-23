@@ -1,4 +1,4 @@
-import { computed, inject, signal, Service } from '@angular/core';
+import { computed, DOCUMENT, inject, signal, Service } from '@angular/core';
 import { HttpClient, httpResource } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
@@ -68,18 +68,31 @@ export class SiteAnnotationsService {
     /** The note the dialog shows; null while it is closed. */
     readonly draft = signal<AnnotationDraft | null>(null);
 
-    open(draft: AnnotationDraft): void {
+    private readonly document = inject(DOCUMENT);
+    private trigger: HTMLElement | null = null;
+
+    restoreFocus(): void {
+        this.trigger?.focus({ preventScroll: true });
+        this.trigger = null;
+    }
+
+    open(draft: AnnotationDraft, trigger?: HTMLElement | null): void {
+        const active = this.document.activeElement;
+        this.trigger = trigger ?? (active instanceof HTMLElement ? active : null);
         this.draft.set(draft);
     }
 
-    openExisting(annotation: Annotation, granularity: AnnotationGranularity): void {
-        this.open({
-            id: annotation.id,
-            startsAt: new Date(annotation.starts_at),
-            endsAt: annotation.ends_at ? new Date(annotation.ends_at) : null,
-            body: annotation.body,
-            granularity
-        });
+    openExisting(annotation: Annotation, granularity: AnnotationGranularity, trigger?: HTMLElement | null): void {
+        this.open(
+            {
+                id: annotation.id,
+                startsAt: new Date(annotation.starts_at),
+                endsAt: annotation.ends_at ? new Date(annotation.ends_at) : null,
+                body: annotation.body,
+                granularity
+            },
+            trigger
+        );
     }
 
     close(): void {

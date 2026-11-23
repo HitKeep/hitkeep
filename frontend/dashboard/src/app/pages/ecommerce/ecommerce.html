@@ -35,12 +35,33 @@
         <p-card class="shadow-sm border border-surface-200 dark:border-surface-700 surface-card">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div>
-                    <h3 class="text-lg font-semibold">{{ "ecommerce.chart.title" | transloco }}</h3>
+                    <h3 id="ecommerce-chart-heading" class="text-lg font-semibold">{{ (selectedChartMetric() === "revenue" ? "ecommerce.chart.title" : "ecommerce.chart.orders") | transloco }}</h3>
                     <p class="text-sm text-[var(--p-text-muted-color)]">{{ "ecommerce.chart.description" | transloco }}</p>
                 </div>
+                <p-selectbutton
+                    [options]="chartMetrics()"
+                    [ngModel]="selectedChartMetric()"
+                    (ngModelChange)="selectedChartMetric.set($event)"
+                    optionLabel="label"
+                    optionValue="key"
+                    [allowEmpty]="false"
+                    size="small"
+                    ariaLabelledBy="ecommerce-chart-heading"
+                    data-testid="ecommerce-chart-metric"
+                />
             </div>
 
-            <app-series-chart [data]="chartData()" [series]="chartConfig()" [isLoading]="isLoading()" [isShortRange]="isShortRange()" [emptyTitle]="'ecommerce.empty.title' | transloco" [emptyDescription]="'ecommerce.empty.description' | transloco" />
+            <app-series-chart
+                [data]="chartData()"
+                [series]="chartConfig()"
+                [minInterval]="selectedChartMetric() === 'orders' ? 1 : 0"
+                [showZeroValues]="hasChartActivity()"
+                [valueFormatter]="chartValueFormatter()"
+                [isLoading]="isLoading()"
+                [isShortRange]="isShortRange()"
+                [emptyTitle]="'ecommerce.empty.title' | transloco"
+                [emptyDescription]="'ecommerce.empty.description' | transloco"
+            />
         </p-card>
     </div>
 

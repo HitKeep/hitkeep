@@ -1,10 +1,12 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { Observable, of, Subject } from 'rxjs';
 import { vi } from 'vitest';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 
 import { AnalyticsService } from '@services/analytics.service';
 import { StatsService } from '@features/analytics/services/stats.service';
@@ -12,7 +14,8 @@ import { SiteService } from '@features/sites/services/site.service';
 import { Funnels } from './funnels';
 import { AccessService } from '@services/access.service';
 import { ConfirmationService } from '@openng/optimus-ui/api';
-import { FunnelSeriesPoint } from '@models/analytics.types';
+import { flushAnnotations } from '@testing/annotations';
+import { Funnel, FunnelSeriesPoint } from '@models/analytics.types';
 
 describe('Funnels', () => {
     const stats = signal({
@@ -55,15 +58,18 @@ describe('Funnels', () => {
         fetchStats: vi.fn(() => of(stats()))
     };
     const analyticsServiceStub = {
-        getFunnels: vi.fn(() => of([])),
+        getFunnels: vi.fn<AnalyticsService['getFunnels']>(() => of([])),
+        deleteFunnel: vi.fn<AnalyticsService['deleteFunnel']>(() => of(undefined)),
         getFunnelTimeseries: vi.fn<() => Observable<FunnelSeriesPoint[]>>(() => of<FunnelSeriesPoint[]>([])),
         getFunnelStats: vi.fn(() => of(null))
     };
 
+    const funnel: Funnel = { id: 'funnel-1', site_id: 'site-1', name: 'Signup', steps: [{ type: 'path', value: '/' }], created_at: '2026-01-01T00:00:00Z' };
+
     beforeEach(async () => {
-        statsServiceStub.loadStats.mockClear();
-        analyticsServiceStub.getFunnels.mockClear();
-        analyticsServiceStub.getFunnelTimeseries.mockClear();
+        vi.clearAllMocks();
+        analyticsServiceStub.getFunnels.mockReset();
+        analyticsServiceStub.getFunnelTimeseries.mockReset();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -132,6 +138,8 @@ describe('Funnels', () => {
                 { provide: AccessService, useValue: { canSite: () => true } },
                 ConfirmationService,
                 provideRouter([]),
+                provideHttpClient(),
+                provideHttpClientTesting(),
                 {
                     provide: TranslocoLocaleService,
                     useValue: {
@@ -148,28 +156,100 @@ describe('Funnels', () => {
         }).compileComponents();
     });
 
-    it('presents one reporting subject and exactly three funnel KPIs', () => {
+    it('presents one reporting subject and exactly three funnel KPIs', async () => {
+        analyticsServiceStub.getFunnels.mockReturnValueOnce(
+            of([
+                { site_id: 'site-1', id: 'funnel-1', name: 'Signup', steps: [{ type: 'path', value: '/' }], created_at: '2026-01-01T00:00:00Z' },
+                { site_id: 'site-1', id: 'funnel-2', name: 'Checkout', steps: [{ type: 'path', value: '/cart' }], created_at: '2026-01-01T00:00:00Z' }
+            ])
+        );
         const component = TestBed.runInInjectionContext(() => new Funnels()) as unknown as {
             kpis: () => { label: string }[];
             subjectOptions: () => { label: string; value: string | null }[];
             selectFunnel: (id: string | null) => void;
             selectedFunnelId: () => string | null;
-            funnels: { set: (funnels: { id: string; name: string; steps: { type: 'path'; value: string }[]; created_at: string }[]) => void };
             trafficFunnelIds: () => string[];
             trafficEnabled: () => boolean;
         };
         expect(component.kpis().length).toBe(3);
         expect(component.subjectOptions()[0].value).toBeNull();
         expect(component.trafficEnabled()).toBe(false);
-        component.funnels.set([
-            { id: 'funnel-1', name: 'Signup', steps: [{ type: 'path', value: '/' }], created_at: '2026-01-01T00:00:00Z' },
-            { id: 'funnel-2', name: 'Checkout', steps: [{ type: 'path', value: '/cart' }], created_at: '2026-01-01T00:00:00Z' }
-        ]);
+        await TestBed.inject(ApplicationRef).whenStable();
         expect(component.trafficFunnelIds()).toEqual(['funnel-1', 'funnel-2']);
         component.selectFunnel('funnel-2');
         expect(component.trafficFunnelIds()).toEqual(['funnel-2']);
         component.selectFunnel(null);
         expect(component.selectedFunnelId()).toBeNull();
+    });
+
+    it('keeps the deep-linked funnel pending until Refresh retries its definitions', async () => {
+        vi.spyOn(TestBed.inject(ActivatedRoute), 'queryParamMap', 'get').mockReturnValue(of(convertToParamMap({ funnel: funnel.id })));
+        const analytics = TestBed.runInInjectionContext(() => new AnalyticsService());
+        analyticsServiceStub.getFunnels.mockImplementation((siteId) => analytics.getFunnels(siteId));
+        const http = TestBed.inject(HttpTestingController);
+        const fixture = TestBed.createComponent(Funnels);
+        const page = fixture.componentInstance;
+        TestBed.tick();
+        page['refresh']('background');
+        expect(page['trafficEnabled']()).toBe(false);
+        expect(analyticsServiceStub.getFunnelTimeseries).not.toHaveBeenCalled();
+
+        flushAnnotations(http);
+        http.expectNone((req) => req.url.endsWith('/hits'));
+        http.expectOne('/api/sites/site-1/funnels').flush(null, { status: 503, statusText: 'Unavailable' });
+        await vi.waitFor(() => expect(fixture.nativeElement.querySelector('app-page-state button')).not.toBeNull());
+        page['refresh']('background');
+        expect(page['loadError']()).toBeTruthy();
+        expect(page['selectedFunnelId']()).toBe(funnel.id);
+        expect(analyticsServiceStub.getFunnels).toHaveBeenCalledTimes(1);
+        expect(analyticsServiceStub.getFunnelStats).not.toHaveBeenCalled();
+        expect(statsServiceStub.fetchStats).not.toHaveBeenCalled();
+
+        fixture.nativeElement.querySelector('app-page-state button').click();
+        TestBed.tick();
+        http.expectOne('/api/sites/site-1/funnels').flush([funnel]);
+        await vi.waitFor(() => expect(page['selectedFunnel']()?.id).toBe(funnel.id));
+        flushAnnotations(http);
+        const hits = http.expectOne((req) => req.url.endsWith('/hits'));
+        expect(hits.request.params.getAll('funnel_id')).toEqual([funnel.id]);
+        hits.flush({ data: [], total: 0 });
+        http.verify();
+
+        expect(analyticsServiceStub.getFunnels).toHaveBeenCalledTimes(2);
+        expect(page['loadError']()).toBeFalsy();
+        expect(fixture.nativeElement.querySelector('app-page-state')).toBeNull();
+        expect(fixture.nativeElement.querySelectorAll('app-kpi-card').length).toBe(3);
+        expect(page['subjectControl'].value).toBe(funnel.id);
+        expect(page['trafficEnabled']()).toBe(true);
+        expect(analyticsServiceStub.getFunnelTimeseries).toHaveBeenCalledTimes(2);
+        expect(analyticsServiceStub.getFunnelStats).toHaveBeenCalledWith('site-1', funnel.id, expect.any(String), expect.any(String));
+    });
+
+    it('cancels the previous site lookup and reloads definitions after create and delete', async () => {
+        const old = new Subject<Funnel[]>();
+        const created = { ...funnel, site_id: 'site-2' };
+        analyticsServiceStub.getFunnels
+            .mockReturnValueOnce(old)
+            .mockReturnValueOnce(of([]))
+            .mockReturnValueOnce(of([created]))
+            .mockReturnValueOnce(of([]));
+        const page = TestBed.runInInjectionContext(() => new Funnels());
+        TestBed.tick();
+        const site = TestBed.inject(SiteService).activeSite;
+        site.set({ ...site()!, id: 'site-2' });
+        await TestBed.inject(ApplicationRef).whenStable();
+        expect(old.observed).toBe(false);
+        old.next([funnel]);
+        expect(page['funnels']()).toEqual([]);
+
+        page['onDefinitionsChanged']();
+        await TestBed.inject(ApplicationRef).whenStable();
+        expect(page['funnels']()).toEqual([created]);
+        page['deleteFunnel'](created);
+        await TestBed.inject(ApplicationRef).whenStable();
+        expect(analyticsServiceStub.deleteFunnel).toHaveBeenCalledWith('site-2', created.id);
+        expect(analyticsServiceStub.getFunnels.mock.calls.flat()).toEqual(['site-1', 'site-2', 'site-2', 'site-2']);
+        expect(page['funnels']()).toEqual([]);
     });
 
     it('ignores a late funnel series response after the reporting scope changes', () => {

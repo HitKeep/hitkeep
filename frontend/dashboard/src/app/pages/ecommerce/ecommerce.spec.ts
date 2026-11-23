@@ -11,6 +11,7 @@ import { TRANSLOCO_LOCALE_CONFIG, TRANSLOCO_LOCALE_LANG_MAPPING, TranslocoLocale
 import { EcommercePage } from './ecommerce';
 import { SiteService } from '@features/sites/services/site.service';
 import { AnalyticsService } from '@core/services/analytics.service';
+import { SeriesChart } from '@features/analytics/components/series-chart';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import type { SiteSetupState } from '@services/setup-state.service';
 import { flushAnnotations } from '@testing/annotations';
@@ -352,6 +353,24 @@ describe('EcommercePage', () => {
         expect(text).toContain('Top products');
         expect(text).toContain('Revenue sources');
         expect(text).toContain('Pro');
+    });
+
+    it('plots only the selected unit and formats currency and order counts separately', () => {
+        const chart: SeriesChart = fixture.debugElement.query(By.directive(SeriesChart)).componentInstance;
+        expect(chart.series().map(({ key }) => key)).toEqual(['revenue']);
+        expect(chart.data()[0]).toEqual({ time: '2026-03-07T00:00:00Z', revenue: 120 });
+        expect(chart.valueFormatter()?.(120)).toBe('$120.00');
+
+        const options = fixture.nativeElement.querySelectorAll('[data-testid="ecommerce-chart-metric"] p-togglebutton') as NodeListOf<HTMLElement>;
+        const orders = Array.from(options).find((option) => option.textContent?.trim() === 'Orders');
+        expect(orders).toBeDefined();
+        orders?.click();
+        fixture.detectChanges();
+
+        expect(chart.series().map(({ key }) => key)).toEqual(['orders']);
+        expect(chart.data()[0]).toEqual({ time: '2026-03-07T00:00:00Z', orders: 1 });
+        expect(chart.valueFormatter()?.(1)).toBe('1');
+        expect(fixture.nativeElement.querySelector('#ecommerce-chart-heading').textContent.trim()).toBe('Orders');
     });
 
     it.each(['getEcommerceSummary', 'getEcommerceTimeseries', 'getEcommerceProducts', 'getEcommerceSources'] as const)('clears stale revenue and warns when %s rejects a mixed-currency report', (method) => {

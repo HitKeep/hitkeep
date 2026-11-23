@@ -1,8 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
-import { TranslocoTestingModule } from '@jsverse/transloco';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { SETTINGS_ROUTES } from '../settings.routes';
+import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { Select } from '@openng/optimus-ui/select';
 import { vi } from 'vitest';
 
@@ -13,7 +17,12 @@ import { UserSettings } from './user-settings';
 describe('UserSettings', () => {
     let fixture: ComponentFixture<UserSettings>;
 
+    let originalLang: string;
+    let originalDir: string;
+
     beforeEach(async () => {
+        originalLang = document.documentElement.lang;
+        originalDir = document.documentElement.dir;
         await TestBed.configureTestingModule({
             imports: [
                 UserSettings,
@@ -72,26 +81,20 @@ describe('UserSettings', () => {
                             }
                         },
                         de: {},
+                        he: {},
                         pt: {}
                     },
                     translocoConfig: {
-                        availableLangs: ['en', 'de', 'pt'],
+                        availableLangs: ['en', 'de', 'pt', 'he'],
                         defaultLang: 'en'
                     },
                     preloadLangs: true
                 })
             ],
             providers: [
-                provideRouter([]),
-                {
-                    provide: UserPreferencesService,
-                    useValue: {
-                        preferences: signal({ default_locale: 'en' }),
-                        isLoading: signal(false),
-                        isSaving: signal(false),
-                        save: vi.fn()
-                    }
-                },
+                provideRouter([{ path: 'settings', children: SETTINGS_ROUTES }]),
+                provideHttpClient(),
+                provideHttpClientTesting(),
                 {
                     provide: UserProfileService,
                     useValue: {
@@ -111,8 +114,94 @@ describe('UserSettings', () => {
             ]
         }).compileComponents();
 
+        TestBed.inject(UserPreferencesService).applyPreferences({ default_locale: 'en', dismissed_onboarding_at: '2026-10-01' });
         fixture = TestBed.createComponent(UserSettings);
-        fixture.detectChanges();
+        await fixture.whenStable();
+    });
+
+    afterEach(() => {
+        document.documentElement.lang = originalLang;
+        document.documentElement.dir = originalDir;
+    });
+
+    it('redirects the historical preferences URL to Account', async () => {
+        const harness = await RouterTestingHarness.create();
+        await harness.navigateByUrl('/settings/preferences', UserSettings);
+        expect(TestBed.inject(Router).url).toBe('/settings');
+        expect(harness.routeNativeElement?.querySelector('#default-locale[role="combobox"]')).toBeTruthy();
+    });
+
+    it('saves a committed language once, restores the saved selection on failure and allows retry', async () => {
+        const http = TestBed.inject(HttpTestingController);
+        const transloco = TestBed.inject(TranslocoService);
+        const preferences = TestBed.inject(UserPreferencesService);
+        const combo = fixture.nativeElement.querySelector('#default-locale[role="combobox"]') as HTMLElement;
+        const key = (name: string) => combo.dispatchEvent(new KeyboardEvent('keydown', { code: name, key: name, bubbles: true }));
+        key('ArrowDown');
+        await fixture.whenStable();
+        expect(combo.getAttribute('aria-expanded')).toBe('true');
+        key('ArrowDown');
+        key('Escape');
+        await fixture.whenStable();
+        http.expectNone('/api/user/preferences');
+
+        const chooseGerman = async () => {
+            combo.click();
+            await fixture.whenStable();
+            const filter = document.querySelector<HTMLInputElement>('input[aria-label="Search by language or ISO code"]')!;
+            filter.value = 'Deutsch';
+            filter.dispatchEvent(new Event('input', { bubbles: true }));
+            await fixture.whenStable();
+            expect(document.querySelectorAll('[role="option"]')).toHaveLength(1);
+            const option = document.querySelector<HTMLElement>('[role="option"][aria-label="German"]');
+            expect(option).toBeTruthy();
+            option!.click();
+            await fixture.whenStable();
+            const put = http.expectOne({ method: 'PUT', url: '/api/user/preferences' });
+            expect(put.request.body).toEqual({ default_locale: 'de' });
+            return put;
+        };
+
+        const first = await chooseGerman();
+        expect(transloco.getActiveLang()).toBe('en');
+        expect(preferences.isSaving()).toBe(true);
+        expect(combo.getAttribute('aria-disabled')).toBe('true');
+        first.flush({}, { status: 503, statusText: 'Unavailable' });
+        await fixture.whenStable();
+        expect(combo.textContent).toContain('English');
+        expect(fixture.nativeElement.textContent).toContain('Could not save preferences');
+        expect(preferences.preferences()?.default_locale).toBe('en');
+
+        const retry = await chooseGerman();
+        retry.flush({ default_locale: 'de' });
+        await fixture.whenStable();
+        expect(transloco.getActiveLang()).toBe('de');
+        expect(combo.textContent).toContain('Deutsch');
+        expect(preferences.preferences()?.dismissed_onboarding_at).toBe('2026-10-01');
+        http.expectNone('/api/user/preferences');
+    });
+
+    it('shows the saved selection even when Transloco is displaying its fallback catalog', async () => {
+        TestBed.inject(UserPreferencesService).applyPreferences({ default_locale: 'de' });
+        TestBed.inject(TranslocoService).setActiveLang('en');
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('#default-locale').textContent).toContain('German');
+        TestBed.inject(HttpTestingController).expectNone('/api/user/preferences');
+    });
+
+    it('applies RTL after a successful selection from a configured RTL catalog', async () => {
+        const combo = fixture.nativeElement.querySelector('#default-locale[role="combobox"]') as HTMLElement;
+        combo.click();
+        await fixture.whenStable();
+        document.querySelector<HTMLElement>('[role="option"][aria-label="Hebrew"]')!.click();
+        await fixture.whenStable();
+        const put = TestBed.inject(HttpTestingController).expectOne({ method: 'PUT', url: '/api/user/preferences' });
+        expect(put.request.body).toEqual({ default_locale: 'he' });
+        expect(document.documentElement.dir).toBe('ltr');
+        put.flush({ default_locale: 'he' });
+        await fixture.whenStable();
+        expect(document.documentElement.lang).toBe('he');
+        expect(document.documentElement.dir).toBe('rtl');
     });
 
     it('replaces the user export tab with an account shortcut to the Import & Export hub', () => {

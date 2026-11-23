@@ -100,10 +100,10 @@
                     <p-skeleton width="80px" height="2rem" />
                     } @else {
                     <div class="text-2xl xl:text-3xl font-bold tabular-nums leading-none"><app-animated-number [value]="totalEventCount()" /></div>
-                    @if (totalEventDelta() !== null) {
-                    <span [class]="totalEventDeltaClass()">{{ totalEventDeltaLabel() }}</span>
+                    @if (seriesRange()) {
+                    <app-kpi-comparison-trigger [metricLabel]="totalEventKpi().label" [delta]="totalEventDelta()" (compare)="eventComparison.show(totalEventKpi().id, $event)" />
                     }
-                    <div class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
+                    <div data-testid="event-total-label" class="text-xs text-[var(--p-text-muted-color)] mt-1">{{ 'events.kpis.totalEvents' | transloco }}</div>
                     }
                 </div>
                 }
@@ -116,11 +116,13 @@
                 [isShortRange]="isShortRange()"
                 [emptyTitle]="(selectedEvent() ? 'events.series.emptySelectedTitle' : 'events.series.emptyTitle') | transloco"
                 [emptyDescription]="(selectedEvent() ? 'events.series.emptySelectedDescription' : 'events.series.emptyDescription') | transloco"
-                [currentPeriodLabel]="currentPeriodLabel()"
-                [comparisonLabel]="comparisonLabel()"
+                [currentPeriod]="seriesRange()"
+                [previousPeriod]="comparisonRange()"
             />
         </p-card>
     </div>
+
+    <app-kpi-comparison-dialog #eventComparison [cards]="[totalEventKpi()]" [currentPeriod]="seriesRange()" />
 
     <!-- Active filter chips — matches dashboard / goals / funnels / UTM pattern -->
     <div class="flex flex-wrap items-center gap-2 mb-6">

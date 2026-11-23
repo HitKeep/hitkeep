@@ -292,6 +292,7 @@
     }
   },
   "askAi": {
+    "viewChartData": "Ver datos del gráfico",
     "triggerPlaceholder": "Ask AI",
     "triggerAria": "Preguntar a Ask AI sobre este sitio",
     "submitAria": "Enviar pregunta a Ask AI",
@@ -786,6 +787,7 @@
     }
   },
   "common": {
+    "filtersLabel": "Filtros",
     "aiCategories": {
       "ai_training_crawler": "Rastreadores de entrenamiento",
       "ai_search_indexer": "Rastreadores de búsqueda de IA",
@@ -920,6 +922,7 @@
     "selectDateRange": "Seleccionar rango de fechas",
     "seriesChartAria": "Gráfico de series temporales con datos de los últimos {{count}} intervalos",
     "chartDesign": {
+      "series": "Series del gráfico",
       "label": "Estilo del gráfico",
       "area": "Área",
       "line": "Línea",
@@ -1013,7 +1016,7 @@
     "trafficChartAria": "Gráfico de tráfico con datos de los últimos {{count}} intervalos",
     "traffic": {
       "visitors": "Visitantes",
-      "trendLine": "Línea de tendencia"
+      "trendLine": "Tendencia de visitantes"
     },
     "kpis": {
       "liveVisitors": "Visitantes en vivo",
@@ -1032,6 +1035,7 @@
       "createSite": "Crear sitio"
     },
     "onboarding": {
+      "checklist": "Pasos de configuración",
       "title": "Lista de instalación",
       "progress": "{{complete}} de {{total}} completados",
       "dismiss": "Ocultar lista",
@@ -3407,22 +3411,25 @@
     }
   },
   "comparison": {
-    "details": "Comparación de periodos",
-    "metric": "Métrica",
+    "countedFrom": "Contado desde {{time}}",
     "currentPeriod": "Periodo actual",
     "previousPeriod": "Periodo anterior",
-    "relativeChange": "Cambio relativo",
     "unavailable": "No disponible",
-    "zeroBaseline": "Sin definir (el valor anterior es cero)",
-    "elapsedRule": "El periodo anterior termina justo antes del actual y dura lo mismo. El cambio relativo se calcula respecto al valor anterior.",
-    "liveOnly": "Los visitantes en directo corresponden a los últimos cinco minutos y no tienen comparación.",
-    "currentOnlyBreakdowns": "Los desgloses y los registros de tráfico solo muestran el periodo actual.",
-    "seriesLabel": "{{metric}} (anterior)",
-    "bucketOrder": "Las series se alinean por orden de los intervalos. El eje muestra las fechas del periodo actual.",
-    "gridMismatch": "Los intervalos del periodo anterior son distintos y su serie se oculta.",
+    "zeroBaseline": "Si el valor anterior es cero, no se puede calcular el cambio porcentual.",
+    "liveOnly": "Los visitantes en directo corresponden a los últimos cinco minutos.",
+    "currentOnlyBreakdowns": "Los desgloses y los registros de tráfico corresponden al periodo actual.",
+    "seriesLabel": "{{metric}} (ant.)",
+    "gridMismatch": "Como los intervalos anteriores son distintos, el gráfico no muestra la serie anterior.",
     "vsLabel": "vs.",
-    "pageviewsLabel": "Páginas vistas (ant.)",
-    "visitorsLabel": "Visitantes (ant.)"
+    "exactTimes": "Horas exactas",
+    "sameElapsedTime": "El periodo anterior termina justo antes del actual y tiene la misma duración.",
+    "compare": "Comparar",
+    "openMetric": "Comparar {{metric}}",
+    "absoluteChange": "Cambio absoluto",
+    "relativeChange": "Cambio relativo",
+    "percentagePoints": "{{value}} pp",
+    "pointUnavailable": "No hay valores visibles en este punto.",
+    "inspectChartHint": "Usa las flechas izquierda y derecha para cambiar de punto. Pulsa Escape para cerrar."
   },
   "events": {
     "setup": {
@@ -4152,7 +4159,7 @@
     },
     "chart": {
       "title": "Tendencia p75 de {{metric}}",
-      "description": "El percentil 75 del rango seleccionado, agrupado para revisar incidencias rápido.",
+      "description": "Cada punto muestra el percentil 75 del periodo correspondiente.",
       "p75": "{{metric}} p75"
     },
     "distribution": {

@@ -1,12 +1,12 @@
 .web-vitals-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    gap: 0.5rem;
 }
 
 .web-vitals-card {
     display: flex;
-    min-height: 190px;
+    min-width: 0;
     flex-direction: column;
     border: 1px solid var(--p-content-border-color);
     border-radius: 8px;
@@ -34,6 +34,7 @@
     display: flex;
     min-height: 1.75rem;
     align-items: center;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 0.5rem;
 }
@@ -46,30 +47,23 @@
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
-    padding: 1rem 0 0.75rem;
+    padding-top: 0.375rem;
 }
 
 .web-vitals-card__value strong {
     color: var(--p-text-color);
-    font-size: clamp(1.75rem, 3vw, 2.4rem);
+    font-size: clamp(1.25rem, 2vw, 1.75rem);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
 }
 
-.web-vitals-card__value span,
-.web-vitals-card__samples {
+.web-vitals-card__value span {
     color: var(--p-text-muted-color);
     font-size: 0.75rem;
     font-weight: 600;
 }
 
-.web-vitals-card__samples {
-    display: block;
-    margin-bottom: 0.65rem;
-}
-
-.web-vitals-card__strip,
 .web-vitals-distribution {
     display: flex;
     height: 8px;
@@ -77,10 +71,6 @@
     overflow: hidden;
     border-radius: 999px;
     background: var(--p-content-border-color);
-}
-
-.web-vitals-card__strip {
-    margin-top: auto;
 }
 
 .web-vitals-card__strip-good {
@@ -224,4 +214,10 @@
 
 :host ::ng-deep .web-vitals-breakdown-tabs .p-tabpanels {
     padding: 1rem 0 0;
+}
+
+.web-vitals-card:focus-visible,
+.web-vitals-dist-cell:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }

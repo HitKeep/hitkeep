@@ -35,18 +35,3 @@ export function getLocaleDirection(locale: string): TextDirection {
     }
     return 'ltr';
 }
-
-export function localeBasePath(locale: string, sourceLocale: string): string {
-    const normalizedLocale = normalizeLocaleTag(locale);
-    const normalizedSource = normalizeLocaleTag(sourceLocale);
-    if (!normalizedLocale || normalizedLocale === normalizedSource) {
-        return '/';
-    }
-    return `/${normalizedLocale}/`;
-}
-
-export function buildLocalePath(locale: string, path: string, sourceLocale: string): string {
-    const base = localeBasePath(locale, sourceLocale);
-    const trimmed = path.startsWith('/') ? path.slice(1) : path;
-    return base + trimmed;
-}

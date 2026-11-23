@@ -603,10 +603,10 @@ func openAPIV1AnalyticsSchemas() map[string]any {
 			"type": "object",
 			"properties": map[string]any{
 				"time":            map[string]any{"type": "string", "format": "date-time"},
-				"ai_requests":     map[string]any{"type": "integer", "description": "Tracked AI bot hits plus AI fetch records in the bucket."},
+				"ai_requests":     map[string]any{"type": "integer", "description": "Tracked AI bot hits plus AI fetch records during this time interval."},
 				"tracked_hits":    map[string]any{"type": "integer"},
 				"fetch_count":     map[string]any{"type": "integer"},
-				"referral_visits": map[string]any{"type": "integer", "description": "Distinct sessions referred by a known AI surface inside the bucket. Buckets are not additive: a session spanning two buckets counts in both."},
+				"referral_visits": map[string]any{"type": "integer", "description": "Distinct sessions referred by a known AI surface during this time interval. A session that spans two intervals counts in both, so adding the counts can count a session twice."},
 			},
 		},
 		"AIActivityReport": map[string]any{

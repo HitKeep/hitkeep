@@ -255,7 +255,7 @@ describe('SiteTrackingSettings', () => {
         expect(copy.mock.calls[1][0]).not.toMatch(/site-1|team-1|domain-1|user-1|hitkeep-domain-verification|HITKEEP_API_TOKEN/);
     });
 
-    it('derives the instance host by stripping the script filename, keeping the base path prefix', () => {
+    it('keeps the server install sample on the prefixed instance after selecting a custom browser host', async () => {
         expect(internals.trackerHostURL()).toMatch(/\/hitkeep$/);
         expect(internals.trackerHostURL()).not.toContain('hk.js');
 
@@ -263,7 +263,10 @@ describe('SiteTrackingSettings', () => {
 
         expect(internals.trackerHostURL()).toBe('https://analytics.example.com');
         expect(internals.npmInitSnippet()).toContain("init({ host: 'https://analytics.example.com' })");
-        expect(internals.serverIngestSnippet()).toContain('https://analytics.example.com/api/ingest/server/pageview');
+        const serverButton = Array.from(testId('tracking-install-method')!.querySelectorAll<HTMLElement>('[role="button"]')).find((button) => button.textContent?.trim() === en.sites.tracking.install.methods.server);
+        serverButton!.click();
+        await fixture.whenStable();
+        expect(testId('tracking-server-snippet')?.querySelector('pre')?.textContent).toContain(`curl -X POST "${window.location.origin}/hitkeep/api/ingest/server/pageview"`);
     });
 
     it('puts the site domain in the server-side ingest sample', () => {

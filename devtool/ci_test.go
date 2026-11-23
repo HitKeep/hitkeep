@@ -139,6 +139,14 @@ func TestCloudTestsExcludeDeveloperAndFrontendDependencyPackages(t *testing.T) {
 	}
 }
 
+func TestCloudTestArgsPreservePackagesAndDeadline(t *testing.T) {
+	packages := []string{"hitkeep/database", "hitkeep/server"}
+	want := []string{"go", "test", "-timeout", "20m", "hitkeep/database", "hitkeep/server"}
+	if got := cloudTestArgs(packages); !slices.Equal(got, want) {
+		t.Fatalf("cloud test arguments = %v, want %v", got, want)
+	}
+}
+
 func TestCIQAMatrixUsesCanonicalStableGateIDs(t *testing.T) {
 	root := initTestRepository(t)
 	t.Setenv("HK_STATE_DIR", filepath.Join(t.TempDir(), "state"))

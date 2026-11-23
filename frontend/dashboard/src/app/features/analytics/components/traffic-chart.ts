@@ -1,10 +1,9 @@
-import { Component, input, output, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 
-import { ButtonModule } from '@openng/optimus-ui/button';
-import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 import type { HitkeepChartDesign } from '@core/charts/hitkeep-chart-options';
-import { EmbedService } from '@services/embed.service';
+import type { ComparisonPeriod } from '@core/analytics/comparison-period';
 import { ChartDataPoint } from '@models/analytics.types';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart';
 
@@ -12,7 +11,7 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
 @Component({
     selector: 'app-traffic-chart',
     standalone: true,
-    imports: [ButtonModule, SeriesChart, TranslocoPipe],
+    imports: [SeriesChart],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <app-series-chart
@@ -21,32 +20,23 @@ import { SeriesChart, SeriesChartPoint, SeriesDefinition } from './series-chart'
             [comparisonData]="comparisonPoints()"
             [isLoading]="isLoading()"
             [isShortRange]="isShortRange()"
-            [currentPeriodLabel]="currentPeriodLabel()"
-            [comparisonLabel]="comparisonLabel()"
-            [design]="design()"
+            [currentPeriod]="currentPeriod()"
+            [previousPeriod]="previousPeriod()"
+            [design]="design() ?? (isShortRange() ? 'bar' : 'area')"
             [showDesignSelector]="showDesignSelector()"
             ariaLabelKey="dashboard.trafficChartAria"
-            [emptyTitle]="'dashboard.empty.noTrafficTitle' | transloco"
-            [emptyDescription]="'dashboard.empty.noTrafficDescription' | transloco"
-        >
-            @if (!embed.isEmbedMode()) {
-                <p-button chart-empty-actions [label]="'dashboard.empty.getTrackingCode' | transloco" icon="pi pi-code" size="small" (onClick)="snippetClicked.emit()" />
-            }
-        </app-series-chart>
+        />
     `
 })
 export class TrafficChart {
-    protected readonly embed = inject(EmbedService);
     data = input.required<ChartDataPoint[]>();
     comparisonData = input<ChartDataPoint[]>([]);
     isLoading = input<boolean>(false);
     isShortRange = input<boolean>(false);
-    currentPeriodLabel = input<string>('');
-    comparisonLabel = input<string>('');
-    design = input<HitkeepChartDesign>('area');
+    currentPeriod = input<ComparisonPeriod | null>(null);
+    previousPeriod = input<ComparisonPeriod | null>(null);
+    design = input<HitkeepChartDesign>();
     showDesignSelector = input<boolean>(true);
-
-    snippetClicked = output<void>();
 
     private transloco = inject(TranslocoService);
     private activeLanguage = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
@@ -66,22 +56,20 @@ export class TrafficChart {
                 key: 'pageviews',
                 label: this.transloco.translate('dashboard.kpis.pageviews'),
                 color: '#6366f1',
-                gradientFrom: 'rgba(99, 102, 241, 0.5)',
-                gradientTo: 'rgba(99, 102, 241, 0)',
-                comparisonLabel: this.transloco.translate('comparison.pageviewsLabel')
+                gradientFrom: 'rgba(99, 102, 241, 0.16)',
+                gradientTo: 'rgba(99, 102, 241, 0)'
             },
             {
                 key: 'visitors',
                 label: this.transloco.translate('dashboard.traffic.visitors'),
                 color: '#14b8a6',
-                gradientFrom: 'rgba(20, 184, 166, 0.5)',
-                gradientTo: 'rgba(20, 184, 166, 0)',
-                comparisonLabel: this.transloco.translate('comparison.visitorsLabel')
+                gradientFrom: 'rgba(13, 148, 136, 0.14)',
+                gradientTo: 'rgba(20, 184, 166, 0)'
             },
             {
                 key: 'visitors-trend',
                 label: this.transloco.translate('dashboard.traffic.trendLine'),
-                color: '#0ea5b7',
+                color: '#64748b',
                 dashed: true,
                 smooth: false,
                 includeInComparison: false

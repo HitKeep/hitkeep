@@ -11,8 +11,7 @@ import { ConfirmDialogModule } from '@openng/optimus-ui/confirmdialog';
 import { TagModule } from '@openng/optimus-ui/tag';
 import { catchError, finalize, forkJoin, of, Subscription } from 'rxjs';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
-import { injectPeriodLabel, isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
-import { calcDelta } from '@core/analytics/delta-utils';
+import { isIntradayPeriod, previousPeriod, type ComparisonPeriod } from '@core/analytics/comparison-period';
 import { HITKEEP_CHART_PALETTE } from '@core/charts/hitkeep-chart-options';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { dialogCancelButton, dialogDangerButton } from '@components/dialog-actions/dialog-actions';
@@ -20,7 +19,10 @@ import { PageState } from '@components/page-state/page-state';
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { TableRowActionItem } from '@components/table-row-actions/table-row-actions';
-import { KpiCard, KpiCardModel, KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KPI_PERCENT_FORMAT } from '@features/analytics/components/kpi-card';
+import { KpiComparisonCards } from '@features/analytics/components/kpi-comparison-cards';
+import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/components/kpi-comparison-metric';
+import { injectConversionDefinitions } from '@features/analytics/services/conversion-definitions';
 import { ConversionSubjectCard } from '@features/analytics/components/conversion-subject-card';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
@@ -40,7 +42,23 @@ import { EmbedService } from '@services/embed.service';
 @Component({
     selector: 'app-funnels',
     standalone: true,
-    imports: [ButtonModule, CardModule, ConfirmDialogModule, ConversionSubjectCard, FunnelManager, KpiCard, PageState, ReportRangeToolbar, SeriesChart, AppTable, AppTableCell, TagModule, TrafficRecordsCard, TranslocoDecimalPipe, TranslocoPipe],
+    imports: [
+        ButtonModule,
+        CardModule,
+        ConfirmDialogModule,
+        ConversionSubjectCard,
+        FunnelManager,
+        KpiComparisonCards,
+        PageState,
+        ReportRangeToolbar,
+        SeriesChart,
+        AppTable,
+        AppTableCell,
+        TagModule,
+        TrafficRecordsCard,
+        TranslocoDecimalPipe,
+        TranslocoPipe
+    ],
     providers: [ConfirmationService],
     templateUrl: './funnels.html',
     styleUrl: './funnels.css',
@@ -69,9 +87,10 @@ export class Funnels {
     private reportingSequence = 0;
     private funnelStatsSequence = 0;
 
-    protected funnels = signal<Funnel[]>([]);
-    protected loading = signal(false);
-    protected loadError = signal(false);
+    private readonly definitions = injectConversionDefinitions((siteId) => this.analytics.getFunnels(siteId));
+    protected readonly funnels = this.definitions.items;
+    protected readonly loading = this.definitions.loading;
+    protected readonly loadError = this.definitions.error;
     protected selectedFunnelId = signal<string | null>(null);
     protected selectedFunnel = computed(() => this.funnels().find((funnel) => funnel.id === this.selectedFunnelId()) ?? null);
     protected subjectControl = new FormControl<string | null>(null);
@@ -92,11 +111,9 @@ export class Funnels {
     protected funnelStats = signal<FunnelStats | null>(null);
     protected funnelStatsLoading = signal(false);
     protected trafficRefreshKey = signal(0);
-    private readonly seriesRange = signal<ComparisonPeriod | null>(null);
-    private readonly comparisonRange = signal<ComparisonPeriod | null>(null);
+    protected readonly seriesRange = signal<ComparisonPeriod | null>(null);
+    protected readonly comparisonRange = signal<ComparisonPeriod | null>(null);
     protected readonly isShortRange = computed(() => isIntradayPeriod(this.seriesRange()));
-    protected readonly currentPeriodLabel = injectPeriodLabel(this.seriesRange);
-    protected readonly comparisonLabel = injectPeriodLabel(this.comparisonRange);
     protected stats = this.statsQuery.stats;
     protected isStatsLoading = this.statsQuery.isLoading;
     protected isRefreshing = computed(() => this.loading() || this.seriesLoading() || this.funnelStatsLoading());
@@ -107,7 +124,9 @@ export class Funnels {
     protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficFunnelIds = computed(() => {
         const selected = this.selectedFunnelId();
-        return selected ? [selected] : this.funnels().map((funnel) => funnel.id);
+        return this.funnels()
+            .filter((funnel) => !selected || funnel.id === selected)
+            .map((funnel) => funnel.id);
     });
     protected trafficEnabled = computed(() => this.trafficFunnelIds().length > 0);
     protected trafficDescriptionKey = computed(() => (this.selectedFunnelId() ? 'funnels.traffic.selectedDescription' : 'funnels.traffic.allDescription'));
@@ -161,7 +180,7 @@ export class Funnels {
             }
         ];
     });
-    protected kpis = computed<KpiCardModel[]>(() => {
+    protected kpis = computed<KpiComparisonCard[]>(() => {
         this.activeLanguage();
         const entries = this.funnelSeries().reduce((sum, point) => sum + point.entries, 0);
         const completions = this.funnelSeries().reduce((sum, point) => sum + point.completions, 0);
@@ -169,26 +188,30 @@ export class Funnels {
         const comparisonCompletions = this.comparisonFunnelSeries().reduce((sum, point) => sum + point.completions, 0);
         const rate = entries ? (completions / entries) * 100 : 0;
         const comparisonRate = comparisonEntries ? (comparisonCompletions / comparisonEntries) * 100 : 0;
+        const period = this.comparisonRange();
         return [
             {
+                id: 'entries',
                 label: this.transloco.translate('funnels.kpis.entries'),
                 value: entries,
                 loading: this.seriesLoading(),
-                delta: calcDelta(entries, comparisonEntries)
+                previous: kpiBaseline(period, comparisonEntries)
             },
             {
+                id: 'completions',
                 label: this.transloco.translate('funnels.kpis.completions'),
                 value: completions,
                 loading: this.seriesLoading(),
-                delta: calcDelta(completions, comparisonCompletions)
+                previous: kpiBaseline(period, comparisonCompletions)
             },
             {
+                id: 'completion_rate',
                 label: this.transloco.translate('funnels.kpis.completionRate'),
                 value: rate,
                 loading: this.seriesLoading(),
                 format: KPI_PERCENT_FORMAT,
                 suffix: '%',
-                delta: calcDelta(rate, comparisonRate)
+                previous: kpiBaseline(period, comparisonRate)
             }
         ];
     });
@@ -201,7 +224,9 @@ export class Funnels {
             this.funnelStatsRequest?.unsubscribe();
         });
         this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-            this.selectedFunnelId.set(params.get('funnel'));
+            const id = params.get('funnel');
+            this.selectedFunnelId.set(id);
+            this.subjectControl.setValue(id, { emitEvent: false });
             this.createRequested = params.get('create') === '1';
         });
         effect(() => {
@@ -217,15 +242,13 @@ export class Funnels {
                 });
             }
             this.lastSiteId = site?.id ?? null;
-            if (site) this.loadFunnels(site.id);
-            else this.funnels.set([]);
         });
         effect(() => {
             const site = this.siteService.activeSite();
             const dates = this.reportRange.currentDateRange();
             const funnels = this.funnels();
             const selected = this.selectedFunnelId();
-            if (!site || !dates || this.loading()) return;
+            if (!site || !dates || this.loading() || this.loadError()) return;
             if (this.createRequested && this.canManage()) {
                 this.createRequested = false;
                 this.openCreate();
@@ -304,42 +327,26 @@ export class Funnels {
             .pipe(finalize(() => this.deletingFunnelId.set(null)))
             .subscribe({
                 next: () => {
+                    if (site.id !== this.siteService.activeSite()?.id) return;
                     if (this.selectedFunnelId() === funnel.id) this.selectFunnel(null);
-                    this.loadFunnels(site.id);
+                    this.definitions.reload();
                 }
             });
     }
-    protected onDefinitionsChanged() {
-        const site = this.siteService.activeSite();
-        if (site) this.loadFunnels(site.id);
-    }
+    protected readonly onDefinitionsChanged = this.definitions.reload;
     protected refresh(mode: StatsQueryMode = 'blocking') {
         const site = this.siteService.activeSite();
+        if (!site || this.loading()) return;
+        if (this.loadError()) {
+            if (mode === 'blocking') this.definitions.reload();
+            return;
+        }
         const dates = this.reportRange.currentDateRange();
-        if (!site || !dates) return;
+        if (!dates) return;
         this.trafficRefreshKey.update((key) => key + 1);
         const selected = this.selectedFunnelId();
         this.loadReporting(site.id, dates.from, dates.to, selected ? [selected] : [], mode);
         if (selected) this.loadFunnelStats(site.id, selected, dates.from, dates.to);
-    }
-    private loadFunnels(siteId: string) {
-        this.loading.set(true);
-        this.loadError.set(false);
-        this.analytics
-            .getFunnels(siteId)
-            .pipe(finalize(() => this.loading.set(false)))
-            .subscribe({
-                next: (funnels) => {
-                    this.funnels.set(funnels ?? []);
-                    this.subjectControl.setValue(this.selectedFunnelId(), {
-                        emitEvent: false
-                    });
-                },
-                error: () => {
-                    this.funnels.set([]);
-                    this.loadError.set(true);
-                }
-            });
     }
     private loadReporting(siteId: string, from: string, to: string, funnelIds: string[], mode: StatsQueryMode = 'blocking') {
         const sequence = ++this.reportingSequence;

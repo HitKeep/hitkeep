@@ -1,9 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input, OnChanges, OnDestroy, signal, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, OnChanges, OnDestroy, output, signal, SimpleChanges } from '@angular/core';
 import { AnimatedDuration } from '@components/animated-duration/animated-duration';
 import { AnimatedNumber } from '@components/animated-number/animated-number';
 import { CardModule } from '@openng/optimus-ui/card';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
 import { injectSkeletonGate } from '@services/report-subject.service';
+import { KPI_DELTA_FORMAT, kpiDeltaClass } from './kpi-comparison-metric';
+import { KpiComparisonTrigger } from './kpi-comparison-trigger';
+
+export { KPI_DELTA_FORMAT } from './kpi-comparison-metric';
 
 export const KPI_PERCENT_FORMAT: Intl.NumberFormatOptions = Object.freeze({
     minimumFractionDigits: 1,
@@ -25,13 +29,6 @@ export const KPI_MONEY_FALLBACK_FORMAT: Intl.NumberFormatOptions = Object.freeze
     maximumFractionDigits: 2
 });
 
-export const KPI_DELTA_FORMAT: Intl.NumberFormatOptions = Object.freeze({
-    style: 'percent',
-    signDisplay: 'exceptZero',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1
-});
-
 export interface KpiCardModel {
     label: string;
     value: string | number;
@@ -41,7 +38,6 @@ export interface KpiCardModel {
     prefix?: string;
     suffix?: string;
     duration?: boolean;
-    delta?: number | null;
     invertDelta?: boolean;
     updateKey?: number;
 }
@@ -49,10 +45,10 @@ export interface KpiCardModel {
 @Component({
     selector: 'app-kpi-card',
     standalone: true,
-    imports: [CardModule, SkeletonModule, AnimatedDuration, AnimatedNumber],
+    imports: [CardModule, SkeletonModule, AnimatedDuration, AnimatedNumber, KpiComparisonTrigger],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <p-card class="shadow-sm h-full border border-surface-200 dark:border-surface-700 surface-card">
+        <p-card [class]="flat() ? 'hk-kpi-flat' : 'shadow-sm h-full border border-surface-200 dark:border-surface-700 surface-card'">
             <div class="hk-kpi-card__body flex flex-col gap-2">
                 @for (cue of updateCues(); track cue) {
                     <span class="hk-kpi-card__update-cue" [attr.data-update-cue]="cue" aria-hidden="true"></span>
@@ -75,16 +71,46 @@ export interface KpiCardModel {
                     }
                 </div>
                 @let deltaValue = normalizedDelta();
-                @if (!showSkeleton() && deltaValue !== null) {
+                @if (!showSkeleton() && comparable() && numericValue() !== null) {
+                    <app-kpi-comparison-trigger class="hk-kpi-card__content self-start" [metricLabel]="label()" [delta]="delta()" [invertDelta]="invertDelta()" (compare)="compare.emit($event)" />
+                } @else if (!showSkeleton() && deltaValue !== null) {
                     <div class="hk-kpi-card__content flex items-center gap-1">
                         <span [class]="deltaClass()"><app-animated-number [value]="deltaValue" [format]="deltaFormat" /></span>
                     </div>
+                }
+                @if (!showSkeleton() && description()) {
+                    <span class="hk-kpi-card__content text-xs text-muted-color">{{ description() }}</span>
                 }
             </div>
         </p-card>
     `,
     styles: [
         `
+            .hk-kpi-flat {
+                --p-card-shadow: none;
+                --p-card-background: transparent;
+                --p-card-body-padding: 0.625rem 0.85rem;
+            }
+
+            .hk-kpi-flat .hk-kpi-card__body {
+                display: flex;
+                flex-flow: row wrap;
+                align-items: center;
+                gap: 0 0.25rem;
+            }
+            .hk-kpi-flat .hk-kpi-card__body > span:not(.hk-kpi-card__update-cue) {
+                flex-basis: 100%;
+            }
+            .hk-kpi-flat .hk-kpi-card__body > div {
+                font-size: clamp(1.25rem, 2vw, 1.75rem);
+            }
+            @media (min-width: 48rem) {
+                .hk-kpi-flat .hk-kpi-card__body {
+                    flex-flow: column nowrap;
+                    align-items: flex-start;
+                    gap: 0;
+                }
+            }
             .hk-kpi-card__body {
                 border-radius: 0.5rem;
                 isolation: isolate;
@@ -129,6 +155,10 @@ export class KpiCard implements OnChanges, OnDestroy {
     duration = input<boolean>(false);
     delta = input<number | null>(null);
     invertDelta = input<boolean>(false);
+    description = input('');
+    comparable = input(false);
+    flat = input(false);
+    compare = output<HTMLButtonElement>();
 
     private cueSequence = 0;
     private cueTimer: ReturnType<typeof setTimeout> | null = null;
@@ -148,16 +178,7 @@ export class KpiCard implements OnChanges, OnDestroy {
         if (delta === null || !Number.isFinite(delta)) return null;
         return delta / 100;
     });
-
-    protected deltaClass = computed(() => {
-        const normalized = this.normalizedDelta();
-        if (normalized === null) return '';
-        if (normalized === 0) return 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-surface-100 dark:bg-surface-800 text-muted-color';
-        const positive = this.invertDelta() ? normalized < 0 : normalized > 0;
-        return positive
-            ? 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-            : 'text-xs font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-    });
+    protected readonly deltaClass = computed(() => kpiDeltaClass(this.delta(), this.invertDelta()));
 
     ngOnChanges(changes: SimpleChanges): void {
         const skeleton = this.showSkeleton();
