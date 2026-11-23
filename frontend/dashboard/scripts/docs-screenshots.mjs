@@ -60,7 +60,7 @@ const DEMO_ASK_AI_STATUS = {
 const DEMO_SITE_DOMAIN = process.env.HITKEEP_SCREENSHOT_SITE ?? "acme-analytics.io";
 // Full runs must replace the entire owned set; omissions must never sync stale assets.
 const EXPECTED_SCREENSHOTS =
-    `admin-sites-list admin-system-activation admin-system-audit admin-system-operations admin-system-status admin-team-api-clients admin-team-audit admin-team-custom-domains admin-team-members admin-team-overview admin-team-settings analytics-ai-agents-traffic analytics-ai-chatbots analytics-ai-visibility-correlation analytics-ai-visibility analytics-annotations-dialog analytics-annotations analytics-ecommerce analytics-events-audience analytics-events analytics-funnels analytics-goals analytics-opportunities analytics-search-console-mobile analytics-search-console analytics-utm analytics-web-vitals-rating-pages analytics-web-vitals dashboard-comparison dashboard-overview dashboard-sites-overview feature-ask-ai-answer feature-ask-ai-budget-selfhost-mobile feature-ask-ai-budget-selfhost feature-ask-ai-empty feature-ask-ai-mobile feature-create-team feature-custom-domain-setup feature-email-reports-mobile feature-email-reports feature-onboarding-checklist feature-report-email-preview feature-share-dashboard feature-shared-table feature-site-tracking feature-site-transfer feature-team-switcher feature-theme-dialog feature-tracking-verifier global_filters imports-plausible-events-report imports-plausible-provider imports-plausible-zip-review imports-simple-analytics-upload integration-api-reference integration-google-search-console-mobile integration-google-search-console integration-webhook-deliveries integration-webhook-form integration-webhooks-events integration-webhooks mcp oauth-client-registration oauth-clients oauth-client-details oauth-connected-applications oauth-application-details page-login qr-campaigns-analytics qr-campaigns-editor qr-campaigns-list qr-campaigns-share-links release-2-5-1-api-client-grants-dialog release-2-5-1-api-clients-card release-2-5-1-api-clients-mobile release-2-5-1-opportunities-dark release-2-5-1-team-api-clients security-2fa-setup security-api-clients security-sso-login security-sso-team-configuration session-expiry-warning settings-profile social-sign-in-providers team-traffic-exclusions-inherited tools-utm-builder wordpress-plugin-oauth-consent`.split(
+    `admin-sites-list admin-system-activation admin-system-audit admin-system-operations admin-system-status admin-team-api-clients admin-team-audit admin-team-custom-domains admin-team-members admin-team-overview admin-team-settings analytics-ai-agents-traffic analytics-ai-chatbots analytics-ai-visibility-correlation analytics-ai-visibility analytics-annotations-dialog analytics-annotations analytics-ecommerce analytics-events-audience analytics-events analytics-funnels analytics-goals analytics-opportunities analytics-search-console-mobile analytics-search-console analytics-utm analytics-web-vitals-rating-pages analytics-web-vitals dashboard-comparison dashboard-overview dashboard-sites-overview feature-ask-ai-answer feature-ask-ai-budget-selfhost-mobile feature-ask-ai-budget-selfhost feature-ask-ai-empty feature-ask-ai-mobile feature-create-team feature-custom-domain-setup feature-email-reports-mobile feature-email-reports feature-onboarding-checklist feature-report-email-preview feature-share-dashboard feature-shared-table feature-site-tracking feature-site-transfer feature-team-switcher feature-theme-dialog feature-tracking-verifier global_filters global-filters-current-ip-review imports-plausible-events-report imports-plausible-provider imports-plausible-zip-review imports-simple-analytics-upload integration-api-reference integration-google-search-console-mobile integration-google-search-console integration-webhook-deliveries integration-webhook-form integration-webhooks-events integration-webhooks mcp oauth-client-registration oauth-clients oauth-client-details oauth-connected-applications oauth-application-details page-login qr-campaigns-analytics qr-campaigns-editor qr-campaigns-list qr-campaigns-share-links security-2fa-setup security-api-clients security-sso-login security-sso-team-configuration session-expiry-warning settings-profile social-sign-in-providers team-traffic-exclusions-inherited tools-utm-builder wordpress-plugin-oauth-consent`.split(
         /\s+/
     );
 
@@ -141,6 +141,7 @@ async function shoot(page, slug, { fullPage = false, clip } = {}) {
 async function installAskAIDemoRoutes(page) {
     await page.route("**/api/user/bootstrap", async (route) => {
         const response = await route.fetch();
+        if (!response.ok() || !response.headers()["content-type"]?.includes("application/json")) return route.fulfill({ response });
         const body = await response.json();
         body.status = body.status || {};
         body.status.ai = { ...(body.status.ai || {}), enabled: true, configured: true, ask_ai_enabled: true, ask_ai_available: true };
@@ -389,7 +390,17 @@ async function prepareAIVisibilityShot(page) {
 
 async function captureRoute(page, record, slug, path, settle = TABLE_SETTLE) {
     await nav(page, path, settle);
-    if (path === "/dashboard") await selectRangePreset(page, slug === "dashboard-comparison" ? "Today" : "30d");
+    if (path === "/dashboard") {
+        await selectRangePreset(page, slug === "dashboard-comparison" ? "7d" : "30d");
+        if (slug === "dashboard-comparison") {
+            const comparison = page.locator("app-chart-legend").getByRole("button", { name: /\(prev\.\)/ });
+            await comparison.first().waitFor({ state: "visible" });
+            for (const series of await comparison.all()) {
+                if ((await series.getAttribute("aria-pressed")) === "false") await series.click();
+            }
+            await page.waitForTimeout(FORM_SETTLE);
+        }
+    }
     if (path === "/settings/reports") {
         const table = page.getByTestId("report-table");
         const empty = page.getByRole("heading", { name: "No reports yet", exact: true });
@@ -817,6 +828,9 @@ async function captureAdditionalScreenshots(page, record) {
         const site = sites.find((site) => site.domain === DEMO_SITE_DOMAIN);
         await captureRoute(page, record, "feature-share-dashboard", `/sites/${site.id}/settings/share`);
     });
+    const exampleIP = "192.0.2.72";
+    const exampleCIDR = `${exampleIP}/32`;
+    await page.route("**/api/user/current-ip", (route) => route.fulfill({ json: { ip: exampleIP, cidr: exampleCIDR } }));
     await route("team-traffic-exclusions-inherited", "/admin/team/exclusions");
     await route("admin-system-status", "/admin/status");
     for (const [slug, label] of [
@@ -825,39 +839,27 @@ async function captureAdditionalScreenshots(page, record) {
     ]) {
         await attempt(slug, async () => {
             await nav(page, "/admin/status");
+            await page.getByRole("tab", { name: new RegExp(`^${label}$`, "i") }).waitFor({ state: "visible" });
             if (!(await clickTab(page, label))) throw new Error(`Missing ${label} tab`);
             record(slug, await shoot(page, slug));
         });
     }
-    await attempt("global_filters", async () => {
-        await nav(page, "/admin/system");
-        if (!(await clickTab(page, "global filters"))) throw new Error("Missing global filters tab");
-        record("global_filters", await shoot(page, "global_filters"));
+    await route("global_filters", "/admin/exclusions");
+    await attempt("global-filters-current-ip-review", async () => {
+        await page.getByRole("button", { name: `Add global filter · ${exampleCIDR}`, exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Add global filter" });
+        await dialog.waitFor({ state: "visible" });
+        if ((await dialog.locator("#instance-exclusion-cidr").inputValue()) !== exampleCIDR) {
+            throw new Error("The global filter dialog did not prefill the example CIDR");
+        }
+        await page.waitForTimeout(FORM_SETTLE);
+        record("global-filters-current-ip-review", await shoot(page, "global-filters-current-ip-review"));
+        await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+        await dialog.waitFor({ state: "hidden" });
     });
     await page.setViewportSize(MOBILE_VIEWPORT);
     await route("feature-email-reports-mobile", "/settings/reports");
-    await route("release-2-5-1-api-clients-mobile", "/integration/api-clients");
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await route("release-2-5-1-api-clients-card", "/integration/api-clients");
-    await attempt("release-2-5-1-api-client-grants-dialog", async () => {
-        await page.locator("tbody tr").first().getByRole("button", { name: "More actions" }).click();
-        await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
-        await page.getByRole("dialog").waitFor({ state: "visible" });
-        record("release-2-5-1-api-client-grants-dialog", await shoot(page, "release-2-5-1-api-client-grants-dialog"));
-        await page.keyboard.press("Escape");
-    });
-    await route("release-2-5-1-team-api-clients", "/admin/team/api-clients");
-    await attempt("release-2-5-1-opportunities-dark", async () => {
-        await nav(page, "/opportunities", CHART_SETTLE);
-        await page.getByRole("button", { name: "Open user menu", exact: true }).click();
-        await page.getByRole("menuitem", { name: "Switch to dark mode", exact: true }).click();
-        await page.waitForFunction(() => document.documentElement.classList.contains("p-dark"));
-        await page.waitForTimeout(CHART_SETTLE);
-        record("release-2-5-1-opportunities-dark", await shoot(page, "release-2-5-1-opportunities-dark"));
-        await page.getByRole("button", { name: "Open user menu", exact: true }).click();
-        await page.getByRole("menuitem", { name: "Switch to light mode", exact: true }).click();
-        await page.waitForFunction(() => !document.documentElement.classList.contains("p-dark"));
-    });
     await captureOAuthScreenshots(page, record, attempt);
     await captureQRScreenshots(page, record, attempt);
     await captureWebhookScreenshots(page, record, attempt);
@@ -1355,6 +1357,7 @@ async function run() {
                     "tracking verifier",
                     "synthetic webhook endpoint and successful test delivery",
                     "incomplete onboarding",
+                    "reserved documentation IP for the exclusion reviews",
                     "OAuth management and WordPress consent",
                     "Assistants HTTPS endpoint",
                     "SSO availability",
