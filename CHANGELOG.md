@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.18.1](https://github.com/HitKeep/hitkeep/compare/v2.18.0...v2.18.1) (2026-11-23)
+
+
+### Features
+
+* **admin:** open Global filters directly with the instance exclusion capability. Review a suggested IP network before adding a rule at site, team or instance scope. Inherited rules identify their scope and remain read-only in child scopes. ([#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **dashboard:** inspect traffic intervals by keyboard, mouse or touch, toggle each series, and switch between area, line and bar charts. Open a metric comparison to see both periods, the change in the metric's own units, and the relative change. ([#494](https://github.com/HitKeep/hitkeep/issues/494), [#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+
+
+### Bug Fixes
+
+* **analytics:** include www-prefixed referrals when filtering by the referring hostname. ([#493](https://github.com/HitKeep/hitkeep/issues/493)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **ci:** give cloud test packages 20 minutes within the 30-minute release QA gate so the full database suite can finish. ([#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **dashboard:** keep every traffic metric visible on narrow screens, show the selected period in empty reports, and distinguish intervals with no data from measured zeroes. Chart tooltips and keyboard inspection show the localized date and time for each period. Display cumulative layout shift in its original score units. ([#494](https://github.com/HitKeep/hitkeep/issues/494), [#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **i18n:** save the Account language after a committed choice, restore the previous choice on save failure, and use the first supported browser preference at startup. Complete Portuguese labels and keep the document language and direction aligned with its active catalog. ([#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **reports:** retry failed goal and funnel definition loads from Refresh. Web Vitals keeps its summary and trend visible while a selected dimension loads or retries. Returning to Pages reuses the current page breakdown. ([#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+* **tracker:** use the instance API in server-side installation examples, type-check the Angular initializer, and route opt-in Web Vitals to the active tracker after a remount. ([#495](https://github.com/HitKeep/hitkeep/issues/495)) ([235aa62](https://github.com/HitKeep/hitkeep/commit/235aa62d2a13dcef8924bb9910219a6d9555fc4d))
+
 ## [2.18.0](https://github.com/HitKeep/hitkeep/compare/v2.17.0...v2.18.0) (2026-11-22)
 
 
