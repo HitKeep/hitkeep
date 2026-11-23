@@ -53,8 +53,7 @@ describe('SeriesChart', () => {
                                 seriesLabel: '{{metric}} (previous)',
                                 currentPeriod: 'Current period',
                                 previousPeriod: 'Previous period',
-                                gridMismatch: 'Different bucket grids',
-                                bucketStart: 'Bucket starting {{time}}',
+                                gridMismatch: 'Different time intervals',
                                 inspectChartHint: 'Use arrow keys'
                             }
                         },
@@ -63,7 +62,6 @@ describe('SeriesChart', () => {
                                 seriesLabel: '{{metric}} (vorher)',
                                 currentPeriod: 'Aktueller Zeitraum',
                                 previousPeriod: 'Vorheriger Zeitraum',
-                                bucketStart: 'Intervallbeginn {{time}}',
                                 inspectChartHint: 'Pfeiltasten verwenden'
                             }
                         }
@@ -135,7 +133,7 @@ describe('SeriesChart', () => {
         expect(fixture.nativeElement.querySelector('[tabindex="0"][aria-keyshortcuts]')).toBeTruthy();
         const read = (dataIndex: number) => tooltipFormatter()([{ dataIndex, seriesId: 'value' }]).textContent;
         expect(read(0)).toBe('');
-        expect(read(1)).toContain('Nov 13, 2026');
+        expect(read(1)).toContain('Current period · Nov 13, 2026');
         expect(read(1)).toContain('INP: 0 ms');
     });
 
@@ -296,7 +294,7 @@ describe('SeriesChart', () => {
 
         const merge = (component as unknown as { chartMergeOptions: () => { series: { name: string }[] } }).chartMergeOptions();
         expect(merge.series.map((series) => series.name)).toEqual(['Events']);
-        expect(fixture.nativeElement.querySelector('[role="application"]').getAttribute('aria-label')).toContain('Different bucket grids');
+        expect(fixture.nativeElement.querySelector('[role="application"]').getAttribute('aria-label')).toContain('Different time intervals');
         const tip = tooltipFormatter()([
             { dataIndex: 0, seriesId: 'count' },
             { dataIndex: 0, seriesId: 'count-comparison' }

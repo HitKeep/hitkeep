@@ -3161,7 +3161,6 @@
   },
   "comparison": {
     "countedFrom": "Geteld vanaf {{time}}",
-    "bucketStart": "Begin van interval {{time}}",
     "currentPeriod": "Huidige periode",
     "previousPeriod": "Vorige periode",
     "unavailable": "Niet beschikbaar",
@@ -3906,7 +3905,7 @@
     },
     "chart": {
       "title": "{{metric}} p75-trend",
-      "description": "Het 75e percentiel in de geselecteerde periode, gegroepeerd voor snelle incidentanalyse.",
+      "description": "Elk punt toont het 75e percentiel voor die periode.",
       "p75": "{{metric}} p75"
     },
     "distribution": {

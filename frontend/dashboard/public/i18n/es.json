@@ -3412,7 +3412,6 @@
   },
   "comparison": {
     "countedFrom": "Contado desde {{time}}",
-    "bucketStart": "Inicio del intervalo {{time}}",
     "currentPeriod": "Periodo actual",
     "previousPeriod": "Periodo anterior",
     "unavailable": "No disponible",
@@ -4160,7 +4159,7 @@
     },
     "chart": {
       "title": "Tendencia p75 de {{metric}}",
-      "description": "El percentil 75 del rango seleccionado, agrupado para revisar incidencias rápido.",
+      "description": "Cada punto muestra el percentil 75 del periodo correspondiente.",
       "p75": "{{metric}} p75"
     },
     "distribution": {

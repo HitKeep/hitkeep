@@ -401,7 +401,7 @@ export class SeriesChart {
             if (!rows.length) continue;
             const period = previous ? this.previousPeriod() : this.currentPeriod();
             const time = this.formatPointTime(point.time);
-            let title = `${this.transloco.translate(previous ? 'comparison.previousPeriod' : 'comparison.currentPeriod')} · ${this.transloco.translate('comparison.bucketStart', { time })}`;
+            let title = `${this.transloco.translate(previous ? 'comparison.previousPeriod' : 'comparison.currentPeriod')} · ${time}`;
             if (period && Date.parse(point.time) < Date.parse(period.from)) {
                 title += ` · ${this.transloco.translate('comparison.countedFrom', { time: this.formatPointTime(period.from) })}`;
             }

@@ -3280,7 +3280,6 @@
   },
   "comparison": {
     "countedFrom": "Counted from {{time}}",
-    "bucketStart": "Bucket starting {{time}}",
     "currentPeriod": "Current period",
     "previousPeriod": "Previous period",
     "unavailable": "Unavailable",
@@ -4025,7 +4024,7 @@
     },
     "chart": {
       "title": "{{metric}} p75 trend",
-      "description": "The 75th percentile over the selected range, bucketed for fast incident review.",
+      "description": "Each point shows the 75th percentile for that time interval.",
       "p75": "{{metric}} p75"
     },
     "distribution": {
