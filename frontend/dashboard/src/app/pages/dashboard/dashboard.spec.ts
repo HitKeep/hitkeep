@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { FetchBackend, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { FetchBackend, HttpBackend, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, type TestRequest } from '@angular/common/http/testing';
 import { inject } from '@angular/core';
 import { provideRouter, Router } from '@angular/router';
@@ -20,6 +20,8 @@ import { OnboardingService } from '@services/onboarding.service';
 import { RealtimeEvent, RealtimeService } from '@services/realtime.service';
 import { GoogleSearchConsoleService } from '@services/google-search-console.service';
 import { ReportRangePreferencesService } from '@services/report-range-preferences.service';
+import { resolveDateRange } from '@components/range-toolbar/range-options';
+import { TakeoutDownloadService } from '@services/takeout-download.service';
 import { AccessService } from '@services/access.service';
 import { ShareService } from '@services/share.service';
 import type { SiteStats } from '@models/analytics.types';
@@ -60,7 +62,7 @@ describe('Dashboard', () => {
         };
 
         const period = { from: '2026-02-01T00:00:00.000Z', to: '2026-02-07T23:59:59.999Z' };
-        dashboard.statsQuery.loaded.set({ siteId: 'site-1', stats: value, period });
+        dashboard.statsQuery.loaded.set({ cohort: JSON.stringify(['site-1', undefined, [], [], []]), stats: value, period });
         dashboard.isStatsLoading.set(false);
     };
 
@@ -525,6 +527,92 @@ describe('Dashboard', () => {
             expect(sessions?.loading).toBe(false);
             expect(sessions?.updateKey).toBe(1);
             expect(fixture.nativeElement.querySelectorAll('app-kpi-card p-skeleton').length).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each(['today', '24h', 'yesterday', 'custom'] as const)('refreshes the selected %s bounds for every dashboard report without resetting pagination', async (preset) => {
+        vi.useFakeTimers();
+        try {
+            const start = new Date(2026, 5, 15, 10);
+            const later = new Date(2026, 5, 16, 11);
+            vi.setSystemTime(start);
+            const ranges = TestBed.inject(ReportRangePreferencesService);
+            ranges.selectRange({ value: { value: preset }, customRange: [new Date(2025, 0, 1), new Date(2025, 0, 2)] });
+            const initial = ranges.currentDateRange()!;
+            const backend = TestBed.inject(HttpBackend);
+            vi.spyOn(TestBed.inject(FetchBackend), 'handle').mockImplementation((req) => backend.handle(req));
+            vi.spyOn(TestBed.inject(AccessService), 'canSite').mockReturnValue(true);
+            const download = vi.spyOn(TestBed.inject(TakeoutDownloadService), 'downloadFromUrl').mockReturnValue(of('hits.csv'));
+            component['applyMetricFilter']('path', { name: '/first', value: 1 });
+            initialOnboarding.flush({ complete: true, steps: [] });
+            startTrackingSite();
+            const details = fixture.nativeElement.querySelector('app-visible-time-report details') as HTMLDetailsElement;
+            details.open = true;
+            details.dispatchEvent(new Event('toggle'));
+            fixture.detectChanges();
+            const take = (report: string) => http.expectOne((req) => req.url === '/api/sites/site-1/' + report);
+            const page = { data: [{ id: 'one', path: '/first' }], total: 25 };
+            take('hits').flush(page);
+            take('visible-time').flush([]);
+            await Promise.resolve();
+            fixture.detectChanges();
+            fixture.nativeElement.querySelector('app-traffic-records-card .p-paginator-next').click();
+            take('hits').flush(page);
+            fixture.detectChanges();
+
+            vi.setSystemTime(later);
+            if (preset === '24h' || preset === 'yesterday') await deliverHit();
+            else component.refreshAll();
+            fixture.detectChanges();
+            const expected = preset === 'today' || preset === '24h' ? resolveDateRange({ value: preset })! : initial;
+            const hits = take('hits');
+            const visible = take('visible-time');
+            expect(hits.request.params.get('offset')).toBe('10');
+            expect.soft([hits.request.params.get('from'), hits.request.params.get('to')]).toEqual([expected.from, expected.to]);
+            expect.soft([visible.request.params.get('from'), visible.request.params.get('to')]).toEqual([expected.from, expected.to]);
+            expect.soft(vi.mocked(TestBed.inject(StatsService).fetchStats).mock.lastCall?.slice(1, 3)).toEqual([expected.from, expected.to]);
+            expect.soft(vi.mocked(TestBed.inject(AnalyticsService).getAIActivity).mock.lastCall?.slice(1, 3)).toEqual([expected.from, expected.to]);
+            component['exportFiltered']('csv');
+            const exported = new URL(download.mock.lastCall![0], location.origin);
+            expect(exported.pathname).toBe('/api/sites/site-1/hits/export');
+            expect(exported.searchParams.getAll('filter')).toEqual(['path:/first']);
+            expect([exported.searchParams.get('from'), exported.searchParams.get('to')]).toEqual([expected.from, expected.to]);
+            hits.flush(page);
+            visible.flush([]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('finishes slow initial and background page statistics during sustained realtime activity', async () => {
+        vi.useFakeTimers();
+        try {
+            initialOnboarding.flush({ complete: true, steps: [] });
+            const initial = new Subject<SiteStats>();
+            const refresh = new Subject<SiteStats>();
+            const stats = vi.mocked(TestBed.inject(StatsService).fetchStats).mockReturnValueOnce(initial).mockReturnValueOnce(refresh);
+            startTrackingSite();
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(1);
+
+            initial.next(emptySiteStats({ top_pages: [{ name: '/before', value: 1 }] }));
+            initial.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(2);
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(2);
+            expect(fixture.nativeElement.textContent).toContain('/before');
+
+            refresh.next(emptySiteStats({ top_pages: [{ name: '/after', value: 2 }] }));
+            fixture.detectChanges();
+            expect(fixture.nativeElement.textContent).toContain('/after');
+            refresh.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(3);
         } finally {
             vi.useRealTimers();
         }

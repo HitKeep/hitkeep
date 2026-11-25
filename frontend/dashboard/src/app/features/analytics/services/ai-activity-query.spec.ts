@@ -80,7 +80,10 @@ describe('AIActivityQuery', () => {
         const { query, responses } = createQuery();
 
         load(query, { ...request, filters: [{ type: 'ai_bot', value: 'GPTBot' }] });
-        load(query, { ...request, filters: [{ type: 'ai_bot', value: 'ClaudeBot' }] });
+        query.load({ ...request, filters: [{ type: 'ai_bot', value: 'ClaudeBot' }] });
+        responses[0].next(emptyAIActivityReport({ ai_requests: 111 }));
+        expect(query.report()).toBeNull();
+        TestBed.tick();
 
         expect(responses[0].observed).toBe(false);
         expect(responses[1].observed).toBe(true);

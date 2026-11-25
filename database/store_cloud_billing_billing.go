@@ -236,18 +236,6 @@ func (s *Store) UpsertCloudBillingAccount(ctx context.Context, account CloudBill
 	)
 }
 
-// HasCloudSubscriptionHistory also covers subscriptions predating conversion milestones.
-func (s *Store) HasCloudSubscriptionHistory(ctx context.Context, teamID uuid.UUID) (bool, error) {
-	var prior bool
-	err := s.db.QueryRowContext(ctx, `
-		SELECT EXISTS(SELECT 1 FROM cloud_conversion_events WHERE tenant_id = ? AND event_name = ?)
-		    OR EXISTS(SELECT 1 FROM cloud_billing_events WHERE tenant_id = ?
-		              AND event_type IN ('checkout.session.completed', 'customer.subscription.created',
-		                                 'customer.subscription.updated', 'customer.subscription.deleted'))
-	`, teamID, CloudConversionSubscriptionActivated, teamID).Scan(&prior)
-	return prior, err
-}
-
 // MarkCloudBillingCheckoutPending preserves a webhook's authoritative state if it changed during Checkout.
 func (s *Store) MarkCloudBillingCheckoutPending(ctx context.Context, previous CloudBillingAccount, billingInterval, priceID string) error {
 	return s.Exec(ctx, `

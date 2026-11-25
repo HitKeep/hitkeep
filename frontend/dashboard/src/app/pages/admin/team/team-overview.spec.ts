@@ -18,7 +18,7 @@ describe('TeamOverviewPage', () => {
     let catalogCurrency = 'EUR';
     let routeQuery = convertToParamMap({});
     let multipleTeams = false;
-    let billingState: { team_id: string; plan_code: string; subscription_status: string; pending_plan_code: string; billing: string; annual_offer?: import('@services/cloud.service').CloudBillingState['annual_offer'] } = {
+    let billingState: { team_id: string; plan_code: string; subscription_status: string; pending_plan_code: string; billing: string; promotion?: import('@services/cloud.service').CloudBillingState['promotion'] } = {
         team_id: '00000000-0000-0000-0000-000000000001',
         plan_code: 'free',
         subscription_status: 'free',
@@ -167,7 +167,7 @@ describe('TeamOverviewPage', () => {
                                     ariaLabel: 'Copy to clipboard'
                                 }
                             },
-                            cloud: { annualOffer: { saving: 'Black Friday · 30% off', firstYear: 'first year', renewal: 'Renews at {{price}} per year.', deadline: 'Start checkout before {{date}}.' } },
+                            cloud: { promotion: { saving: '{{percent}} off one invoice', withCode: 'with {{code}}', annualRenewal: 'Renews at {{price}} per year.', deadline: 'Start checkout before {{date}}.' } },
                             teams: { roles: { owner: 'Owner' } },
                             signup: {
                                 plans: {
@@ -226,6 +226,9 @@ describe('TeamOverviewPage', () => {
                     useValue: {
                         createBillingPortalSession: vi.fn().mockReturnValue(of({ url: 'https://billing.stripe.test/session' })),
                         createBillingCheckoutSession: vi.fn().mockReturnValue(of({ url: 'https://checkout.stripe.test/session' })),
+                        redeemPromotion: vi.fn().mockReturnValue(of(undefined)),
+                        watchBillingState: vi.fn(() => of(billingState)),
+                        refreshBillingState: vi.fn(),
                         getBillingState: vi.fn().mockImplementation(() => of(billingState)),
                         getPlans: vi.fn().mockImplementation(() =>
                             of([
@@ -439,14 +442,42 @@ describe('TeamOverviewPage', () => {
     }
 
     it('reviews and submits the team-bound first-invoice offer in its currency', async () => {
-        const state = { ...billingState, annual_offer: { code: 'HKBF26', ends_at: new Date(Date.now() + 60000).toISOString(), prices: { business: { first_invoice_minor: 27300, renewal_minor: 39000, currency: 'USD' } } } };
+        const state = { ...billingState, promotion: { code: 'HKBF26', percent_off: 30, ends_at: new Date(Date.now() + 60000).toISOString(), prices: { business: { annual: { with_code_minor: 27300, regular_minor: 39000, currency: 'USD' } } } } };
         const component = await showRecovery({ purchase: 'review', plan: 'business', billing: 'annual' }, state);
-        const offer = fixture.nativeElement.querySelector('app-annual-offer-price');
+        const offer = fixture.nativeElement.querySelector('app-promotion-price');
         expect(offer.querySelector('strong').textContent).toBe('$273.00');
         expect(offer.textContent).toContain('Renews at $390.00 per year.');
         vi.spyOn(component, 'redirectTo').mockImplementation(() => undefined);
         component.startRecoveryCheckout();
-        expect(TestBed.inject(CloudService).createBillingCheckoutSession).toHaveBeenCalledWith({ plan_code: 'business', billing: 'annual', locale: 'en', team_id: state.team_id, expected_offer: 'HKBF26' });
+        expect(TestBed.inject(CloudService).createBillingCheckoutSession).toHaveBeenCalledWith({ plan_code: 'business', billing: 'annual', locale: 'en', team_id: state.team_id, expected_promotion: 'HKBF26' });
+    });
+
+    it('redeems a paid monthly invoice only after entering the code and submitting', async () => {
+        const team = createActiveTeam();
+        activeTeam.set({ ...team, plan: { ...team.plan!, code: 'pro', name: 'Pro' } });
+        const state = {
+            ...billingState,
+            plan_code: 'pro',
+            subscription_status: 'active',
+            promotion: { code: 'HKBF26', percent_off: 30, ends_at: new Date(Date.now() + 60000).toISOString(), prices: { pro: { monthly: { with_code_minor: 1050, regular_minor: 1500, currency: 'USD' } } } }
+        };
+        await showRecovery({ team: team.id }, state);
+        const service = TestBed.inject(CloudService);
+        const input = fixture.nativeElement.querySelector('#promotion-code') as HTMLInputElement;
+        expect(input.value).toBe('');
+        expect(service.redeemPromotion).not.toHaveBeenCalled();
+        input.value = 'HKBF26';
+        input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        expect(service.redeemPromotion).toHaveBeenCalledWith(team.id, 'HKBF26');
+        expect(service.createBillingCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('keeps an explicit review selection when a different checkout is pending', async () => {
+        const state = { ...billingState, subscription_status: 'pending_checkout', pending_plan_code: 'business', billing: 'monthly' };
+        const review = await showRecovery({ purchase: 'review', plan: 'pro', billing: 'annual' }, state);
+        expect(review.recoveryIntent()).toEqual({ plan: 'pro', billing: 'annual' });
+        const canceled = await showRecovery({ checkout: 'canceled', team: state.team_id }, state);
+        expect(canceled.recoveryIntent()).toEqual({ plan: 'business', billing: 'monthly' });
     });
 
     it('requires the team from an annual offer link before allowing review', async () => {

@@ -121,7 +121,6 @@ export class Funnels {
         const site = this.siteService.activeSite();
         return !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageGoals);
     });
-    protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficFunnelIds = computed(() => {
         const selected = this.selectedFunnelId();
         return this.funnels()

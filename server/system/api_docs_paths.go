@@ -320,11 +320,11 @@ func openAPIV1CorePaths() map[string]any {
 				jsonBody(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"plan_code":      map[string]any{"type": "string", "enum": []string{"pro", "business"}},
-						"billing":        map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},
-						"locale":         map[string]any{"type": "string"},
-						"team_id":        map[string]any{"type": "string", "format": "uuid", "description": "Reject checkout if the active team has changed since review."},
-						"expected_offer": map[string]any{"type": "string", "description": "Reject checkout if this reviewed offer no longer applies."},
+						"plan_code":          map[string]any{"type": "string", "enum": []string{"pro", "business"}},
+						"billing":            map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},
+						"locale":             map[string]any{"type": "string"},
+						"team_id":            map[string]any{"type": "string", "format": "uuid", "description": "Reject checkout if the active team has changed since review."},
+						"expected_promotion": map[string]any{"type": "string", "description": "Require manual Stripe promotion-code entry to be available for the reviewed code."},
 					},
 					"required": []string{"plan_code"},
 				}),
@@ -340,9 +340,14 @@ func openAPIV1CorePaths() map[string]any {
 					"401": errResp("Unauthorized"),
 					"403": errResp("Team billing access denied"),
 					"404": errResp("Cloud billing account not found"),
-					"409": errResp("Existing paid plan, conflicting checkout, active team changed, or reviewed offer no longer applies"),
+					"409": errResp("Existing paid plan, conflicting checkout, active team changed, or reviewed promotion is unavailable"),
 					"502": errResp("Unable to start checkout"),
 				}),
+		},
+		"/api/cloud/billing/promotion": map[string]any{
+			"post": cloudOp("Redeem a Cloud billing promotion", "Apply the entered promotion code to the active team's existing subscription. Requires team.manage_settings. The next eligible invoice receives the once-only discount.", secCookie(), nil,
+				jsonBody(map[string]any{"type": "object", "properties": map[string]any{"team_id": map[string]any{"type": "string", "format": "uuid"}, "code": map[string]any{"type": "string"}}, "required": []string{"team_id", "code"}}),
+				map[string]any{"204": map[string]any{"description": "Stripe confirmed the promotion on this subscription."}, "400": errResp("Invalid code or team"), "401": errResp("Unauthorized"), "403": errResp("Team billing access denied"), "409": errResp("Team, promotion, or subscription is ineligible"), "502": errResp("Unable to confirm promotion")}),
 		},
 		"/api/cloud/billing/state": map[string]any{
 			"get": cloudOp("Get Cloud billing state", "Returns authoritative billing state for the authenticated active Cloud team. Requires team.manage_settings. A pending plan is reported only while checkout is pending; a paid plan is never described as Free.", secCookie(), nil, nil,
@@ -351,12 +356,12 @@ func openAPIV1CorePaths() map[string]any {
 						"team_id":             map[string]any{"type": "string", "format": "uuid"},
 						"plan_code":           map[string]any{"type": "string"},
 						"subscription_status": map[string]any{"type": "string"},
-						"annual_offer": map[string]any{"type": "object", "description": "Eligible first annual invoice prices for this team. Start Checkout strictly before ends_at.", "properties": map[string]any{
-							"code": map[string]any{"type": "string"}, "ends_at": map[string]any{"type": "string", "format": "date-time"},
-							"prices": map[string]any{"type": "object", "description": "Annual prices keyed by eligible plan code (pro or business).", "additionalProperties": map[string]any{"type": "object", "properties": map[string]any{
-								"first_invoice_minor": map[string]any{"type": "integer"}, "renewal_minor": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"},
-							}, "required": []string{"first_invoice_minor", "renewal_minor", "currency"}}},
-						}, "required": []string{"code", "ends_at", "prices"}},
+						"promotion": map[string]any{"type": "object", "description": "Optional promotion for this billing customer. Redeem strictly before ends_at.", "properties": map[string]any{
+							"code": map[string]any{"type": "string"}, "percent_off": map[string]any{"type": "number", "description": "Percentage off one invoice on successful redemption."}, "ends_at": map[string]any{"type": "string", "format": "date-time"},
+							"prices": map[string]any{"type": "object", "description": "Quotes keyed by eligible plan (pro or business) then billing interval (monthly or annual).", "additionalProperties": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "object", "properties": map[string]any{
+								"with_code_minor": map[string]any{"type": "integer", "description": "Price only after successful redemption."}, "regular_minor": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"},
+							}, "required": []string{"with_code_minor", "regular_minor", "currency"}}}},
+						}, "required": []string{"code", "percent_off", "ends_at", "prices"}},
 						"pending_plan_code": map[string]any{"type": "string", "enum": []string{"pro", "business"}},
 						"billing":           map[string]any{"type": "string", "enum": []string{"monthly", "annual"}},
 					}, "required": []string{"team_id", "plan_code", "subscription_status"}}),

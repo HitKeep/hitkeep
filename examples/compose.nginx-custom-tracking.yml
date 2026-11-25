@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:1.30.7-alpine
+    image: nginx:1.30.8-alpine
     container_name: hitkeep-nginx
     restart: unless-stopped
     depends_on:

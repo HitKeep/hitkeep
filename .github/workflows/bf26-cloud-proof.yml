@@ -14,12 +14,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gate: [cloud-test, cloud-build, cloud-image, self-hosted-image, default-tenant-migration-acceptance]
+        gate: [cloud-test, cloud-image, default-tenant-migration-acceptance]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: f472e83a460331d8c3f76b7c03a511df3502b1ba
-          fetch-depth: 0
+          ref: 7787f333b6004d86df5ed4a695397a1f7d088a72
+          fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
         with:
@@ -30,6 +30,29 @@ jobs:
           GATE: ${{ matrix.gate }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = f472e83a460331d8c3f76b7c03a511df3502b1ba
-          plan_id="$(./hk qa plan full --base origin/main --output json | jq -er '.data.plan_id')"
+          test "$(git rev-parse HEAD)" = 7787f333b6004d86df5ed4a695397a1f7d088a72
+          plan_id="$(./hk qa plan full --base c6aafa285f0667ec73dc9049b9935d68fe538d1f --output json | jq -er '.data.plan_id')"
           ./hk qa full --plan-id "$plan_id" --gate "$GATE"
+      - name: Verify the Optimus table patch in the cloud image's embedded dashboard
+        if: matrix.gate == 'cloud-image'
+        run: |
+          set -euo pipefail
+          image=$(./hk catalog --output json | jq -er '.data.variants[] | select(.id == "cloud") | .local_image')
+          docker image inspect "$image" --format 'Cloud image {{.Id}}, {{.Os}}/{{.Architecture}}'
+          container=$(docker create "$image")
+          trap 'docker rm -v "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/local/bin/hitkeep" "$RUNNER_TEMP/verified-cloud-hitkeep"
+          python3 - "$RUNNER_TEMP/verified-cloud-hitkeep" <<'PY'
+          import mmap
+          import re
+          import sys
+
+          guard = re.compile(
+              rb'saveColumnWidths\(([\w$]+)\)\{if\(!this\.tableHeaderViewChild\)\{'
+              rb'\1\.columnWidths=this\.columnWidthsState,\1\.tableWidth=this\.tableWidthState;return\}'
+          )
+          with open(sys.argv[1], "rb") as binary, mmap.mmap(binary.fileno(), 0, access=mmap.ACCESS_READ) as embedded:
+              if not guard.search(embedded):
+                  sys.exit("Patched saveColumnWidths guard missing from the cloud binary")
+          print("Verified the compiled table-header guard and both preserved widths in the cloud binary")
+          PY

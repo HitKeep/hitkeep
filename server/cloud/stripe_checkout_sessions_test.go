@@ -75,8 +75,8 @@ func TestStripeCheckoutSessionWireContract(t *testing.T) {
 			if err := r.ParseForm(); err != nil {
 				t.Error(err)
 			}
-			if r.Form.Get("discounts[0][coupon]") != annualCoupon || r.Form.Get("expires_at") != "1796630400" || r.Form.Get("adaptive_pricing[enabled]") != "false" || r.Form.Has("allow_promotion_codes") {
-				t.Error("missing private one-time discount or bounded expiry")
+			if r.Form.Has("discounts[0][coupon]") || r.Form.Has("discounts[0][promotion_code]") || r.Form.Get("adaptive_pricing[enabled]") != "false" || r.Form.Get("allow_promotion_codes") != "true" {
+				t.Error("native promotion entry must not preselect a discount")
 			}
 			if r.Header.Get("Idempotency-Key") != "wire-key" || r.Form.Get("mode") != "subscription" || r.Form.Get("line_items[0][price]") != "price_wire" || r.Form.Get("line_items[0][quantity]") != "1" || r.Form.Get("metadata[tenant_id]") != teamID.String() {
 				t.Errorf("unsafe create request: %v", r.Form)
@@ -108,7 +108,7 @@ func TestStripeCheckoutSessionWireContract(t *testing.T) {
 	defer server.Close()
 	backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{URL: new(server.URL), HTTPClient: server.Client(), MaxNetworkRetries: new(int64(0))})
 	client := &stripeSDKClient{client: stripe.NewClient("sk_fixture", stripe.WithBackends(&stripe.Backends{API: backend}))}
-	session, err := client.CreateCheckoutSession(t.Context(), createCheckoutSessionInput{Coupon: annualCoupon, ExpiresAt: 1796630400, IdempotencyKey: "wire-key", CustomerID: "cus_wire", PriceID: "price_wire", TenantID: teamID, PlanCode: "pro", BillingInterval: "annual"})
+	session, err := client.CreateCheckoutSession(t.Context(), createCheckoutSessionInput{AllowPromotionCodes: true, IdempotencyKey: "wire-key", CustomerID: "cus_wire", PriceID: "price_wire", TenantID: teamID, PlanCode: "pro", BillingInterval: "annual"})
 	if err != nil {
 		t.Fatal(err)
 	}

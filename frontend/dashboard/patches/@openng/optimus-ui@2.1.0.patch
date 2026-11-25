@@ -1,0 +1,17 @@
+--- a/fesm2022/openng-optimus-ui-table.mjs
++++ b/fesm2022/openng-optimus-ui-table.mjs
+@@ -2917,8 +2917,14 @@
+             this.onStateRestore.emit(state);
+         }
+     }
+     saveColumnWidths(state) {
++        // Restoring filters can save state before the table header has rendered.
++        if (!this.tableHeaderViewChild) {
++            state.columnWidths = this.columnWidthsState;
++            state.tableWidth = this.tableWidthState;
++            return;
++        }
+         state.columnWidths = this._totalTableWidth().join(',');
+         if (this.columnResizeMode === 'expand' && this.tableViewChild) {
+             state.tableWidth = DomHandler.getOuterWidth(this.tableViewChild.nativeElement);
+         }

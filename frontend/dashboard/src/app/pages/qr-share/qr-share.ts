@@ -7,7 +7,7 @@ import { TagModule } from '@openng/optimus-ui/tag';
 import { MenuItem } from '@openng/optimus-ui/api';
 import { buildTakeoutExportMenuItems, TakeoutExportFormat } from '@core/export/export-formats';
 import { CopyControl } from '@components/copy-control/copy-control';
-import { DEFAULT_RANGE_OPTIONS, RangeOption, RangeToolbar, resolveDateRange, selectDefaultRange } from '@components/range-toolbar/range-toolbar';
+import { DEFAULT_RANGE_OPTIONS, findLinkedPreset, RangeOption, RangeToolbar, resolveDateRange, selectDefaultRange } from '@components/range-toolbar/range-toolbar';
 import { KpiCard } from '@features/analytics/components/kpi-card';
 import { MetricCardGroup, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
@@ -29,6 +29,7 @@ export class QRSharePage {
     private readonly transloco = inject(TranslocoService);
     private readonly destroyRef = inject(DestroyRef);
     protected readonly token = input<string>();
+    protected readonly range = input<string>();
 
     protected readonly qr = signal<QRCode | null>(null);
     protected readonly summary = signal<QRCodeSummary | null>(null);
@@ -39,10 +40,7 @@ export class QRSharePage {
     private readonly refreshSequence = signal(0);
 
     protected readonly timeRanges = signal<RangeOption[]>(DEFAULT_RANGE_OPTIONS);
-    protected readonly selectedRange = linkedSignal<RangeOption[], RangeOption>({
-        source: this.timeRanges,
-        computation: (ranges, previous) => selectDefaultRange(ranges, previous?.value)
-    });
+    protected readonly selectedRange = linkedSignal(() => findLinkedPreset(this.timeRanges(), this.range()) ?? selectDefaultRange(this.timeRanges()));
     protected readonly customRangeDates = signal<Date[] | null>(null);
     protected readonly assetURL = computed(() => {
         const token = this.token()?.trim();

@@ -954,7 +954,7 @@
       "thisYearShort": "Este año",
       "lastYear": "Último año",
       "lastYearShort": "1a",
-      "moreRanges": "Más rangos",
+      "allRanges": "Todos los rangos",
       "searchRanges": "Buscar rangos",
       "customRange": "Rango personalizado",
       "customShort": "Personalizado",
@@ -4334,14 +4334,25 @@
       "upgradeAction": "Mejorar a Pro",
       "dismissAction": "Descartar aviso"
     },
-    "annualOffer": {
-      "saving": "Black Friday · 30 % de descuento",
-      "firstYear": "el primer año",
-      "renewal": "Se renueva por {{price}} al año.",
-      "deadline": "Inicia el pago antes del {{date}}.",
+    "promotion": {
+      "saving": "{{percent}} de descuento en una factura",
+      "withCode": "con {{code}}",
+      "annualRenewal": "Precio habitual de {{price}} al año.",
+      "monthlyRenewal": "Precio habitual de {{price}} al mes.",
+      "checkoutDeadline": "Completa el pago antes del {{date}}.",
+      "applyDeadline": "Aplica el código antes del {{date}}.",
+      "review": "Ver {{plan}}",
+      "heading": "Ahorra en tu próxima factura",
+      "once": "Una vez por cliente de facturación de Stripe.",
+      "redeem": "Canjear código",
+      "copy": "Copiar código",
+      "code": "Código promocional",
+      "apply": "Aplicar a la próxima factura",
+      "applied": "El descuento se aplicará a tu próxima factura de suscripción válida.",
+      "failed": "No se pudo confirmar el descuento. Comprueba el código y tus datos de facturación.",
+      "checkout": "Introduce el código en Stripe Checkout y revisa el total antes de pagar.",
       "history": "Conserva {{days}} días de historial con {{plan}}",
-      "freeHistory": "Tu plan Free conserva {{days}} días.",
-      "review": "Ver {{plan}} anual"
+      "freeHistory": "Tu plan Free conserva {{days}} días."
     },
     "planChip": {
       "free": "Plan gratuito",

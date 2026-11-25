@@ -96,8 +96,8 @@ jobs:
         run: |
           set -euo pipefail
           publisher_archive="mcp-publisher_linux_amd64.tar.gz"
-          publisher_url="https://github.com/modelcontextprotocol/registry/releases/download/v1.8.11/$publisher_archive"
-          publisher_sha256="99fbd857ae2277e5e4a4a2cddc7f4d3e64612c6f90950f44584c3539c9df854f"
+          publisher_url="https://github.com/modelcontextprotocol/registry/releases/download/v1.8.16/$publisher_archive"
+          publisher_sha256="6e2f799550cf843c6fd3350498d56cc49be3dc0af1e6237eb0e6435c7a9d5c05"
           curl --fail --silent --show-error --location "$publisher_url" --output "$publisher_archive"
           printf '%s  %s\n' "$publisher_sha256" "$publisher_archive" | sha256sum --check --status
           tar -xzf "$publisher_archive" mcp-publisher

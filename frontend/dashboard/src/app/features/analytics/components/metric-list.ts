@@ -68,6 +68,7 @@ export class MetricList {
      * top-N says nothing about the metric the row reports.
      */
     showShare = input<boolean>(true);
+    shareTotal = input<number>();
     framed = input<boolean>(true);
     showHeader = input<boolean>(true);
     rowClicked = output<MetricListItem>();
@@ -78,7 +79,7 @@ export class MetricList {
     protected readonly isScrollFrameAtBottom = signal(true);
     protected readonly scrollThumbTop = signal(0);
     protected readonly scrollThumbHeight = signal(100);
-    protected readonly totalValue = computed(() => this.data().reduce((sum, item) => sum + item.value, 0));
+    protected readonly totalValue = computed(() => this.shareTotal() ?? this.data().reduce((sum, item) => sum + item.value, 0));
     protected readonly maxValue = computed(() => {
         const list = this.data();
         if (list.length === 0) return 0;

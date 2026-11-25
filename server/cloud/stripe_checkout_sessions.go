@@ -12,7 +12,7 @@ import (
 )
 
 func checkoutSessionFromStripe(s *stripe.CheckoutSession) *checkoutSessionOutput {
-	out := &checkoutSessionOutput{Coupon: s.Metadata["coupon"], PriceID: s.Metadata["price_id"], ID: s.ID, URL: s.URL, Status: string(s.Status), PaymentStatus: string(s.PaymentStatus), TenantID: s.Metadata["tenant_id"], PlanCode: s.Metadata["plan_code"], BillingInterval: s.Metadata["billing_interval"], Currency: string(s.Currency), AmountSubtotal: s.AmountSubtotal, AmountTotal: s.AmountTotal, ExpiresAt: s.ExpiresAt}
+	out := &checkoutSessionOutput{AllowPromotionCodes: s.AllowPromotionCodes, PriceID: s.Metadata["price_id"], ID: s.ID, URL: s.URL, Status: string(s.Status), PaymentStatus: string(s.PaymentStatus), TenantID: s.Metadata["tenant_id"], PlanCode: s.Metadata["plan_code"], BillingInterval: s.Metadata["billing_interval"], Currency: string(s.Currency), AmountSubtotal: s.AmountSubtotal, AmountTotal: s.AmountTotal, ExpiresAt: s.ExpiresAt}
 	if s.Customer != nil {
 		out.CustomerID = s.Customer.ID
 	}
@@ -78,7 +78,7 @@ func (h *handler) reuseOrCreateCheckout(ctx context.Context, input createCheckou
 			previous = s.ID
 		}
 		// Only Stripe's terminal subscription state makes a historical payment safe to replace.
-		if s.Status == "complete" && (input.Coupon != "" || (s.SubscriptionStatus != string(stripe.SubscriptionStatusCanceled) && s.SubscriptionStatus != string(stripe.SubscriptionStatusIncompleteExpired))) {
+		if s.Status == "complete" && s.SubscriptionStatus != string(stripe.SubscriptionStatusCanceled) && s.SubscriptionStatus != string(stripe.SubscriptionStatusIncompleteExpired) {
 			return nil, errCheckoutConflict
 		}
 		if s.Status != "open" {
@@ -92,19 +92,9 @@ func (h *handler) reuseOrCreateCheckout(ctx context.Context, input createCheckou
 		}
 		pending = s
 	}
-	if input.Coupon != "" {
-		input.ExpiresAt = annualSessionExpiry(h.now())
-		if input.ExpiresAt == 0 {
-			return nil, errCheckoutConflict
-		}
-	}
 	if pending != nil {
-		if pending.Coupon == input.Coupon {
+		if !input.AllowPromotionCodes || pending.AllowPromotionCodes {
 			return pending, nil
-		}
-		if pending.Coupon != "" {
-			// An already issued discounted URL may finish until its original expiry.
-			return nil, errCheckoutConflict
 		}
 		expired, err := h.stripe.ExpireCheckoutSession(ctx, pending.ID, stripeIdempotencyKey("replace-checkout", pending.ID))
 		if err != nil {
@@ -117,9 +107,6 @@ func (h *handler) reuseOrCreateCheckout(ctx context.Context, input createCheckou
 	}
 	// One key for the next team purchase, independent of browser/protocol and plan.
 	input.IdempotencyKey = fmt.Sprintf("checkout_%x", sha256.Sum256([]byte(input.TenantID.String()+":"+previous)))
-	if input.Coupon != "" && !h.now().Before(annualOfferEnd) {
-		return nil, errCheckoutConflict
-	}
 	return h.stripe.CreateCheckoutSession(ctx, input)
 }
 

@@ -53,7 +53,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <app-filter-chip-row [chips]="filterChips()" (clearAll)="clearFilter()" />
         @if (!embed.isEmbedMode()) {
-        <app-export-split-button [isExporting]="isExportingFiltered()" [disabled]="!exportUrl() || isExportingFiltered()" (export)="exportFiltered($event)" />
+        <app-export-split-button [isExporting]="isExportingFiltered()" [disabled]="!reportRequest() || isExportingFiltered()" (export)="exportFiltered($event)" />
         }
     </div>
     <app-export-status-banner [state]="filteredExportState()" successKey="dashboard.exportStatus.success" errorKey="dashboard.exportStatus.error" />
@@ -69,8 +69,7 @@
     <app-traffic-records-card
         [siteId]="siteService.activeSite()?.id || null"
         [siteDomain]="siteDomain()"
-        [from]="trafficDateRange()?.from || null"
-        [to]="trafficDateRange()?.to || null"
+        [window]="reportRange.window()"
         [filters]="activeFilters()"
         [goalIds]="trafficGoalIds()"
         [funnelIds]="trafficFunnelIds()"

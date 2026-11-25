@@ -177,7 +177,7 @@ describe('MetricList', () => {
 
         const flag = fixture.debugElement.query(By.css('.metric-list__flag'));
         expect(flag).not.toBeNull();
-        expect(flag.nativeElement.getAttribute('ngsrc') ?? flag.nativeElement.getAttribute('src')).toContain('/flags/gb.svg');
+        expect(flag.nativeElement.getAttribute('ngsrc') ?? flag.nativeElement.getAttribute('src')).toContain('flags/gb.svg');
     });
 
     it('should map Czech to the Czech Republic flag', () => {
@@ -188,7 +188,7 @@ describe('MetricList', () => {
         fixture.detectChanges();
 
         const flag = fixture.debugElement.query(By.css('.metric-list__flag'));
-        expect(flag.nativeElement.getAttribute('ngsrc') ?? flag.nativeElement.getAttribute('src')).toContain('/flags/cz.svg');
+        expect(flag.nativeElement.getAttribute('ngsrc') ?? flag.nativeElement.getAttribute('src')).toContain('flags/cz.svg');
     });
 
     describe('provenance hint', () => {
@@ -250,6 +250,6 @@ describe('MetricList', () => {
 
         const flag = fixture.debugElement.query(By.css('.metric-list__flag'));
         const source = flag.nativeElement.getAttribute('ngsrc') ?? flag.nativeElement.getAttribute('src');
-        expect(source.includes('/flags/language/non.svg') || source.includes('/flags/no.svg')).toBeTruthy();
+        expect(source.includes('flags/language/non.svg') || source.includes('flags/no.svg')).toBeTruthy();
     });
 });

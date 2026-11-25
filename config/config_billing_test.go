@@ -23,6 +23,7 @@ func TestLoadCloudConfigFromEnv(t *testing.T) {
 		"HITKEEP_STRIPE_SECRET_KEY":              "sk_test_123",
 		"HITKEEP_STRIPE_PUBLISHABLE_KEY":         "pk_test_123",
 		"HITKEEP_STRIPE_WEBHOOK_SECRET":          "whsec_123",
+		"HITKEEP_STRIPE_PROMOTION_COUPON_ID":     "coupon_example",
 		"HITKEEP_STRIPE_PORTAL_CONFIGURATION_ID": "bpc_123",
 		"HITKEEP_STRIPE_PRICE_PRO_MONTHLY":       "price_pro",
 		"HITKEEP_STRIPE_PRICE_BUSINESS_MONTHLY":  "price_business",
@@ -54,7 +55,7 @@ func TestLoadCloudConfigFromEnv(t *testing.T) {
 	if conf.StripeSecretKey == "" || conf.StripePublishableKey == "" || conf.StripeWebhookSecret == "" {
 		t.Fatalf("expected stripe secrets to load from env")
 	}
-	if conf.StripePortalConfigurationID != "bpc_123" {
+	if conf.StripePromotionCouponID != "coupon_example" || conf.StripePortalConfigurationID != "bpc_123" {
 		t.Fatalf("unexpected stripe portal config: %+v", conf)
 	}
 	if conf.StripePriceProMonthly != "price_pro" || conf.StripePriceBusinessMonthly != "price_business" ||

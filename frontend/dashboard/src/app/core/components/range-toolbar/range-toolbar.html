@@ -1,11 +1,11 @@
 <div class="range-toolbar mb-6 flex flex-wrap items-center justify-between gap-3.5 max-md:items-stretch">
     <div class="range-toolbar__controls flex flex-wrap items-center gap-3 max-md:w-full max-md:gap-2">
-        <div class="range-toolbar__range-group max-md:w-full">
+        <div #rangeGroup class="range-toolbar__range-group max-md:w-full">
             <span id="range-toolbar-presets-label" class="sr-only">{{ "common.timeRangeSelectorAria" | transloco }}</span>
             <p-selectbutton
                 class="range-toolbar__preset-select"
                 [options]="visiblePresetRanges()"
-                [ngModel]="selectedPresetValue()"
+                [ngModel]="selectedRange().value"
                 optionLabel="shortLabel"
                 optionValue="value"
                 size="small"
@@ -14,14 +14,15 @@
                 (onChange)="selectPresetValue($event.value)"
             />
 
-            @if (overflowPresetRanges().length) {
+            @if (translatedTimeRanges().length) {
             <p-select
+                #rangeSelect="ngModel"
                 class="range-toolbar__more-select"
                 styleClass="range-toolbar__more-select-control"
                 panelStyleClass="range-toolbar__more-select-panel"
-                [options]="overflowPresetRanges()"
-                [ngModel]="overflowSelectValue()"
-                (ngModelChange)="selectOverflowPresetValue($event)"
+                [options]="translatedTimeRanges()"
+                [ngModel]="dropdownPreset()"
+                (onChange)="selectDropdownRange($event.value, $event.originalEvent, rangeSelect, customPopover, rangeGroup)"
                 optionLabel="label"
                 optionValue="value"
                 size="small"
@@ -29,16 +30,17 @@
                 filterBy="label,shortLabel,value"
                 [filterPlaceholder]="searchRangesLabel()"
                 [ariaFilterLabel]="searchRangesLabel()"
-                [ariaLabel]="moreRangesLabel()"
-                [placeholder]="moreRangesLabel()"
+                [ariaLabel]="allRangesLabel()"
+                [placeholder]="allRangesLabel()"
                 [resetFilterOnHide]="true"
                 [checkmark]="true"
                 appendTo="body"
-                [pTooltip]="moreRangesLabel()"
+                [pTooltip]="allRangesLabel()"
                 tooltipPosition="bottom"
-            />
-            }
-
+            >
+                <ng-template #selectedItem let-option>{{ option.quick ? allRangesLabel() : option.label }}</ng-template>
+            </p-select>
+            } @if (customOption()) {
             <p-button
                 type="button"
                 icon="pi pi-calendar"
@@ -52,6 +54,7 @@
                 tooltipPosition="bottom"
                 (onClick)="toggleCustomRange($event, customPopover)"
             />
+            }
         </div>
 
         @if (customRangeSummary(); as summary) {
@@ -125,17 +128,29 @@
     <ng-content select="[toolbar-right]" />
 
     @if (campaign.spotlight(); as deal) {
-    <section class="annual-upgrade" aria-labelledby="annual-upgrade-title">
-        <div class="annual-upgrade__benefit">
-            <span class="annual-upgrade__icon" aria-hidden="true"><i class="pi pi-history"></i></span>
+    <section class="billing-promotion" aria-labelledby="billing-promotion-title">
+        <div class="billing-promotion__benefit">
+            <span class="billing-promotion__icon" aria-hidden="true"><i class="pi pi-history"></i></span>
             <div class="min-w-0">
-                <h2 id="annual-upgrade-title" class="m-0 text-base leading-snug font-semibold">{{ 'cloud.annualOffer.history' | transloco: { days: deal.days, plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</h2>
-                <p class="m-0 mt-1 text-sm text-muted-color">{{ 'cloud.annualOffer.freeHistory' | transloco: { days: deal.current } }}</p>
+                @if (!deal.paid && deal.days && deal.current) {
+                <h2 id="billing-promotion-title" class="m-0 text-base leading-snug font-semibold">{{ 'cloud.promotion.history' | transloco: { days: deal.days, plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</h2>
+                <p class="m-0 mt-1 text-sm text-muted-color">{{ 'cloud.promotion.freeHistory' | transloco: { days: deal.current } }}</p>
+                } @else {
+                <h2 id="billing-promotion-title" class="m-0 text-base font-semibold">{{ 'cloud.promotion.heading' | transloco }}</h2>
+                <p class="m-0 mt-1 text-sm text-muted-color">{{ 'cloud.promotion.once' | transloco }}</p>
+                }
             </div>
         </div>
-        <app-annual-offer-price [price]="deal.price" [endsAt]="deal.endsAt" />
-        <a pButton severity="contrast" size="small" routerLink="/admin/team/overview" [queryParams]="{purchase: 'review', plan: deal.plan, billing: 'annual', team: deal.teamId}">
-            <span pButtonLabel>{{ 'cloud.annualOffer.review' | transloco: { plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</span><i class="pi pi-arrow-right" aria-hidden="true"></i>
+        <app-promotion-price [price]="deal.price" [paid]="deal.paid" [endsAt]="deal.offer.ends_at" [code]="deal.offer.code" [percentOff]="deal.offer.percent_off" [interval]="deal.interval" />
+        <a
+            pButton
+            severity="contrast"
+            size="small"
+            routerLink="/admin/team/overview"
+            [queryParams]="deal.paid ? {team: deal.teamId} : {purchase: 'review', plan: deal.plan, billing: deal.interval, team: deal.teamId}"
+            [fragment]="deal.paid ? 'promotion' : undefined"
+        >
+            <span pButtonLabel>{{ (deal.paid ? 'cloud.promotion.redeem' : 'cloud.promotion.review') | transloco: { plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</span><i class="pi pi-arrow-right" aria-hidden="true"></i>
         </a>
     </section>
     } @else if (retentionHintDays(); as days) {

@@ -27,10 +27,19 @@ describe('ReportRangePreferencesService', () => {
         expect(service.initialSelection(DEFAULT_RANGE_OPTIONS, fallback)).toEqual({ range: fallback, customRangeDates: null });
     });
 
-    it('restores a stored preset range', () => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ value: '7d' }));
+    it.each(['7d', '28d', '30d'])('restores the stored %s preset', (value) => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ value }));
 
-        expect(service.initialSelection().range.value).toBe('7d');
+        expect(service.initialSelection().range.value).toBe(value);
+    });
+
+    it('uses a linked preset for this view and restores the stored preference afterward', () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ value: '28d' }));
+        service.initialize(undefined, '30d');
+        expect(service.selectedRange().value).toBe('30d');
+
+        service.initialize();
+        expect(service.selectedRange().value).toBe('28d');
     });
 
     it('restores a stored custom range', () => {

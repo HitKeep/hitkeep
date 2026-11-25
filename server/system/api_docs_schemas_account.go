@@ -197,12 +197,13 @@ func openAPIV1AccountSchemas() map[string]any {
 		"CloudStatus": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"hosted":         map[string]any{"type": "boolean"},
-				"signup_enabled": map[string]any{"type": "boolean"},
-				"jurisdiction":   map[string]any{"type": "string"},
-				"region":         map[string]any{"type": "string"},
-				"upgrade_url":    map[string]any{"type": "string"},
-				"support_url":    map[string]any{"type": "string"},
+				"promotion_configured": map[string]any{"type": "boolean", "description": "A billing promotion is configured for this deployment."},
+				"hosted":               map[string]any{"type": "boolean"},
+				"signup_enabled":       map[string]any{"type": "boolean"},
+				"jurisdiction":         map[string]any{"type": "string"},
+				"region":               map[string]any{"type": "string"},
+				"upgrade_url":          map[string]any{"type": "string"},
+				"support_url":          map[string]any{"type": "string"},
 			},
 		},
 		"AskAIStatus": map[string]any{

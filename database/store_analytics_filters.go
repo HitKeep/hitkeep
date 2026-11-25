@@ -237,16 +237,16 @@ func (s *Store) queryUTMKpis(
 	//nolint:gosec // filterSQL is derived from a fixed allowlist
 	query := fmt.Sprintf(`
 		SELECT
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_campaign), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_campaign_hits,
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_content), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_content_hits,
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_medium), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_medium_hits,
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_source), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_source_hits,
-			COALESCE(SUM(CASE WHEN NULLIF(TRIM(h.utm_term), '') IS NOT NULL THEN 1 ELSE 0 END), 0) AS utm_term_hits,
+			COUNT(%s) AS utm_campaign_hits,
+			COUNT(%s) AS utm_content_hits,
+			COUNT(%s) AS utm_medium_hits,
+			COUNT(%s) AS utm_source_hits,
+			COUNT(%s) AS utm_term_hits,
 			COUNT(DISTINCT h.session_id) FILTER (WHERE h.paid_click IS TRUE) AS paid_signal_sessions,
 			COUNT(DISTINCT h.session_id) FILTER (WHERE h.paid_click IS NOT NULL) AS paid_signal_measured_sessions
 		FROM hits h
 		WHERE h.site_id = ? AND h.timestamp >= ? AND h.timestamp <= ?%s
-	`, filterSQL)
+	`, utmValueSQL("h.utm_campaign"), utmValueSQL("h.utm_content"), utmValueSQL("h.utm_medium"), utmValueSQL("h.utm_source"), utmValueSQL("h.utm_term"), filterSQL)
 
 	return s.db.QueryRowContext(ctx, query, append([]any{params.SiteID, params.Start, params.End}, filterArgs...)...).Scan(
 		&stats.UTMCampaignHits,

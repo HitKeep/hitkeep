@@ -134,7 +134,6 @@ export class Goals {
         const site = this.siteService.activeSite();
         return !!site && this.access.canSite(site.id, SITE_CAPABILITIES.manageGoals);
     });
-    protected trafficDateRange = computed(() => this.reportRange.currentDateRange());
     protected trafficGoalIds = computed(() => {
         const selected = this.selectedGoalId();
         return this.goals()

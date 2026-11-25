@@ -156,6 +156,7 @@ type Config struct {
 	StripeSecretKey             string `env:"HITKEEP_STRIPE_SECRET_KEY"              default:""      desc:"Stripe secret key for managed cloud billing"                       cloud:"true" sensitive:"redact"`
 	StripePublishableKey        string `env:"HITKEEP_STRIPE_PUBLISHABLE_KEY"         default:""      desc:"Stripe publishable key for managed cloud billing"                  cloud:"true" sensitive:"redact"`
 	StripeWebhookSecret         string `env:"HITKEEP_STRIPE_WEBHOOK_SECRET"          default:""      desc:"Stripe webhook signing secret for managed cloud billing"           cloud:"true" sensitive:"redact"`
+	StripePromotionCouponID     string `env:"HITKEEP_STRIPE_PROMOTION_COUPON_ID" default:"" desc:"Optional Stripe coupon for customer-entered, once-per-customer discounts" cloud:"true"`
 	StripePortalConfigurationID string `env:"HITKEEP_STRIPE_PORTAL_CONFIGURATION_ID" default:""   desc:"Stripe customer portal configuration ID for managed cloud billing" cloud:"true"`
 	StripePriceProMonthly       string `env:"HITKEEP_STRIPE_PRICE_PRO_MONTHLY"       default:""      desc:"Stripe monthly recurring price ID for the Pro plan"               cloud:"true"`
 	StripePriceBusinessMonthly  string `env:"HITKEEP_STRIPE_PRICE_BUSINESS_MONTHLY" default:""     desc:"Stripe monthly recurring price ID for the Business plan"          cloud:"true"`

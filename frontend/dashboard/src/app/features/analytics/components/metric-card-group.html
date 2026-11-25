@@ -44,6 +44,7 @@
                             [aiIconKind]="card.aiIconKind ?? 'none'"
                             [showProvenance]="card.showProvenance ?? false"
                             [showShare]="card.showShare ?? true"
+                            [shareTotal]="card.shareTotal"
                             (rowClicked)="handleRowClick(group, card, $event)"
                         />
                     </p-tabpanel>
@@ -74,6 +75,7 @@
                 [aiIconKind]="card.aiIconKind ?? 'none'"
                 [showProvenance]="card.showProvenance ?? false"
                 [showShare]="card.showShare ?? true"
+                [shareTotal]="card.shareTotal"
                 (rowClicked)="handleRowClick(group, card, $event)"
             />
             }

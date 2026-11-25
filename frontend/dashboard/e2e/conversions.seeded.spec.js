@@ -6,7 +6,7 @@ const PRIMARY_SEEDED_SITE_DOMAIN = "acme-analytics.io";
 test("dashboard goal and funnel rows replace the active conversion cohort", async ({ page }) => {
     await login(page, "/dashboard");
     await selectSeededSite(page);
-    await selectRange(page, "30d");
+    await selectRange(page, "28d");
 
     let filteredGoalStatsCount = 0;
     let filteredGoalHitsCount = 0;

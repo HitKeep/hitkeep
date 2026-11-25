@@ -288,13 +288,14 @@ func (h *handler) handleGetShareSiteStats() http.HandlerFunc {
 		}
 
 		params := api.AnalyticsParams{
-			SiteID:    site.ID,
-			UserID:    site.UserID,
-			Start:     start,
-			End:       end,
-			Filters:   filters,
-			GoalIDs:   goalIDs,
-			FunnelIDs: funnelIDs,
+			UTMOverview: q.Get("view") == "utm",
+			SiteID:      site.ID,
+			UserID:      site.UserID,
+			Start:       start,
+			End:         end,
+			Filters:     filters,
+			GoalIDs:     goalIDs,
+			FunnelIDs:   funnelIDs,
 		}
 
 		analyticsStore, err := h.ctx.AnalyticsStore(r.Context(), site.ID)

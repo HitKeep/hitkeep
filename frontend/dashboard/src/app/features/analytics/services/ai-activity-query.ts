@@ -1,6 +1,6 @@
 import { inject, Injector, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
-import { finalize, Subject, takeUntil, tap } from 'rxjs';
+import { finalize, Subject, takeUntil, tap, throwIfEmpty } from 'rxjs';
 
 import { AnalyticsService } from '@core/services/analytics.service';
 import type { AIActivityReport } from '@models/analytics.types';
@@ -42,14 +42,17 @@ export class AIActivityQuery {
             params: () => this.request(),
             stream: ({ params }) =>
                 this.analyticsService.getAIActivity(params.siteId, params.from, params.to, params.filters ?? [], params.comparison ?? undefined, params.goalIds ?? [], params.funnelIds ?? []).pipe(
+                    throwIfEmpty(),
                     takeUntil(this.cancel$),
                     tap({
                         next: (report) => {
+                            if (this.request() !== params) return;
                             this.report.set(report);
                             this.error.set(null);
                             params.onSuccess?.(report);
                         },
                         error: (error) => {
+                            if (this.request() !== params) return;
                             // A failed activity request must not leave the
                             // previous site's/range's report visible. The
                             // dashboard falls back to legacy stats cards.
@@ -84,6 +87,10 @@ export class AIActivityQuery {
         this.report.set(null);
         this.error.set(null);
         this.isLoading.set(false);
+    }
+
+    isFetching(): boolean {
+        return this.query.isLoading();
     }
 }
 
