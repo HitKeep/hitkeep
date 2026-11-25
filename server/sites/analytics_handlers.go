@@ -160,13 +160,14 @@ func (h *handler) handleGetSiteStats() http.HandlerFunc {
 		}
 
 		params := api.AnalyticsParams{
-			SiteID:    siteID,
-			UserID:    userID,
-			Start:     start,
-			End:       end,
-			Filters:   filters,
-			GoalIDs:   goalIDs,
-			FunnelIDs: funnelIDs,
+			UTMOverview: q.Get("view") == "utm",
+			SiteID:      siteID,
+			UserID:      userID,
+			Start:       start,
+			End:         end,
+			Filters:     filters,
+			GoalIDs:     goalIDs,
+			FunnelIDs:   funnelIDs,
 		}
 
 		params.CompareStart, params.CompareEnd = filterparams.ParseComparisonRange(q.Get("compare_from"), q.Get("compare_to"))

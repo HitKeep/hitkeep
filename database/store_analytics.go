@@ -35,6 +35,9 @@ func (s *Store) GetSiteAnalyticsBounds(ctx context.Context, siteID uuid.UUID) (t
 
 // GetSiteStats returns aggregated KPIs and time-series data using the AnalyticsParams struct.
 func (s *Store) GetSiteStats(ctx context.Context, params api.AnalyticsParams) (*api.SiteStats, error) {
+	if params.UTMOverview {
+		return s.GetSiteStatsSections(ctx, params, SiteStatsSections{Chart: true})
+	}
 	return s.GetSiteStatsSections(ctx, params, AllSiteStatsSections)
 }
 
@@ -94,7 +97,7 @@ func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsPa
 		Funnels:         []api.Funnel{},
 	}
 
-	filterSQL, filterArgs := buildHitFilters(params.Filters, "h")
+	filterSQL, filterArgs := buildReportHitFilters(params.Filters, "h", params.UTMOverview)
 	sessionSQL, sessionArgs, err := s.buildSessionFilter(ctx, params, "h")
 	if err != nil {
 		return nil, err
@@ -154,6 +157,10 @@ func (s *Store) querySiteStatsWindow(ctx context.Context, params api.AnalyticsPa
 	if comparison {
 		if err := s.queryAIKpis(ctx, params, filterSQL, filterArgs, &stats.AIBotHits, &stats.AISourceVisits); err != nil {
 			return nil, fmt.Errorf("failed to calc AI KPIs: %w", err)
+		}
+	} else if params.UTMOverview {
+		if err := s.queryUTMRankings(ctx, params, truncUnit, filterSQL, filterArgs, stats); err != nil {
+			return nil, err
 		}
 	} else if err := s.querySiteTopLists(ctx, params, sections, filterSQL, filterArgs, stats); err != nil {
 		return nil, err

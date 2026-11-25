@@ -25,6 +25,7 @@ export interface MetricCardConfig<TFilter extends string = string> {
     showProvenance?: boolean;
     /** Share-of-total column; off for rows that are not parts of one whole. */
     showShare?: boolean;
+    shareTotal?: number;
     filterType?: TFilter;
     actionId?: string;
     actionLabel?: string;

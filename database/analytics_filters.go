@@ -10,6 +10,10 @@ import (
 )
 
 func buildHitFilters(filters []api.Filter, alias string) (string, []any) {
+	return buildReportHitFilters(filters, alias, false)
+}
+
+func buildReportHitFilters(filters []api.Filter, alias string, literalUTM bool) (string, []any) {
 	if len(filters) == 0 {
 		return "", nil
 	}
@@ -17,7 +21,7 @@ func buildHitFilters(filters []api.Filter, alias string) (string, []any) {
 	var sql strings.Builder
 	var args []any
 	for _, filter := range filters {
-		clause, clauseArgs := buildHitFilter(filter.Type, filter.Value, alias)
+		clause, clauseArgs := buildHitFilter(filter.Type, filter.Value, alias, literalUTM)
 		if clause == "" {
 			continue
 		}
@@ -28,7 +32,7 @@ func buildHitFilters(filters []api.Filter, alias string) (string, []any) {
 	return sql.String(), args
 }
 
-func buildHitFilter(filterType, filterValue, alias string) (string, []any) {
+func buildHitFilter(filterType, filterValue, alias string, literalUTM bool) (string, []any) {
 	if filterType == "" || filterValue == "" {
 		return "", nil
 	}
@@ -92,20 +96,12 @@ func buildHitFilter(filterType, filterValue, alias string) (string, []any) {
 			normalized = strings.SplitN(normalized, "-", 2)[0]
 		}
 		return " AND " + expr + " = ?", []any{normalizeUnspecified(normalized)}
-	case "utm_campaign":
-		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%sutm_campaign), ''), '(Unspecified)')", prefix)
-		return " AND " + expr + " = ?", []any{normalizeUnspecified(filterValue)}
-	case "utm_content":
-		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%sutm_content), ''), '(Unspecified)')", prefix)
-		return " AND " + expr + " = ?", []any{normalizeUnspecified(filterValue)}
-	case "utm_medium":
-		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%sutm_medium), ''), '(Unspecified)')", prefix)
-		return " AND " + expr + " = ?", []any{normalizeUnspecified(filterValue)}
-	case "utm_source":
-		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%sutm_source), ''), '(Unspecified)')", prefix)
-		return " AND " + expr + " = ?", []any{normalizeUnspecified(filterValue)}
-	case "utm_term":
-		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%sutm_term), ''), '(Unspecified)')", prefix)
+	case "utm_campaign", "utm_content", "utm_medium", "utm_source", "utm_term":
+		column := prefix + filterType
+		if literalUTM {
+			return " AND " + utmValueSQL(column) + " = ?", []any{filterValue}
+		}
+		expr := fmt.Sprintf("COALESCE(NULLIF(TRIM(%s), ''), '(Unspecified)')", column)
 		return " AND " + expr + " = ?", []any{normalizeUnspecified(filterValue)}
 	case "qr_code_id":
 		id, err := uuid.Parse(strings.TrimSpace(filterValue))

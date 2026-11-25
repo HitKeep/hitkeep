@@ -55,7 +55,7 @@ func (s *Store) augmentImportedSiteStats(ctx context.Context, params api.Analyti
 			FROM imported_dimension_daily
 			WHERE site_id = ? AND date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
 				AND dimension IN ('utm_campaign', 'utm_content', 'utm_medium', 'utm_source', 'utm_term')
-				AND TRIM(name) <> ''
+				AND `+utmValueSQL("name")+` IS NOT NULL
 		)
 		SELECT traffic.*, utm.*
 		FROM traffic CROSS JOIN utm
