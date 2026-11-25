@@ -207,8 +207,7 @@
     text-align: right;
 }
 
-.metric-list__flag,
-.metric-list__favicon {
+.metric-list__flag {
     flex-shrink: 0;
     width: 1rem;
     height: 1rem;
@@ -218,10 +217,6 @@
     flex-shrink: 0;
     font-size: 0.85rem;
     color: var(--p-text-muted-color);
-}
-
-.metric-list__favicon {
-    border-radius: 0.18rem;
 }
 
 .metric-list__link {

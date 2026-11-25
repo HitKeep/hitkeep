@@ -218,8 +218,8 @@
                     >
                         <ng-template appTableCell="path" let-row>
                             <div class="flex items-center gap-2 min-w-0">
-                                @if (siteFaviconUrl(); as favicon) {
-                                <img [ngSrc]="favicon" class="size-4 shrink-0 rounded-full" [width]="16" [height]="16" alt="" />
+                                @if (siteDomain(); as domain) {
+                                <app-site-favicon compact [site]="{ domain }" />
                                 }
                                 <button type="button" class="web-vitals-path-button" [class.web-vitals-path-button--active]="row.path === pathFilter()" [title]="row.path" (click)="setPathFromRow(row.path)">{{ row.path }}</button>
                                 @if (buildSiteUrl(row.path); as pageUrl) {

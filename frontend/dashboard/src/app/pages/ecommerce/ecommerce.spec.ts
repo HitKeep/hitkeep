@@ -504,7 +504,7 @@ describe('EcommercePage', () => {
         clickTab('Revenue sources');
 
         const links = Array.from<HTMLAnchorElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell__link'));
-        const favicons = Array.from<HTMLImageElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell__favicon'));
+        const favicons = Array.from<HTMLImageElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell app-site-favicon img'));
 
         expect(links.map((link) => link.href)).toContain('https://google.com/search');
         expect(links.map((link) => link.href)).not.toContain('https://google.com/');

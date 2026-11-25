@@ -26,14 +26,19 @@ export interface SiteFaviconSource {
                 display: inline-flex;
                 width: 1.25rem;
                 height: 1.25rem;
-                flex: 0 0 auto;
+                flex: none;
+            }
+
+            :host([compact]) {
+                width: 1rem;
+                height: 1rem;
             }
 
             .hk-site-favicon,
             .hk-site-favicon-fallback {
-                width: 1.25rem;
-                height: 1.25rem;
-                flex: 0 0 auto;
+                width: 100%;
+                height: 100%;
+                flex: none;
                 border-radius: 999px;
             }
 

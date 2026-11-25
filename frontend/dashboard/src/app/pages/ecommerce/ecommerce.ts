@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
-import { NgOptimizedImage } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
@@ -22,7 +21,7 @@ import { ReportRangeToolbar } from '@components/report-range-toolbar/report-rang
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
 import { EcommerceProductStat, EcommerceSeriesPoint, EcommerceSourceStat, EcommerceSummary, MetricStat, SiteStats } from '@models/analytics.types';
-import { injectFaviconUrl } from '@core/analytics/favicon';
+import { SiteFavicon } from '@features/sites/components/site-favicon';
 import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_EVENT_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
@@ -46,7 +45,7 @@ type DataLoadMode = 'blocking' | 'background';
 @Component({
     selector: 'app-ecommerce',
     imports: [
-        NgOptimizedImage,
+        SiteFavicon,
         FormsModule,
         ReactiveFormsModule,
         TranslocoPipe,
@@ -74,7 +73,6 @@ export class EcommercePage {
     private analyticsService = inject(AnalyticsService);
     private localeService = inject(TranslocoLocaleService);
     private transloco = inject(TranslocoService);
-    protected readonly faviconUrlForDomain = injectFaviconUrl();
     private destroyRef = inject(DestroyRef);
     private realtimeRefresh = inject(RealtimeRefreshCoordinator);
     private readonly setupState = inject(SetupStateService);
