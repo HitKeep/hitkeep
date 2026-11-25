@@ -45,11 +45,13 @@ export class AIActivityQuery {
                     takeUntil(this.cancel$),
                     tap({
                         next: (report) => {
+                            if (this.request() !== params) return;
                             this.report.set(report);
                             this.error.set(null);
                             params.onSuccess?.(report);
                         },
                         error: (error) => {
+                            if (this.request() !== params) return;
                             // A failed activity request must not leave the
                             // previous site's/range's report visible. The
                             // dashboard falls back to legacy stats cards.
@@ -84,6 +86,10 @@ export class AIActivityQuery {
         this.report.set(null);
         this.error.set(null);
         this.isLoading.set(false);
+    }
+
+    isFetching(): boolean {
+        return this.query.isLoading();
     }
 }
 

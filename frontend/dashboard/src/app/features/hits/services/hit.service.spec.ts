@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpClient, provideHttpClient } from '@angular/common/http';
+import { EMPTY, defer, of } from 'rxjs';
+import { vi } from 'vitest';
 import { HitService } from '@features/hits/services/hit.service';
 
 describe('HitService', () => {
@@ -58,6 +60,20 @@ describe('HitService', () => {
         expect(service.hasError()).toBe(true);
         expect(service.hits()).toEqual([]);
         expect(service.total()).toBe(0);
+        expect(service.isLoading()).toBe(false);
+    });
+
+    it('discards a private page if the auth interceptor completes a refresh during sign-out', () => {
+        let signedIn = true;
+        vi.spyOn(TestBed.inject(HttpClient), 'get').mockReturnValue(defer(() => (signedIn ? of({ data: [{ path: '/private' }], total: 1 }) : EMPTY)));
+        service.loadHits('site-1', 'from', 'to');
+        expect(service.total()).toBe(1);
+
+        signedIn = false;
+        service.refresh();
+        expect(service.hits()).toEqual([]);
+        expect(service.total()).toBe(0);
+        expect(service.hasError()).toBe(true);
         expect(service.isLoading()).toBe(false);
     });
 });

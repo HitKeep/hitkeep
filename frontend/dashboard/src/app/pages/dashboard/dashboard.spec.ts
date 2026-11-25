@@ -530,6 +530,38 @@ describe('Dashboard', () => {
         }
     });
 
+    it('finishes slow initial and background page statistics during sustained realtime activity', async () => {
+        vi.useFakeTimers();
+        try {
+            initialOnboarding.flush({ complete: true, steps: [] });
+            const initial = new Subject<SiteStats>();
+            const refresh = new Subject<SiteStats>();
+            const stats = vi.mocked(TestBed.inject(StatsService).fetchStats).mockReturnValueOnce(initial).mockReturnValueOnce(refresh);
+            startTrackingSite();
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(1);
+
+            initial.next(emptySiteStats({ top_pages: [{ name: '/before', value: 1 }] }));
+            initial.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(2);
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(2);
+            expect(fixture.nativeElement.textContent).toContain('/before');
+
+            refresh.next(emptySiteStats({ top_pages: [{ name: '/after', value: 2 }] }));
+            fixture.detectChanges();
+            expect(fixture.nativeElement.textContent).toContain('/after');
+            refresh.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(3);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('should group top, landing, and exit pages under the content metric tab', () => {
         const siteService = TestBed.inject(SiteService);
         const statsService = TestBed.inject(StatsService);

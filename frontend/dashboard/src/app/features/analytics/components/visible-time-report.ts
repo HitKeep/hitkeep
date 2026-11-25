@@ -1,5 +1,5 @@
 import { HttpErrorResponse, httpResource } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { injectActiveLang } from '@core/i18n/active-lang';
@@ -32,7 +32,6 @@ export class VisibleTimeReport {
 
     protected readonly report = httpResource<VisibleTimePage[]>(() => {
         if (!this.open()) return undefined;
-        this.refreshKey();
         const { siteId, from, to, filters, subject } = this.scope();
         return {
             url: `/api/sites/${siteId}/visible-time`,
@@ -49,4 +48,14 @@ export class VisibleTimeReport {
         const error = this.report.error();
         return error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
     });
+
+    constructor() {
+        let lastRefresh = 0;
+        effect(() => {
+            const key = this.refreshKey();
+            if (key === lastRefresh || this.report.isLoading()) return;
+            lastRefresh = key;
+            if (this.report.hasValue()) this.report.reload();
+        });
+    }
 }

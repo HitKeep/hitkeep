@@ -26,6 +26,7 @@
         stateKey="traffic-records"
         dataKey="id"
         [lazy]="true"
+        [first]="first()"
         (lazyLoad)="loadHits($event)"
         [totalRecords]="hitService.total()"
         [loading]="hitService.isLoading()"

@@ -72,8 +72,15 @@ describe('VisibleTimeReport', () => {
         fixture.componentRef.setInput('refreshKey', 2);
         fixture.detectChanges();
         const refresh = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
-        expect(fixture.nativeElement.querySelector('table')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('/pricing');
+        fixture.componentRef.setInput('refreshKey', 3);
+        fixture.detectChanges();
+        expect(refresh.cancelled).toBe(false);
         refresh.flush([]);
+        await Promise.resolve();
+        fixture.detectChanges();
+        const trailing = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
+        trailing.flush([]);
         await fixture.whenStable();
         expect(fixture.nativeElement.textContent).toContain('No matching pageviews');
     });
