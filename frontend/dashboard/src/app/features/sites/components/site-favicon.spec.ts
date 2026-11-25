@@ -67,6 +67,19 @@ describe('SiteFavicon', () => {
         expect(current.getAttribute('src')).toContain('/api/favicon/google.com');
     });
 
+    it('ignores an old error between a domain change and the next render', () => {
+        fixture.componentRef.setInput('site', site('first.example.com'));
+        fixture.detectChanges();
+        const first = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+
+        fixture.componentRef.setInput('site', site('google.com'));
+        first.dispatchEvent(new Event('error'));
+        fixture.detectChanges();
+
+        const current = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        expect(current.getAttribute('src')).toContain('/api/favicon/google.com');
+    });
+
     it('tries the image again when the site changes after a failed favicon', () => {
         fixture.componentRef.setInput('site', site('example.com'));
         fixture.detectChanges();

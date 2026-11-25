@@ -12,8 +12,8 @@ export interface SiteFaviconSource {
     imports: [NgOptimizedImage],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        @for (url of visibleUrls(); track url) {
-            <img [ngSrc]="url" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="visibleUrls.set([])" />
+        @for (image of visibleImages(); track image.url) {
+            <img [ngSrc]="image.url" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="showFallback(image.url)" />
         } @empty {
             <span class="hk-site-favicon-fallback" aria-hidden="true">
                 <i class="pi pi-globe"></i>
@@ -72,8 +72,14 @@ export class SiteFavicon {
     site = input.required<SiteFaviconSource | null>();
     private readonly faviconUrl = computed(() => this.faviconUrlForDomain(this.site()?.domain));
     // Key the image node by URL so a late error cannot hide its replacement.
-    protected readonly visibleUrls = linkedSignal(() => {
+    protected readonly visibleImages = linkedSignal(() => {
         const url = this.faviconUrl();
-        return url ? [url] : [];
+        return url ? [{ url }] : [];
     });
+
+    protected showFallback(url: string): void {
+        if (url === this.faviconUrl()) {
+            this.visibleImages.set([]);
+        }
+    }
 }
