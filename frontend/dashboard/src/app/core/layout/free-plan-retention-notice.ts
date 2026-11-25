@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from '@openng/optimus-ui/button';
 
+import { AnnualOfferService } from '@services/annual-offer.service';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { ShareService } from '@services/share.service';
 import { TeamService } from '@services/team.service';
@@ -28,6 +29,7 @@ const USAGE_PRESSURE_THRESHOLD = 0.8;
 export class FreePlanRetentionNotice {
     private static readonly dismissedValue = 'dismissed';
 
+    private readonly campaign = inject(AnnualOfferService);
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly document = inject(DOCUMENT);
     private readonly share = inject(ShareService);
@@ -70,7 +72,7 @@ export class FreePlanRetentionNotice {
 
         const team = this.team();
         const eligible = Boolean(this.bootstrap.cloudHosted() && !this.share.isShareMode() && team?.plan?.code === 'free');
-        if (!eligible) {
+        if (!eligible || this.campaign.spotlight()) {
             return null;
         }
         if (this.usagePressure() && !this.isDismissed(this.usageDismissalKey())) {

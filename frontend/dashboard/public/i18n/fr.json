@@ -4098,8 +4098,13 @@
       "dismissAction": "Fermer l’avis"
     },
     "annualOffer": {
-      "link": "Black Friday · 30 % de réduction la première année",
-      "terms": "Avec HKBF26, votre première facture annuelle passe à {{first}}, soit 30 % de réduction. Le renouvellement coûte ensuite {{renewal}} par an. Commencez le paiement avant le 7 décembre à 08 h 00 UTC."
+      "saving": "Black Friday · 30 % de réduction",
+      "firstYear": "la première année",
+      "renewal": "Renouvellement à {{price}} par an.",
+      "deadline": "Commencez le paiement avant le {{date}}.",
+      "history": "Gardez {{days}} jours d’historique avec {{plan}}",
+      "freeHistory": "Votre offre Free conserve {{days}} jours.",
+      "review": "Voir {{plan}} en formule annuelle"
     },
     "planChip": {
       "free": "Offre gratuite",

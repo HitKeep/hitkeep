@@ -4335,8 +4335,13 @@
       "dismissAction": "Descartar aviso"
     },
     "annualOffer": {
-      "link": "Black Friday · 30 % menos el primer año",
-      "terms": "Con HKBF26, tu primera factura anual tiene un 30 % de descuento y pagas {{first}}. Después, el plan se renueva por {{renewal}} al año. Inicia el pago antes del 7 de diciembre a las 08:00 UTC."
+      "saving": "Black Friday · 30 % de descuento",
+      "firstYear": "el primer año",
+      "renewal": "Se renueva por {{price}} al año.",
+      "deadline": "Inicia el pago antes del {{date}}.",
+      "history": "Conserva {{days}} días de historial con {{plan}}",
+      "freeHistory": "Tu plan Free conserva {{days}} días.",
+      "review": "Ver {{plan}} anual"
     },
     "planChip": {
       "free": "Plan gratuito",

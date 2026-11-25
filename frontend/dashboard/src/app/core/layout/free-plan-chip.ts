@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { AnnualOfferService } from '@services/annual-offer.service';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 
@@ -7,16 +6,14 @@ import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service
 import { ShareService } from '@services/share.service';
 import { TeamService } from '@services/team.service';
 
-/** Quiet sidebar chip reminding free cloud teams of their plan, linking to the plan comparison. */
+/** Header link reminding free cloud teams of their plan, linking to the plan comparison. */
 @Component({
     selector: 'app-free-plan-chip',
     imports: [RouterLink, TranslocoPipe],
     template: `
         @if (visible()) {
-            <a class="free-plan-chip" routerLink="/admin/team/overview" [attr.aria-label]="(campaign.offer() ? 'cloud.annualOffer.link' : 'cloud.planChip.aria') | transloco">
-                <i class="pi pi-bolt" aria-hidden="true"></i>
-                <span>{{ (campaign.offer() ? 'cloud.annualOffer.link' : 'cloud.planChip.free') | transloco }}</span>
-                <i class="pi pi-arrow-right free-plan-chip__arrow" aria-hidden="true"></i>
+            <a class="free-plan-chip" routerLink="/admin/team/overview" [attr.aria-label]="'cloud.planChip.aria' | transloco">
+                <span>{{ 'cloud.planChip.free' | transloco }}</span>
             </a>
         }
     `,
@@ -27,6 +24,7 @@ import { TeamService } from '@services/team.service';
             }
 
             .free-plan-chip {
+                white-space: nowrap;
                 display: inline-flex;
                 align-items: center;
                 gap: 0.4rem;
@@ -48,35 +46,11 @@ import { TeamService } from '@services/team.service';
                 border-color: color-mix(in srgb, var(--p-primary-color) 40%, var(--p-content-border-color));
                 color: var(--p-primary-color);
             }
-
-            .free-plan-chip i {
-                font-size: 0.7rem;
-            }
-
-            .free-plan-chip__arrow {
-                opacity: 0;
-                transition:
-                    opacity 160ms ease,
-                    transform 160ms ease;
-            }
-
-            .free-plan-chip:hover .free-plan-chip__arrow,
-            .free-plan-chip:focus-visible .free-plan-chip__arrow {
-                opacity: 1;
-            }
-
-            @media (prefers-reduced-motion: no-preference) {
-                .free-plan-chip:hover .free-plan-chip__arrow,
-                .free-plan-chip:focus-visible .free-plan-chip__arrow {
-                    transform: translateX(2px);
-                }
-            }
         `
     ],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FreePlanChip {
-    protected readonly campaign = inject(AnnualOfferService);
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly share = inject(ShareService);
     private readonly teamService = inject(TeamService);

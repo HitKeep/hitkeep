@@ -7,6 +7,7 @@ import { Team } from '@models/analytics.types';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { ShareService } from '@services/share.service';
 import { TeamService } from '@services/team.service';
+import { AnnualOfferService } from '@services/annual-offer.service';
 import { FreePlanRetentionNotice } from './free-plan-retention-notice';
 
 describe('FreePlanRetentionNotice', () => {
@@ -48,6 +49,7 @@ describe('FreePlanRetentionNotice', () => {
             ],
             providers: [
                 provideRouter([]),
+                { provide: AnnualOfferService, useValue: { spotlight: () => null } },
                 {
                     provide: DashboardBootstrapService,
                     useValue: {

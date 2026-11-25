@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
+import { AnnualOfferPriceDisplay } from '@components/annual-offer-price/annual-offer-price';
 import { AnnualOfferService } from '@services/annual-offer.service';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -36,7 +37,7 @@ const VISIBLE_PRESET_VALUES = new Set<RangeValue>(['today', 'yesterday', '24h', 
 
 @Component({
     selector: 'app-range-toolbar',
-    imports: [FormsModule, ReactiveFormsModule, RouterLink, DatePickerModule, PopoverModule, ButtonModule, SelectButtonModule, SelectModule, TooltipModule, TranslocoPipe],
+    imports: [AnnualOfferPriceDisplay, FormsModule, ReactiveFormsModule, RouterLink, DatePickerModule, PopoverModule, ButtonModule, SelectButtonModule, SelectModule, TooltipModule, TranslocoPipe],
     templateUrl: './range-toolbar.html',
     styleUrl: './range-toolbar.css',
     changeDetection: ChangeDetectionStrategy.OnPush
