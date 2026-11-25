@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.18.3](https://github.com/HitKeep/hitkeep/compare/v2.18.2...v2.18.3) (2026-11-25)
+
+
+### Bug Fixes
+
+* **cloud:** recognize deployed regions in billing promotions ([#506](https://github.com/HitKeep/hitkeep/issues/506)) ([49c2d77](https://github.com/HitKeep/hitkeep/commit/49c2d77c86064dbc7940c0e5aae3e057e29d1573))
+
 ## [2.18.2](https://github.com/HitKeep/hitkeep/compare/v2.18.1...v2.18.2) (2026-11-25)
 
 
