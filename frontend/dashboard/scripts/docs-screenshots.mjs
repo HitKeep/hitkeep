@@ -546,7 +546,7 @@ async function captureAskAI(page, record) {
     await page.setViewportSize(DESKTOP_VIEWPORT);
 }
 
-/** Demo notes relative to today, so the chart always shows the same story on a 30-day range. */
+/** Demo notes relative to today, so the chart always shows the same story in the four-week view. */
 function demoAnnotations() {
     const day = (daysAgo) => {
         const date = new Date();

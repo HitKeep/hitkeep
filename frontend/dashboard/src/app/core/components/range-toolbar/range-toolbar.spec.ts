@@ -388,7 +388,7 @@ describe('RangeToolbar', () => {
         const change = vi.fn();
         component.rangeChange.subscribe(change);
         const popover = fixture.debugElement.query(By.directive(Popover)).componentInstance as Popover;
-        const show = vi.spyOn(popover, 'show').mockImplementation(() => {});
+        const show = vi.spyOn(popover, 'show').mockReturnValue(undefined);
         fixture.debugElement.query(By.directive(Select)).triggerEventHandler('onChange', { value: 'custom', originalEvent: new Event('click') });
 
         expect(show).toHaveBeenCalledOnce();
