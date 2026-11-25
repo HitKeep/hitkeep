@@ -15,6 +15,8 @@ import (
 	"hitkeep/server/shared"
 )
 
+var faviconProxyTransport http.RoundTripper = http.DefaultTransport.(*http.Transport).Clone()
+
 func (h *handler) handleGetFavicon() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		domain := normalizeFaviconDomain(r.PathValue("domain"))
@@ -68,7 +70,9 @@ func (h *handler) handleGetFavicon() http.HandlerFunc {
 			},
 		}
 
-		proxy.ServeHTTP(w, r)
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		proxy.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
 
@@ -144,10 +148,4 @@ func isValidFaviconDomain(domain string) bool {
 		return false
 	}
 	return domainRegex.MatchString(domain)
-}
-
-func newFaviconProxyTransport(timeout time.Duration) http.RoundTripper {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.ResponseHeaderTimeout = timeout
-	return transport
 }

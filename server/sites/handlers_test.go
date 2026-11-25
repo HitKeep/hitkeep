@@ -252,6 +252,47 @@ func TestFaviconLookupAfterExactMiss(t *testing.T) {
 	}
 }
 
+func TestFaviconLookupSharesDeadlineAndClientCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/favicon/blog.example.com", nil)
+	req.SetPathValue("domain", "blog.example.com")
+
+	started := time.Now()
+	var firstDeadline time.Time
+	calls := 0
+	original := faviconProxyTransport
+	t.Cleanup(func() { faviconProxyTransport = original })
+	faviconProxyTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		deadline, ok := r.Context().Deadline()
+		if !ok {
+			t.Fatal("favicon request has no deadline")
+		}
+		if calls == 1 {
+			if deadline.Before(started.Add(5*time.Second)) || deadline.After(time.Now().Add(5*time.Second)) {
+				t.Fatalf("expected a five-second lookup budget, got deadline %v", deadline)
+			}
+			firstDeadline = deadline
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody}, nil
+		}
+		if !deadline.Equal(firstDeadline) {
+			t.Fatalf("fallback deadline %v differs from exact deadline %v", deadline, firstDeadline)
+		}
+		cancel()
+		if !errors.Is(r.Context().Err(), context.Canceled) {
+			t.Fatal("fallback outlived caller cancellation")
+		}
+		return nil, r.Context().Err()
+	})
+
+	w := httptest.NewRecorder()
+	new(handler).handleGetFavicon().ServeHTTP(w, req)
+	if calls != 2 || w.Code != http.StatusNoContent {
+		t.Fatalf("got %d upstream requests and status %d", calls, w.Code)
+	}
+}
+
 func TestHandleGetFaviconCachesTransientFailuresBriefly(t *testing.T) {
 	for _, code := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
 		t.Run(http.StatusText(code), func(t *testing.T) {
