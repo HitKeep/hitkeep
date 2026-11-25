@@ -1,0 +1,60 @@
+name: Backend dependency compatibility proof
+on:
+  push:
+    branches: [qa/release-deps-go]
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env:
+      GOTOOLCHAIN: local
+      GOPROXY: https://proxy.golang.org
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 7b768ec62ced77a473c276389911f2e70efb7940
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Select audited updates and resolve all supported targets
+        run: |
+          go mod edit \
+            -require=cloud.google.com/go/auth@v0.24.5 \
+            -require=github.com/aws/smithy-go@v1.28.10 \
+            -require=github.com/boombuler/barcode@v1.1.1 \
+            -require=github.com/duckdb/duckdb-go/v2@v2.20001.0 \
+            -require=golang.org/x/exp@v0.0.0-20261124000051-d6646c509b6d \
+            -require=google.golang.org/api@v0.317.0 \
+            -require=google.golang.org/genproto@v0.0.0-20261123191846-1e707ab9fbc2 \
+            -require=google.golang.org/genproto/googleapis/api@v0.0.0-20261123191846-1e707ab9fbc2 \
+            -require=google.golang.org/genproto/googleapis/rpc@v0.0.0-20261123191846-1e707ab9fbc2
+          go mod tidy
+          go mod tidy -diff
+          git diff -- go.mod
+      - name: Refresh and verify every official extension archive
+        run: |
+          go run ./duckdbextensions/update
+          go run ./duckdbextensions/update -check
+      - name: Collect reviewed file set
+        run: |
+          files=(go.mod go.sum duckdbextensions/manifest.json)
+          for platform in linux_amd64 linux_arm64 osx_amd64 osx_arm64 windows_amd64; do
+            for extension in aws excel httpfs; do
+              files+=("duckdbextensions/assets/$platform/$extension.duckdb_extension.gz")
+            done
+          done
+          diff <(printf '%s\n' "${files[@]}" | sort) <(git diff --name-only | sort)
+          tar -cf "$RUNNER_TEMP/backend-update.tar" "${files[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: backend-update
+          path: ${{ runner.temp }}/backend-update.tar
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
+      - name: Exercise storage version, migration, retention, signed extension loading and takeout
+        run: go test -count=1 -timeout=35m ./duckdbextensions ./database ./takeout
