@@ -74,7 +74,17 @@ jobs:
               s=s.replace(a,b)
           replace("    pid = spawn", '    start = Process.clock_gettime(Process::CLOCK_MONOTONIC)\n    log = testpath/"startup.log"\n    pid = spawn')
           replace("out: File::NULL, err: File::NULL", "out: log.to_s, err: [:child, :out]")
-          replace('      assert healthy,', """      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+          replace('      assert healthy,', """      unless healthy
+                  puts "original probe budget exhausted at #{(Process.clock_gettime(Process::CLOCK_MONOTONIC) - start).round(3)}s"
+                  while Process.clock_gettime(Process::CLOCK_MONOTONIC) - start < 120
+                    if quiet_system((bin/"hitkeep").to_s, "-healthcheck")
+                      healthy = true
+                      break
+                    end
+                    sleep 1
+                  end
+                end
+                elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
                 child = Process.waitpid2(pid, Process::WNOHANG)
                 puts "readiness: healthy=#{healthy} elapsed=#{elapsed.round(3)}s child=#{child ? child.last.inspect : 'running'}"
                 if log.file?
@@ -83,6 +93,7 @@ jobs:
                   selected.last(16).each { |l| puts "startup: " + l.encode("UTF-8", invalid: :replace, undef: :replace).gsub(/[^[:print:]]/, " ").gsub(%r{https?://[^ ]+}, "[URL]").gsub(/[A-Za-z0-9_+=-]{32,}/, "[redacted]")[0, 360] }
                 end
                 assert healthy,""")
+          replace('        assert_equal "200", response.code', '        puts "asset #{path} status=#{response.code} bytes=#{response.body.bytesize}"\n        assert_equal "200", response.code')
           replace('        Timeout.timeout(10) { Process.wait(pid) }', '        Timeout.timeout(10) { Process.wait(pid) }\n        puts "server exit: #{$?.inspect}"')
           p.write_text(s)
           PATCH
