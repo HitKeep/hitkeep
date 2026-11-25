@@ -16,12 +16,12 @@ import { UtmAnalytics } from './utm-analytics';
 describe('UtmAnalytics', () => {
     let fixture: ComponentFixture<UtmAnalytics>;
     const stats = emptySiteStats({
-        top_utm_campaigns: [{ name: 'launch', value: 12 }],
+        top_utm_campaigns: [{ name: 'launch', value: 12 }, ...Array.from({ length: 9 }, (_, i) => ({ name: `campaign-${i}`, value: 1 }))],
         top_utm_contents: [{ name: 'hero', value: 7 }],
         top_utm_mediums: [{ name: 'cpc', value: 8 }],
         top_utm_sources: [{ name: 'google', value: 10 }],
         top_utm_terms: [{ name: 'analytics', value: 4 }],
-        utm_campaign_hits: 12,
+        utm_campaign_hits: 24,
         utm_content_hits: 7,
         utm_medium_hits: 8,
         utm_source_hits: 10,
@@ -134,6 +134,8 @@ describe('UtmAnalytics', () => {
 
         const tabs = component.metricCardTabs();
 
+        expect(fixture.nativeElement.querySelector('.metric-list__share')?.textContent.trim()).toBe('50%');
+
         expect(tabs.map((tab) => tab.id)).toEqual(['acquisition']);
         expect(tabs[0]?.cards.map((card) => card.id)).toEqual(['campaigns', 'sources', 'mediums', 'contents', 'terms']);
         expect(tabs[0]?.cards.find((card) => card.id === 'sources')?.linkMode).toBeUndefined();
@@ -147,7 +149,7 @@ describe('UtmAnalytics', () => {
 
         expect(component.activeFilters()).toEqual([{ type: 'utm_source', value: 'google' }]);
         expect(component.activeFilterValue('utm_source')).toBe('google');
-        expect(statsServiceStub.fetchStats).toHaveBeenLastCalledWith('site-1', expect.any(String), expect.any(String), [{ type: 'utm_source', value: 'google' }], [], []);
+        expect(statsServiceStub.fetchStats).toHaveBeenLastCalledWith('site-1', expect.any(String), expect.any(String), [{ type: 'utm_source', value: 'google' }], [], [], 'utm');
         expect(paidSignalsCard().textContent).toContain('Loading...');
         expect(paidSignalsCard().textContent).not.toContain('4 of 15 measured');
 
@@ -155,6 +157,7 @@ describe('UtmAnalytics', () => {
         response.complete();
         await fixture.whenStable();
 
+        expect(fixture.nativeElement.querySelector('.metric-list__empty-label')).toBeTruthy();
         expect(paidSignalsCard().textContent).toContain('0 of 3 measured');
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobserved);
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobservedHint);

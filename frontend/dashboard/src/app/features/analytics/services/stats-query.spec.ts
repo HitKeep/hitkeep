@@ -145,7 +145,7 @@ describe('StatsQuery', () => {
             funnelIds: ['funnel-1']
         });
 
-        expect(fetchStats).toHaveBeenCalledWith(request.siteId, request.from, request.to, [{ type: 'country', value: 'DE' }], ['goal-1'], ['funnel-1']);
+        expect(fetchStats).toHaveBeenCalledWith(request.siteId, request.from, request.to, [{ type: 'country', value: 'DE' }], ['goal-1'], ['funnel-1'], undefined);
         expect(responses[0].observed).toBe(true);
 
         TestBed.resetTestingModule();

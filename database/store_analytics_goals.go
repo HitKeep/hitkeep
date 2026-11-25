@@ -408,7 +408,7 @@ func (s *Store) GetFunnelStats(ctx context.Context, funnelID uuid.UUID, params a
 // GetComparisonStats uses the same period aggregates as the current report.
 func (s *Store) GetComparisonStats(ctx context.Context, params api.AnalyticsParams) (*api.ComparisonStats, error) {
 	params.Start, params.End = params.CompareStart, params.CompareEnd
-	window, err := s.querySiteStatsWindow(ctx, params, SiteStatsSections{Chart: true, Goals: true}, true)
+	window, err := s.querySiteStatsWindow(ctx, params, SiteStatsSections{Chart: true, Goals: !params.UTMOverview}, true)
 	if err != nil {
 		return nil, err
 	}

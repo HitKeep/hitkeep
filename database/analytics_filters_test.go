@@ -81,7 +81,7 @@ func TestBuildHitFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clause, args := buildHitFilter(tt.field, tt.value, "h")
+			clause, args := buildHitFilter(tt.field, tt.value, "h", false)
 			if clause != tt.wantClause {
 				t.Fatalf("unexpected clause: got %q want %q", clause, tt.wantClause)
 			}
