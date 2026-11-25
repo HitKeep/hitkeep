@@ -391,7 +391,7 @@ async function prepareAIVisibilityShot(page) {
 async function captureRoute(page, record, slug, path, settle = TABLE_SETTLE) {
     await nav(page, path, settle);
     if (path === "/dashboard") {
-        await selectRangePreset(page, slug === "dashboard-comparison" ? "7d" : "30d");
+        await selectRangePreset(page, slug === "dashboard-comparison" ? "7d" : "28d");
         if (slug === "dashboard-comparison") {
             const comparison = page.locator("app-chart-legend").getByRole("button", { name: /\(prev\.\)/ });
             await comparison.first().waitFor({ state: "visible" });
@@ -565,7 +565,7 @@ async function captureAnnotations(page, record) {
     try {
         await nav(page, "/dashboard", CHART_SETTLE);
         await selectSiteByDomain(page);
-        await selectRangePreset(page, "30d");
+        await selectRangePreset(page, "28d");
         const chart = page.locator("app-traffic-chart").first();
         await chart.locator("app-annotation-strip li").first().waitFor({ state: "visible", timeout: 8_000 });
 
@@ -660,7 +660,7 @@ async function captureThemeDialog(page, record) {
 async function captureSharedTable(page, record) {
     await nav(page, "/dashboard", CHART_SETTLE);
     await selectSiteByDomain(page);
-    await selectRangePreset(page, "30d");
+    await selectRangePreset(page, "28d");
     const card = page.locator("app-traffic-records-card").first();
     await card.waitFor({ state: "visible", timeout: 10_000 });
     await card.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
@@ -969,7 +969,7 @@ async function captureQRScreenshots(page, record, attempt) {
     await attempt("qr-campaigns-analytics", async () => {
         await page.getByRole("link", { name: "Conference booth poster", exact: true }).click();
         await page.getByRole("heading", { name: "QR opens", exact: true }).waitFor({ state: "visible" });
-        await selectRangePreset(page, "30d");
+        await selectRangePreset(page, "28d");
         await page
             .locator("app-kpi-card")
             .first()

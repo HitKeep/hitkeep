@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { DEFAULT_RANGE_OPTIONS, RangeOption, RangeSelectEvent, RangeToolbar } from '@components/range-toolbar/range-toolbar';
-import { injectReportRange } from '@services/report-range-preferences.service';
+import { ReportRangePreferencesService } from '@services/report-range-preferences.service';
 
 @Component({
     selector: 'app-report-range-toolbar',
@@ -15,7 +15,7 @@ import { injectReportRange } from '@services/report-range-preferences.service';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ReportRangeToolbar {
-    private readonly reportRange = injectReportRange();
+    private readonly reportRange = inject(ReportRangePreferencesService);
 
     readonly timeRanges = input<RangeOption[]>(DEFAULT_RANGE_OPTIONS);
     readonly loading = input(false);

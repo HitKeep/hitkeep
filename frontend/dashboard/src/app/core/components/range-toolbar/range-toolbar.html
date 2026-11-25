@@ -1,11 +1,11 @@
 <div class="range-toolbar mb-6 flex flex-wrap items-center justify-between gap-3.5 max-md:items-stretch">
     <div class="range-toolbar__controls flex flex-wrap items-center gap-3 max-md:w-full max-md:gap-2">
-        <div class="range-toolbar__range-group max-md:w-full">
+        <div #rangeGroup class="range-toolbar__range-group max-md:w-full">
             <span id="range-toolbar-presets-label" class="sr-only">{{ "common.timeRangeSelectorAria" | transloco }}</span>
             <p-selectbutton
                 class="range-toolbar__preset-select"
                 [options]="visiblePresetRanges()"
-                [ngModel]="selectedPresetValue()"
+                [ngModel]="selectedRange().value"
                 optionLabel="shortLabel"
                 optionValue="value"
                 size="small"
@@ -14,14 +14,15 @@
                 (onChange)="selectPresetValue($event.value)"
             />
 
-            @if (overflowPresetRanges().length) {
+            @if (translatedTimeRanges().length) {
             <p-select
+                #rangeSelect="ngModel"
                 class="range-toolbar__more-select"
                 styleClass="range-toolbar__more-select-control"
                 panelStyleClass="range-toolbar__more-select-panel"
-                [options]="overflowPresetRanges()"
-                [ngModel]="overflowSelectValue()"
-                (ngModelChange)="selectOverflowPresetValue($event)"
+                [options]="translatedTimeRanges()"
+                [ngModel]="selectedRange().value"
+                (onChange)="selectDropdownRange($event.value, $event.originalEvent, rangeSelect, customPopover, rangeGroup)"
                 optionLabel="label"
                 optionValue="value"
                 size="small"
@@ -29,16 +30,15 @@
                 filterBy="label,shortLabel,value"
                 [filterPlaceholder]="searchRangesLabel()"
                 [ariaFilterLabel]="searchRangesLabel()"
-                [ariaLabel]="moreRangesLabel()"
-                [placeholder]="moreRangesLabel()"
+                [ariaLabel]="allRangesLabel()"
+                [placeholder]="allRangesLabel()"
                 [resetFilterOnHide]="true"
                 [checkmark]="true"
                 appendTo="body"
-                [pTooltip]="moreRangesLabel()"
+                [pTooltip]="allRangesLabel()"
                 tooltipPosition="bottom"
             />
-            }
-
+            } @if (customOption()) {
             <p-button
                 type="button"
                 icon="pi pi-calendar"
@@ -52,6 +52,7 @@
                 tooltipPosition="bottom"
                 (onClick)="toggleCustomRange($event, customPopover)"
             />
+            }
         </div>
 
         @if (customRangeSummary(); as summary) {

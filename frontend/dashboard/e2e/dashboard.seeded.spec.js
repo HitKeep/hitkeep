@@ -3,7 +3,7 @@ const { E2E_SHARE_TOKEN, login } = require("./support/auth");
 
 const PRIMARY_SEEDED_SITE_DOMAIN = "acme-analytics.io";
 const SEEDED_EVENT_NAME = "newsletter_signup";
-const SEEDED_EVENT_RANGE = "30d";
+const SEEDED_EVENT_RANGE = "28d";
 // Any second range works; the switch itself is what the smooth-reload test checks.
 const ALTERNATE_RANGE = "7d";
 const SEEDED_CITY_RE = /Mountain View|New York|Seattle|Berlin|Munich|London|Paris|Amsterdam/;
@@ -11,7 +11,7 @@ const SEEDED_PROVIDER_RE = /Google LLC|Verizon Business|Comcast Cable|Deutsche T
 const SEEDED_ASN_RE = /AS15169|AS701|AS7922|AS3320|AS3209|AS2856|AS3215|AS1136/;
 const SEEDED_AI_SOURCE_RE = /ChatGPT|Claude|Perplexity|Gemini|DeepSeek/;
 // Seeded hits carry AI crawler user agents, and GPTBot is the heaviest-weighted
-// one, so it is always present in a 30 day window.
+// one, so it is always present in the selected four weeks.
 const SEEDED_AI_AGENT_RE = /GPTBot/;
 // The seeded crawler mix only covers these three categories.
 const SEEDED_AI_CATEGORY_RE = /Training crawlers|AI search crawlers|AI assistants/;
@@ -256,6 +256,27 @@ function metricCardGroupHasPolish(result, expectedCardCount) {
         result.cards.some((card) => card.scrollableCount > 0 && card.visibleScrollbarCount > 0 && card.visibleFadeCount > 0)
     );
 }
+
+test("mobile range search includes quick presets and opens custom dates", async ({ page }) => {
+    await login(page, "/dashboard");
+    await selectSeededSite(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/dashboard?range=30d");
+
+    const dropdown = page.locator("app-range-toolbar .range-toolbar__more-select");
+    await expect(dropdown).toContainText("Last 30 days");
+    await dropdown.click();
+    await page.getByPlaceholder("Search ranges").fill("28d");
+    await page.getByRole("option", { name: "Last 28 days", exact: true }).click();
+    await expect(dropdown).toContainText("Last 28 days");
+    await expect(page.getByRole("button", { name: "28d", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+    await dropdown.click();
+    await page.getByRole("option", { name: "Custom range", exact: true }).click();
+    await expect(page.locator("#range-custom-start")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dropdown).toContainText("Last 28 days");
+});
 
 test("dashboard switches date ranges without tearing the KPIs and chart down", async ({ page }) => {
     await login(page, "/dashboard");
