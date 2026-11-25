@@ -17,6 +17,7 @@ import (
 	stripe "github.com/stripe/stripe-go/v87"
 
 	"hitkeep/database"
+	json "hitkeep/jsonapi"
 	"hitkeep/server/shared"
 )
 
@@ -40,11 +41,18 @@ func TestBillingPromotion(t *testing.T) {
 	f.coupon = &stripe.Coupon{ID: fixtureCoupon, Metadata: map[string]string{"hitkeep_promotion_code": promotionCode, "hitkeep_promotion_ends_at": promotionEnd.Format(time.RFC3339)}, Valid: true, Duration: "once", PercentOff: 30, RedeemBy: promotionEnd.Add(35 * time.Minute).Unix(), AppliesTo: &stripe.CouponAppliesTo{Products: []string{"prod_pro", "prod_business"}}}
 	f.customer = &stripe.Customer{ID: "cus_test"}
 	f.prices = map[string]*stripePriceOutput{}
-	for _, plan := range []string{"pro", "business"} {
-		for _, billing := range []string{"monthly", "annual"} {
-			id := priceIDForPlan(h.ctx.Config, plan, billing)
-			f.prices[id] = &stripePriceOutput{ProductID: "prod_" + plan, Active: true, AmountMinor: 1500, Currency: "eur", Interval: map[string]string{"monthly": "month", "annual": "year"}[billing], IntervalCount: 1}
-		}
+	quotes := []struct {
+		plan, cadence, interval string
+		regular, discounted     int64
+	}{
+		{"pro", "monthly", "month", 1500, 1050},
+		{"pro", "annual", "year", 15000, 10500},
+		{"business", "monthly", "month", 3900, 2730},
+		{"business", "annual", "year", 39000, 27300},
+	}
+	for _, q := range quotes {
+		id := priceIDForPlan(h.ctx.Config, q.plan, q.cadence)
+		f.prices[id] = &stripePriceOutput{ProductID: "prod_" + q.plan, Active: true, AmountMinor: q.regular, Currency: "eur", Interval: q.interval, IntervalCount: 1}
 	}
 	current := func() *database.CloudBillingAccount {
 		a, e := store.GetCloudBillingAccount(ctx, buyer.TenantID)
@@ -78,23 +86,75 @@ func TestBillingPromotion(t *testing.T) {
 	}
 	f.coupon.Metadata["hitkeep_promotion_code"] = promotionCode
 	f.coupon.PercentOff = 30
-	for _, region := range []string{"EU", "US"} {
+	getState := func(userID uuid.UUID) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(context.WithValue(ctx, shared.UserIDKey, userID), http.MethodGet, "/api/cloud/billing/state", nil)
+		w := httptest.NewRecorder()
+		h.handleGetBillingState().ServeHTTP(w, req)
+		return w
+	}
+	setRegion := func(region, currency string) {
 		h.ctx.Config.CloudJurisdiction = region
-		currency := map[string]string{"EU": "EUR", "US": "USD"}[region]
 		for _, p := range f.prices {
 			p.Currency = currency
 		}
-		offer, e := h.promotionFor(ctx, buyer.TenantID, nil, "", "")
-		if e != nil || offer == nil || len(offer.Prices) != 2 {
-			t.Fatalf("regional offer: %+v, %v", offer, e)
-		}
-		for _, plan := range []string{"pro", "business"} {
-			for _, billing := range []string{"monthly", "annual"} {
-				if offer.Prices[plan][billing] != (promotionPrice{1050, 1500, currency}) {
-					t.Fatalf("price %s/%s/%s: %+v", region, plan, billing, offer)
+	}
+	for _, tc := range []struct {
+		region, currency string
+		eligible         bool
+	}{
+		{"", "EUR", false}, {"ap-southeast-1", "EUR", false},
+		{"usual", "USD", false}, {"eucalyptus", "EUR", false},
+		{"EU", "EUR", true}, {"eu-central-1", "EUR", true},
+		{"US", "USD", true}, {"us-east-1", "USD", true},
+		{"  eU  ", "EUR", true}, {" Us-East-1 ", "USD", true},
+		{"us-west-2", "USD", false}, {"eu-west-1", "EUR", false},
+	} {
+		t.Run("billing_state/"+tc.region, func(t *testing.T) {
+			setRegion(tc.region, tc.currency)
+			w := getState(buyer.UserID)
+			var state billingStateResponse
+			if w.Code != http.StatusOK {
+				t.Fatalf("billing state HTTP %d: %s", w.Code, w.Body.String())
+			}
+			if err := json.UnmarshalRead(w.Body, &state); err != nil {
+				t.Fatal(err)
+			}
+			if state.TeamID != buyer.TenantID || state.PlanCode != database.CloudPlanFree || state.SubscriptionStatus != database.CloudSubscriptionStatusFree {
+				t.Fatalf("unexpected billing state: %+v", state)
+			}
+			if !tc.eligible {
+				if state.Promotion != nil {
+					t.Fatalf("unexpected offer: %+v", state.Promotion)
+				}
+				return
+			}
+			if state.Promotion == nil || state.Promotion.Code != promotionCode {
+				t.Fatalf("missing promotion %q: %+v", promotionCode, state.Promotion)
+			}
+			for _, q := range quotes {
+				got := state.Promotion.Prices[q.plan][q.cadence]
+				if got != (promotionPrice{q.discounted, q.regular, tc.currency}) {
+					t.Errorf("%s/%s quote: %+v", q.plan, q.cadence, got)
 				}
 			}
-		}
+		})
+	}
+	setRegion("US", "USD")
+	if w := getState(uuid.Nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous billing state: %d", w.Code)
+	}
+	member, err := store.CreateUser(ctx, "region-member@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddTeamMember(ctx, buyer.TenantID, member, database.TenantRoleMember, buyer.UserID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetActiveTenantID(ctx, member, buyer.TenantID); err != nil {
+		t.Fatal(err)
+	}
+	if w := getState(member); w.Code != http.StatusForbidden {
+		t.Fatalf("member billing state: %d", w.Code)
 	}
 	if _, err := store.RecordCloudConversionEvent(ctx, database.CloudConversionEvent{TenantID: buyer.TenantID, EventName: database.CloudConversionSubscriptionActivated, PlanCode: "pro"}); err != nil {
 		t.Fatal(err)

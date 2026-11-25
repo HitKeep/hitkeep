@@ -171,8 +171,16 @@ func (h *handler) customerCode(ctx context.Context, offer *billingPromotion, cus
 
 func (h *handler) promotionFor(ctx context.Context, team uuid.UUID, account *database.CloudBillingAccount, plan, interval string) (*billingPromotion, error) {
 	conf := h.ctx.Config
-	region := strings.ToUpper(strings.TrimSpace(conf.CloudJurisdiction))
-	if conf.StripePromotionCouponID == "" || !conf.CloudHosted || conf.StripeSecretKey == "" || (region != "EU" && region != "US") {
+	if conf.StripePromotionCouponID == "" || !conf.CloudHosted || conf.StripeSecretKey == "" {
+		return nil, nil
+	}
+	var currency string
+	switch strings.ToUpper(strings.TrimSpace(conf.CloudJurisdiction)) {
+	case "EU", "EU-CENTRAL-1":
+		currency = "EUR"
+	case "US", "US-EAST-1":
+		currency = "USD"
+	default:
 		return nil, nil
 	}
 	operator, err := h.ctx.Store.IsTeamOwnedByOperator(ctx, team)
@@ -187,10 +195,6 @@ func (h *handler) promotionFor(ctx context.Context, team uuid.UUID, account *dat
 	offer := promotionFromCoupon(coupon, conf.StripePromotionCouponID, h.now())
 	if err != nil || offer == nil {
 		return nil, err
-	}
-	currency := "EUR"
-	if region == "US" {
-		currency = "USD"
 	}
 	if account != nil && account.StripeCustomerID != "" {
 		customer, err := h.stripe.PromotionCustomer(ctx, account.StripeCustomerID)
