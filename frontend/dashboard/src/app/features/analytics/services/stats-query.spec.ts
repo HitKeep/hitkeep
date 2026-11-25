@@ -133,6 +133,18 @@ describe('StatsQuery', () => {
         expect(query.isLoading()).toBe(true);
     });
 
+    it('clears the displayed rows when switching between tagged and all traffic on the same site', () => {
+        const { query, responses, fetchStats } = createQuery();
+        for (const view of ['utm', undefined, 'utm'] as const) {
+            load(query, { ...request, view });
+            expect(fetchStats).toHaveBeenLastCalledWith(request.siteId, request.from, request.to, [], [], [], view);
+            expect(query.stats()).toBeNull();
+            const current = responses.at(-1)!;
+            current.next(emptySiteStats({ total_pageviews: view === 'utm' ? 2 : 10 }));
+            current.complete();
+        }
+    });
+
     it.each([401, 403, 'session ended'])('clears visible page statistics when a refresh loses access (%s)', (status) => {
         const { query, responses } = createQuery();
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -172,7 +184,7 @@ describe('StatsQuery', () => {
             funnelIds: ['funnel-1']
         });
 
-        expect(fetchStats).toHaveBeenCalledWith(request.siteId, request.from, request.to, [{ type: 'country', value: 'DE' }], ['goal-1'], ['funnel-1']);
+        expect(fetchStats).toHaveBeenCalledWith(request.siteId, request.from, request.to, [{ type: 'country', value: 'DE' }], ['goal-1'], ['funnel-1'], undefined);
         expect(responses[0].observed).toBe(true);
 
         TestBed.resetTestingModule();

@@ -60,7 +60,7 @@ describe('Dashboard', () => {
         };
 
         const period = { from: '2026-02-01T00:00:00.000Z', to: '2026-02-07T23:59:59.999Z' };
-        dashboard.statsQuery.loaded.set({ cohort: JSON.stringify(['site-1', [], [], []]), stats: value, period });
+        dashboard.statsQuery.loaded.set({ cohort: JSON.stringify(['site-1', undefined, [], [], []]), stats: value, period });
         dashboard.isStatsLoading.set(false);
     };
 

@@ -292,6 +292,7 @@ func openAPIV1AdminSitePaths() map[string]any {
 		"/api/sites/{id}/stats": map[string]any{
 			"get": op([]string{"Sites"}, "Get site stats", "Aggregated site metrics and charts.", secAnyAuth(), []any{
 				paramRef("#/components/parameters/siteID"), paramRef("#/components/parameters/from"), paramRef("#/components/parameters/to"),
+				paramRef("#/components/parameters/statsView"),
 				paramRef("#/components/parameters/filter"), paramRef("#/components/parameters/filterType"), paramRef("#/components/parameters/filterValue"),
 				paramRef("#/components/parameters/goalIDQuery"), paramRef("#/components/parameters/funnelIDQuery"),
 			}, nil, map[string]any{"200": jsonRefResp("Site stats", "#/components/schemas/SiteStats")}),
@@ -711,7 +712,7 @@ func openAPIV1AdminSitePaths() map[string]any {
 			"get": op([]string{"Share"}, "Get shared site", "Gets site metadata from share token.", nil, []any{paramRef("#/components/parameters/token")}, nil, map[string]any{"200": jsonRefResp("Site", "#/components/schemas/Site")}),
 		},
 		"/api/share/{token}/sites/{id}/stats": map[string]any{
-			"get": op([]string{"Share"}, "Shared site stats", "Returns stats through share token.", nil, []any{paramRef("#/components/parameters/token"), paramRef("#/components/parameters/siteID"), paramRef("#/components/parameters/from"), paramRef("#/components/parameters/to"), paramRef("#/components/parameters/filter"), paramRef("#/components/parameters/filterType"), paramRef("#/components/parameters/filterValue"), paramRef("#/components/parameters/goalIDQuery"), paramRef("#/components/parameters/funnelIDQuery")}, nil, map[string]any{"200": jsonRefResp("Site stats", "#/components/schemas/SiteStats")}),
+			"get": op([]string{"Share"}, "Shared site stats", "Returns stats through share token.", nil, []any{paramRef("#/components/parameters/token"), paramRef("#/components/parameters/siteID"), paramRef("#/components/parameters/from"), paramRef("#/components/parameters/to"), paramRef("#/components/parameters/statsView"), paramRef("#/components/parameters/filter"), paramRef("#/components/parameters/filterType"), paramRef("#/components/parameters/filterValue"), paramRef("#/components/parameters/goalIDQuery"), paramRef("#/components/parameters/funnelIDQuery")}, nil, map[string]any{"200": jsonRefResp("Site stats", "#/components/schemas/SiteStats")}),
 		},
 		"/api/share/{token}/sites/{id}/opportunities": map[string]any{
 			"get": op([]string{"Share"}, "Shared opportunities", "Lists saved opportunity recommendations through a read-only share token. Returns only validated customer-visible outputs with cited evidence.", nil, []any{paramRef("#/components/parameters/token"), paramRef("#/components/parameters/siteID")}, nil,

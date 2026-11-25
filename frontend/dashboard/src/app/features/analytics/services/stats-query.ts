@@ -13,6 +13,7 @@ export interface StatsQueryRequest {
     filters?: { type: string; value: string }[];
     goalIds?: string[];
     funnelIds?: string[];
+    view?: 'utm';
     mode?: StatsQueryMode;
     onSuccess?: (stats: SiteStats, result: StatsQueryResult) => void;
 }
@@ -25,7 +26,7 @@ export interface StatsQueryResult {
 }
 
 function cohortKey(request: StatsQueryRequest): string {
-    return JSON.stringify([request.siteId, request.filters ?? [], request.goalIds ?? [], request.funnelIds ?? []]);
+    return JSON.stringify([request.siteId, request.view, request.filters ?? [], request.goalIds ?? [], request.funnelIds ?? []]);
 }
 
 export class StatsQuery {
@@ -49,7 +50,7 @@ export class StatsQuery {
         this.query = rxResource({
             params: () => this.request(),
             stream: ({ params }) =>
-                this.statsService.fetchStats(params.siteId, params.from, params.to, params.filters ?? [], params.goalIds ?? [], params.funnelIds ?? []).pipe(
+                this.statsService.fetchStats(params.siteId, params.from, params.to, params.filters ?? [], params.goalIds ?? [], params.funnelIds ?? [], params.view).pipe(
                     throwIfEmpty(),
                     tap({
                         next: (stats) => {
