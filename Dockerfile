@@ -51,7 +51,7 @@ FROM golang:${GOLANG_VERSION} AS data-dir
 
 RUN mkdir -p /var/lib/hitkeep/data
 
-FROM gcr.io/distroless/cc-debian13:nonroot AS runtime
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:532c7a94f9e96ba9db75eb9388f4227751131c7cb0a411d1a8521af4096135de AS runtime
 
 ARG HITKEEP_VERSION='snapshot'
 ARG HITKEEP_VARIANT='self-hosted'
