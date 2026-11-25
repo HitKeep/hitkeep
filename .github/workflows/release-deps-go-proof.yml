@@ -5,56 +5,58 @@ on:
 permissions:
   contents: read
 jobs:
-  candidate:
+  release-checks:
+    name: ${{ matrix.gate }}
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [cloud-build, cloud-test, default-tenant-migration-acceptance]
     runs-on: ubuntu-latest
-    timeout-minutes: 95
+    timeout-minutes: 50
     env:
       GOTOOLCHAIN: local
-      GOPROXY: https://proxy.golang.org
+      GATE: ${{ matrix.gate }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 7b768ec62ced77a473c276389911f2e70efb7940
+          ref: d918af956ce635e3fa3da2d5cfc5d6c98260db35
           persist-credentials: false
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
         with:
           go-version-file: go.mod
           cache: false
-      - name: Select audited updates and resolve all supported targets
+      - name: Run canonical release gate
         run: |
-          go mod edit \
-            -require=cloud.google.com/go/auth@v0.24.5 \
-            -require=github.com/aws/smithy-go@v1.28.10 \
-            -require=github.com/boombuler/barcode@v1.1.1 \
-            -require=github.com/duckdb/duckdb-go/v2@v2.20001.0 \
-            -require=golang.org/x/exp@v0.0.0-20261124000051-d6646c509b6d \
-            -require=google.golang.org/api@v0.317.0 \
-            -require=google.golang.org/genproto@v0.0.0-20261123191846-1e707ab9fbc2 \
-            -require=google.golang.org/genproto/googleapis/api@v0.0.0-20261123191846-1e707ab9fbc2 \
-            -require=google.golang.org/genproto/googleapis/rpc@v0.0.0-20261123191846-1e707ab9fbc2
-          go mod tidy
-          go mod tidy -diff
-          git diff -- go.mod
-      - name: Refresh and verify every official extension archive
+          id=$(./hk qa plan full --output json | jq -er '.data.plan_id')
+          ./hk qa full --plan-id "$id" --gate "$GATE"
+  storage:
+    name: DuckDB file upgrade and rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkpoint actual files across both engine versions
+        working-directory: ${{ runner.temp }}
+        shell: bash
         run: |
-          go run ./duckdbextensions/update
-          go run ./duckdbextensions/update -check
-      - name: Collect reviewed file set
-        run: |
-          files=(go.mod go.sum duckdbextensions/manifest.json)
-          for platform in linux_amd64 linux_arm64 osx_amd64 osx_arm64 windows_amd64; do
-            for extension in aws excel httpfs; do
-              files+=("duckdbextensions/assets/$platform/$extension.duckdb_extension.gz")
-            done
+          set -euo pipefail
+          for version in 2.0.0 2.0.1; do
+            curl -fsSL --retry 3 "https://github.com/duckdb/duckdb/releases/download/v$version/duckdb-cli-linux-amd64.tar.gz" -o "$version.tar.gz"
           done
-          diff <(printf '%s\n' "${files[@]}" | sort) <(git diff --name-only | sort)
-          tar -cf "$RUNNER_TEMP/backend-update.tar" "${files[@]}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: backend-update
-          path: ${{ runner.temp }}/backend-update.tar
-          retention-days: 2
-          compression-level: 0
-          if-no-files-found: error
-      - name: Exercise storage version, migration, retention, signed extension loading and takeout
-        run: go test -count=1 -timeout=35m ./duckdbextensions ./database ./takeout
+          echo 'c6507206baf7793c6013dbd82368469a45f20dc0e17a6f92f204602f652ed2bc  2.0.0.tar.gz' | sha256sum -c -
+          echo 'b676268be4d39e4e41a904442c9796c9914e645cc085c7505f048f2c992b5eca  2.0.1.tar.gz' | sha256sum -c -
+          for version in 2.0.0 2.0.1; do
+            mkdir "$version"
+            tar -xf "$version.tar.gz" -C "$version"
+            cli=$(find "$version" -type f -name duckdb -print -quit)
+            test -x "$cli"
+            ln -s "$PWD/$cli" "cli-$version"
+            "./cli-$version" -version
+          done
+          for floor in v1.0.0 v1.4.0; do
+            file="$PWD/probe-$floor.db"
+            ./cli-2.0.0 -bail -c "ATTACH '$file' AS prior (STORAGE_VERSION '$floor'); CREATE TABLE prior.probe(id INT PRIMARY KEY); INSERT INTO prior.probe VALUES (7); CHECKPOINT prior;"
+            ./cli-2.0.1 -bail -c "SET storage_compatibility_version='v1.0.0'; ATTACH '$file' AS candidate; INSERT INTO candidate.probe VALUES (11); CHECKPOINT candidate;"
+            result=$(./cli-2.0.0 -batch -csv -noheader -readonly "$file" -c "SELECT tags['storage_version'], (SELECT sum(id) FROM probe) FROM duckdb_databases() WHERE database_name=current_database()")
+            echo "$floor -> $result"
+            test "$result" = "$floor+,18"
+          done
