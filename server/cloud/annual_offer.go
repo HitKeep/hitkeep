@@ -43,7 +43,7 @@ func annualSessionExpiry(now time.Time) int64 {
 	if !now.Before(annualOfferEnd) {
 		return 0
 	}
-	if annualOfferEnd.Sub(now) < 30*time.Minute {
+	if annualOfferEnd.Sub(now) < 30*time.Minute+5*time.Second {
 		return now.Add(30*time.Minute + 5*time.Second).Unix()
 	}
 	return min(now.Add(24*time.Hour).Unix(), annualOfferEnd.Unix())

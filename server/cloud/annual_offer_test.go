@@ -20,7 +20,7 @@ import (
 func TestAnnualOfferSessionExpiry(t *testing.T) {
 	for _, test := range []struct{ before, expires time.Duration }{
 		{48 * time.Hour, -24 * time.Hour}, {24 * time.Hour, 0}, {31 * time.Minute, 0},
-		{30 * time.Minute, 0}, {30*time.Minute - time.Second, 6 * time.Second},
+		{30*time.Minute + 5*time.Second, 0}, {30*time.Minute + time.Second, 4 * time.Second}, {30 * time.Minute, 5 * time.Second}, {30*time.Minute - time.Second, 6 * time.Second},
 		{time.Second, 30*time.Minute + 4*time.Second},
 	} {
 		got := annualSessionExpiry(annualOfferEnd.Add(-test.before))
