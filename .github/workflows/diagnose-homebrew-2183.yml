@@ -1,0 +1,108 @@
+name: Homebrew 2.18.3 Linux startup diagnostics
+on:
+  push:
+    branches: [qa/homebrew-2183-amd64]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  linux-amd64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      CANDIDATE_VERSION: 2.18.3
+    steps:
+      - name: Configure Homebrew
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          printf '%s\n' "$HOMEBREW_PREFIX/bin" >> "$GITHUB_PATH"
+          printf 'HOMEBREW_PREFIX=%s\n' "$HOMEBREW_PREFIX" >> "$GITHUB_ENV"
+          printf 'HOMEBREW_CELLAR=%s\n' "$HOMEBREW_CELLAR" >> "$GITHUB_ENV"
+          printf 'HOMEBREW_REPOSITORY=%s\n' "$HOMEBREW_REPOSITORY" >> "$GITHUB_ENV"
+      - name: Install current stable formula
+        run: |
+          set -euo pipefail
+          brew tap HitKeep/hitkeep
+          git -C "$(brew --repository HitKeep/hitkeep)" checkout --detach d9ef1e78a1c7c19463ab33f10c95caf037accb07
+          brew install --build-from-source HitKeep/hitkeep/hitkeep
+          stable_version="$(brew info --json=v2 HitKeep/hitkeep/hitkeep | jq -er '.formulae[0].versions.stable')"
+          [[ "$stable_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(hitkeep --version)" = "$stable_version"
+          printf 'STABLE_VERSION=%s\n' "$stable_version" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45671680180
+          artifact-ids: 15049413040
+          path: ${{ runner.temp }}/source-package
+      - name: Prepare candidate formula
+        run: |
+          set -euo pipefail
+          archives=( "$RUNNER_TEMP"/source-package/hitkeep-source-*.tar.gz )
+          [[ ${#archives[@]} -eq 1 && -f "${archives[0]}" ]]
+          candidate_url="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).as_uri())' "${archives[0]}")"
+          candidate_checksum="$(shasum -a 256 "${archives[0]}" | awk '{print $1}')"
+          formula="$(brew --repository HitKeep/hitkeep)/Formula/hitkeep.rb"
+          candidate_formula="$(mktemp)"
+          awk -v version="$CANDIDATE_VERSION" -v url="$candidate_url" -v checksum="$candidate_checksum" '
+            /^  version "/ { print "  version \"" version "\""; versions++; next }
+            /^  url "/ {
+              if (versions == 0) { print "  version \"" version "\""; versions++ }
+              print "  url \"" url "\""; urls++; next
+            }
+            /^  sha256 "/ { print "  sha256 \"" checksum "\""; checksums++; next }
+            { print }
+            END { if (versions != 1 || urls != 1 || checksums != 1) exit 1 }
+          ' "$formula" > "$candidate_formula"
+          mv "$candidate_formula" "$formula"
+          ruby -c "$formula"
+      - name: Capture candidate process readiness and bounded startup diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$(brew --repository HitKeep/hitkeep)/Formula/hitkeep.rb" <<'PATCH'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          s=p.read_text()
+          def replace(a,b):
+              global s
+              assert s.count(a)==1, a
+              s=s.replace(a,b)
+          replace("    pid = spawn", '    start = Process.clock_gettime(Process::CLOCK_MONOTONIC)\n    log = testpath/"startup.log"\n    pid = spawn')
+          replace("out: File::NULL, err: File::NULL", "out: log.to_s, err: [:child, :out]")
+          replace('      assert healthy,', """      unless healthy
+                  puts "original probe budget exhausted at #{(Process.clock_gettime(Process::CLOCK_MONOTONIC) - start).round(3)}s"
+                  while Process.clock_gettime(Process::CLOCK_MONOTONIC) - start < 120
+                    if quiet_system((bin/"hitkeep").to_s, "-healthcheck")
+                      healthy = true
+                      break
+                    end
+                    sleep 1
+                  end
+                end
+                elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+                child = Process.waitpid2(pid, Process::WNOHANG)
+                puts "readiness: healthy=#{healthy} elapsed=#{elapsed.round(3)}s child=#{child ? child.last.inspect : 'running'}"
+                if log.file?
+                  lines = log.readlines.last(200)
+                  selected = lines.select { |l| l.match?(/error|fatal|panic|exception|failed|listen|ready|migrat|extension|database|startup/i) && !l.match?(/admin|token|secret|password|credential|bearer|invite|signup|api.key|mail/i) }
+                  selected.last(16).each { |l| puts "startup: " + l.encode("UTF-8", invalid: :replace, undef: :replace).gsub(/[^[:print:]]/, " ").gsub(%r{https?://[^ ]+}, "[URL]").gsub(/[A-Za-z0-9_+=-]{32,}/, "[redacted]")[0, 360] }
+                end
+                assert healthy,""")
+          replace('        assert_equal "200", response.code', '        puts "asset #{path} status=#{response.code} bytes=#{response.body.bytesize}"\n        assert_equal "200", response.code')
+          replace('        Timeout.timeout(10) { Process.wait(pid) }', '        Timeout.timeout(10) { Process.wait(pid) }\n        puts "server exit: #{$?.inspect}"')
+          p.write_text(s)
+          PATCH
+      - name: Upgrade to and test candidate
+        run: |
+          set -euo pipefail
+          test "$(hitkeep --version)" = "$STABLE_VERSION"
+          brew upgrade --build-from-source HitKeep/hitkeep/hitkeep
+          test "$(hitkeep --version)" = "$CANDIDATE_VERSION"
+          brew test --verbose HitKeep/hitkeep/hitkeep
+          brew uninstall hitkeep
+          ! command -v hitkeep
