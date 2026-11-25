@@ -4199,6 +4199,10 @@
       "upgradeAction": "Upgrade to Pro",
       "dismissAction": "Dismiss retention notice"
     },
+    "annualOffer": {
+      "link": "Black Friday · 30% off your first year",
+      "terms": "HKBF26 takes 30% off your first annual invoice: {{first}}. Renews at {{renewal}} per year. Start checkout before 7 Dec, 08:00 UTC."
+    },
     "planChip": {
       "free": "Free plan",
       "aria": "You are on the Free plan — view plans and upgrade"

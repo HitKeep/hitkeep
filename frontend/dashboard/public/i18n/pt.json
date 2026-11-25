@@ -4094,6 +4094,10 @@
       "upgradeAction": "Fazer upgrade para Pro",
       "dismissAction": "Dispensar aviso"
     },
+    "annualOffer": {
+      "link": "Black Friday · 30% de desconto no primeiro ano",
+      "terms": "Com HKBF26, a primeira fatura anual fica em {{first}}, com 30% de desconto. A renovação custa {{renewal}} por ano. Inicie o pagamento antes das 08:00 UTC de 7 de dezembro."
+    },
     "planChip": {
       "free": "Plano gratuito",
       "aria": "Você está no plano gratuito – veja os planos e faça upgrade"

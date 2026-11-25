@@ -30,6 +30,7 @@ import (
 )
 
 type fakeStripeClient struct {
+	coupon            *stripe.Coupon
 	afterCheckoutList func()
 	checkoutCalls     int
 	sessions          []*checkoutSessionOutput
@@ -58,7 +59,7 @@ func (f *fakeStripeClient) CreateCheckoutSession(_ context.Context, input create
 	if f.createCheckoutErr != nil {
 		return nil, f.createCheckoutErr
 	}
-	session := &checkoutSessionOutput{PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
+	session := &checkoutSessionOutput{Coupon: input.Coupon, ExpiresAt: input.ExpiresAt, PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
 	if f.checkoutCalls > 1 {
 		session.ID = fmt.Sprintf("cs_test_%d", f.checkoutCalls)
 	}
@@ -75,6 +76,10 @@ func (f *fakeStripeClient) CreatePortalSession(_ context.Context, input createPo
 		ID:  "bps_test",
 		URL: "https://billing.stripe.test/session",
 	}, nil
+}
+
+func (f *fakeStripeClient) GetAnnualCoupon(context.Context) (*stripe.Coupon, error) {
+	return f.coupon, nil
 }
 
 func (f *fakeStripeClient) GetPrice(_ context.Context, priceID string) (*stripePriceOutput, error) {

@@ -35,7 +35,9 @@
         } @else {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ (kind === 'canceled' ? 'signup.recovery.canceledTitle' : 'signup.recovery.reviewTitle') | transloco }}</h2>
         <p class="text-sm">{{ (kind === 'canceled' ? 'signup.recovery.canceledDescription' : 'signup.recovery.reviewDescription') | transloco }}</p>
-        <p class="text-sm font-medium">{{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }} · {{ recoveryPrice() }}</p>
+        <p class="text-sm font-medium">
+            {{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }} · {{ offerTerms(recoveryIntent().plan, recoveryIntent().billing) || recoveryPrice() }}
+        </p>
         @if (teamService.hasMultipleTeams() && !teamConfirmed()) {
         <p class="text-sm">{{ 'signup.recovery.confirmTeam' | transloco: { team: t.name } }}</p>
         <p-button [label]="'signup.recovery.confirmTeamAction' | transloco" severity="secondary" (onClick)="confirmRecoveryTeam()" />
@@ -103,6 +105,9 @@
             </div>
         </div>
 
+        @if (recoveryError() && !recoveryMode) {
+        <p role="alert">{{ 'signup.recovery.checkoutError' | transloco }}</p>
+        }
         <div class="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
             @if (currentTier(); as current) {
             <p-card styleClass="hk-card plan-comparison__card--current">
@@ -152,10 +157,14 @@
                         <p-tag [value]="'admin.team.overview.plans.recommended' | transloco" severity="success" [rounded]="true" />
                         }
                     </div>
+                    @if (offerTerms(tier.code, billingInterval()); as terms) {
+                    <p class="m-0 font-semibold text-primary">{{ terms }}</p>
+                    } @else {
                     <span class="flex items-baseline gap-1">
                         <span class="text-3xl font-extrabold">{{ planPriceLabels()[tier.code] }}</span>
                         <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">{{ (billingInterval() === "annual" ? "admin.team.overview.plans.perYear" : "admin.team.overview.plans.perMonth") | transloco }}</span>
                     </span>
+                    }
                     <p class="mt-1 mb-0 text-sm text-[var(--p-text-muted-color)]">{{ ("signup.plans." + tier.code + ".description") | transloco }}</p>
                 </div>
 

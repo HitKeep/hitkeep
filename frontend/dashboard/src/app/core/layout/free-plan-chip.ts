@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { AnnualOfferService } from '@services/annual-offer.service';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 
@@ -12,9 +13,9 @@ import { TeamService } from '@services/team.service';
     imports: [RouterLink, TranslocoPipe],
     template: `
         @if (visible()) {
-            <a class="free-plan-chip" routerLink="/admin/team/overview" [attr.aria-label]="'cloud.planChip.aria' | transloco">
+            <a class="free-plan-chip" routerLink="/admin/team/overview" [attr.aria-label]="(campaign.offer() ? 'cloud.annualOffer.link' : 'cloud.planChip.aria') | transloco">
                 <i class="pi pi-bolt" aria-hidden="true"></i>
-                <span>{{ 'cloud.planChip.free' | transloco }}</span>
+                <span>{{ (campaign.offer() ? 'cloud.annualOffer.link' : 'cloud.planChip.free') | transloco }}</span>
                 <i class="pi pi-arrow-right free-plan-chip__arrow" aria-hidden="true"></i>
             </a>
         }
@@ -75,6 +76,7 @@ import { TeamService } from '@services/team.service';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FreePlanChip {
+    protected readonly campaign = inject(AnnualOfferService);
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly share = inject(ShareService);
     private readonly teamService = inject(TeamService);

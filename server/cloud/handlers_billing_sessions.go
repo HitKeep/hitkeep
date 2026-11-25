@@ -201,6 +201,10 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 			return nil
 		}
 	}
+	if req.ExpectedTeamID != uuid.Nil && activeTenantID != req.ExpectedTeamID {
+		http.Error(w, "Active billing team changed", http.StatusConflict)
+		return nil
+	}
 	if !shared.CheckAgentTeam(w, r, activeTenantID) {
 		return nil
 	}
@@ -220,7 +224,7 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		return nil
 	}
 	account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
-	if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
+	if errors.Is(err, database.ErrCloudBillingAccountNotFound) {
 		// Auto-create a free billing account for legacy users who signed up
 		// before the billing account table existed.
 		newAccount := database.CloudBillingAccount{
@@ -280,6 +284,21 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		return nil
 	}
 
+	coupon := ""
+	if req.BillingInterval == database.CloudBillingIntervalAnnual {
+		offer, err := h.annualOfferFor(r.Context(), activeTenantID, account, req.PlanCode)
+		if err != nil {
+			http.Error(w, "Unable to verify annual checkout price", http.StatusBadGateway)
+			return nil
+		}
+		if offer != nil {
+			coupon = offer.Code
+		}
+	}
+	if req.ExpectedOffer != "" && req.ExpectedOffer != coupon {
+		http.Error(w, "Annual offer changed, review the current price", http.StatusConflict)
+		return nil
+	}
 	customerID := strings.TrimSpace(account.StripeCustomerID)
 	if customerID == "" {
 		customerID, err = h.stripe.CreateCustomer(r.Context(), createCustomerInput{
@@ -307,6 +326,7 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 	}
 
 	session, err := h.reuseOrCreateCheckout(r.Context(), createCheckoutSessionInput{
+		Coupon:          coupon,
 		CustomerID:      customerID,
 		PriceID:         priceID,
 		SuccessURL:      checkoutSuccessURL(h.ctx.Config),
@@ -348,11 +368,12 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 }
 
 type billingStateResponse struct {
-	TeamID             uuid.UUID `json:"team_id"`
-	PlanCode           string    `json:"plan_code"`
-	SubscriptionStatus string    `json:"subscription_status"`
-	PendingPlanCode    string    `json:"pending_plan_code,omitempty"`
-	BillingInterval    string    `json:"billing,omitempty"`
+	AnnualOffer        *annualOffer `json:"annual_offer,omitempty"`
+	TeamID             uuid.UUID    `json:"team_id"`
+	PlanCode           string       `json:"plan_code"`
+	SubscriptionStatus string       `json:"subscription_status"`
+	PendingPlanCode    string       `json:"pending_plan_code,omitempty"`
+	BillingInterval    string       `json:"billing,omitempty"`
 }
 
 func (h *handler) handleGetBillingState() http.HandlerFunc {
@@ -375,6 +396,12 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 			return
 		}
 
+		role, err := h.ctx.Store.GetTenantRole(r.Context(), teamID, userID)
+		if err != nil || !authcore.TeamRoleHasCapability(role, authcore.CapTeamManageSettings) {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+
 		state := billingStateResponse{TeamID: teamID, PlanCode: database.CloudPlanFree, SubscriptionStatus: database.CloudSubscriptionStatusFree}
 		account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), teamID)
 		if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
@@ -389,6 +416,11 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 				state.BillingInterval = account.BillingInterval
 			}
 		}
+		state.AnnualOffer, err = h.annualOfferFor(r.Context(), teamID, account, database.CloudPlanPro, database.CloudPlanBusiness)
+		if err != nil {
+			shared.LoggerFromContext(r.Context()).Warn("Unable to verify annual billing offer", slog.Group("stripe", stripeErrorLogAttrs(err)...))
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		shared.WriteJSON(r.Context(), w, http.StatusOK, state)
 	}
 }

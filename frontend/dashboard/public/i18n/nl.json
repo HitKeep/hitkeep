@@ -4080,6 +4080,10 @@
       "upgradeAction": "Upgrade naar Pro",
       "dismissAction": "Melding sluiten"
     },
+    "annualOffer": {
+      "link": "Black Friday · 30% korting in het eerste jaar",
+      "terms": "Met HKBF26 betaal je {{first}} voor het eerste jaar, met 30% korting. Daarna wordt het abonnement verlengd voor {{renewal}} per jaar. Start de betaling vóór 7 december om 08:00 UTC."
+    },
     "planChip": {
       "free": "Gratis abonnement",
       "aria": "Je gebruikt het gratis abonnement – bekijk abonnementen en upgrade"

@@ -1,6 +1,6 @@
 import { inject, Service } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { concat, map, Observable, of, switchMap, timer } from 'rxjs';
 
 import { CloudPlanTier } from '@models/analytics.types';
 
@@ -44,17 +44,39 @@ export interface BillingPortalSessionRequest {
 }
 
 export interface BillingCheckoutSessionRequest {
+    team_id?: string;
+    expected_offer?: string;
     plan_code: 'pro' | 'business';
     billing: BillingInterval;
     locale?: string;
 }
 
+export interface AnnualOfferPrice {
+    first_invoice_minor: number;
+    renewal_minor: number;
+    currency: string;
+}
+
 export interface CloudBillingState {
+    annual_offer?: { code: string; ends_at: string; prices: Record<string, AnnualOfferPrice> };
     team_id: string;
     plan_code: string;
     subscription_status: string;
     pending_plan_code?: 'pro' | 'business';
     billing?: BillingInterval;
+}
+
+// Expire visible prices even if the dashboard stays open across the checkout deadline.
+export function billingStateUntilExpiry(source: Observable<CloudBillingState>): Observable<CloudBillingState> {
+    return source.pipe(
+        switchMap((state) => {
+            if (!state.annual_offer) return of(state);
+            const remaining = Date.parse(state.annual_offer.ends_at) - Date.now();
+            const expired = { ...state, annual_offer: undefined };
+            if (!(remaining > 0)) return of(expired);
+            return concat(of(state), timer(remaining).pipe(map(() => expired)));
+        })
+    );
 }
 
 @Service()

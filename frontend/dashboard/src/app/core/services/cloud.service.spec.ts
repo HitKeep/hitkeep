@@ -2,7 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { CloudService, CloudSignupVerificationResendResponse } from '@services/cloud.service';
+import { of } from 'rxjs';
+import { vi } from 'vitest';
+import { billingStateUntilExpiry, CloudService, CloudSignupVerificationResendResponse } from '@services/cloud.service';
 
 describe('CloudService', () => {
     let service: CloudService;
@@ -18,6 +20,23 @@ describe('CloudService', () => {
 
     afterEach(() => {
         httpMock.verify();
+    });
+
+    it('removes the annual offer at the exclusive cutoff while review remains open', () => {
+        vi.useFakeTimers();
+        try {
+            const ends = new Date('2026-12-07T08:00:00Z');
+            vi.setSystemTime(new Date(ends.getTime() - 1));
+            const state = { team_id: 'team', plan_code: 'free', subscription_status: 'free', annual_offer: { code: 'HKBF26', ends_at: ends.toISOString(), prices: {} } };
+            const codes: (string | undefined)[] = [];
+            billingStateUntilExpiry(of(state)).subscribe((current) => codes.push(current.annual_offer?.code));
+            expect(codes).toEqual(['HKBF26']);
+            vi.advanceTimersByTime(1);
+            expect(codes).toEqual(['HKBF26', undefined]);
+            billingStateUntilExpiry(of(state)).subscribe((current) => expect(current.annual_offer).toBeUndefined());
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('requests a privacy-neutral signup verification resend', () => {

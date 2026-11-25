@@ -195,7 +195,7 @@ func (h *handler) handleCommerceSession(protocol, action string) http.HandlerFun
 						status = http.StatusCreated
 					}
 					w.Header().Set("Idempotent-Replayed", "true")
-					shared.WriteJSON(r.Context(), w, status, h.commerceResponse(protocol, &cached))
+					h.writeCommerceSession(w, r, status, protocol, &cached)
 					return
 				}
 			}
@@ -279,8 +279,16 @@ func (h *handler) handleCommerceSession(protocol, action string) http.HandlerFun
 				return
 			}
 		}
-		shared.WriteJSON(r.Context(), w, status, h.commerceResponse(protocol, session))
+		h.writeCommerceSession(w, r, status, protocol, session)
 	})
+}
+
+func (h *handler) writeCommerceSession(w http.ResponseWriter, r *http.Request, status int, protocol string, session *checkoutSessionOutput) {
+	if session.Coupon == annualCoupon && session.Status == "open" && !h.now().Before(annualOfferEnd) {
+		http.Error(w, "Annual offer closed", http.StatusConflict)
+		return
+	}
+	shared.WriteJSON(r.Context(), w, status, h.commerceResponse(protocol, session))
 }
 
 func commerceSessionStatus(s *checkoutSessionOutput) string {

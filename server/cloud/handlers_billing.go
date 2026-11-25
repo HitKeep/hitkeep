@@ -46,6 +46,7 @@ type stripeClient interface {
 	ExpireCheckoutSession(context.Context, string, string) (*checkoutSessionOutput, error)
 	CreatePortalSession(context.Context, createPortalSessionInput) (*portalSessionOutput, error)
 	GetCharge(context.Context, string) (*stripeChargeOutput, error)
+	GetAnnualCoupon(context.Context) (*stripe.Coupon, error)
 	GetPrice(context.Context, string) (*stripePriceOutput, error)
 }
 
@@ -57,6 +58,7 @@ type handler struct {
 	ctx          *shared.Context
 	stripe       stripeClient
 	webhooks     stripeWebhookVerifier
+	clock        func() time.Time
 	checkoutMu   sync.Mutex
 	commerceMu   sync.Mutex
 	profileCheck func(context.Context, string) (int, error)
@@ -74,6 +76,8 @@ type createCustomerInput struct {
 }
 
 type createCheckoutSessionInput struct {
+	Coupon          string
+	ExpiresAt       int64
 	IdempotencyKey  string
 	CustomerID      string
 	PriceID         string
@@ -89,6 +93,7 @@ type createCheckoutSessionInput struct {
 }
 
 type checkoutSessionOutput struct {
+	Coupon             string
 	PriceID            string
 	ID                 string
 	URL                string
@@ -124,10 +129,12 @@ type stripeChargeOutput struct {
 }
 
 type stripePriceOutput struct {
-	AmountMinor int64
-	Currency    string
-	Interval    string
-	Active      bool
+	ProductID     string
+	IntervalCount int64
+	AmountMinor   int64
+	Currency      string
+	Interval      string
+	Active        bool
 }
 
 type stripeSDKClient struct {
@@ -218,6 +225,8 @@ type billingPortalSessionRequest struct {
 }
 
 type billingCheckoutSessionRequest struct {
+	ExpectedTeamID  uuid.UUID `json:"team_id,omitzero"`
+	ExpectedOffer   string    `json:"expected_offer,omitempty"`
 	teamID          uuid.UUID
 	PlanCode        string `json:"plan_code"`
 	BillingInterval string `json:"billing"`

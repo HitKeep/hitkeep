@@ -18,7 +18,13 @@ describe('TeamOverviewPage', () => {
     let catalogCurrency = 'EUR';
     let routeQuery = convertToParamMap({});
     let multipleTeams = false;
-    let billingState = { team_id: '00000000-0000-0000-0000-000000000001', plan_code: 'free', subscription_status: 'free', pending_plan_code: '', billing: '' };
+    let billingState: { team_id: string; plan_code: string; subscription_status: string; pending_plan_code: string; billing: string; annual_offer?: import('@services/cloud.service').CloudBillingState['annual_offer'] } = {
+        team_id: '00000000-0000-0000-0000-000000000001',
+        plan_code: 'free',
+        subscription_status: 'free',
+        pending_plan_code: '',
+        billing: ''
+    };
     type TeamOverviewTestAccess = TeamOverviewPage & {
         openBillingPortal(): void;
         startUpgradeCheckout(): void;
@@ -161,6 +167,7 @@ describe('TeamOverviewPage', () => {
                                     ariaLabel: 'Copy to clipboard'
                                 }
                             },
+                            cloud: { annualOffer: { terms: 'HKBF26 {{first}} then {{renewal}} per year' } },
                             teams: { roles: { owner: 'Owner' } },
                             signup: {
                                 plans: {
@@ -430,6 +437,15 @@ describe('TeamOverviewPage', () => {
         fixture.detectChanges();
         return fixture.componentInstance as TeamOverviewTestAccess;
     }
+
+    it('reviews and submits the team-bound first-invoice offer in its currency', async () => {
+        const state = { ...billingState, annual_offer: { code: 'HKBF26', ends_at: new Date(Date.now() + 60000).toISOString(), prices: { business: { first_invoice_minor: 27300, renewal_minor: 39000, currency: 'USD' } } } };
+        const component = await showRecovery({ purchase: 'review', plan: 'business', billing: 'annual' }, state);
+        expect(fixture.nativeElement.textContent).toContain('HKBF26 $273.00 then $390.00 per year');
+        vi.spyOn(component, 'redirectTo').mockImplementation(() => undefined);
+        component.startRecoveryCheckout();
+        expect(TestBed.inject(CloudService).createBillingCheckoutSession).toHaveBeenCalledWith({ plan_code: 'business', billing: 'annual', locale: 'en', team_id: state.team_id, expected_offer: 'HKBF26' });
+    });
 
     it('offers an explicit consent return only after authoritative paid state and a valid pending request', async () => {
         oauth.continuation.mockReturnValue(of({ pending: true }));

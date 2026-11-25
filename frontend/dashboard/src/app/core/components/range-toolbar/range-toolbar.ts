@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
+import { AnnualOfferService } from '@services/annual-offer.service';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
@@ -44,6 +45,7 @@ export class RangeToolbar {
     private readonly transloco = inject(TranslocoService);
     private readonly localeService = inject(TranslocoLocaleService);
     private readonly activeLanguage = injectActiveLang();
+    protected readonly campaign = inject(AnnualOfferService);
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly share = inject(ShareService);
     private readonly teamService = inject(TeamService);

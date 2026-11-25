@@ -4097,6 +4097,10 @@
       "upgradeAction": "Passer à Pro",
       "dismissAction": "Fermer l’avis"
     },
+    "annualOffer": {
+      "link": "Black Friday · 30 % de réduction la première année",
+      "terms": "Avec HKBF26, votre première facture annuelle passe à {{first}}, soit 30 % de réduction. Le renouvellement coûte ensuite {{renewal}} par an. Commencez le paiement avant le 7 décembre à 08 h 00 UTC."
+    },
     "planChip": {
       "free": "Offre gratuite",
       "aria": "Vous utilisez l'offre gratuite – voir les offres et mettre à niveau"

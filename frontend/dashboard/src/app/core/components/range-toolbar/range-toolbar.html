@@ -124,7 +124,9 @@
 
     <ng-content select="[toolbar-right]" />
 
-    @if (retentionHintDays(); as days) {
+    @if (campaign.offer()) {
+    <a routerLink="/admin/team/overview" class="basis-full text-sm font-semibold text-primary hover:underline">{{ 'cloud.annualOffer.link' | transloco }}</a>
+    } @if (retentionHintDays(); as days) {
     <p class="range-toolbar__retention-hint m-0 inline-flex basis-full flex-wrap items-center gap-1.5 text-sm text-[var(--p-text-muted-color)]" data-testid="range-retention-hint">
         <i class="pi pi-clock" aria-hidden="true"></i>
         <span>{{ "cloud.retentionHint.message" | transloco: { count: days } }}</span>

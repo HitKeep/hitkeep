@@ -4136,6 +4136,10 @@
       "upgradeAction": "Auf Pro upgraden",
       "dismissAction": "Hinweis ausblenden"
     },
+    "annualOffer": {
+      "link": "Black Friday · 30 % Rabatt im ersten Jahr",
+      "terms": "Mit HKBF26 zahlst du für die erste Jahresrechnung 30 % weniger: {{first}}. Danach kostet das Abo {{renewal}} pro Jahr. Starte den Kauf vor dem 7. Dezember um 08:00 Uhr UTC."
+    },
     "planChip": {
       "free": "Free-Tarif",
       "aria": "Du nutzt den kostenlosen Tarif – Tarife ansehen und upgraden"

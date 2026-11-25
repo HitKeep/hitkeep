@@ -15,7 +15,7 @@ import { TeamService } from '@services/team.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
 import { AnalyticsService } from '@services/analytics.service';
 import { OAuthService } from '@services/oauth.service';
-import { BillingInterval, CloudService } from '@services/cloud.service';
+import { billingStateUntilExpiry, BillingInterval, CloudService } from '@services/cloud.service';
 import { cloudPurchaseIntent, type CloudPurchaseIntent } from '@core/utils/cloud-purchase-intent';
 
 import { CloudPlanTier, TeamPlan, TeamRole } from '@models/analytics.types';
@@ -55,10 +55,30 @@ export class TeamOverviewPage {
     protected readonly confirmedTeamId = signal('');
     protected readonly recoveryError = signal(false);
     protected readonly billingStateResource = rxResource({
-        params: () => ((this.recoveryMode || this.checkoutReturned) && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
-        stream: () => this.cloudService.getBillingState()
+        params: () => ((this.recoveryMode || this.checkoutReturned || (this.team()?.plan?.code === 'free' && this.team()?.role !== 'member')) && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
+        stream: () => billingStateUntilExpiry(this.cloudService.getBillingState())
     });
     protected readonly billingState = computed(() => (this.billingStateResource.hasValue() ? this.billingStateResource.value() : null));
+    protected readonly annualOffer = computed(() => {
+        const state = this.billingState();
+        return state?.team_id === this.team()?.id && state?.plan_code === 'free' ? state.annual_offer : undefined;
+    });
+    protected offerTerms(plan: string, interval: BillingInterval): string {
+        this.activeLanguage();
+        const offer = this.annualOffer();
+        const price = offer?.prices[plan];
+        if (interval !== 'annual' || !price) return '';
+        const currency = { currency: price.currency };
+        const first = this.localeService.localizeNumber(price.first_invoice_minor / 100, 'currency', undefined, currency);
+        const renewal = this.localeService.localizeNumber(price.renewal_minor / 100, 'currency', undefined, currency);
+        return this.transloco.translate('cloud.annualOffer.terms', { first, renewal });
+    }
+
+    private offerExpectation(plan: string, interval: BillingInterval) {
+        const offer = this.annualOffer();
+        return interval === 'annual' && offer?.prices[plan] ? { team_id: this.teamService.activeTeamId(), expected_offer: offer.code } : {};
+    }
+
     protected readonly checkoutAuthorizationReady = computed(() => {
         const state = this.billingState();
         // Reuse the native paid-plan rule; the checkout query is not payment proof.
@@ -307,6 +327,7 @@ export class TeamOverviewPage {
         if ((kind !== 'canceled' && kind !== 'review') || !this.teamConfirmed() || this.checkoutPending()) return;
         const intent = this.recoveryIntent();
         if (intent.plan === 'free') return;
+        const expected = this.offerExpectation(intent.plan, intent.billing);
         this.checkoutPending.set(true);
         this.recoveryError.set(false);
         this.cloudService
@@ -321,7 +342,7 @@ export class TeamOverviewPage {
                         this.billingStateResource.reload();
                         return EMPTY;
                     }
-                    return this.cloudService.createBillingCheckoutSession({ plan_code: intent.plan as 'pro' | 'business', billing: intent.billing, locale: this.activeLanguage() });
+                    return this.cloudService.createBillingCheckoutSession({ ...expected, plan_code: intent.plan as 'pro' | 'business', billing: intent.billing, locale: this.activeLanguage() });
                 }),
                 finalize(() => this.checkoutPending.set(false)),
                 takeUntilDestroyed(this.destroyRef)
@@ -369,6 +390,7 @@ export class TeamOverviewPage {
         this.checkoutPending.set(true);
         this.cloudService
             .createBillingCheckoutSession({
+                ...this.offerExpectation(planCode, this.billingInterval()),
                 plan_code: planCode,
                 billing: this.billingInterval(),
                 locale: this.activeLanguage()
@@ -381,32 +403,14 @@ export class TeamOverviewPage {
                 },
                 error: () => {
                     this.checkoutPending.set(false);
+                    this.recoveryError.set(true);
+                    this.billingStateResource.reload();
                 }
             });
     }
 
     protected startUpgradeCheckout(): void {
-        if (this.checkoutPending()) {
-            return;
-        }
-
-        this.checkoutPending.set(true);
-        this.cloudService
-            .createBillingCheckoutSession({
-                plan_code: 'pro',
-                billing: this.billingInterval(),
-                locale: this.activeLanguage()
-            })
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-                next: ({ url }) => {
-                    this.checkoutPending.set(false);
-                    this.redirectTo(url);
-                },
-                error: () => {
-                    this.checkoutPending.set(false);
-                }
-            });
+        this.startCheckoutForPlan('pro');
     }
 
     private isOperatorPlan(plan: TeamPlan): boolean {
