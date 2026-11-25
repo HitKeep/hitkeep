@@ -29,6 +29,7 @@ export interface RangeSelectEvent {
 interface ToolbarRangeOption extends RangeOption {
     label: string;
     shortLabel: string;
+    quick: boolean;
 }
 
 const VISIBLE_PRESET_VALUES = new Set<RangeValue>(['today', 'yesterday', '24h', '7d', '28d']);
@@ -68,10 +69,11 @@ export class RangeToolbar {
         return this.timeRanges().map((option) => ({
             ...option,
             label: option.label ?? this.defaultLabel(option.value),
-            shortLabel: this.shortLabel(option.value)
+            shortLabel: this.shortLabel(option.value),
+            quick: VISIBLE_PRESET_VALUES.has(option.value)
         })) satisfies ToolbarRangeOption[];
     });
-    protected readonly visiblePresetRanges = computed(() => this.translatedTimeRanges().filter((option) => VISIBLE_PRESET_VALUES.has(option.value)));
+    protected readonly visiblePresetRanges = computed(() => this.translatedTimeRanges().filter((option) => option.quick));
     protected readonly customOption = computed(() => this.translatedTimeRanges().find((option) => option.value === 'custom'));
     protected readonly customRangeSummary = computed(() => {
         this.activeLanguage();

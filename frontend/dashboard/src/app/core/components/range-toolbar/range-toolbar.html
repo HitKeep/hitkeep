@@ -37,7 +37,9 @@
                 appendTo="body"
                 [pTooltip]="allRangesLabel()"
                 tooltipPosition="bottom"
-            />
+            >
+                <ng-template #selectedItem let-option>{{ option.quick || option.value === 'custom' ? allRangesLabel() : option.label }}</ng-template>
+            </p-select>
             } @if (customOption()) {
             <p-button
                 type="button"

@@ -110,8 +110,8 @@ describe('RangeToolbar', () => {
                                     lastYear: 'Letztes Jahr',
                                     lastYearShort: '1J',
                                     customRange: 'Benutzerdefiniert',
-                                    customShort: 'Benutzerdef.',
-                                    allRanges: 'Alle Zeiträume',
+                                    customShort: 'Eigener Zeitraum',
+                                    allRanges: 'Zeiträume',
                                     searchRanges: 'Zeiträume suchen'
                                 },
                                 actions: {
