@@ -67,10 +67,8 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 	}
 	setStripeVersionHeader(&params.Params)
 	setStripeIdempotencyKey(&params.Params, input.IdempotencyKey)
-	if input.Coupon != "" {
-		params.Discounts = []*stripe.CheckoutSessionCreateDiscountParams{{Coupon: new(input.Coupon)}}
-		params.ExpiresAt = new(input.ExpiresAt)
-		params.AddMetadata("coupon", input.Coupon)
+	if input.AllowPromotionCodes {
+		params.AllowPromotionCodes = new(true)
 		params.AdaptivePricing = &stripe.CheckoutSessionCreateAdaptivePricingParams{Enabled: new(false)}
 	}
 	params.Locale = stripe.String(input.Locale)

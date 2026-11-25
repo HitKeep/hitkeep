@@ -150,7 +150,7 @@ jobs:
             ipmeta) paths=(ipmeta/data_country_lite.go ipmeta/data_country.hk.zst ipmeta/data_city_network_lite.go ipmeta/data_city.hk.zst ipmeta/data_asn.hk.zst) ;;
             duckdb)
               paths=(go.mod go.sum duckdbextensions/manifest.json)
-              for platform in linux_amd64 linux_arm64 osx_amd64 osx_arm64; do
+              for platform in linux_amd64 linux_arm64 osx_amd64 osx_arm64 windows_amd64; do
                 for extension in httpfs aws excel; do
                   paths+=("duckdbextensions/assets/$platform/$extension.duckdb_extension.gz")
                 done

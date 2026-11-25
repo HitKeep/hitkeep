@@ -954,7 +954,7 @@
       "thisYearShort": "Cette année",
       "lastYear": "Dernière année",
       "lastYearShort": "1a",
-      "moreRanges": "Plus de plages",
+      "allRanges": "Toutes les périodes",
       "searchRanges": "Rechercher des plages",
       "customRange": "Plage personnalisée",
       "customShort": "Personnalisé",
@@ -4097,14 +4097,25 @@
       "upgradeAction": "Passer à Pro",
       "dismissAction": "Fermer l’avis"
     },
-    "annualOffer": {
-      "saving": "Black Friday · 30 % de réduction",
-      "firstYear": "la première année",
-      "renewal": "Renouvellement à {{price}} par an.",
-      "deadline": "Commencez le paiement avant le {{date}}.",
+    "promotion": {
+      "saving": "{{percent}} de réduction sur une facture",
+      "withCode": "avec {{code}}",
+      "annualRenewal": "Tarif habituel de {{price}} par an.",
+      "monthlyRenewal": "Tarif habituel de {{price}} par mois.",
+      "checkoutDeadline": "Finalisez le paiement avant le {{date}}.",
+      "applyDeadline": "Appliquez le code avant le {{date}}.",
+      "review": "Voir {{plan}}",
+      "heading": "Économisez sur votre prochaine facture",
+      "once": "Une fois par compte client Stripe.",
+      "redeem": "Utiliser le code",
+      "copy": "Copier le code",
+      "code": "Code promotionnel",
+      "apply": "Appliquer à la prochaine facture",
+      "applied": "La remise s’applique à votre prochaine facture d’abonnement admissible.",
+      "failed": "La remise n’a pas pu être confirmée. Vérifiez le code et vos informations de facturation.",
+      "checkout": "Saisissez le code dans Stripe Checkout et vérifiez le total avant de payer.",
       "history": "Gardez {{days}} jours d’historique avec {{plan}}",
-      "freeHistory": "Votre offre Free conserve {{days}} jours.",
-      "review": "Voir {{plan}} en formule annuelle"
+      "freeHistory": "Votre offre Free conserve {{days}} jours."
     },
     "planChip": {
       "free": "Offre gratuite",

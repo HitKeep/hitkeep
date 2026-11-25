@@ -29,6 +29,7 @@ func openAPIV1Parameters() map[string]any {
 		"query":           map[string]any{"name": "q", "in": "query", "schema": map[string]any{"type": "string"}},
 		"sort":            map[string]any{"name": "sort", "in": "query", "schema": map[string]any{"type": "string"}},
 		"order":           map[string]any{"name": "order", "in": "query", "schema": map[string]any{"type": "string", "enum": []string{"asc", "desc"}}},
+		"statsView":       map[string]any{"name": "view", "in": "query", "description": "Use utm for the campaign overview. It returns the traffic chart, pageview and session metrics, paid-signal counts, and up to ten nonblank values per UTM field. UTM filters match the entered value literally.", "schema": map[string]any{"type": "string", "enum": []string{"utm"}}},
 		"filter":          map[string]any{"name": "filter", "in": "query", "description": "Filter in form type:value (repeatable). Supported types: path, hostname, referrer, referrer_host, device, country, city, provider, asn, browser, language, ai_bot, ai_bot_category, ai_source, utm_campaign, utm_content, utm_medium, utm_source, utm_term, qr_code_id.", "schema": map[string]any{"type": "string"}},
 		"filterType":      map[string]any{"name": "filter_type", "in": "query", "schema": map[string]any{"type": "string"}},
 		"filterValue":     map[string]any{"name": "filter_value", "in": "query", "schema": map[string]any{"type": "string"}},

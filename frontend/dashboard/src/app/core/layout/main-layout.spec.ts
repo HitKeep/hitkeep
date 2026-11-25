@@ -1528,8 +1528,7 @@ describe('MainLayout', () => {
         const supportLink = links.find((link) => link.href === 'https://hitkeep.com/support/help/');
 
         expect(supportLink).toBeTruthy();
-        expect(supportLink?.querySelector('.pi-headphones')).toBeTruthy();
-        expect(supportLink?.querySelector('.pi-external-link')).toBeTruthy();
+        expect(supportLink?.querySelector('.pi-headphones ~ .pi-external-link')).toBeTruthy();
     });
 
     it('allows team switching without the retired drawer confirmation', () => {

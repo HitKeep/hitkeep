@@ -3,7 +3,7 @@
     @if (open()) {
     <div class="space-y-2 pb-2 pt-1 text-sm">
         <p class="text-muted-color">{{ 'dashboard.visibleTime.description' | transloco }}</p>
-        @if (report.isLoading()) {
+        @if (report.isLoading() && !report.hasValue()) {
         <p role="status">{{ 'common.loadingSiteData' | transloco }}</p>
         } @else if (forbidden()) {
         <p role="alert">{{ 'dashboard.visibleTime.forbidden' | transloco }}</p>

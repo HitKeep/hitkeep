@@ -14,11 +14,12 @@ func (c *Context) CloudStatus() *api.CloudStatus {
 	}
 
 	return &api.CloudStatus{
-		Hosted:        true,
-		SignupEnabled: c.Config.CloudSignupEnabled,
-		Jurisdiction:  strings.TrimSpace(c.Config.CloudJurisdiction),
-		Region:        strings.TrimSpace(c.Config.CloudRegion),
-		UpgradeURL:    strings.TrimSpace(c.Config.CloudUpgradeURL),
-		SupportURL:    strings.TrimSpace(c.Config.CloudSupportURL),
+		Hosted:              true,
+		PromotionConfigured: c.Config.StripePromotionCouponID != "",
+		SignupEnabled:       c.Config.CloudSignupEnabled,
+		Jurisdiction:        strings.TrimSpace(c.Config.CloudJurisdiction),
+		Region:              strings.TrimSpace(c.Config.CloudRegion),
+		UpgradeURL:          strings.TrimSpace(c.Config.CloudUpgradeURL),
+		SupportURL:          strings.TrimSpace(c.Config.CloudSupportURL),
 	}
 }

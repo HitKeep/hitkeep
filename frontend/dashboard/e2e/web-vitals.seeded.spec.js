@@ -3,7 +3,7 @@ const { E2E_SHARE_TOKEN, login } = require("./support/auth");
 
 const TABLE_SETTLE_MS = 1000;
 const PRIMARY_SEEDED_SITE_DOMAIN = "acme-analytics.io";
-const SEEDED_RANGE = "30d";
+const SEEDED_RANGE = "28d";
 const SEEDED_CITY_RE = /Mountain View|New York|Seattle|Berlin|Munich|London|Paris|Amsterdam/;
 const SEEDED_PROVIDER_RE = /Google LLC|Verizon Business|Comcast Cable|Deutsche Telekom AG|Vodafone GmbH|BT|Orange|KPN/;
 const SEEDED_ASN_RE = /AS15169|AS701|AS7922|AS3320|AS3209|AS2856|AS3215|AS1136/;

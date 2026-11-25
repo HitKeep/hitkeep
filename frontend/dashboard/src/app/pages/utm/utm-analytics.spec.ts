@@ -7,6 +7,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { StatsService } from '@features/analytics/services/stats.service';
+import { RealtimeService, type RealtimeEvent } from '@services/realtime.service';
 import { SiteService } from '@features/sites/services/site.service';
 import { emptySiteStats } from '@testing/empty-site-stats';
 import type { SiteStats } from '@models/analytics.types';
@@ -15,13 +16,14 @@ import { UtmAnalytics } from './utm-analytics';
 
 describe('UtmAnalytics', () => {
     let fixture: ComponentFixture<UtmAnalytics>;
+    let events: Subject<RealtimeEvent>;
     const stats = emptySiteStats({
-        top_utm_campaigns: [{ name: 'launch', value: 12 }],
+        top_utm_campaigns: [{ name: 'launch', value: 12 }, ...Array.from({ length: 9 }, (_, i) => ({ name: `campaign-${i}`, value: 1 }))],
         top_utm_contents: [{ name: 'hero', value: 7 }],
         top_utm_mediums: [{ name: 'cpc', value: 8 }],
         top_utm_sources: [{ name: 'google', value: 10 }],
         top_utm_terms: [{ name: 'analytics', value: 4 }],
-        utm_campaign_hits: 12,
+        utm_campaign_hits: 24,
         utm_content_hits: 7,
         utm_medium_hits: 8,
         utm_source_hits: 10,
@@ -36,6 +38,7 @@ describe('UtmAnalytics', () => {
 
     beforeEach(async () => {
         statsServiceStub.fetchStats.mockReset();
+        events = new Subject<RealtimeEvent>();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -92,6 +95,7 @@ describe('UtmAnalytics', () => {
             ],
             providers: [
                 provideRouter([]),
+                { provide: RealtimeService, useValue: { events$: events, isOpen: () => true } },
                 {
                     provide: SiteService,
                     useValue: {
@@ -134,6 +138,8 @@ describe('UtmAnalytics', () => {
 
         const tabs = component.metricCardTabs();
 
+        expect(fixture.nativeElement.querySelector('.metric-list__share')?.textContent.trim()).toBe('50%');
+
         expect(tabs.map((tab) => tab.id)).toEqual(['acquisition']);
         expect(tabs[0]?.cards.map((card) => card.id)).toEqual(['campaigns', 'sources', 'mediums', 'contents', 'terms']);
         expect(tabs[0]?.cards.find((card) => card.id === 'sources')?.linkMode).toBeUndefined();
@@ -147,7 +153,7 @@ describe('UtmAnalytics', () => {
 
         expect(component.activeFilters()).toEqual([{ type: 'utm_source', value: 'google' }]);
         expect(component.activeFilterValue('utm_source')).toBe('google');
-        expect(statsServiceStub.fetchStats).toHaveBeenLastCalledWith('site-1', expect.any(String), expect.any(String), [{ type: 'utm_source', value: 'google' }], [], []);
+        expect(statsServiceStub.fetchStats).toHaveBeenLastCalledWith('site-1', expect.any(String), expect.any(String), [{ type: 'utm_source', value: 'google' }], [], [], 'utm');
         expect(paidSignalsCard().textContent).toContain('Loading...');
         expect(paidSignalsCard().textContent).not.toContain('4 of 15 measured');
 
@@ -155,10 +161,33 @@ describe('UtmAnalytics', () => {
         response.complete();
         await fixture.whenStable();
 
+        expect(fixture.nativeElement.querySelector('.metric-list__empty-label')).toBeTruthy();
         expect(paidSignalsCard().textContent).toContain('0 of 3 measured');
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobserved);
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobservedHint);
         expect(paidSignalsCard().querySelectorAll('dd')[1]?.textContent?.trim()).toBe('3');
+    });
+
+    it('finishes a slow UTM request during a sustained burst and fetches one trailing update', () => {
+        vi.useFakeTimers();
+        try {
+            const pending = new Subject<SiteStats>();
+            statsServiceStub.fetchStats.mockClear().mockReturnValueOnce(pending);
+            for (let tick = 0; tick < 35; tick++) {
+                events.next({ type: 'analytics.changed', site_id: 'site-1', kinds: ['hits'], counts: { hits: 1 }, changed_at: '', bucket_start: '' });
+                vi.advanceTimersByTime(100);
+                fixture.detectChanges();
+            }
+            expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(1);
+            expect(pending.observed).toBe(true);
+            pending.next(stats);
+            pending.complete();
+            fixture.detectChanges();
+            expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(2);
+            expect(paidSignalsCard().textContent).toContain('4 of 15 measured');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('distinguishes zero measured sessions from unavailable stats', async () => {

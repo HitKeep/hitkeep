@@ -1,4 +1,4 @@
-import { type RangeValue } from './range-options';
+import type { RangeValue } from './range-options';
 
 interface RangeLabelTranslator {
     translate(key: string, params?: Record<string, unknown>): string;
@@ -74,6 +74,12 @@ const RANGE_LABEL_SPECS: Record<RangeValue, RangeLabelSpec> = {
         labelKey: 'common.timeRanges.lastDays',
         count: 14,
         shortLabel: '14d'
+    },
+    '28d': {
+        type: 'rolling',
+        labelKey: 'common.timeRanges.lastDays',
+        count: 28,
+        shortLabel: '28d'
     },
     '30d': {
         type: 'rolling',

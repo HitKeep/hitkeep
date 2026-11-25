@@ -852,6 +852,7 @@ export interface AskAIAction {
 }
 
 export interface CloudStatus {
+    promotion_configured?: boolean;
     hosted: boolean;
     signup_enabled: boolean;
     jurisdiction?: string;

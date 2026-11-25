@@ -25,9 +25,10 @@ export class StatsService {
             });
     }
 
-    fetchStats(siteId: string, from: string, to: string, filters: { type: string; value: string }[] = [], goalIds: string[] = [], funnelIds: string[] = []): Observable<SiteStats> {
+    fetchStats(siteId: string, from: string, to: string, filters: { type: string; value: string }[] = [], goalIds: string[] = [], funnelIds: string[] = [], view?: 'utm'): Observable<SiteStats> {
         const cmp = previousPeriod(from, to);
         let params = new HttpParams().set('from', from).set('to', to).set('compare_from', cmp.from).set('compare_to', cmp.to);
+        if (view) params = params.set('view', view);
         for (const filter of filters) {
             params = params.append('filter', `${filter.type}:${filter.value}`);
         }

@@ -16,7 +16,7 @@ import { SiteService } from '@features/sites/services/site.service';
 import { injectStatsQuery, type StatsQueryMode } from '@features/analytics/services/stats-query';
 import { injectAIActivityQuery, type AIActivityQueryMode } from '@features/analytics/services/ai-activity-query';
 import { TrafficRecordsCard } from '@features/hits/components/traffic-records-card';
-import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
+import { RealtimeRefreshCoordinator, refreshWhenIdle } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_ALL_ANALYTICS_KINDS } from '@services/realtime.service';
 import { TrafficChart } from '@features/analytics/components/traffic-chart';
 import { MetricCardGroup, MetricCardGroupAction, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
@@ -42,6 +42,7 @@ import { AddSiteDialog } from '@features/sites/components/add-site-dialog';
 import { TeamService } from '@services/team.service';
 import { OnboardingService, OnboardingStep } from '@services/onboarding.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
+import { type ReportWindow, reportWindowBounds } from '@components/range-toolbar/range-options';
 import { AccessService } from '@services/access.service';
 import { SITE_CAPABILITIES } from '@core/access/capabilities';
 import { NavigationNoticeService } from '@services/navigation-notice.service';
@@ -54,8 +55,7 @@ interface MetricFilter {
 }
 interface DashboardReportRequest {
     siteId: string;
-    from: string;
-    to: string;
+    window: ReportWindow;
     filters: MetricFilter[];
     subject: { kind: ConversionSubject['kind']; id: string } | null;
 }
@@ -139,7 +139,7 @@ export class Dashboard {
     protected emptyTeamName = computed(() => this.teamService.activeTeam()?.name ?? null);
     protected activeFilters = signal<MetricFilter[]>([]);
     protected trafficRefreshKey = signal(0);
-    protected trafficDateRange = computed(() => this.getCurrentDateRange());
+    private readonly realtimeRefreshKey = signal(0);
     protected trafficGoalIds = computed(() => {
         const subject = this.requestedConversion();
         return subject?.kind === 'goal' ? [subject.id] : [];
@@ -148,15 +148,14 @@ export class Dashboard {
         const subject = this.requestedConversion();
         return subject?.kind === 'funnel' ? [subject.id] : [];
     });
-    private reportRequest = computed<DashboardReportRequest | null>(
+    protected readonly reportRequest = computed<DashboardReportRequest | null>(
         () => {
             const site = this.siteService.activeSite();
-            const dates = this.getCurrentDateRange();
-            if (!site || !dates) return null;
+            const window = this.reportRange.window();
+            if (!site || !window) return null;
             return {
                 siteId: site.id,
-                from: dates.from,
-                to: dates.to,
+                window,
                 filters: this.activeFilters(),
                 subject: this.requestedConversion()
             };
@@ -435,26 +434,21 @@ export class Dashboard {
             total: steps.length
         };
     });
-    protected exportUrl = computed(() => {
-        const shareToken = this.shareService.token();
-        const site = this.siteService.activeSite();
-        const dates = this.getCurrentDateRange();
-        if (!site || !dates) return '';
-
-        const params = new URLSearchParams({
-            from: dates.from,
-            to: dates.to
-        });
-        for (const filter of this.activeFilters()) {
+    protected exportUrl(): string {
+        const request = this.reportRequest();
+        if (!request) return '';
+        const params = new URLSearchParams({ ...reportWindowBounds(request.window) });
+        for (const filter of request.filters) {
             params.append('filter', `${filter.type}:${filter.value}`);
         }
-        const subject = this.requestedConversion();
+        const subject = request.subject;
         if (subject) params.append(`${subject.kind}_id`, subject.id);
+        const shareToken = this.shareService.token();
         if (this.isShareMode() && shareToken) {
-            return `/api/share/${encodeURIComponent(shareToken)}/sites/${site.id}/hits/export?${params.toString()}`;
+            return `/api/share/${encodeURIComponent(shareToken)}/sites/${request.siteId}/hits/export?${params.toString()}`;
         }
-        return `/api/sites/${site.id}/hits/export?${params.toString()}`;
-    });
+        return `/api/sites/${request.siteId}/hits/export?${params.toString()}`;
+    }
     protected readonly kpiCards = computed<KpiCardData[]>(() => {
         this.activeLanguage();
         const stats = this.stats();
@@ -623,11 +617,22 @@ export class Dashboard {
             }
         });
 
+        refreshWhenIdle(
+            this.realtimeRefreshKey,
+            () => this.statsQuery.isLoading() || this.statsQuery.isBackgroundRefreshing(),
+            () => this.loadStatsForCurrentRange('background')
+        );
+        refreshWhenIdle(
+            this.realtimeRefreshKey,
+            () => this.aiActivityQuery.isFetching(),
+            () => this.loadAIActivityForCurrentRange('background')
+        );
         this.realtimeRefresh.registerUntilDestroyed(this.destroyRef, {
             siteId: () => this.siteService.activeSite()?.id ?? null,
             kinds: REALTIME_ALL_ANALYTICS_KINDS,
             enabled: () => !!this.siteService.activeSite() && !!this.getCurrentDateRange(),
             refresh: () => this.refreshRealtimeData(),
+            refreshDuringBursts: true,
             debounceMs: 600
         });
     }
@@ -713,13 +718,8 @@ export class Dashboard {
         }
     }
 
-    private refreshStatsOnly(mode: StatsQueryMode = 'blocking') {
-        this.loadStatsForCurrentRange(mode);
-        this.loadAIActivityForCurrentRange(mode);
-    }
-
     private refreshRealtimeData() {
-        this.refreshStatsOnly('background');
+        this.realtimeRefreshKey.update((key) => key + 1);
         this.trafficRefreshKey.update((key) => key + 1);
         if (this.onboarding.onboarding() === null || this.showOnboarding()) {
             this.refreshOnboarding();
@@ -747,8 +747,7 @@ export class Dashboard {
         const effectiveMode = mode === 'background' && this.stats() && !this.isStatsLoading() ? 'background' : 'blocking';
         this.statsQuery.load({
             siteId: request.siteId,
-            from: request.from,
-            to: request.to,
+            ...reportWindowBounds(request.window),
             filters: request.filters,
             goalIds: request.subject?.kind === 'goal' ? [request.subject.id] : [],
             funnelIds: request.subject?.kind === 'funnel' ? [request.subject.id] : [],
@@ -762,8 +761,7 @@ export class Dashboard {
         this.aiActivityQuery.load(
             {
                 siteId: request.siteId,
-                from: request.from,
-                to: request.to,
+                ...reportWindowBounds(request.window),
                 filters: request.filters,
                 goalIds: request.subject?.kind === 'goal' ? [request.subject.id] : [],
                 funnelIds: request.subject?.kind === 'funnel' ? [request.subject.id] : []

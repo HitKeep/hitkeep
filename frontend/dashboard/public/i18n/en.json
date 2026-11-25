@@ -959,7 +959,7 @@
       "thisYearShort": "YTD",
       "lastYear": "Last year",
       "lastYearShort": "1y",
-      "moreRanges": "More ranges",
+      "allRanges": "All ranges",
       "searchRanges": "Search ranges",
       "customRange": "Custom range",
       "customShort": "Custom",
@@ -4199,14 +4199,25 @@
       "upgradeAction": "Upgrade to Pro",
       "dismissAction": "Dismiss retention notice"
     },
-    "annualOffer": {
-      "saving": "Black Friday · 30% off",
-      "firstYear": "first year",
-      "renewal": "Renews at {{price}} per year.",
-      "deadline": "Start checkout before {{date}}.",
+    "promotion": {
+      "saving": "{{percent}} off one invoice",
+      "withCode": "with {{code}}",
+      "annualRenewal": "Regular price {{price}} per year.",
+      "monthlyRenewal": "Regular price {{price}} per month.",
+      "checkoutDeadline": "Complete checkout before {{date}}.",
+      "applyDeadline": "Apply the code before {{date}}.",
+      "review": "Review {{plan}}",
+      "heading": "Save on your next invoice",
+      "once": "Once per Stripe billing customer.",
+      "redeem": "Redeem code",
+      "copy": "Copy code",
+      "code": "Promotion code",
+      "apply": "Apply to next invoice",
+      "applied": "The discount is applied to your next eligible subscription invoice.",
+      "failed": "Couldn’t confirm the discount. Check the code and your billing details before trying again.",
+      "checkout": "Enter the code in Stripe Checkout and check your total before paying.",
       "history": "Keep {{days}} days of history with {{plan}}",
-      "freeHistory": "Your Free plan keeps {{days}} days.",
-      "review": "Review annual {{plan}}"
+      "freeHistory": "Your Free plan keeps {{days}} days."
     },
     "planChip": {
       "free": "Free plan",

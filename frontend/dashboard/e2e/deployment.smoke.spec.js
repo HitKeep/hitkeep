@@ -46,6 +46,22 @@ test.describe("deployment smoke", () => {
         await expectNoNetworkLeaks(network);
     });
 
+    test("renders the reporting error icon with the packaged dashboard font", async ({ page, baseURL }) => {
+        await page.route("**/api/reports", (route) => route.fulfill({ status: 503, json: {} }));
+        await login(page, baseURL, "/settings/reports");
+
+        const state = page.getByRole("region", { name: "Reports are unavailable" });
+        const icon = state.locator(".page-state__icon i");
+        await expect(icon).toBeVisible();
+        const loaded = await icon.evaluate(async (element) => {
+            const glyph = getComputedStyle(element, "::before");
+            const faces = await document.fonts.load(`${glyph.fontSize} ${glyph.fontFamily}`, glyph.content);
+            return faces.some((face) => face.family === "openng-icons" && face.status === "loaded");
+        });
+        expect(loaded).toBe(true);
+        await expect(state.getByRole("button", { name: "Refresh" })).toBeVisible();
+    });
+
     test("serves tracker assets and ingest preflight from the configured base path", async ({ request, baseURL }) => {
         const tracker = await request.get(appUrl(baseURL, "/hk.js"));
         expect(tracker.ok()).toBeTruthy();

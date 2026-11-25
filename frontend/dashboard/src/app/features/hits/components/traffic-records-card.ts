@@ -9,6 +9,7 @@ import { ExportSplitButton, ExportStatusBanner } from '@components/export-split-
 import { PageState } from '@components/page-state/page-state';
 import { AppTable, AppTableCell, AppTableColumn } from '@components/table/table';
 import { HitService } from '@features/hits/services/hit.service';
+import { type ReportWindow, reportWindowBounds } from '@components/range-toolbar/range-options';
 import { SiteFavicon } from '@features/sites/components/site-favicon';
 import { TakeoutDownloadService } from '@services/takeout-download.service';
 
@@ -32,8 +33,7 @@ export interface TrafficRecordFilter {
 export class TrafficRecordsCard {
     siteId = input<string | null>(null);
     siteDomain = input<string | null>(null);
-    from = input<string | null>(null);
-    to = input<string | null>(null);
+    window = input<ReportWindow | null>(null);
     filters = input<TrafficRecordFilter[]>([]);
     goalIds = input<string[]>([]);
     funnelIds = input<string[]>([]);
@@ -51,7 +51,9 @@ export class TrafficRecordsCard {
     private readonly destroyRef = inject(DestroyRef);
     private lastTableEvent: TableLazyLoadEvent | null = null;
     private lastLoadedScope = '';
+    private lastRefreshKey = 0;
 
+    protected readonly first = signal(0);
     protected readonly searchQuery = signal('');
     protected readonly isExporting = signal(false);
     protected readonly hitRows = computed(() => this.hitService.hits().map((hit) => ({ ...hit, device: (hit.viewport_width ?? 0) > 768 ? 'desktop' : 'mobile' })));
@@ -65,22 +67,21 @@ export class TrafficRecordsCard {
     private readonly requestScope = computed(() =>
         JSON.stringify({
             siteId: this.siteId(),
-            from: this.from(),
-            to: this.to(),
+            window: this.window(),
             filters: this.filters(),
             goalIds: this.goalIds(),
             funnelIds: this.funnelIds(),
             enabled: this.enabled(),
-            refreshKey: this.refreshKey(),
             shareToken: this.shareToken()
         })
     );
     protected readonly exportUrl = computed(() => {
         const siteId = this.siteId();
-        const from = this.from();
-        const to = this.to();
-        if (!this.enabled() || !siteId || !from || !to) return '';
+        const window = this.window();
+        if (!this.enabled() || !siteId || !window) return '';
 
+        this.refreshKey();
+        const { from, to } = reportWindowBounds(window);
         const params = new URLSearchParams({ from, to });
         const query = this.searchQuery();
         if (query) params.set('q', query);
@@ -95,32 +96,39 @@ export class TrafficRecordsCard {
     constructor() {
         effect(() => {
             const scope = this.requestScope();
+            const refreshKey = this.refreshKey();
             if (!this.enabled()) {
                 untracked(() => this.hitService.reset());
                 this.lastLoadedScope = scope;
                 return;
             }
-            if (!this.lastTableEvent || scope === this.lastLoadedScope) return;
-            untracked(() => this.reloadFromFirstPage());
+            if (!this.lastTableEvent) return;
+            if (scope !== this.lastLoadedScope) {
+                untracked(() => this.loadHits({ ...this.lastTableEvent, first: 0 }));
+            } else if (refreshKey !== this.lastRefreshKey) {
+                this.lastRefreshKey = refreshKey;
+                untracked(() => this.hitService.refresh());
+            }
         });
     }
 
     protected loadHits(event: TableLazyLoadEvent) {
         this.lastTableEvent = { ...event };
+        this.first.set(event.first ?? 0);
+        this.lastLoadedScope = this.requestScope();
+        this.lastRefreshKey = this.refreshKey();
         this.searchQuery.set(typeof event.globalFilter === 'string' ? event.globalFilter.trim() : '');
         const sort = event.multiSortMeta?.[0] ?? { field: event.sortField as string, order: event.sortOrder };
         const siteId = this.siteId();
-        const from = this.from();
-        const to = this.to();
-        if (!this.enabled() || !siteId || !from || !to) {
+        const window = this.window();
+        if (!this.enabled() || !siteId || !window) {
             this.hitService.reset();
             return;
         }
 
         const rows = event.rows || 10;
         const first = event.first || 0;
-        this.lastLoadedScope = this.requestScope();
-        this.hitService.loadHits(siteId, from, to, first / rows + 1, rows, sort.field, sort.order === 1 ? 'asc' : 'desc', this.searchQuery(), this.filters(), this.goalIds(), this.funnelIds(), this.shareToken());
+        this.hitService.loadHits(siteId, window, first / rows + 1, rows, sort.field, sort.order === 1 ? 'asc' : 'desc', this.searchQuery(), this.filters(), this.goalIds(), this.funnelIds(), this.shareToken());
     }
 
     protected retry() {
@@ -160,11 +168,6 @@ export class TrafficRecordsCard {
 
     protected referrerDomain(referrer: string | null | undefined): string | null {
         return this.normalizeUrl(referrer)?.hostname ?? null;
-    }
-
-    private reloadFromFirstPage() {
-        if (!this.lastTableEvent) return;
-        this.loadHits({ ...this.lastTableEvent, first: 0 });
     }
 
     private normalizeUrl(raw: string | null | undefined): URL | null {

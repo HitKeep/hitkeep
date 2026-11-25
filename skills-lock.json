@@ -5,7 +5,7 @@
       "source": "angular/angular",
       "sourceType": "github",
       "skillPath": "skills/dev-skills/angular-developer/SKILL.md",
-      "computedHash": "a8255744287e57048100b129723a32307eb04adf4ca13bf653c1f5f002441dbc"
+      "computedHash": "910a053a15650922bada6218f5ac572b8914c209ed326e15b9c4b01497fbbd3a"
     },
     "cobra-viper": {
       "source": "spf13/go-skills",

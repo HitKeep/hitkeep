@@ -46,7 +46,12 @@ type stripeClient interface {
 	ExpireCheckoutSession(context.Context, string, string) (*checkoutSessionOutput, error)
 	CreatePortalSession(context.Context, createPortalSessionInput) (*portalSessionOutput, error)
 	GetCharge(context.Context, string) (*stripeChargeOutput, error)
-	GetAnnualCoupon(context.Context) (*stripe.Coupon, error)
+	GetPromotionCoupon(context.Context, string) (*stripe.Coupon, error)
+	CreateCustomerPromotion(context.Context, string, *billingPromotion) (*stripe.PromotionCode, error)
+	CustomerPromotions(context.Context, *stripe.PromotionCodeListParams) ([]*stripe.PromotionCode, error)
+	PromotionCustomer(context.Context, string) (*stripe.Customer, error)
+	PromotionSubscription(context.Context, string) (*stripe.Subscription, error)
+	ApplyPromotion(context.Context, string, string, *stripe.PromotionCode) error
 	GetPrice(context.Context, string) (*stripePriceOutput, error)
 }
 
@@ -76,39 +81,38 @@ type createCustomerInput struct {
 }
 
 type createCheckoutSessionInput struct {
-	Coupon          string
-	ExpiresAt       int64
-	IdempotencyKey  string
-	CustomerID      string
-	PriceID         string
-	SuccessURL      string
-	CancelURL       string
-	Locale          string
-	UserID          uuid.UUID
-	TenantID        uuid.UUID
-	PlanCode        string
-	PlanName        string
-	BillingInterval string
-	Jurisdiction    string
+	AllowPromotionCodes bool
+	IdempotencyKey      string
+	CustomerID          string
+	PriceID             string
+	SuccessURL          string
+	CancelURL           string
+	Locale              string
+	UserID              uuid.UUID
+	TenantID            uuid.UUID
+	PlanCode            string
+	PlanName            string
+	BillingInterval     string
+	Jurisdiction        string
 }
 
 type checkoutSessionOutput struct {
-	Coupon             string
-	PriceID            string
-	ID                 string
-	URL                string
-	Status             string
-	PaymentStatus      string
-	CustomerID         string
-	SubscriptionID     string
-	SubscriptionStatus string
-	TenantID           string
-	PlanCode           string
-	BillingInterval    string
-	Currency           string
-	AmountSubtotal     int64
-	AmountTotal        int64
-	ExpiresAt          int64
+	AllowPromotionCodes bool
+	PriceID             string
+	ID                  string
+	URL                 string
+	Status              string
+	PaymentStatus       string
+	CustomerID          string
+	SubscriptionID      string
+	SubscriptionStatus  string
+	TenantID            string
+	PlanCode            string
+	BillingInterval     string
+	Currency            string
+	AmountSubtotal      int64
+	AmountTotal         int64
+	ExpiresAt           int64
 }
 
 type createPortalSessionInput struct {
@@ -171,6 +175,9 @@ func Register(mux *http.ServeMux, ctx *shared.Context) {
 		ActiveTeamCap: authcore.CapTeamManageSettings,
 		RateLimiter:   ctx.ApiLimiter,
 	}, h.handleCreateBillingCheckoutSession()))
+	mux.HandleFunc("POST /api/cloud/billing/promotion", ctx.Handler(shared.HandlerConfig{
+		RequireAuth: true, ActiveTeamCap: authcore.CapTeamManageSettings, RateLimiter: ctx.ApiLimiter,
+	}, h.handleRedeemPromotion()))
 	mux.HandleFunc("GET /api/cloud/billing/state", ctx.Handler(shared.HandlerConfig{
 		RequireAuth:   true,
 		ActiveTeamCap: authcore.CapTeamManageSettings,
@@ -225,12 +232,12 @@ type billingPortalSessionRequest struct {
 }
 
 type billingCheckoutSessionRequest struct {
-	ExpectedTeamID  uuid.UUID `json:"team_id,omitzero"`
-	ExpectedOffer   string    `json:"expected_offer,omitempty"`
-	teamID          uuid.UUID
-	PlanCode        string `json:"plan_code"`
-	BillingInterval string `json:"billing"`
-	Locale          string `json:"locale"`
+	ExpectedTeamID    uuid.UUID `json:"team_id,omitzero"`
+	ExpectedPromotion string    `json:"expected_promotion,omitempty"`
+	teamID            uuid.UUID
+	PlanCode          string `json:"plan_code"`
+	BillingInterval   string `json:"billing"`
+	Locale            string `json:"locale"`
 }
 
 type billingCheckoutSessionResponse struct {

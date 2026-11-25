@@ -7,6 +7,7 @@ import { provideRouter } from '@angular/router';
 import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { Optimus } from '@openng/optimus-ui/config';
+import { Popover } from '@openng/optimus-ui/popover';
 import { Select } from '@openng/optimus-ui/select';
 
 import { DEFAULT_RANGE_OPTIONS, RangeOption, RangeToolbar } from './range-toolbar';
@@ -67,7 +68,7 @@ describe('RangeToolbar', () => {
                                     lastYearShort: '1y',
                                     customRange: 'Custom range',
                                     customShort: 'Custom',
-                                    moreRanges: 'More ranges',
+                                    allRanges: 'All ranges',
                                     searchRanges: 'Search ranges'
                                 },
                                 actions: {
@@ -77,12 +78,12 @@ describe('RangeToolbar', () => {
                                 refreshDataTooltip: 'Refresh'
                             },
                             cloud: {
-                                annualOffer: {
+                                promotion: {
                                     history: 'Keep {{days}} days with {{plan}}',
                                     freeHistory: 'Free keeps {{days}} days',
-                                    saving: 'Black Friday',
-                                    firstYear: 'first year',
-                                    renewal: 'Renews at {{price}}',
+                                    saving: '{{percent}} off one invoice',
+                                    withCode: 'with {{code}}',
+                                    annualRenewal: 'Renews at {{price}}',
                                     deadline: 'Start before {{date}}',
                                     review: 'Review {{plan}}'
                                 },
@@ -118,8 +119,8 @@ describe('RangeToolbar', () => {
                                     lastYear: 'Letztes Jahr',
                                     lastYearShort: '1J',
                                     customRange: 'Benutzerdefiniert',
-                                    customShort: 'Benutzerdef.',
-                                    moreRanges: 'Weitere Zeiträume',
+                                    customShort: 'Eigener Zeitraum',
+                                    allRanges: 'Zeiträume',
                                     searchRanges: 'Zeiträume suchen'
                                 },
                                 actions: {
@@ -156,7 +157,7 @@ describe('RangeToolbar', () => {
                                     lastYearShort: '1a',
                                     customRange: 'Intervalo personalizado',
                                     customShort: 'Personalizado',
-                                    moreRanges: 'Mais períodos',
+                                    allRanges: 'Todos os períodos',
                                     searchRanges: 'Pesquisar períodos'
                                 },
                                 actions: {
@@ -207,7 +208,7 @@ describe('RangeToolbar', () => {
         }
     });
 
-    function seedFreeCloudTeam(retentionDays = 60) {
+    function seedFreeCloudTeam(retentionDays = 60, promotionConfigured = false) {
         const teamService = TestBed.inject(TeamService);
         teamService.teams.set([
             {
@@ -231,12 +232,12 @@ describe('RangeToolbar', () => {
         TestBed.inject(DashboardBootstrapService).status.set({
             needs_setup: false,
             version: 'v2.0.0',
-            cloud: { hosted: true, signup_enabled: false }
+            cloud: { hosted: true, signup_enabled: false, promotion_configured: promotionConfigured }
         });
     }
 
     it('links the eligible team to annual review and replaces the retention hint', async () => {
-        seedFreeCloudTeam();
+        seedFreeCloudTeam(60, true);
         const team = TestBed.inject(TeamService).activeTeam()!;
         const http = TestBed.inject(HttpTestingController);
         fixture.componentRef.setInput('selectedRange', { value: 'custom', label: 'Custom' });
@@ -247,14 +248,14 @@ describe('RangeToolbar', () => {
             team_id: team.id,
             plan_code: 'free',
             subscription_status: 'free',
-            annual_offer: { code: 'HKBF26', ends_at: new Date(Date.now() + 60000).toISOString(), prices: { pro: { first_invoice_minor: 10500, renewal_minor: 15000, currency: 'USD' } } }
+            promotion: { code: 'HKBF26', percent_off: 30, ends_at: new Date(Date.now() + 60000).toISOString(), prices: { pro: { annual: { with_code_minor: 10500, regular_minor: 15000, currency: 'USD' } } } }
         });
         await Promise.resolve();
         TestBed.tick();
         http.expectOne('/api/cloud/plans').flush([{ code: 'pro', entitlements: { max_retention_days: 365 } }]);
         await fixture.whenStable();
         fixture.detectChanges();
-        const offer = fixture.nativeElement.querySelector('.annual-upgrade') as HTMLElement;
+        const offer = fixture.nativeElement.querySelector('.billing-promotion') as HTMLElement;
         expect(offer.textContent).toContain('365');
         expect(offer.textContent).toContain('Free keeps 60 days');
         expect(offer.querySelector('strong')?.textContent).toBe('$105.00');
@@ -264,7 +265,7 @@ describe('RangeToolbar', () => {
         TestBed.inject(ShareService).setToken('shared-test');
         TestBed.tick();
         fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('.annual-upgrade')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.billing-promotion')).toBeNull();
     });
 
     it('shows the retention hint when a free cloud team selects a range beyond retention', () => {
@@ -272,6 +273,8 @@ describe('RangeToolbar', () => {
         fixture.componentRef.setInput('selectedRange', DEFAULT_RANGE_OPTIONS.find((range) => range.value === '90d') as RangeOption);
         fixture.detectChanges();
 
+        TestBed.tick();
+        TestBed.inject(HttpTestingController).expectNone('/api/cloud/billing/state');
         const hint = fixture.nativeElement.querySelector('[data-testid="range-retention-hint"]') as HTMLElement | null;
         expect(hint).toBeTruthy();
         expect(hint?.textContent).toContain('60 days');
@@ -322,12 +325,13 @@ describe('RangeToolbar', () => {
             'Yesterday',
             'Last 24 hours',
             'Last 7 days',
-            'Last 30 days',
+            'Last 28 days',
             'Last 30 minutes',
             'Last hour',
             'Last 6 hours',
             'Last 3 days',
             'Last 14 days',
+            'Last 30 days',
             'Last 60 days',
             'Last 90 days',
             'Last 180 days',
@@ -351,12 +355,13 @@ describe('RangeToolbar', () => {
             'Gestern',
             'Letzte 24 Stunden',
             'Letzte 7 Tage',
-            'Letzte 30 Tage',
+            'Letzte 28 Tage',
             'Letzte 30 Minuten',
             'Letzte Stunde',
             'Letzte 6 Stunden',
             'Letzte 3 Tage',
             'Letzte 14 Tage',
+            'Letzte 30 Tage',
             'Letzte 60 Tage',
             'Letzte 90 Tage',
             'Letzte 180 Tage',
@@ -375,7 +380,7 @@ describe('RangeToolbar', () => {
         fixture.detectChanges();
         await fixture.whenStable();
 
-        expect(translatedShortLabels(component)).toEqual(['Hoje', 'Ontem', '24h', '7d', '30d', '30m', '1h', '6h', '3d', '14d', '60d', '90d', '180d', 'Esta sem.', 'Sem. passada', 'Este mês', 'Mês passado', 'Este ano', '1a', 'Personalizado']);
+        expect(translatedShortLabels(component)).toEqual(['Hoje', 'Ontem', '24h', '7d', '28d', '30m', '1h', '6h', '3d', '14d', '30d', '60d', '90d', '180d', 'Esta sem.', 'Sem. passada', 'Este mês', 'Mês passado', 'Este ano', '1a', 'Personalizado']);
     });
 
     it('emits range changes when a visible preset is selected', () => {
@@ -392,29 +397,70 @@ describe('RangeToolbar', () => {
         expect(rangeEvents[0]?.value.value).toBe('yesterday');
     });
 
-    it('emits range changes when an overflow preset is selected', () => {
-        const selectedRangeEvents: RangeOption[] = [];
-        const rangeEvents: { value: RangeOption }[] = [];
-        component.selectedRangeChange.subscribe((event) => selectedRangeEvents.push(event));
-        component.rangeChange.subscribe((event) => rangeEvents.push(event));
-
-        const overflowSelect = fixture.debugElement.query(By.css('p-select.range-toolbar__more-select'));
-        overflowSelect.triggerEventHandler('ngModelChange', '14d');
-        fixture.detectChanges();
-
-        expect(selectedRangeEvents[0]?.value).toBe('14d');
-        expect(rangeEvents[0]?.value.value).toBe('14d');
+    it.each(['28d', '30d', '14d'])('selects %s from the searchable list', (value) => {
+        const change = vi.fn();
+        component.rangeChange.subscribe(change);
+        fixture.debugElement.query(By.directive(Select)).triggerEventHandler('onChange', { value });
+        expect(change).toHaveBeenCalledExactlyOnceWith({ value: expect.objectContaining({ value }) });
     });
 
-    it('makes overflow presets searchable', () => {
-        const overflowSelect = fixture.debugElement.query(By.css('p-select.range-toolbar__more-select')).componentInstance as Select;
+    it('includes every supported option in search alongside the five quick buttons', () => {
+        const select = fixture.debugElement.query(By.directive(Select)).componentInstance as Select;
+        const buttons = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('p-togglebutton'));
 
-        expect(overflowSelect.filter).toBe(true);
-        expect(overflowSelect.filterBy).toBe('label,shortLabel,value');
-        expect(overflowSelect.filterPlaceholder).toBe('Search ranges');
-        expect(overflowSelect.ariaFilterLabel).toBe('Search ranges');
-        expect(overflowSelect.resetFilterOnHide).toBe(true);
-        expect((overflowSelect.options ?? []).map((option: RangeOption) => option.value)).toContain('180d');
+        expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Today', 'Yesterday', '24h', '7d', '28d']);
+        expect(select.filter).toBe(true);
+        expect(select.filterBy).toBe('label,shortLabel,value');
+        expect(select.filterPlaceholder).toBe('Search ranges');
+        expect(select.ariaFilterLabel).toBe('Search ranges');
+        expect(select.resetFilterOnHide).toBe(true);
+        expect(select.options?.map((option: RangeOption) => option.value)).toEqual(DEFAULT_RANGE_OPTIONS.map((option) => option.value));
+    });
+
+    it('limits the buttons and list to the options supplied by the page', () => {
+        fixture.componentRef.setInput('timeRanges', [{ value: '7d' }]);
+        fixture.detectChanges();
+
+        const select = fixture.debugElement.query(By.directive(Select)).componentInstance as Select;
+        expect(select.options?.map((option: RangeOption) => option.value)).toEqual(['7d']);
+        expect(fixture.nativeElement.querySelectorAll('p-togglebutton')).toHaveLength(1);
+        expect(fixture.nativeElement.querySelector('.range-toolbar__custom-button')).toBeNull();
+    });
+
+    it('opens the date picker without applying an incomplete custom selection', () => {
+        const change = vi.fn();
+        component.rangeChange.subscribe(change);
+        const popover = fixture.debugElement.query(By.directive(Popover)).componentInstance as Popover;
+        const show = vi.spyOn(popover, 'show').mockReturnValue(undefined);
+        fixture.debugElement.query(By.directive(Select)).triggerEventHandler('onChange', { value: 'custom', originalEvent: new Event('click') });
+
+        expect(show).toHaveBeenCalledOnce();
+        expect(component.selectedRange().value).toBe('24h');
+        expect(change).not.toHaveBeenCalled();
+    });
+
+    it('reopens the date picker from the dropdown when a custom range is already applied', async () => {
+        const dates = [new Date(2026, 6, 1), new Date(2026, 6, 3)];
+        fixture.componentRef.setInput('selectedRange', { value: 'custom' });
+        fixture.componentRef.setInput('customRangeDates', dates);
+        await fixture.whenStable();
+        const change = vi.fn();
+        component.rangeChange.subscribe(change);
+        const combo = fixture.nativeElement.querySelector('[role="combobox"]') as HTMLElement;
+        const popover = fixture.debugElement.query(By.directive(Popover)).componentInstance as Popover;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            combo.click();
+            await fixture.whenStable();
+            document.querySelector<HTMLElement>('[role="option"][aria-label="Custom range"]')!.click();
+            await fixture.whenStable();
+
+            expect(popover.overlayVisible).toBe(true);
+            expect(component.customRangeDates()).toEqual(dates);
+            expect(change).not.toHaveBeenCalled();
+            popover.hide();
+            await fixture.whenStable();
+        }
     });
 
     it('labels the refresh button for assistive technology', () => {
@@ -424,15 +470,13 @@ describe('RangeToolbar', () => {
         expect(refreshButton.getAttribute('aria-label')).toBe('Refresh');
     });
 
-    it('shows the active overflow preset as the searchable selector value', () => {
-        fixture.componentRef.setInput('selectedRange', DEFAULT_RANGE_OPTIONS.find((range) => range.value === '90d') as RangeOption);
+    it.each(['28d', '90d'])('shows the active %s preset in the dropdown', async (value) => {
+        fixture.componentRef.setInput('selectedRange', { value });
         fixture.detectChanges();
+        await fixture.whenStable();
 
-        const { overflowSelectValue } = component as unknown as {
-            overflowSelectValue: Signal<string | null>;
-        };
-
-        expect(overflowSelectValue()).toBe('90d');
+        const select = fixture.debugElement.query(By.directive(Select)).componentInstance as Select;
+        expect(select.value).toBe(value);
     });
 
     it('keeps the segmented toolbar on dark content surfaces in dark mode', () => {

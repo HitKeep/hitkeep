@@ -82,7 +82,7 @@ describe('WebVitalsPage', () => {
                                     lastDays: 'Last {{count}} days',
                                     lastYear: 'Last year',
                                     lastYearShort: '1y',
-                                    moreRanges: 'More ranges',
+                                    allRanges: 'All ranges',
                                     customRange: 'Custom range',
                                     customShort: 'Custom',
                                     customRangeSummary: '{{start}} - {{end}}'
