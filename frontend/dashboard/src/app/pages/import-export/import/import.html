@@ -106,7 +106,7 @@
                                 <div class="imports-file-list">
                                     @for (file of files; track file.name + file.size) {
                                     <div class="imports-file-row">
-                                        <i class="pi" [class.pi-file-zip]="isZipFile(file)" [class.pi-file]="!isZipFile(file)" aria-hidden="true"></i>
+                                        <i class="pi" [class.pi-box]="isZipFile(file)" [class.pi-file]="!isZipFile(file)" aria-hidden="true"></i>
                                         <span>{{ file.name }}</span>
                                         <small>{{ formatBytes(file.size) }}</small>
                                         <button type="button" (click)="removeFileCallback($event, $index)" [disabled]="isBusy()" [attr.aria-label]="'imports.actions.removeFile' | transloco">

@@ -37,9 +37,9 @@
                 ><i [class]="item.icon" aria-hidden="true"></i>{{ item.label }}</a
             >
             } @else {
-            <a class="flex w-full items-center gap-3 py-1 text-color no-underline" [href]="item.url" [target]="item.target" rel="noopener noreferrer" tabindex="-1" (click)="close(); $event.stopPropagation()"
-                ><i [class]="item.icon" aria-hidden="true"></i>{{ item.label }}</a
-            >
+            <a class="flex w-full items-center gap-3 py-1 text-color no-underline" [href]="item.url" [target]="item.target" rel="noopener noreferrer" tabindex="-1" (click)="close(); $event.stopPropagation()">
+                <i [class]="item.icon" aria-hidden="true"></i>{{ item.label }}<i class="pi pi-external-link text-xs" aria-hidden="true"></i>
+            </a>
             }
         </ng-template>
     </p-autocomplete>

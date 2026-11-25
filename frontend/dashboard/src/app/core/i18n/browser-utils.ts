@@ -41,13 +41,13 @@ const BROWSER_ICON_MAP: Record<string, string> = {
     'avg secure browser': 'avg-secure-browser'
 };
 
-const DEFAULT_BROWSER_ICON = '/browsers/_default.avif';
+const DEFAULT_BROWSER_ICON = 'browsers/_default.avif';
 
 export function browserIconUrl(name: string | null | undefined): string {
     const normalized = (name ?? '').trim().toLowerCase();
     const slug = BROWSER_ICON_MAP[normalized];
     if (slug) {
-        return `/browsers/${slug}.avif`;
+        return `browsers/${slug}.avif`;
     }
     return DEFAULT_BROWSER_ICON;
 }

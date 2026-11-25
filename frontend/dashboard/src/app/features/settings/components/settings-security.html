@@ -22,7 +22,7 @@
                     <span class="text-xs text-muted-color"> {{ "settings.security.social.lastUsed" | transloco }} <app-relative-date-time [value]="identity.last_used_at" /> </span>
                     }
                 </div>
-                <button pButton type="button" severity="secondary" [outlined]="true" icon="pi pi-unlink" [loading]="socialLoading() === identity.provider" [disabled]="socialLoading() !== null" (click)="unlinkSocial(identity.provider)">
+                <button pButton type="button" severity="secondary" [outlined]="true" icon="pi pi-minus-circle" [loading]="socialLoading() === identity.provider" [disabled]="socialLoading() !== null" (click)="unlinkSocial(identity.provider)">
                     {{ "settings.security.social.unlinkAction" | transloco }}
                 </button>
             </div>

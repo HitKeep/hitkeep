@@ -29,7 +29,7 @@
             }
         </div>
         } @else if (initialLoadError()) {
-        <app-page-state titleKey="settings.reports.errors.loadTitle" messageKey="settings.reports.errors.load" icon="pi pi-cloud-off" actionLabelKey="common.actions.refresh" actionIcon="pi pi-refresh" (actionClicked)="refresh()" />
+        <app-page-state titleKey="settings.reports.errors.loadTitle" messageKey="settings.reports.errors.load" icon="pi pi-exclamation-triangle" actionLabelKey="common.actions.refresh" actionIcon="pi pi-refresh" (actionClicked)="refresh()" />
         } @else if (reports().length === 0) {
         <app-page-state titleKey="settings.reports.empty.title" messageKey="settings.reports.empty.description" icon="pi pi-send" actionLabelKey="settings.reports.empty.action" actionIcon="pi pi-plus" (actionClicked)="openCreate()" />
         } @else {

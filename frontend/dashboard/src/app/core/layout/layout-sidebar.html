@@ -68,6 +68,8 @@
         ><i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span></a
     >
     } @else {
-    <a class="focus-sidebar__link" [href]="item.url" [target]="item.target" rel="noopener noreferrer" [title]="item.label" (click)="closeMobileDrawer()"><i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span></a>
+    <a class="focus-sidebar__link" [href]="item.url" [target]="item.target" rel="noopener noreferrer" [title]="item.label" (click)="closeMobileDrawer()">
+        <i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span><i class="pi pi-external-link text-xs" aria-hidden="true"></i>
+    </a>
     }
 </ng-template>
