@@ -777,6 +777,7 @@ type UserRecoveryCodesResponse struct {
 }
 
 type AnalyticsParams struct {
+	UTMOverview  bool
 	SiteID       uuid.UUID
 	UserID       uuid.UUID
 	Start        time.Time

@@ -12,6 +12,7 @@ export interface StatsQueryRequest {
     filters?: { type: string; value: string }[];
     goalIds?: string[];
     funnelIds?: string[];
+    view?: 'utm';
     mode?: StatsQueryMode;
     onSuccess?: (stats: SiteStats, result: StatsQueryResult) => void;
 }
@@ -44,7 +45,7 @@ export class StatsQuery {
         this.query = rxResource({
             params: () => this.request(),
             stream: ({ params }) =>
-                this.statsService.fetchStats(params.siteId, params.from, params.to, params.filters ?? [], params.goalIds ?? [], params.funnelIds ?? []).pipe(
+                this.statsService.fetchStats(params.siteId, params.from, params.to, params.filters ?? [], params.goalIds ?? [], params.funnelIds ?? [], params.view).pipe(
                     tap({
                         next: (stats) => {
                             if (this.request() !== params) return;
