@@ -4200,8 +4200,13 @@
       "dismissAction": "Dismiss retention notice"
     },
     "annualOffer": {
-      "link": "Black Friday · 30% off your first year",
-      "terms": "HKBF26 takes 30% off your first annual invoice: {{first}}. Renews at {{renewal}} per year. Start checkout before 7 Dec, 08:00 UTC."
+      "saving": "Black Friday · 30% off",
+      "firstYear": "first year",
+      "renewal": "Renews at {{price}} per year.",
+      "deadline": "Start checkout before {{date}}.",
+      "history": "Keep {{days}} days of history with {{plan}}",
+      "freeHistory": "Your Free plan keeps {{days}} days.",
+      "review": "Review annual {{plan}}"
     },
     "planChip": {
       "free": "Free plan",

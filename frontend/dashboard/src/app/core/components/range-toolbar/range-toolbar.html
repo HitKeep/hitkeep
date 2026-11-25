@@ -124,9 +124,21 @@
 
     <ng-content select="[toolbar-right]" />
 
-    @if (campaign.offer()) {
-    <a routerLink="/admin/team/overview" class="basis-full text-sm font-semibold text-primary hover:underline">{{ 'cloud.annualOffer.link' | transloco }}</a>
-    } @if (retentionHintDays(); as days) {
+    @if (campaign.spotlight(); as deal) {
+    <section class="annual-upgrade" aria-labelledby="annual-upgrade-title">
+        <div class="annual-upgrade__benefit">
+            <span class="annual-upgrade__icon" aria-hidden="true"><i class="pi pi-history"></i></span>
+            <div class="min-w-0">
+                <h2 id="annual-upgrade-title" class="m-0 text-base leading-snug font-semibold">{{ 'cloud.annualOffer.history' | transloco: { days: deal.days, plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</h2>
+                <p class="m-0 mt-1 text-sm text-muted-color">{{ 'cloud.annualOffer.freeHistory' | transloco: { days: deal.current } }}</p>
+            </div>
+        </div>
+        <app-annual-offer-price [price]="deal.price" [endsAt]="deal.endsAt" />
+        <a pButton severity="contrast" size="small" routerLink="/admin/team/overview" [queryParams]="{purchase: 'review', plan: deal.plan, billing: 'annual', team: deal.teamId}">
+            <span pButtonLabel>{{ 'cloud.annualOffer.review' | transloco: { plan: ('signup.plans.' + deal.plan + '.name' | transloco) } }}</span><i class="pi pi-arrow-right" aria-hidden="true"></i>
+        </a>
+    </section>
+    } @else if (retentionHintDays(); as days) {
     <p class="range-toolbar__retention-hint m-0 inline-flex basis-full flex-wrap items-center gap-1.5 text-sm text-[var(--p-text-muted-color)]" data-testid="range-retention-hint">
         <i class="pi pi-clock" aria-hidden="true"></i>
         <span>{{ "cloud.retentionHint.message" | transloco: { count: days } }}</span>

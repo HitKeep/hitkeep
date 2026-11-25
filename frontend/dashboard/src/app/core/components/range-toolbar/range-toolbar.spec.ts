@@ -2,7 +2,7 @@ import { Signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
@@ -77,6 +77,15 @@ describe('RangeToolbar', () => {
                                 refreshDataTooltip: 'Refresh'
                             },
                             cloud: {
+                                annualOffer: {
+                                    history: 'Keep {{days}} days with {{plan}}',
+                                    freeHistory: 'Free keeps {{days}} days',
+                                    saving: 'Black Friday',
+                                    firstYear: 'first year',
+                                    renewal: 'Renews at {{price}}',
+                                    deadline: 'Start before {{date}}',
+                                    review: 'Review {{plan}}'
+                                },
                                 retentionHint: {
                                     message: 'The Free plan keeps {{count}} days of data — older hits are not included in this view.',
                                     upgradeAction: 'Upgrade for more history'
@@ -225,6 +234,38 @@ describe('RangeToolbar', () => {
             cloud: { hosted: true, signup_enabled: false }
         });
     }
+
+    it('links the eligible team to annual review and replaces the retention hint', async () => {
+        seedFreeCloudTeam();
+        const team = TestBed.inject(TeamService).activeTeam()!;
+        const http = TestBed.inject(HttpTestingController);
+        fixture.componentRef.setInput('selectedRange', { value: 'custom', label: 'Custom' });
+        fixture.componentRef.setInput('customRangeDates', [new Date(Date.now() - 90 * 86400000), new Date()]);
+        fixture.detectChanges();
+        TestBed.tick();
+        http.expectOne('/api/cloud/billing/state').flush({
+            team_id: team.id,
+            plan_code: 'free',
+            subscription_status: 'free',
+            annual_offer: { code: 'HKBF26', ends_at: new Date(Date.now() + 60000).toISOString(), prices: { pro: { first_invoice_minor: 10500, renewal_minor: 15000, currency: 'USD' } } }
+        });
+        await Promise.resolve();
+        TestBed.tick();
+        http.expectOne('/api/cloud/plans').flush([{ code: 'pro', entitlements: { max_retention_days: 365 } }]);
+        await fixture.whenStable();
+        fixture.detectChanges();
+        const offer = fixture.nativeElement.querySelector('.annual-upgrade') as HTMLElement;
+        expect(offer.textContent).toContain('365');
+        expect(offer.textContent).toContain('Free keeps 60 days');
+        expect(offer.querySelector('strong')?.textContent).toBe('$105.00');
+        const link = new URL(offer.querySelector('a')!.href);
+        expect(Object.fromEntries(link.searchParams)).toEqual({ purchase: 'review', plan: 'pro', billing: 'annual', team: team.id });
+        expect(fixture.nativeElement.querySelector('[data-testid="range-retention-hint"]')).toBeNull();
+        TestBed.inject(ShareService).setToken('shared-test');
+        TestBed.tick();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.annual-upgrade')).toBeNull();
+    });
 
     it('shows the retention hint when a free cloud team selects a range beyond retention', () => {
         seedFreeCloudTeam();

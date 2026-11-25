@@ -10,6 +10,7 @@ import { CardModule } from '@openng/optimus-ui/card';
 import { ProgressBarModule } from '@openng/optimus-ui/progressbar';
 import { SelectButtonModule } from '@openng/optimus-ui/selectbutton';
 import { TagModule } from '@openng/optimus-ui/tag';
+import { AnnualOfferPriceDisplay } from '@components/annual-offer-price/annual-offer-price';
 import { SettingsCard } from '@features/settings/components/settings-card';
 import { TeamService } from '@services/team.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
@@ -25,7 +26,7 @@ const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, business: 2 };
 
 @Component({
     selector: 'app-team-overview',
-    imports: [AdminItemList, ButtonModule, CardModule, FormsModule, ProgressBarModule, RouterLink, SelectButtonModule, SettingsCard, TagModule, TranslocoPipe],
+    imports: [AnnualOfferPriceDisplay, AdminItemList, ButtonModule, CardModule, FormsModule, ProgressBarModule, RouterLink, SelectButtonModule, SettingsCard, TagModule, TranslocoPipe],
     templateUrl: './team-overview.html',
     styleUrl: './team-overview.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -63,15 +64,8 @@ export class TeamOverviewPage {
         const state = this.billingState();
         return state?.team_id === this.team()?.id && state?.plan_code === 'free' ? state.annual_offer : undefined;
     });
-    protected offerTerms(plan: string, interval: BillingInterval): string {
-        this.activeLanguage();
-        const offer = this.annualOffer();
-        const price = offer?.prices[plan];
-        if (interval !== 'annual' || !price) return '';
-        const currency = { currency: price.currency };
-        const first = this.localeService.localizeNumber(price.first_invoice_minor / 100, 'currency', undefined, currency);
-        const renewal = this.localeService.localizeNumber(price.renewal_minor / 100, 'currency', undefined, currency);
-        return this.transloco.translate('cloud.annualOffer.terms', { first, renewal });
+    protected offerPrice(plan: string, interval: BillingInterval) {
+        return interval === 'annual' ? this.annualOffer()?.prices[plan] : undefined;
     }
 
     private offerExpectation(plan: string, interval: BillingInterval) {
@@ -90,7 +84,7 @@ export class TeamOverviewPage {
     });
     protected readonly recoveryKind = computed(() => {
         if (!this.recoveryMode || !this.systemStatus()?.cloud?.hosted || this.requestedIntent.plan === 'free') return null;
-        if (this.recoveryMode === 'canceled' && this.returnTeamId !== this.teamService.activeTeamId()) return 'switchTeam';
+        if ((this.recoveryMode === 'canceled' || this.returnTeamId) && this.returnTeamId !== this.teamService.activeTeamId()) return 'switchTeam';
         if (this.billingStateResource.isLoading()) return 'loading';
         const state = this.billingState();
         if (!state || state.team_id !== this.teamService.activeTeamId()) return 'unavailable';
@@ -105,6 +99,8 @@ export class TeamOverviewPage {
     protected readonly recoveryPrice = computed(() => {
         this.activeLanguage();
         const intent = this.recoveryIntent();
+        const offerPrice = this.offerPrice(intent.plan, intent.billing);
+        if (offerPrice) return this.localeService.localizeNumber(offerPrice.first_invoice_minor / 100, 'currency', undefined, { currency: offerPrice.currency });
         const price = this.planTiers().find((tier) => tier.code === intent.plan)?.prices?.[intent.billing];
         return price ? this.localeService.localizeNumber(price.amount_minor / 100, 'currency', undefined, { currency: price.currency }) : this.transloco.translate('signup.priceUnavailable');
     });

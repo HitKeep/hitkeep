@@ -157,3 +157,42 @@
         justify-self: end;
     }
 }
+
+.annual-upgrade {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 2rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--p-content-border-color);
+    border-inline-start: 3px solid var(--p-primary-color);
+    border-radius: var(--p-content-border-radius);
+    background: var(--p-content-background);
+}
+.annual-upgrade__benefit {
+    display: flex;
+    flex: 1 1 15rem;
+    align-items: center;
+    gap: 0.75rem;
+}
+.annual-upgrade__icon {
+    display: grid;
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--p-highlight-background);
+    color: var(--p-highlight-color);
+}
+@media (max-width: 640px) {
+    .annual-upgrade {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 1rem;
+    }
+    .annual-upgrade__benefit {
+        flex-basis: auto;
+    }
+}

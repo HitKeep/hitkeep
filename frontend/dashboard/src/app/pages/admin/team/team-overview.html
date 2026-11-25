@@ -34,11 +34,18 @@
         <a pButton routerLink="/dashboard" severity="secondary"><span pButtonLabel>{{ 'signup.recovery.dashboard' | transloco }}</span></a>
         } @else {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ (kind === 'canceled' ? 'signup.recovery.canceledTitle' : 'signup.recovery.reviewTitle') | transloco }}</h2>
+        @if (kind === 'review' && offerPrice(recoveryIntent().plan, recoveryIntent().billing)) {
+        <p class="text-sm text-muted-color">{{ t.name }}</p>
+        } @else {
         <p class="text-sm">{{ (kind === 'canceled' ? 'signup.recovery.canceledDescription' : 'signup.recovery.reviewDescription') | transloco }}</p>
-        <p class="text-sm font-medium">
-            {{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }} · {{ offerTerms(recoveryIntent().plan, recoveryIntent().billing) || recoveryPrice() }}
-        </p>
-        @if (teamService.hasMultipleTeams() && !teamConfirmed()) {
+        } @if (offerPrice(recoveryIntent().plan, recoveryIntent().billing); as price) {
+        <div class="grid gap-2 rounded-lg border border-[var(--p-content-border-color)] p-4">
+            <strong>{{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ 'signup.billing.annual' | transloco }}</strong>
+            <app-annual-offer-price [price]="price" [endsAt]="annualOffer()!.ends_at" />
+        </div>
+        } @else {
+        <p class="text-sm font-medium">{{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }} · {{ recoveryPrice() }}</p>
+        } @if (teamService.hasMultipleTeams() && !teamConfirmed()) {
         <p class="text-sm">{{ 'signup.recovery.confirmTeam' | transloco: { team: t.name } }}</p>
         <p-button [label]="'signup.recovery.confirmTeamAction' | transloco" severity="secondary" (onClick)="confirmRecoveryTeam()" />
         } @else {
@@ -101,7 +108,9 @@
                     size="small"
                     [attr.aria-label]="'admin.team.overview.plans.billingLabel' | transloco"
                 />
+                @if (!annualOffer() || billingInterval() !== "annual") {
                 <span class="text-xs leading-4 text-[var(--p-text-muted-color)]">{{ "admin.team.overview.plans.annualSaving" | transloco }}</span>
+                }
             </div>
         </div>
 
@@ -157,8 +166,8 @@
                         <p-tag [value]="'admin.team.overview.plans.recommended' | transloco" severity="success" [rounded]="true" />
                         }
                     </div>
-                    @if (offerTerms(tier.code, billingInterval()); as terms) {
-                    <p class="m-0 font-semibold text-primary">{{ terms }}</p>
+                    @if (offerPrice(tier.code, billingInterval()); as price) {
+                    <app-annual-offer-price [price]="price" [endsAt]="annualOffer()!.ends_at" />
                     } @else {
                     <span class="flex items-baseline gap-1">
                         <span class="text-3xl font-extrabold">{{ planPriceLabels()[tier.code] }}</span>

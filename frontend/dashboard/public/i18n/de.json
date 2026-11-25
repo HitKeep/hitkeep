@@ -4137,8 +4137,13 @@
       "dismissAction": "Hinweis ausblenden"
     },
     "annualOffer": {
-      "link": "Black Friday · 30 % Rabatt im ersten Jahr",
-      "terms": "Mit HKBF26 zahlst du für die erste Jahresrechnung 30 % weniger: {{first}}. Danach kostet das Abo {{renewal}} pro Jahr. Starte den Kauf vor dem 7. Dezember um 08:00 Uhr UTC."
+      "saving": "Black Friday · 30 % Rabatt",
+      "firstYear": "im ersten Jahr",
+      "renewal": "Danach {{price}} pro Jahr.",
+      "deadline": "Kauf vor dem {{date}} beginnen.",
+      "history": "{{days}} Tage Verlauf mit {{plan}}",
+      "freeHistory": "Dein Free-Tarif speichert Daten für {{days}} Tage.",
+      "review": "Jahrestarif {{plan}} ansehen"
     },
     "planChip": {
       "free": "Free-Tarif",

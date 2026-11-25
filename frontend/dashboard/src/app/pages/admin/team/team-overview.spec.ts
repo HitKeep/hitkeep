@@ -167,7 +167,7 @@ describe('TeamOverviewPage', () => {
                                     ariaLabel: 'Copy to clipboard'
                                 }
                             },
-                            cloud: { annualOffer: { terms: 'HKBF26 {{first}} then {{renewal}} per year' } },
+                            cloud: { annualOffer: { saving: 'Black Friday · 30% off', firstYear: 'first year', renewal: 'Renews at {{price}} per year.', deadline: 'Start checkout before {{date}}.' } },
                             teams: { roles: { owner: 'Owner' } },
                             signup: {
                                 plans: {
@@ -441,10 +441,19 @@ describe('TeamOverviewPage', () => {
     it('reviews and submits the team-bound first-invoice offer in its currency', async () => {
         const state = { ...billingState, annual_offer: { code: 'HKBF26', ends_at: new Date(Date.now() + 60000).toISOString(), prices: { business: { first_invoice_minor: 27300, renewal_minor: 39000, currency: 'USD' } } } };
         const component = await showRecovery({ purchase: 'review', plan: 'business', billing: 'annual' }, state);
-        expect(fixture.nativeElement.textContent).toContain('HKBF26 $273.00 then $390.00 per year');
+        const offer = fixture.nativeElement.querySelector('app-annual-offer-price');
+        expect(offer.querySelector('strong').textContent).toBe('$273.00');
+        expect(offer.textContent).toContain('Renews at $390.00 per year.');
         vi.spyOn(component, 'redirectTo').mockImplementation(() => undefined);
         component.startRecoveryCheckout();
         expect(TestBed.inject(CloudService).createBillingCheckoutSession).toHaveBeenCalledWith({ plan_code: 'business', billing: 'annual', locale: 'en', team_id: state.team_id, expected_offer: 'HKBF26' });
+    });
+
+    it('requires the team from an annual offer link before allowing review', async () => {
+        const component = await showRecovery({ purchase: 'review', plan: 'pro', billing: 'annual', team: 'another-team' }, billingState);
+        expect(component.recoveryKind()).toBe('switchTeam');
+        component.startRecoveryCheckout();
+        expect(TestBed.inject(CloudService).createBillingCheckoutSession).not.toHaveBeenCalled();
     });
 
     it('offers an explicit consent return only after authoritative paid state and a valid pending request', async () => {

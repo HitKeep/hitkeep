@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 721a78759f014fc170594ef865e8c66f56edc737
+          ref: f472e83a460331d8c3f76b7c03a511df3502b1ba
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
@@ -30,6 +30,6 @@ jobs:
           GATE: ${{ matrix.gate }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 721a78759f014fc170594ef865e8c66f56edc737
+          test "$(git rev-parse HEAD)" = f472e83a460331d8c3f76b7c03a511df3502b1ba
           plan_id="$(./hk qa plan full --base origin/main --output json | jq -er '.data.plan_id')"
           ./hk qa full --plan-id "$plan_id" --gate "$GATE"
