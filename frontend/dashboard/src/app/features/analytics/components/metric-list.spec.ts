@@ -132,6 +132,23 @@ describe('MetricList', () => {
         expect(link.getAttribute('aria-label')).toBe('Open details for Signup');
     });
 
+    it('keeps the referrer label and link when its favicon fails', () => {
+        fixture.componentRef.setInput('linkMode', 'url');
+        fixture.componentRef.setInput('data', [{ name: 'google.com', value: 1 }]);
+        fixture.detectChanges();
+
+        const row = fixture.nativeElement.querySelector('.metric-list__row') as HTMLElement;
+        const image = row.querySelector('img')!;
+        expect(image.getAttribute('src')).toContain('/api/favicon/google.com');
+        image.dispatchEvent(new Event('error'));
+        fixture.detectChanges();
+
+        expect(row.querySelector('img')).toBeNull();
+        expect(row.querySelector('.pi-globe')).toBeTruthy();
+        expect(row.textContent).toContain('google.com');
+        expect(row.querySelector('a')?.href).toBe('https://google.com/');
+    });
+
     it('should render distinct device icons', () => {
         fixture.componentRef.setInput('data', [
             { name: 'Desktop', value: 70 },

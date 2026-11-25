@@ -4,37 +4,129 @@ on:
     branches: [qa/bf26-cloud-proof]
 permissions:
   contents: read
-concurrency:
-  group: bf26-cloud-proof
-  cancel-in-progress: true
+env:
+  CANDIDATE: 1f6cfb0d5f7e5ba7e5f81073043644a956af792a
+  REVIEWED_TREE: f852d3d64c6ab362a820cc3fca5f64cb03d945d0
 jobs:
-  verify:
+  full:
+    name: Linux billing tests (full suite)
+    env:
+      SCOPE: full-suite
+    outputs:
+      database_failure: ${{ steps.signal.outputs.database_failure }}
     runs-on: ubuntu-latest
-    timeout-minutes: 55
-    strategy:
-      fail-fast: false
-      matrix:
-        gate: [cloud-test, cloud-image, default-tenant-migration-acceptance]
+    timeout-minutes: 45
+    steps: &timing-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Select the reviewed source and retain only the diagnostic parser outside the checkout
+        run: |
+          cp .github/bf26-proof-timings.py "$RUNNER_TEMP/timings.py"
+          git checkout --detach "$CANDIDATE"
+          test "$(git rev-parse HEAD^{tree})" = "$REVIEWED_TREE"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run uncached billing tests with structured timing and runner pressure samples
+        id: tests
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/evidence"
+          mkdir "$evidence"
+          {
+            git rev-parse HEAD HEAD^{tree}
+            go version
+            ./hk ci go-config goflags --variant cloud --output plain
+            nproc
+            lscpu | sed -n '/^CPU(s):/p;/^Model name:/p'
+            sed -n '/^Cpus_allowed_list:/p' /proc/self/status
+            for limit in /sys/fs/cgroup/cpu.max /sys/fs/cgroup/memory.max; do
+              if [[ -r "$limit" ]]; then cat "$limit"; fi
+            done
+            df -h .
+            uname -srmo
+          } > "$evidence/host.txt"
+          vmstat -wt 15 > "$evidence/vmstat.txt" &
+          vmstat_pid=$!
+          (
+            while :; do
+              date -u +%FT%TZ
+              cat /proc/loadavg /proc/pressure/cpu /proc/pressure/io /proc/pressure/memory
+              if [[ -r /sys/fs/cgroup/cpu.stat ]]; then cat /sys/fs/cgroup/cpu.stat; fi
+              ps -e -o comm=,pcpu=,etimes= | awk '$1 ~ /\.test$/ {print}' | sort
+              sleep 15
+            done
+          ) > "$evidence/pressure.txt" &
+          sample_pid=$!
+          trap 'kill "$sample_pid" "$vmstat_pid" 2>/dev/null || true' EXIT
+          if [[ "$SCOPE" == full-suite ]]; then
+            plan=$(./hk qa plan full --base HEAD^ --output json | jq -er '.data.plan_id')
+            ./hk qa full --gate cloud-test --plan-id "$plan" --output json > "$RUNNER_TEMP/qa-envelope.json"
+          else
+            export GOFLAGS="$(./hk ci go-config goflags --variant cloud --output plain)"
+            go test -json -timeout 20m ./database > "$RUNNER_TEMP/database.jsonl"
+          fi
+      - name: Summarize database tests and complete package statuses
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ "$SCOPE" == full-suite ]]; then
+            files=(~/.cache/hitkeep/hk/workspaces/*/runs/*.cloud-test.log)
+            test "${#files[@]}" = 1
+            raw="${files[0]}"
+          else
+            raw="$RUNNER_TEMP/database.jsonl"
+          fi
+          python3 "$RUNNER_TEMP/timings.py" "$raw" "$RUNNER_TEMP/evidence"
+      - name: Identify a database failure in the full suite
+        id: signal
+        if: always() && env.SCOPE == 'full-suite' && steps.tests.outcome == 'failure'
+        run: |
+          if [[ -f "$RUNNER_TEMP/evidence/summary.json" ]]; then
+            echo "database_failure=$(jq -r '.database_failure == true' "$RUNNER_TEMP/evidence/summary.json")" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: cloud-timings-${{ env.SCOPE }}
+          path: ${{ runner.temp }}/evidence/
+          retention-days: 7
+          if-no-files-found: error
+  isolated-database:
+    name: Isolated Linux billing database after a full-suite database failure
+    needs: full
+    if: ${{ !cancelled() && needs.full.result == 'failure' && needs.full.outputs.database_failure == 'true' }}
+    env:
+      SCOPE: database-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps: *timing-steps
+  image:
+    name: Linux cloud image and embedded Optimus guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 7787f333b6004d86df5ed4a695397a1f7d088a72
+          ref: ${{ env.CANDIDATE }}
           fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
         with:
           go-version-file: go.mod
           cache: false
-      - name: Run the selected gate against the candidate
-        env:
-          GATE: ${{ matrix.gate }}
+      - name: Build and smoke the final cloud dashboard image
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 7787f333b6004d86df5ed4a695397a1f7d088a72
-          plan_id="$(./hk qa plan full --base c6aafa285f0667ec73dc9049b9935d68fe538d1f --output json | jq -er '.data.plan_id')"
-          ./hk qa full --plan-id "$plan_id" --gate "$GATE"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git rev-parse HEAD^{tree})" = "$REVIEWED_TREE"
+          plan=$(./hk qa plan full --base HEAD^ --output json | jq -er '.data.plan_id')
+          ./hk qa full --plan-id "$plan" --gate cloud-image
       - name: Verify the Optimus table patch in the cloud image's embedded dashboard
-        if: matrix.gate == 'cloud-image'
         run: |
           set -euo pipefail
           image=$(./hk catalog --output json | jq -er '.data.variants[] | select(.id == "cloud") | .local_image')

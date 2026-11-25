@@ -68,10 +68,10 @@
                             <img [ngSrc]="flagUrl" class="metric-list__flag" [width]="16" [height]="16" alt="" />
                             } @else if (showLanguageFlags() && languageFlagUrl(item.name); as flagUrl) {
                             <img [ngSrc]="flagUrl" class="metric-list__flag" [width]="16" [height]="16" alt="" />
-                            } @else if (aiIconUrl(item); as iconUrl) {
-                            <img [ngSrc]="iconUrl" class="metric-list__favicon" [width]="16" [height]="16" alt="" />
-                            } @if (linkInfo(item); as info) { @if (info.faviconUrl) {
-                            <img [ngSrc]="info.faviconUrl" class="metric-list__favicon" [width]="16" [height]="16" alt="" />
+                            } @else if (aiIconDomain(item); as domain) {
+                            <app-site-favicon compact [site]="{ domain }" />
+                            } @if (linkInfo(item); as info) { @if (info.faviconDomain; as domain) {
+                            <app-site-favicon compact [site]="{ domain }" />
                             }
                             <span class="metric-list__label" [title]="titleForItem(item, provenance)">{{ displayLabel(item) }}</span>
                             @if (provenance) {
