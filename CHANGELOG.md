@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.18.2](https://github.com/HitKeep/hitkeep/compare/v2.18.1...v2.18.2) (2026-11-25)
+
+
+### Features
+
+* **cloud:** support customer-entered discounts and improve dashboard reporting ([#497](https://github.com/HitKeep/hitkeep/issues/497)) ([47f7fc3](https://github.com/HitKeep/hitkeep/commit/47f7fc31adfa50e72a3827f57b26c052e859b59c))
+
+
+### Bug Fixes
+
+* **dashboard:** rank only tagged pageviews in the UTM overview ([#500](https://github.com/HitKeep/hitkeep/issues/500)) ([c6aafa2](https://github.com/HitKeep/hitkeep/commit/c6aafa285f0667ec73dc9049b9935d68fe538d1f))
+
 ## [2.18.1](https://github.com/HitKeep/hitkeep/compare/v2.18.0...v2.18.1) (2026-11-23)
 
 
