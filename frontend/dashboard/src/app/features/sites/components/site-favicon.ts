@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { injectFaviconUrl } from '@core/analytics/favicon';
 
@@ -12,9 +12,9 @@ export interface SiteFaviconSource {
     imports: [NgOptimizedImage],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        @if (showImage()) {
-            <img [ngSrc]="faviconUrl()" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="showFallback()" />
-        } @else {
+        @for (url of visibleUrls(); track url) {
+            <img [ngSrc]="url" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="visibleUrls.set([])" />
+        } @empty {
             <span class="hk-site-favicon-fallback" aria-hidden="true">
                 <i class="pi pi-globe"></i>
             </span>
@@ -70,18 +70,10 @@ export interface SiteFaviconSource {
 export class SiteFavicon {
     private readonly faviconUrlForDomain = injectFaviconUrl();
     site = input.required<SiteFaviconSource | null>();
-    private readonly failedDomain = signal<string | null>(null);
-    protected domain = computed(() => this.site()?.domain ?? '');
-    protected showImage = computed(() => {
-        const domain = this.domain();
-        return !!this.faviconUrl() && this.failedDomain() !== domain;
+    private readonly faviconUrl = computed(() => this.faviconUrlForDomain(this.site()?.domain));
+    // Key the image node by URL so a late error cannot hide its replacement.
+    protected readonly visibleUrls = linkedSignal(() => {
+        const url = this.faviconUrl();
+        return url ? [url] : [];
     });
-    protected faviconUrl = computed(() => this.faviconUrlForDomain(this.domain()) ?? '');
-
-    protected showFallback(): void {
-        const domain = this.domain();
-        if (domain) {
-            this.failedDomain.set(domain);
-        }
-    }
 }
