@@ -15,19 +15,22 @@
     </div>
     <div class="focus-header__context" [attr.aria-busy]="context.isContextPending()">
         @if (!shareService.isShareMode()) {
-        <app-team-switcher
-            class="focus-header__team"
-            [teams]="teamService.teams()"
-            [currentTeamId]="teamService.activeTeamId()"
-            [loading]="teamService.isLoading()"
-            [switching]="context.isContextPending()"
-            [showBrand]="false"
-            [showAdd]="canCreateTeams()"
-            [compact]="true"
-            [beforeSwitch]="beforeTeamSwitch"
-            (teamSelected)="context.onTeamSelected($event)"
-            (addClicked)="isCreateTeamVisible.set(true)"
-        />
+        <div class="focus-header__team">
+            <app-team-switcher
+                class="min-w-0 flex-1"
+                [teams]="teamService.teams()"
+                [currentTeamId]="teamService.activeTeamId()"
+                [loading]="teamService.isLoading()"
+                [switching]="context.isContextPending()"
+                [showBrand]="false"
+                [showAdd]="canCreateTeams()"
+                [compact]="true"
+                [beforeSwitch]="beforeTeamSwitch"
+                (teamSelected)="context.onTeamSelected($event)"
+                (addClicked)="isCreateTeamVisible.set(true)"
+            />
+            <app-free-plan-chip />
+        </div>
         <span class="focus-header__divider" aria-hidden="true">/</span>
         <app-site-selector
             class="focus-header__site"

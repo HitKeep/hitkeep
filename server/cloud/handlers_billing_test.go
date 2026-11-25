@@ -30,6 +30,13 @@ import (
 )
 
 type fakeStripeClient struct {
+	coupon            *stripe.Coupon
+	promotions        []*stripe.PromotionCode
+	subscription      *stripe.Subscription
+	customer          *stripe.Customer
+	minted, applied   int
+	promotionErr      error
+	lostApply         bool
 	afterCheckoutList func()
 	checkoutCalls     int
 	sessions          []*checkoutSessionOutput
@@ -58,7 +65,7 @@ func (f *fakeStripeClient) CreateCheckoutSession(_ context.Context, input create
 	if f.createCheckoutErr != nil {
 		return nil, f.createCheckoutErr
 	}
-	session := &checkoutSessionOutput{PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
+	session := &checkoutSessionOutput{AllowPromotionCodes: input.AllowPromotionCodes, PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
 	if f.checkoutCalls > 1 {
 		session.ID = fmt.Sprintf("cs_test_%d", f.checkoutCalls)
 	}
@@ -77,6 +84,50 @@ func (f *fakeStripeClient) CreatePortalSession(_ context.Context, input createPo
 	}, nil
 }
 
+func (f *fakeStripeClient) GetPromotionCoupon(context.Context, string) (*stripe.Coupon, error) {
+	return f.coupon, f.promotionErr
+}
+
+func (f *fakeStripeClient) CustomerPromotions(_ context.Context, q *stripe.PromotionCodeListParams) ([]*stripe.PromotionCode, error) {
+	var records []*stripe.PromotionCode
+	for _, p := range f.promotions {
+		if p.Customer.ID == *q.Customer && (q.Coupon == nil || p.Promotion.Coupon.ID == *q.Coupon) && (q.Code == nil || strings.EqualFold(p.Code, *q.Code)) {
+			records = append(records, p)
+		}
+	}
+	return records, nil
+}
+func (f *fakeStripeClient) CreateCustomerPromotion(_ context.Context, customer string, offer *billingPromotion) (*stripe.PromotionCode, error) {
+	f.minted++
+	p := &stripe.PromotionCode{ID: "promo_" + offer.couponID, Code: offer.Code, Active: true, Customer: &stripe.Customer{ID: customer}, Promotion: &stripe.PromotionCodePromotion{Type: "coupon", Coupon: f.coupon}, MaxRedemptions: 1, ExpiresAt: offer.EndsAt.Unix()}
+	f.promotions = append(f.promotions, p)
+	return p, nil
+}
+func (f *fakeStripeClient) PromotionCustomer(context.Context, string) (*stripe.Customer, error) {
+	return f.customer, nil
+}
+func (f *fakeStripeClient) PromotionSubscription(context.Context, string) (*stripe.Subscription, error) {
+	return f.subscription, nil
+}
+func (f *fakeStripeClient) ApplyPromotion(_ context.Context, sub, customer string, p *stripe.PromotionCode) error {
+	promo := p.ID
+	if sub != f.subscription.ID || !p.Active || p.Customer.ID != customer {
+		return errPromotionUnavailable
+	}
+	f.applied++
+	p.TimesRedeemed++
+	p.Active = false
+	f.subscription.Discounts = []*stripe.Discount{{PromotionCode: p}}
+	if f.subscription.Metadata == nil {
+		f.subscription.Metadata = map[string]string{}
+	}
+	f.subscription.Metadata[promotionReceipt(p.Promotion.Coupon.ID)] = promo
+	if f.lostApply {
+		f.lostApply = false
+		return errors.New("response lost")
+	}
+	return nil
+}
 func (f *fakeStripeClient) GetPrice(_ context.Context, priceID string) (*stripePriceOutput, error) {
 	return f.prices[priceID], nil
 }

@@ -17,15 +17,17 @@
 
     @if (!enabled()) {
     <app-page-state [titleKey]="unavailableTitleKey()" [messageKey]="unavailableDescriptionKey()" icon="pi pi-filter" />
-    } @else if (hitService.hasError()) {
+    } @else { @if (hitService.hasError()) {
     <app-page-state titleKey="trafficRecords.errorTitle" messageKey="trafficRecords.errorDescription" icon="pi pi-exclamation-circle" actionLabelKey="common.actions.retry" actionIcon="pi pi-refresh" (actionClicked)="retry()" />
-    } @else {
+    }
     <app-table
+        [style.display]="hitService.hasError() ? 'none' : null"
         [value]="hitRows()"
         [columns]="hitColumns"
         stateKey="traffic-records"
         dataKey="id"
         [lazy]="true"
+        [first]="first()"
         (lazyLoad)="loadHits($event)"
         [totalRecords]="hitService.total()"
         [loading]="hitService.isLoading()"

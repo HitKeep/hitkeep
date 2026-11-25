@@ -7,7 +7,7 @@ import { CardModule } from '@openng/optimus-ui/card';
 import { SkeletonModule } from '@openng/optimus-ui/skeleton';
 import { browserIconUrl } from '@core/i18n/browser-utils';
 import { countryFlagUrl, languageFlagUrl } from '@core/i18n/flag-utils';
-import { injectFaviconUrl } from '@core/analytics/favicon';
+import { SiteFavicon } from '@features/sites/components/site-favicon';
 import { aiCategoryLabel } from '@features/analytics/ai-category-labels';
 import { AIAgentIconsService } from '@services/ai-agent-icons.service';
 import { injectSkeletonGate } from '@services/report-subject.service';
@@ -29,14 +29,13 @@ function hasProvenanceCounters(item: MetricStat): item is AIActivityStat {
 
 @Component({
     selector: 'app-metric-list',
-    imports: [CardModule, SkeletonModule, TranslocoPipe, TranslocoDecimalPipe, NgOptimizedImage, NgTemplateOutlet, RouterLink],
+    imports: [CardModule, SkeletonModule, TranslocoPipe, TranslocoDecimalPipe, NgOptimizedImage, NgTemplateOutlet, RouterLink, SiteFavicon],
     templateUrl: './metric-list.html',
     styleUrl: './metric-list.css',
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MetricList {
     private readonly transloco = inject(TranslocoService);
-    private readonly buildFaviconUrl = injectFaviconUrl();
     private readonly router = inject(Router);
     private readonly aiAgentIcons = inject(AIAgentIconsService);
     private readonly scrollFrame = viewChild<ElementRef<HTMLElement>>('scrollFrame');
@@ -101,7 +100,7 @@ export class MetricList {
         });
     }
 
-    protected linkInfo(item: MetricListItem): { href?: string; routerLink?: UrlTree; faviconUrl: string | null; external: boolean; ariaLabel: string } | null {
+    protected linkInfo(item: MetricListItem): { href?: string; routerLink?: UrlTree; faviconDomain: string | null; external: boolean; ariaLabel: string } | null {
         const mode = this.linkMode();
         if (mode === 'none' || !item.name) return null;
 
@@ -109,7 +108,7 @@ export class MetricList {
             if (!item.detailsHref) return null;
             return {
                 routerLink: this.router.parseUrl(item.detailsHref),
-                faviconUrl: null,
+                faviconDomain: null,
                 external: false,
                 ariaLabel: item.detailsAriaLabel ?? this.transloco.translate('common.actions.open')
             };
@@ -121,7 +120,7 @@ export class MetricList {
             const path = item.name.startsWith('/') ? item.name : `/${item.name}`;
             return {
                 href: `https://${domain}${path}`,
-                faviconUrl: null,
+                faviconDomain: null,
                 external: true,
                 ariaLabel: this.transloco.translate('common.openInNewTabAria')
             };
@@ -132,7 +131,7 @@ export class MetricList {
 
         return {
             href: url.href,
-            faviconUrl: this.buildFaviconUrl(url.hostname),
+            faviconDomain: url.hostname,
             external: true,
             ariaLabel: this.transloco.translate('common.openInNewTabAria')
         };
@@ -187,11 +186,10 @@ export class MetricList {
         return browserIconUrl(item.name);
     }
 
-    protected aiIconUrl(item: MetricStat): string | null {
+    protected aiIconDomain(item: MetricStat): string | null {
         const kind = this.aiIconKind();
         if (kind === 'none') return null;
-        const host = kind === 'agent' ? this.aiAgentIcons.agentIconHost(item.name) : this.aiAgentIcons.referrerIconHost(item.name);
-        return host ? this.buildFaviconUrl(host) : null;
+        return kind === 'agent' ? this.aiAgentIcons.agentIconHost(item.name) : this.aiAgentIcons.referrerIconHost(item.name);
     }
 
     protected isDeviceMetric(): boolean {

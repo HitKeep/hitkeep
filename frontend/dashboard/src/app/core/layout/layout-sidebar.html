@@ -9,7 +9,6 @@
     <nav class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco">
         <ng-container [ngTemplateOutlet]="navigation" />
     </nav>
-    <app-free-plan-chip class="px-2" />
 </aside>
 <p-drawer
     [visible]="isMobileDrawerOpen()"
@@ -24,7 +23,6 @@
     <div class="flex h-full flex-col gap-4">
         <ng-container [ngTemplateOutlet]="askAITrigger" />
         <nav #mobileNavigation tabindex="-1" class="flex-1" [attr.aria-label]="'nav.primaryNavigationAria' | transloco"><ng-container [ngTemplateOutlet]="navigation" /></nav>
-        <app-free-plan-chip />
     </div>
 </p-drawer>
 <ng-template #askAITrigger>
@@ -68,6 +66,8 @@
         ><i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span></a
     >
     } @else {
-    <a class="focus-sidebar__link" [href]="item.url" [target]="item.target" rel="noopener noreferrer" [title]="item.label" (click)="closeMobileDrawer()"><i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span></a>
+    <a class="focus-sidebar__link" [href]="item.url" [target]="item.target" rel="noopener noreferrer" [title]="item.label" (click)="closeMobileDrawer()">
+        <i [class]="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span><i class="pi pi-external-link text-xs" aria-hidden="true"></i>
+    </a>
     }
 </ng-template>

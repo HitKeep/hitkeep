@@ -9,13 +9,6 @@
     min-width: 0;
 }
 
-.ecommerce-source-cell__favicon {
-    border-radius: 0.18rem;
-    flex-shrink: 0;
-    height: 1rem;
-    width: 1rem;
-}
-
 .ecommerce-source-cell__label {
     min-width: 0;
     overflow: hidden;

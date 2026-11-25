@@ -66,7 +66,7 @@
                 >
                     {{ "integration.googleSearchConsole.actions.reconnect" | transloco }}
                 </button>
-                <button pButton class="settings-action-btn min-h-11" type="button" data-testid="gsc-disconnect" severity="danger" icon="pi pi-unlink" [loading]="actionBusy()" (click)="confirmDisconnect()" [disabled]="actionBusy()">
+                <button pButton class="settings-action-btn min-h-11" type="button" data-testid="gsc-disconnect" severity="danger" icon="pi pi-minus-circle" [loading]="actionBusy()" (click)="confirmDisconnect()" [disabled]="actionBusy()">
                     {{ "integration.googleSearchConsole.actions.disconnect" | transloco }}
                 </button>
                 } } @else {
@@ -165,7 +165,7 @@
                     type="button"
                     severity="danger"
                     [outlined]="true"
-                    icon="pi pi-unlink"
+                    icon="pi pi-minus-circle"
                     data-testid="gsc-remove-mapping"
                     [loading]="propertyActionBusy()"
                     (click)="confirmRemoveMapping()"

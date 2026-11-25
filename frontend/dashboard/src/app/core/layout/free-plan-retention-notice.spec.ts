@@ -7,15 +7,18 @@ import { Team } from '@models/analytics.types';
 import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { ShareService } from '@services/share.service';
 import { TeamService } from '@services/team.service';
+import { BillingPromotionService } from '@services/billing-promotion.service';
 import { FreePlanRetentionNotice } from './free-plan-retention-notice';
 
 describe('FreePlanRetentionNotice', () => {
+    const spotlight = signal<object | null>(null);
     let fixture: ComponentFixture<FreePlanRetentionNotice>;
     let activeTeam = signal<Team | null>(freeTeam('team-a'));
     let cloudHosted = signal(true);
     let shareMode = signal(false);
 
     beforeEach(async () => {
+        spotlight.set(null);
         activeTeam = signal<Team | null>(freeTeam('team-a'));
         cloudHosted = signal(true);
         shareMode = signal(false);
@@ -48,6 +51,7 @@ describe('FreePlanRetentionNotice', () => {
             ],
             providers: [
                 provideRouter([]),
+                { provide: BillingPromotionService, useValue: { spotlight } },
                 {
                     provide: DashboardBootstrapService,
                     useValue: {
@@ -122,6 +126,18 @@ describe('FreePlanRetentionNotice', () => {
         fixture.detectChanges();
 
         expect(noticeElement()?.textContent).toContain('Your team is using 3 of 3 sites on the Free plan.');
+    });
+
+    it('keeps the quota warning and its own dismissal while a promotion is active', () => {
+        spotlight.set({});
+        activeTeam.set({ ...freeTeam('team-a'), usage: { current_sites: 3, current_members: 1, current_pending_invites: 0 } });
+        fixture.detectChanges();
+        expect(noticeElement()?.textContent).toContain('Your team is using 3 of 3 sites');
+        dismissButton()?.click();
+        fixture.detectChanges();
+        expect(noticeElement()).toBeNull();
+        expect(window.localStorage.getItem('hitkeep.freeUsageNotice.dismissed.team-a.sites')).toBe('dismissed');
+        expect(window.localStorage.getItem('hitkeep.freeRetentionNotice.dismissed.team-a')).toBeNull();
     });
 
     it('surfaces usage pressure with its own dismissal even after the retention notice was dismissed', () => {

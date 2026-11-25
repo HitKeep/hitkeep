@@ -1,6 +1,6 @@
 import { getBaseLanguage, normalizeLocaleTag } from './locale-utils';
 
-const EARTH_FLAG_URL = '/flags/other/earth.svg';
+const EARTH_FLAG_URL = 'flags/other/earth.svg';
 
 const LANGUAGE_FLAG_ASSET_CODES = new Set(['ar', 'eo', 'es-mx', 'ia', 'ie', 'interslavic', 'io', 'la', 'mr', 'non', 'pt-br', 'vo', 'yi']);
 
@@ -44,7 +44,7 @@ export function countryFlagUrl(value: string | null | undefined): string {
     if (!/^[a-z]{2}$/.test(code)) {
         return EARTH_FLAG_URL;
     }
-    return `/flags/${code}.svg`;
+    return `flags/${code}.svg`;
 }
 
 export function languageFlagUrl(value: string | null | undefined): string {
@@ -60,7 +60,7 @@ export function languageFlagUrl(value: string | null | undefined): string {
 
     const languageAssetCode = LANGUAGE_FLAG_ASSET_BY_CODE[code] ?? code;
     if (LANGUAGE_FLAG_ASSET_CODES.has(languageAssetCode)) {
-        return `/flags/language/${languageAssetCode}.svg`;
+        return `flags/language/${languageAssetCode}.svg`;
     }
 
     const countryCode = REPRESENTATIVE_COUNTRY_FLAG_BY_LANGUAGE[code] ?? code;

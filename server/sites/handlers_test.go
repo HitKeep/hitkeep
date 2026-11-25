@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -184,6 +185,132 @@ func TestHandleGetFaviconUsesDuckDuckGoIconPath(t *testing.T) {
 	}
 	if capturedPath != "/ip3/example.com.ico" {
 		t.Fatalf("expected upstream path %q, got %q", "/ip3/example.com.ico", capturedPath)
+	}
+}
+
+func TestFaviconLookupAfterExactMiss(t *testing.T) {
+	for _, tc := range []struct {
+		domain    string
+		alternate string
+	}{
+		{"chat.deepseek.com", "deepseek.com"},
+		{"twitter.com", "x.com"},
+		{"blog.shop.example.co.uk", "example.co.uk"},
+		{"blog.tenant.github.io", "tenant.github.io"},
+		{"example.com", "www.example.com"},
+		{"github.io", ""},
+		{"127.0.0.1", ""},
+	} {
+		t.Run(tc.domain, func(t *testing.T) {
+			var paths []string
+			upstream := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				paths = append(paths, r.URL.Path)
+				if r.URL.Scheme != "https" || r.URL.Host != "icons.duckduckgo.com" || r.URL.RawQuery != "" {
+					t.Fatalf("unexpected upstream %v", r.URL)
+				}
+				for _, key := range []string{"Referer", "Authorization", "Cookie", "X-Api-Key"} {
+					if r.Header.Get(key) != "" {
+						t.Fatalf("forwarded %s", key)
+					}
+				}
+				if len(paths) == 1 {
+					return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody}, nil
+				}
+				if r.Header.Get("If-None-Match") != "" || r.Header.Get("If-Modified-Since") != "" {
+					t.Fatal("forwarded exact icon's validators to alternate")
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"image/png"}, "Etag": {"alternate"}, "Last-Modified": {"yesterday"}}, Body: io.NopCloser(strings.NewReader("icon"))}, nil
+			})
+			original := faviconProxyTransport
+			faviconProxyTransport = upstream
+			t.Cleanup(func() { faviconProxyTransport = original })
+			req := httptest.NewRequest(http.MethodGet, "/api/favicon/"+tc.domain, nil)
+			req.SetPathValue("domain", tc.domain)
+			for _, key := range []string{"Referer", "Authorization", "Cookie", "X-Api-Key", "If-None-Match", "If-Modified-Since"} {
+				req.Header.Set(key, "test-value")
+			}
+			w := httptest.NewRecorder()
+			new(handler).handleGetFavicon().ServeHTTP(w, req)
+			wantPaths := []string{"/ip3/" + tc.domain + ".ico"}
+			if tc.alternate == "" {
+				if w.Code != http.StatusNoContent || w.Body.Len() != 0 {
+					t.Fatalf("unexpected miss %d %q", w.Code, w.Body.String())
+				}
+			} else {
+				wantPaths = append(wantPaths, "/ip3/"+tc.alternate+".ico")
+				if w.Code != http.StatusOK || w.Body.String() != "icon" || w.Header().Get("Content-Type") != "image/png" {
+					t.Fatalf("unexpected alternate %d %q", w.Code, w.Body.String())
+				}
+				if w.Header().Get("Etag") != "" || w.Header().Get("Last-Modified") != "" || w.Header().Get("Cache-Control") != "public, max-age=86400" {
+					t.Fatal("incorrect alternate cache headers")
+				}
+			}
+			if !slices.Equal(paths, wantPaths) {
+				t.Fatalf("requested paths %v, want %v", paths, wantPaths)
+			}
+		})
+	}
+}
+
+func TestFaviconLookupSharesDeadlineAndClientCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/favicon/blog.example.com", nil)
+	req.SetPathValue("domain", "blog.example.com")
+
+	started := time.Now()
+	var firstDeadline time.Time
+	calls := 0
+	original := faviconProxyTransport
+	t.Cleanup(func() { faviconProxyTransport = original })
+	faviconProxyTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		deadline, ok := r.Context().Deadline()
+		if !ok {
+			t.Fatal("favicon request has no deadline")
+		}
+		if calls == 1 {
+			if deadline.Before(started.Add(5*time.Second)) || deadline.After(time.Now().Add(5*time.Second)) {
+				t.Fatalf("expected a five-second lookup budget, got deadline %v", deadline)
+			}
+			firstDeadline = deadline
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody}, nil
+		}
+		if !deadline.Equal(firstDeadline) {
+			t.Fatalf("fallback deadline %v differs from exact deadline %v", deadline, firstDeadline)
+		}
+		cancel()
+		if !errors.Is(r.Context().Err(), context.Canceled) {
+			t.Fatal("fallback outlived caller cancellation")
+		}
+		return nil, r.Context().Err()
+	})
+
+	w := httptest.NewRecorder()
+	new(handler).handleGetFavicon().ServeHTTP(w, req)
+	if calls != 2 || w.Code != http.StatusNoContent {
+		t.Fatalf("got %d upstream requests and status %d", calls, w.Code)
+	}
+}
+
+func TestHandleGetFaviconCachesTransientFailuresBriefly(t *testing.T) {
+	for _, code := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(code), func(t *testing.T) {
+			calls := 0
+			original := faviconProxyTransport
+			t.Cleanup(func() { faviconProxyTransport = original })
+			faviconProxyTransport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: code, Header: make(http.Header), Body: http.NoBody}, nil
+			})
+			req := httptest.NewRequest(http.MethodGet, "/api/favicon/chat.deepseek.com", nil)
+			req.SetPathValue("domain", "chat.deepseek.com")
+			w := httptest.NewRecorder()
+			new(handler).handleGetFavicon().ServeHTTP(w, req)
+			if calls != 1 || w.Code != http.StatusNoContent || w.Header().Get("Cache-Control") != "public, max-age=300" {
+				t.Fatalf("unexpected transient response after %d calls: %d, %v", calls, w.Code, w.Header())
+			}
+		})
 	}
 }
 

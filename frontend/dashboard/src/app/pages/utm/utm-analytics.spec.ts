@@ -7,6 +7,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { StatsService } from '@features/analytics/services/stats.service';
+import { RealtimeService, type RealtimeEvent } from '@services/realtime.service';
 import { SiteService } from '@features/sites/services/site.service';
 import { emptySiteStats } from '@testing/empty-site-stats';
 import type { SiteStats } from '@models/analytics.types';
@@ -15,6 +16,7 @@ import { UtmAnalytics } from './utm-analytics';
 
 describe('UtmAnalytics', () => {
     let fixture: ComponentFixture<UtmAnalytics>;
+    let events: Subject<RealtimeEvent>;
     const stats = emptySiteStats({
         top_utm_campaigns: [{ name: 'launch', value: 12 }, ...Array.from({ length: 9 }, (_, i) => ({ name: `campaign-${i}`, value: 1 }))],
         top_utm_contents: [{ name: 'hero', value: 7 }],
@@ -36,6 +38,7 @@ describe('UtmAnalytics', () => {
 
     beforeEach(async () => {
         statsServiceStub.fetchStats.mockReset();
+        events = new Subject<RealtimeEvent>();
 
         await TestBed.configureTestingModule({
             imports: [
@@ -92,6 +95,7 @@ describe('UtmAnalytics', () => {
             ],
             providers: [
                 provideRouter([]),
+                { provide: RealtimeService, useValue: { events$: events, isOpen: () => true } },
                 {
                     provide: SiteService,
                     useValue: {
@@ -162,6 +166,28 @@ describe('UtmAnalytics', () => {
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobserved);
         expect(paidSignalsCard().textContent).toContain(en.utm.paidSignals.unobservedHint);
         expect(paidSignalsCard().querySelectorAll('dd')[1]?.textContent?.trim()).toBe('3');
+    });
+
+    it('finishes a slow UTM request during a sustained burst and fetches one trailing update', () => {
+        vi.useFakeTimers();
+        try {
+            const pending = new Subject<SiteStats>();
+            statsServiceStub.fetchStats.mockClear().mockReturnValueOnce(pending);
+            for (let tick = 0; tick < 35; tick++) {
+                events.next({ type: 'analytics.changed', site_id: 'site-1', kinds: ['hits'], counts: { hits: 1 }, changed_at: '', bucket_start: '' });
+                vi.advanceTimersByTime(100);
+                fixture.detectChanges();
+            }
+            expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(1);
+            expect(pending.observed).toBe(true);
+            pending.next(stats);
+            pending.complete();
+            fixture.detectChanges();
+            expect(statsServiceStub.fetchStats).toHaveBeenCalledTimes(2);
+            expect(paidSignalsCard().textContent).toContain('4 of 15 measured');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('distinguishes zero measured sessions from unavailable stats', async () => {

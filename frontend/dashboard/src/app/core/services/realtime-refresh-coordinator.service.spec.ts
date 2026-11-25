@@ -37,7 +37,7 @@ describe('RealtimeRefreshCoordinator', () => {
         vi.useRealTimers();
     });
 
-    it('debounces matching realtime events per registered site and kind', () => {
+    it('coalesces continuous matching events without postponing refresh indefinitely', () => {
         const coordinator = TestBed.inject(RealtimeRefreshCoordinator);
         const refresh = vi.fn();
 
@@ -45,18 +45,26 @@ describe('RealtimeRefreshCoordinator', () => {
             siteId: () => 'site-1',
             kinds: ['hits'],
             refresh,
+            refreshDuringBursts: true,
             debounceMs: 500
         });
 
-        events.next(changeEvent({ site_id: 'site-1', kinds: ['hits'] }));
-        vi.advanceTimersByTime(499);
-        expect(refresh).not.toHaveBeenCalled();
+        for (let i = 0; i < 20; i++) {
+            events.next(changeEvent({ site_id: 'site-1', kinds: ['hits'] }));
+            vi.advanceTimersByTime(100);
+        }
+        expect(refresh).toHaveBeenCalledTimes(4);
+    });
 
-        events.next(changeEvent({ site_id: 'site-1', kinds: ['hits'] }));
-        vi.advanceTimersByTime(499);
+    it('waits for quiet when a consumer has no in-flight coalescing', () => {
+        const refresh = vi.fn();
+        TestBed.inject(RealtimeRefreshCoordinator).register({ siteId: () => 'site-1', kinds: ['hits'], refresh, debounceMs: 500 });
+        for (let i = 0; i < 20; i++) {
+            events.next(changeEvent({ site_id: 'site-1', kinds: ['hits'] }));
+            vi.advanceTimersByTime(100);
+        }
         expect(refresh).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(1);
+        vi.advanceTimersByTime(400);
         expect(refresh).toHaveBeenCalledTimes(1);
     });
 

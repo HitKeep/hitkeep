@@ -6,10 +6,12 @@ import { EMPTY, finalize, switchMap } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { TranslocoLocaleService } from '@jsverse/transloco-locale';
 import { ButtonModule } from '@openng/optimus-ui/button';
+import { InputText } from '@openng/optimus-ui/inputtext';
 import { CardModule } from '@openng/optimus-ui/card';
 import { ProgressBarModule } from '@openng/optimus-ui/progressbar';
 import { SelectButtonModule } from '@openng/optimus-ui/selectbutton';
 import { TagModule } from '@openng/optimus-ui/tag';
+import { PromotionPriceDisplay } from '@components/promotion-price/promotion-price';
 import { SettingsCard } from '@features/settings/components/settings-card';
 import { TeamService } from '@services/team.service';
 import { injectActiveLang } from '@core/i18n/active-lang';
@@ -25,7 +27,7 @@ const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, business: 2 };
 
 @Component({
     selector: 'app-team-overview',
-    imports: [AdminItemList, ButtonModule, CardModule, FormsModule, ProgressBarModule, RouterLink, SelectButtonModule, SettingsCard, TagModule, TranslocoPipe],
+    imports: [InputText, PromotionPriceDisplay, AdminItemList, ButtonModule, CardModule, FormsModule, ProgressBarModule, RouterLink, SelectButtonModule, SettingsCard, TagModule, TranslocoPipe],
     templateUrl: './team-overview.html',
     styleUrl: './team-overview.css',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -55,10 +57,53 @@ export class TeamOverviewPage {
     protected readonly confirmedTeamId = signal('');
     protected readonly recoveryError = signal(false);
     protected readonly billingStateResource = rxResource({
-        params: () => ((this.recoveryMode || this.checkoutReturned) && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
-        stream: () => this.cloudService.getBillingState()
+        params: () => ((this.recoveryMode || this.checkoutReturned || this.team()?.role === 'owner' || this.team()?.role === 'admin') && this.systemStatus()?.cloud?.hosted ? this.teamService.activeTeamId() || undefined : undefined),
+        stream: ({ params }) => this.cloudService.watchBillingState(params)
     });
     protected readonly billingState = computed(() => (this.billingStateResource.hasValue() ? this.billingStateResource.value() : null));
+    protected readonly promotion = computed(() => {
+        const state = this.billingState();
+        return state && state.team_id === this.team()?.id ? state.promotion : undefined;
+    });
+    protected offerPrice(plan: string, interval: BillingInterval) {
+        return this.promotion()?.prices[plan]?.[interval];
+    }
+
+    private offerExpectation(plan: string, interval: BillingInterval) {
+        const offer = this.promotion();
+        return offer?.prices[plan]?.[interval] ? { team_id: this.teamService.activeTeamId(), expected_promotion: offer.code } : {};
+    }
+
+    protected readonly paidPrice = computed(() => {
+        const state = this.billingState();
+        if (!state || state.plan_code === 'free' || (this.returnTeamId && this.returnTeamId !== state.team_id)) return null;
+        const prices = this.promotion()?.prices[state.plan_code];
+        const interval: BillingInterval = prices?.annual ? 'annual' : 'monthly';
+        const price = prices?.[interval];
+        return price ? ({ price, interval } as const) : null;
+    });
+    protected readonly redeemPending = signal(false);
+    protected readonly redemption = signal<{ team: string; status: 'applied' | 'failed' } | null>(null);
+    protected redeemCode(code: string): void {
+        const team = this.teamService.activeTeamId();
+        if (!this.paidPrice() || !code.trim() || this.redeemPending() || (this.returnTeamId && this.returnTeamId !== team)) return;
+        this.redeemPending.set(true);
+        this.cloudService
+            .redeemPromotion(team, code.trim())
+            .pipe(
+                finalize(() => this.redeemPending.set(false)),
+                takeUntilDestroyed(this.destroyRef)
+            )
+            .subscribe({
+                next: () => {
+                    this.redemption.set({ team, status: 'applied' });
+                },
+                error: () => {
+                    this.redemption.set({ team, status: 'failed' });
+                    this.refreshBilling();
+                }
+            });
+    }
     protected readonly checkoutAuthorizationReady = computed(() => {
         const state = this.billingState();
         // Reuse the native paid-plan rule; the checkout query is not payment proof.
@@ -70,7 +115,7 @@ export class TeamOverviewPage {
     });
     protected readonly recoveryKind = computed(() => {
         if (!this.recoveryMode || !this.systemStatus()?.cloud?.hosted || this.requestedIntent.plan === 'free') return null;
-        if (this.recoveryMode === 'canceled' && this.returnTeamId !== this.teamService.activeTeamId()) return 'switchTeam';
+        if ((this.recoveryMode === 'canceled' || this.returnTeamId) && this.returnTeamId !== this.teamService.activeTeamId()) return 'switchTeam';
         if (this.billingStateResource.isLoading()) return 'loading';
         const state = this.billingState();
         if (!state || state.team_id !== this.teamService.activeTeamId()) return 'unavailable';
@@ -80,11 +125,12 @@ export class TeamOverviewPage {
     });
     protected readonly recoveryIntent = computed<CloudPurchaseIntent>(() => {
         const state = this.billingState();
-        return state?.subscription_status === 'pending_checkout' && state.pending_plan_code ? cloudPurchaseIntent(state.pending_plan_code, state.billing) : this.requestedIntent;
+        return this.recoveryMode === 'canceled' && state?.subscription_status === 'pending_checkout' && state.pending_plan_code ? cloudPurchaseIntent(state.pending_plan_code, state.billing) : this.requestedIntent;
     });
     protected readonly recoveryPrice = computed(() => {
         this.activeLanguage();
         const intent = this.recoveryIntent();
+
         const price = this.planTiers().find((tier) => tier.code === intent.plan)?.prices?.[intent.billing];
         return price ? this.localeService.localizeNumber(price.amount_minor / 100, 'currency', undefined, { currency: price.currency }) : this.transloco.translate('signup.priceUnavailable');
     });
@@ -307,6 +353,7 @@ export class TeamOverviewPage {
         if ((kind !== 'canceled' && kind !== 'review') || !this.teamConfirmed() || this.checkoutPending()) return;
         const intent = this.recoveryIntent();
         if (intent.plan === 'free') return;
+        const expected = this.offerExpectation(intent.plan, intent.billing);
         this.checkoutPending.set(true);
         this.recoveryError.set(false);
         this.cloudService
@@ -318,10 +365,10 @@ export class TeamOverviewPage {
                         state.plan_code !== 'free' ||
                         (kind === 'canceled' && (state.subscription_status !== 'pending_checkout' || state.pending_plan_code !== intent.plan || state.billing !== intent.billing))
                     ) {
-                        this.billingStateResource.reload();
+                        this.refreshBilling();
                         return EMPTY;
                     }
-                    return this.cloudService.createBillingCheckoutSession({ plan_code: intent.plan as 'pro' | 'business', billing: intent.billing, locale: this.activeLanguage() });
+                    return this.cloudService.createBillingCheckoutSession({ ...expected, plan_code: intent.plan as 'pro' | 'business', billing: intent.billing, locale: this.activeLanguage() });
                 }),
                 finalize(() => this.checkoutPending.set(false)),
                 takeUntilDestroyed(this.destroyRef)
@@ -342,7 +389,7 @@ export class TeamOverviewPage {
             .subscribe({
                 next: (state) => {
                     if (state.team_id !== this.teamService.activeTeamId() || state.plan_code !== 'free') {
-                        this.billingStateResource.reload();
+                        this.refreshBilling();
                         return;
                     }
                     this.oauth.continueAfterAuthentication('/dashboard');
@@ -356,8 +403,13 @@ export class TeamOverviewPage {
         this.oauth.continueAfterAuthentication('/admin/team/overview');
     }
 
+    protected refreshBilling(): void {
+        if (this.billingStateResource.error()) this.billingStateResource.reload();
+        else this.cloudService.refreshBillingState(this.teamService.activeTeamId());
+    }
+
     protected retryAuthorizationReturn(): void {
-        this.billingStateResource.reload();
+        this.refreshBilling();
         this.authorizationContinuation.reload();
     }
 
@@ -369,6 +421,7 @@ export class TeamOverviewPage {
         this.checkoutPending.set(true);
         this.cloudService
             .createBillingCheckoutSession({
+                ...this.offerExpectation(planCode, this.billingInterval()),
                 plan_code: planCode,
                 billing: this.billingInterval(),
                 locale: this.activeLanguage()
@@ -381,32 +434,14 @@ export class TeamOverviewPage {
                 },
                 error: () => {
                     this.checkoutPending.set(false);
+                    this.recoveryError.set(true);
+                    this.refreshBilling();
                 }
             });
     }
 
     protected startUpgradeCheckout(): void {
-        if (this.checkoutPending()) {
-            return;
-        }
-
-        this.checkoutPending.set(true);
-        this.cloudService
-            .createBillingCheckoutSession({
-                plan_code: 'pro',
-                billing: this.billingInterval(),
-                locale: this.activeLanguage()
-            })
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-                next: ({ url }) => {
-                    this.checkoutPending.set(false);
-                    this.redirectTo(url);
-                },
-                error: () => {
-                    this.checkoutPending.set(false);
-                }
-            });
+        this.startCheckoutForPlan('pro');
     }
 
     private isOperatorPlan(plan: TeamPlan): boolean {

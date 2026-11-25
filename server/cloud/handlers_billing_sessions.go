@@ -201,6 +201,10 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 			return nil
 		}
 	}
+	if req.ExpectedTeamID != uuid.Nil && activeTenantID != req.ExpectedTeamID {
+		http.Error(w, "Active billing team changed", http.StatusConflict)
+		return nil
+	}
 	if !shared.CheckAgentTeam(w, r, activeTenantID) {
 		return nil
 	}
@@ -220,7 +224,7 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		return nil
 	}
 	account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), activeTenantID)
-	if errors.Is(err, database.ErrCloudBillingAccountNotFound) || account == nil {
+	if errors.Is(err, database.ErrCloudBillingAccountNotFound) {
 		// Auto-create a free billing account for legacy users who signed up
 		// before the billing account table existed.
 		newAccount := database.CloudBillingAccount{
@@ -306,18 +310,34 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
+	offer, err := h.promotionFor(r.Context(), activeTenantID, account, req.PlanCode, req.BillingInterval)
+	if offer != nil && req.ExpectedPromotion != "" && !strings.EqualFold(req.ExpectedPromotion, offer.Code) {
+		offer = nil
+	}
+	entry, issueErr := h.customerCode(r.Context(), offer, customerID)
+	if req.ExpectedPromotion != "" {
+		if err != nil || issueErr != nil {
+			http.Error(w, "Unable to verify promotion", http.StatusBadGateway)
+			return nil
+		}
+		if entry == nil {
+			http.Error(w, "Promotion changed, review the current price", http.StatusConflict)
+			return nil
+		}
+	}
 	session, err := h.reuseOrCreateCheckout(r.Context(), createCheckoutSessionInput{
-		CustomerID:      customerID,
-		PriceID:         priceID,
-		SuccessURL:      checkoutSuccessURL(h.ctx.Config),
-		CancelURL:       checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
-		Locale:          req.Locale,
-		UserID:          user.ID,
-		TenantID:        activeTenantID,
-		PlanCode:        req.PlanCode,
-		PlanName:        planNameForCode(req.PlanCode),
-		BillingInterval: req.BillingInterval,
-		Jurisdiction:    strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
+		AllowPromotionCodes: entry != nil,
+		CustomerID:          customerID,
+		PriceID:             priceID,
+		SuccessURL:          checkoutSuccessURL(h.ctx.Config),
+		CancelURL:           checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
+		Locale:              req.Locale,
+		UserID:              user.ID,
+		TenantID:            activeTenantID,
+		PlanCode:            req.PlanCode,
+		PlanName:            planNameForCode(req.PlanCode),
+		BillingInterval:     req.BillingInterval,
+		Jurisdiction:        strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
 	})
 	if errors.Is(err, errCheckoutConflict) {
 		http.Error(w, errCheckoutConflict.Error(), http.StatusConflict)
@@ -344,15 +364,21 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		shared.LoggerFromContext(r.Context()).Warn("Failed to record checkout conversion", "error", err, "team_id", activeTenantID, "checkout_session_id", session.ID)
 	}
 
+	if req.ExpectedPromotion != "" && !h.now().Before(offer.EndsAt) {
+		http.Error(w, "Promotion expired, review the current price", http.StatusConflict)
+		return nil
+	}
+
 	return session
 }
 
 type billingStateResponse struct {
-	TeamID             uuid.UUID `json:"team_id"`
-	PlanCode           string    `json:"plan_code"`
-	SubscriptionStatus string    `json:"subscription_status"`
-	PendingPlanCode    string    `json:"pending_plan_code,omitempty"`
-	BillingInterval    string    `json:"billing,omitempty"`
+	Promotion          *billingPromotion `json:"promotion,omitempty"`
+	TeamID             uuid.UUID         `json:"team_id"`
+	PlanCode           string            `json:"plan_code"`
+	SubscriptionStatus string            `json:"subscription_status"`
+	PendingPlanCode    string            `json:"pending_plan_code,omitempty"`
+	BillingInterval    string            `json:"billing,omitempty"`
 }
 
 func (h *handler) handleGetBillingState() http.HandlerFunc {
@@ -375,6 +401,12 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 			return
 		}
 
+		role, err := h.ctx.Store.GetTenantRole(r.Context(), teamID, userID)
+		if err != nil || !authcore.TeamRoleHasCapability(role, authcore.CapTeamManageSettings) {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+
 		state := billingStateResponse{TeamID: teamID, PlanCode: database.CloudPlanFree, SubscriptionStatus: database.CloudSubscriptionStatusFree}
 		account, err := h.ctx.Store.GetCloudBillingAccount(r.Context(), teamID)
 		if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
@@ -389,6 +421,11 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 				state.BillingInterval = account.BillingInterval
 			}
 		}
+		state.Promotion, err = h.promotionFor(r.Context(), teamID, account, "", "")
+		if err != nil {
+			shared.LoggerFromContext(r.Context()).Warn("Unable to verify billing promotion", slog.Group("stripe", stripeErrorLogAttrs(err)...))
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		shared.WriteJSON(r.Context(), w, http.StatusOK, state)
 	}
 }

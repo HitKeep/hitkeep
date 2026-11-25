@@ -1,5 +1,8 @@
-import { HttpErrorResponse, httpResource } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { rxResource } from '@angular/core/rxjs-interop';
+import { type ReportWindow, reportWindowBounds } from '@components/range-toolbar/range-options';
+import { isTransientReportError } from '@core/analytics/transient-report-error';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from '@openng/optimus-ui/button';
 import { injectActiveLang } from '@core/i18n/active-lang';
@@ -8,8 +11,7 @@ import type { VisibleTimePage } from '@models/analytics.types';
 
 interface VisibleTimeScope {
     siteId: string;
-    from: string;
-    to: string;
+    window: ReportWindow;
     filters: { type: string; value: string }[];
     subject: { kind: 'goal' | 'funnel'; id: string } | null;
 }
@@ -30,23 +32,31 @@ export class VisibleTimeReport {
     protected readonly seconds = computed(() => new Intl.NumberFormat(this.locale(), { style: 'unit', unit: 'second', maximumFractionDigits: 3 }));
     protected readonly counts = computed(() => new Intl.NumberFormat(this.locale()));
 
-    protected readonly report = httpResource<VisibleTimePage[]>(() => {
-        if (!this.open()) return undefined;
-        this.refreshKey();
-        const { siteId, from, to, filters, subject } = this.scope();
-        return {
-            url: `/api/sites/${siteId}/visible-time`,
-            params: {
-                from,
-                to,
-                filter: filters.map(({ type, value }) => `${type}:${value}`),
-                ...(subject ? { [`${subject.kind}_id`]: subject.id } : {})
-            }
-        };
+    private readonly http = inject(HttpClient);
+    protected readonly report = rxResource({
+        params: () => (this.open() ? this.scope() : undefined),
+        stream: ({ params: { siteId, window, filters, subject } }) =>
+            this.http.get<VisibleTimePage[]>(`/api/sites/${siteId}/visible-time`, {
+                params: {
+                    ...reportWindowBounds(window),
+                    filter: filters.map(({ type, value }) => `${type}:${value}`),
+                    ...(subject ? { [`${subject.kind}_id`]: subject.id } : {})
+                }
+            })
     });
 
     protected readonly forbidden = computed(() => {
         const error = this.report.error();
         return error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
     });
+
+    constructor() {
+        let lastRefresh = 0;
+        effect(() => {
+            const key = this.refreshKey();
+            if (key === lastRefresh || this.report.isLoading()) return;
+            lastRefresh = key;
+            if (this.report.hasValue() || isTransientReportError(this.report.error())) this.report.reload();
+        });
+    }
 }

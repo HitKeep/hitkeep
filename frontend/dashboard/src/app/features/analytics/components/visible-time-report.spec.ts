@@ -9,8 +9,7 @@ describe('VisibleTimeReport', () => {
     let http: HttpTestingController;
     const scope = {
         siteId: 'site-1',
-        from: '2026-11-19T00:00:00Z',
-        to: '2026-11-20T23:59:59Z',
+        window: { from: '2026-11-19T00:00:00Z', to: '2026-11-20T23:59:59Z' },
         filters: [{ type: 'country', value: 'US' }],
         subject: { kind: 'goal', id: 'goal-1' }
     };
@@ -54,8 +53,8 @@ describe('VisibleTimeReport', () => {
         setOpen(true);
 
         const request = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
-        expect(request.request.params.get('from')).toBe(scope.from);
-        expect(request.request.params.get('to')).toBe(scope.to);
+        expect(request.request.params.get('from')).toBe(scope.window.from);
+        expect(request.request.params.get('to')).toBe(scope.window.to);
         expect(request.request.params.getAll('filter')).toEqual(['country:US']);
         expect(request.request.params.get('goal_id')).toBe('goal-1');
         expect(fixture.nativeElement.textContent).toContain('Loading');
@@ -72,17 +71,46 @@ describe('VisibleTimeReport', () => {
         fixture.componentRef.setInput('refreshKey', 2);
         fixture.detectChanges();
         const refresh = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
-        expect(fixture.nativeElement.querySelector('table')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('/pricing');
+        fixture.componentRef.setInput('refreshKey', 3);
+        fixture.detectChanges();
+        expect(refresh.cancelled).toBe(false);
         refresh.flush([]);
+        await Promise.resolve();
+        fixture.detectChanges();
+        const trailing = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
+        trailing.flush([]);
         await fixture.whenStable();
         expect(fixture.nativeElement.textContent).toContain('No matching pageviews');
+    });
+
+    it('recovers on the next refresh after a 503 and clears access-denied rows', async () => {
+        setOpen(true);
+        const first = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
+        first.flush('', { status: 503, statusText: 'Unavailable' });
+        await fixture.whenStable();
+        expect(fixture.nativeElement.textContent).toContain('Report unavailable');
+        fixture.componentRef.setInput('refreshKey', 1);
+        fixture.detectChanges();
+        http.expectOne(first.request.urlWithParams).flush([{ path: '/recovered', avg_visible_ms: 1, tracked_views: 1, measured_views: 1 }]);
+        await fixture.whenStable();
+        expect(fixture.nativeElement.textContent).toContain('/recovered');
+        fixture.componentRef.setInput('refreshKey', 2);
+        fixture.detectChanges();
+        http.expectOne(first.request.urlWithParams).flush('', { status: 401, statusText: 'Unauthorized' });
+        await fixture.whenStable();
+        expect(fixture.nativeElement.textContent).toContain('Access denied');
+        fixture.componentRef.setInput('refreshKey', 3);
+        fixture.detectChanges();
+        http.expectNone(() => true);
+        expect(fixture.nativeElement.textContent).not.toContain('/recovered');
     });
 
     it('cancels obsolete requests and retries a failed report', async () => {
         setOpen(true);
         const old = http.expectOne((req) => req.url === '/api/sites/site-1/visible-time');
 
-        fixture.componentRef.setInput('scope', { ...scope, siteId: 'site-2', from: '2026-11-18T00:00:00Z', subject: null });
+        fixture.componentRef.setInput('scope', { ...scope, siteId: 'site-2', window: { ...scope.window, from: '2026-11-18T00:00:00Z' }, subject: null });
         fixture.detectChanges();
         expect(old.cancelled).toBe(true);
         const latest = http.expectOne((req) => req.url === '/api/sites/site-2/visible-time');

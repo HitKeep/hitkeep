@@ -1,7 +1,8 @@
-import { inject, signal, Service } from '@angular/core';
+import { DestroyRef, inject, signal, Service } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { finalize } from 'rxjs';
-import type { Subscription } from 'rxjs';
+import { defer, type Observable, type Subscription, throwIfEmpty } from 'rxjs';
+import { type ReportWindow, reportWindowBounds } from '@components/range-toolbar/range-options';
+import { isTransientReportError } from '@core/analytics/transient-report-error';
 import { Hit, PaginatedHits } from '@models/analytics.types';
 
 @Service()
@@ -13,13 +14,17 @@ export class HitService {
     readonly isLoading = signal<boolean>(false);
     readonly hasError = signal<boolean>(false);
 
-    private requestSequence = 0;
+    private currentPage: Observable<PaginatedHits> | null = null;
     private activeRequest: Subscription | null = null;
+    private refreshPending = false;
+
+    constructor() {
+        inject(DestroyRef).onDestroy(() => this.reset());
+    }
 
     loadHits(
         siteId: string,
-        from: string,
-        to: string,
+        window: ReportWindow,
         page = 1,
         pageSize = 10,
         sortField?: string,
@@ -30,16 +35,10 @@ export class HitService {
         funnelIds: string[] = [],
         shareToken?: string | null
     ) {
-        const sequence = ++this.requestSequence;
-        this.activeRequest?.unsubscribe();
+        this.reset();
         this.isLoading.set(true);
-        this.hasError.set(false);
 
-        let params = new HttpParams()
-            .set('from', from)
-            .set('to', to)
-            .set('limit', pageSize)
-            .set('offset', (page - 1) * pageSize);
+        let params = new HttpParams().set('limit', pageSize).set('offset', (page - 1) * pageSize);
 
         if (sortField) params = params.set('sort', sortField);
         if (sortOrder) params = params.set('order', sortOrder);
@@ -51,32 +50,51 @@ export class HitService {
         for (const id of funnelIds) params = params.append('funnel_id', id);
 
         const endpoint = shareToken ? `/api/share/${encodeURIComponent(shareToken)}/sites/${siteId}/hits` : `/api/sites/${siteId}/hits`;
-        this.activeRequest = this.http
-            .get<PaginatedHits>(endpoint, { params })
-            .pipe(
-                finalize(() => {
-                    if (sequence === this.requestSequence) this.isLoading.set(false);
-                })
-            )
-            .subscribe({
-                next: (res) => {
-                    if (sequence !== this.requestSequence) return;
-                    this.hits.set(res.data);
-                    this.total.set(res.total);
-                },
-                error: () => {
-                    if (sequence !== this.requestSequence) return;
-                    this.hits.set([]);
-                    this.total.set(0);
-                    this.hasError.set(true);
-                }
-            });
+        // Session expiry can complete the HTTP stream without a response during the redirect.
+        this.currentPage = defer(() => {
+            const { from, to } = reportWindowBounds(window);
+            return this.http.get<PaginatedHits>(endpoint, { params: params.set('from', from).set('to', to) });
+        }).pipe(throwIfEmpty());
+        this.fetchPage();
+    }
+
+    refresh() {
+        if (this.activeRequest && !this.activeRequest.closed) {
+            this.refreshPending = true;
+            return;
+        }
+        this.fetchPage();
+    }
+
+    private fetchPage() {
+        if (!this.currentPage) return;
+        this.refreshPending = false;
+        this.activeRequest = this.currentPage.subscribe({
+            next: (res) => {
+                this.hits.set(res.data);
+                this.total.set(res.total);
+                this.isLoading.set(false);
+                this.hasError.set(false);
+            },
+            error: (error) => {
+                this.hits.set([]);
+                this.total.set(0);
+                this.isLoading.set(false);
+                this.hasError.set(true);
+                if (!isTransientReportError(error)) this.currentPage = null;
+                if (this.refreshPending) this.fetchPage();
+            },
+            complete: () => {
+                if (this.refreshPending) this.fetchPage();
+            }
+        });
     }
 
     reset() {
-        this.requestSequence += 1;
         this.activeRequest?.unsubscribe();
         this.activeRequest = null;
+        this.currentPage = null;
+        this.refreshPending = false;
         this.hits.set([]);
         this.total.set(0);
         this.isLoading.set(false);

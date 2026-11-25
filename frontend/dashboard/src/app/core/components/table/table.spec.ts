@@ -174,6 +174,19 @@ describe('AppTable', () => {
         expect(localStorage.getItem('hitkeep.table.v1.spec')).toBeNull();
     });
 
+    it('restores filtered rows without losing column widths during the first render', async () => {
+        fixture.destroy();
+        const key = 'hitkeep.table.v1.spec';
+        const state = { first: 0, rows: 10, filters: { global: { value: 'beta', matchMode: 'contains' } }, columnWidths: '140,120,100,150,80' };
+        localStorage.setItem(key, JSON.stringify(state));
+
+        fixture = TestBed.createComponent(Host);
+        await fixture.whenStable();
+
+        expect(names()).toEqual(['Beta']);
+        expect(JSON.parse(localStorage.getItem(key)!)).toMatchObject(state);
+    });
+
     it('exports the current view as formula-safe CSV', async () => {
         let blob: Blob | undefined;
         vi.spyOn(URL, 'createObjectURL').mockImplementation((value) => {

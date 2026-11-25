@@ -227,8 +227,8 @@ export class SidebarMenuService {
                 collapsible: true,
                 visible: notShare,
                 items: [
-                    { labelKey: 'nav.docs', icon: 'pi pi-bookmark pi-external-link', url: SidebarMenuService.docsURL, target: '_blank' },
-                    { labelKey: 'nav.support', icon: 'pi pi-headphones pi-external-link', url: supportURL, target: '_blank', visible: () => supportURL !== '' }
+                    { labelKey: 'nav.docs', icon: 'pi pi-bookmark', url: SidebarMenuService.docsURL, target: '_blank' },
+                    { labelKey: 'nav.support', icon: 'pi pi-headphones', url: supportURL, target: '_blank', visible: () => supportURL !== '' }
                 ]
             },
             {

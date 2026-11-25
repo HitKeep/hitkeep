@@ -13,7 +13,7 @@ import { kpiBaseline, type KpiComparisonCard } from '@features/analytics/compone
 import { ReportRangeToolbar } from '@components/report-range-toolbar/report-range-toolbar';
 import { MetricCardGroup, MetricCardGroupRowClick, MetricCardGroupTab } from '@features/analytics/components/metric-card-group';
 import { SeriesChart, SeriesChartPoint, SeriesDefinition } from '@features/analytics/components/series-chart';
-import { RealtimeRefreshCoordinator } from '@services/realtime-refresh-coordinator.service';
+import { RealtimeRefreshCoordinator, refreshWhenIdle } from '@services/realtime-refresh-coordinator.service';
 import { REALTIME_TRAFFIC_KINDS } from '@services/realtime.service';
 import { injectReportRange } from '@services/report-range-preferences.service';
 
@@ -232,11 +232,18 @@ export class UtmAnalytics {
             }
             this.loadStats(site.id, dates.from, dates.to, filters);
         });
-        this.realtimeRefresh.registerUntilDestroyed(this.destroyRef, {
+        const refreshKey = signal(0);
+        refreshWhenIdle(
+            refreshKey,
+            () => this.statsQuery.isLoading() || this.statsQuery.isBackgroundRefreshing(),
+            () => this.refreshStats('background')
+        );
+        this.realtimeRefresh.registerSignalUntilDestroyed(this.destroyRef, {
             siteId: () => this.siteService.activeSite()?.id ?? null,
             kinds: REALTIME_TRAFFIC_KINDS,
             enabled: () => !!this.siteService.activeSite() && !!this.getCurrentDateRange(),
-            refresh: () => this.refreshStats('background'),
+            signal: refreshKey,
+            refreshDuringBursts: true,
             debounceMs: 700
         });
     }

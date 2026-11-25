@@ -364,7 +364,7 @@ jobs:
 
           docker run --detach --restart=always \
             --publish "127.0.0.1:${registry_port}:5000" \
-            --name "$registry" registry:2
+            --name "$registry" registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
           cat > "$chart_dir/kind.yaml" <<EOF
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4

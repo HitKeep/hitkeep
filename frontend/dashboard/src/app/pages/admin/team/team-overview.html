@@ -1,6 +1,19 @@
 @if (team(); as t) {
 <div class="grid gap-4">
-    @if (checkoutReturned && systemStatus()?.cloud?.hosted) { @if (billingStateResource.isLoading() || authorizationContinuation.isLoading()) {
+    @if (paidPrice(); as paid) {
+    <section id="promotion" class="grid gap-3 rounded-xl border border-[var(--p-content-border-color)] bg-[var(--p-content-background)] p-4 sm:p-6">
+        <h2 class="m-0 text-lg font-semibold">{{ 'cloud.promotion.heading' | transloco }}</h2>
+        <p>{{ t.name }} · {{ 'cloud.promotion.once' | transloco }}</p>
+        <app-promotion-price [price]="paid.price" [paid]="true" [code]="promotion()!.code" [percentOff]="promotion()!.percent_off" [endsAt]="promotion()!.ends_at" [interval]="paid.interval" />
+        <form class="grid justify-items-start gap-2" (submit)="$event.preventDefault(); redeemCode(enteredCode.value)">
+            <label for="promotion-code">{{ 'cloud.promotion.code' | transloco }}</label>
+            <input id="promotion-code" #enteredCode pInputText type="text" required maxlength="64" autocomplete="off" class="w-full max-w-xs" />
+            <button pButton type="submit" [disabled]="redeemPending()"><span pButtonLabel>{{ 'cloud.promotion.apply' | transloco }}</span></button>
+        </form>
+    </section>
+    } @if (redemption(); as result) { @if (result.team === t.id) {
+    <p role="status">{{ (result.status === 'applied' ? 'cloud.promotion.applied' : 'cloud.promotion.failed') | transloco }}</p>
+    } } @if (checkoutReturned && systemStatus()?.cloud?.hosted) { @if (billingStateResource.isLoading() || authorizationContinuation.isLoading()) {
     <p role="status">{{ 'oauth.loading' | transloco }}</p>
     } @else if (billingStateResource.error() || authorizationContinuation.error()) {
     <section class="grid gap-3" aria-live="polite">
@@ -27,16 +40,26 @@
         } @else if (kind === 'unavailable') {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ 'signup.recovery.unavailableTitle' | transloco }}</h2>
         <p class="text-sm">{{ 'signup.recovery.unavailableDescription' | transloco }}</p>
-        <p-button [label]="'signup.recovery.retryState' | transloco" severity="secondary" (onClick)="billingStateResource.reload()" />
+        <p-button [label]="'signup.recovery.retryState' | transloco" severity="secondary" (onClick)="refreshBilling()" />
         } @else if (kind === 'paid') {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ 'signup.recovery.paidTitle' | transloco }}</h2>
         <p class="text-sm">{{ 'signup.recovery.paidDescription' | transloco }}</p>
         <a pButton routerLink="/dashboard" severity="secondary"><span pButtonLabel>{{ 'signup.recovery.dashboard' | transloco }}</span></a>
         } @else {
         <h2 id="purchase-recovery-title" class="m-0 text-lg font-semibold">{{ (kind === 'canceled' ? 'signup.recovery.canceledTitle' : 'signup.recovery.reviewTitle') | transloco }}</h2>
+        @if (kind === 'review' && offerPrice(recoveryIntent().plan, recoveryIntent().billing)) {
+        <p class="text-sm text-muted-color">{{ t.name }}</p>
+        } @else {
         <p class="text-sm">{{ (kind === 'canceled' ? 'signup.recovery.canceledDescription' : 'signup.recovery.reviewDescription') | transloco }}</p>
+        } @if (offerPrice(recoveryIntent().plan, recoveryIntent().billing); as price) {
+        <div class="grid gap-2 rounded-lg border border-[var(--p-content-border-color)] p-4">
+            <strong>{{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }}</strong>
+            <app-promotion-price [price]="price" [endsAt]="promotion()!.ends_at" [code]="promotion()!.code" [percentOff]="promotion()!.percent_off" [interval]="recoveryIntent().billing" />
+        </div>
+        <p class="text-sm">{{ 'cloud.promotion.checkout' | transloco }}</p>
+        } @else {
         <p class="text-sm font-medium">{{ ('signup.plans.' + recoveryIntent().plan + '.name') | transloco }} · {{ ('signup.billing.' + recoveryIntent().billing) | transloco }} · {{ recoveryPrice() }}</p>
-        @if (teamService.hasMultipleTeams() && !teamConfirmed()) {
+        } @if (teamService.hasMultipleTeams() && !teamConfirmed()) {
         <p class="text-sm">{{ 'signup.recovery.confirmTeam' | transloco: { team: t.name } }}</p>
         <p-button [label]="'signup.recovery.confirmTeamAction' | transloco" severity="secondary" (onClick)="confirmRecoveryTeam()" />
         } @else {
@@ -99,10 +122,15 @@
                     size="small"
                     [attr.aria-label]="'admin.team.overview.plans.billingLabel' | transloco"
                 />
+                @if (!promotion()) {
                 <span class="text-xs leading-4 text-[var(--p-text-muted-color)]">{{ "admin.team.overview.plans.annualSaving" | transloco }}</span>
+                }
             </div>
         </div>
 
+        @if (recoveryError() && !recoveryMode) {
+        <p role="alert">{{ 'signup.recovery.checkoutError' | transloco }}</p>
+        }
         <div class="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
             @if (currentTier(); as current) {
             <p-card styleClass="hk-card plan-comparison__card--current">
@@ -152,10 +180,14 @@
                         <p-tag [value]="'admin.team.overview.plans.recommended' | transloco" severity="success" [rounded]="true" />
                         }
                     </div>
+                    @if (offerPrice(tier.code, billingInterval()); as price) {
+                    <app-promotion-price [price]="price" [endsAt]="promotion()!.ends_at" [code]="promotion()!.code" [percentOff]="promotion()!.percent_off" [interval]="billingInterval()" />
+                    } @else {
                     <span class="flex items-baseline gap-1">
                         <span class="text-3xl font-extrabold">{{ planPriceLabels()[tier.code] }}</span>
                         <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">{{ (billingInterval() === "annual" ? "admin.team.overview.plans.perYear" : "admin.team.overview.plans.perMonth") | transloco }}</span>
                     </span>
+                    }
                     <p class="mt-1 mb-0 text-sm text-[var(--p-text-muted-color)]">{{ ("signup.plans." + tier.code + ".description") | transloco }}</p>
                 </div>
 

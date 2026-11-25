@@ -6,7 +6,6 @@ import { filter } from 'rxjs';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { DrawerModule } from '@openng/optimus-ui/drawer';
 import { PanelMenuModule } from '@openng/optimus-ui/panelmenu';
-import { FreePlanChip } from '@layout/free-plan-chip';
 import { MainLayoutContextService } from '@layout/main-layout-context.service';
 import { SidebarMenuService, type SidebarMenuSectionItem } from '@layout/sidebar-menu.service';
 import { AskAIControlService } from '@features/ask-ai/ask-ai-control.service';
@@ -14,7 +13,7 @@ import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service
 
 @Component({
     selector: 'app-layout-sidebar',
-    imports: [NgTemplateOutlet, FreePlanChip, DrawerModule, PanelMenuModule, RouterLink, RouterLinkActive, TranslocoPipe],
+    imports: [NgTemplateOutlet, DrawerModule, PanelMenuModule, RouterLink, RouterLinkActive, TranslocoPipe],
     templateUrl: './layout-sidebar.html',
     styleUrl: './layout-sidebar.css',
     encapsulation: ViewEncapsulation.None,

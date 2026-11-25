@@ -162,7 +162,7 @@ describe('EcommercePage', () => {
                                     lastDays: 'Last {{count}} days',
                                     lastYear: 'Last year',
                                     lastYearShort: '1y',
-                                    moreRanges: 'More ranges',
+                                    allRanges: 'All ranges',
                                     customRange: 'Custom range',
                                     customShort: 'Custom',
                                     customRangeSummary: '{{start}} - {{end}}'
@@ -504,7 +504,7 @@ describe('EcommercePage', () => {
         clickTab('Revenue sources');
 
         const links = Array.from<HTMLAnchorElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell__link'));
-        const favicons = Array.from<HTMLImageElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell__favicon'));
+        const favicons = Array.from<HTMLImageElement>(fixture.nativeElement.querySelectorAll('.ecommerce-source-cell app-site-favicon img'));
 
         expect(links.map((link) => link.href)).toContain('https://google.com/search');
         expect(links.map((link) => link.href)).not.toContain('https://google.com/');

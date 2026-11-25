@@ -67,6 +67,10 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 	}
 	setStripeVersionHeader(&params.Params)
 	setStripeIdempotencyKey(&params.Params, input.IdempotencyKey)
+	if input.AllowPromotionCodes {
+		params.AllowPromotionCodes = new(true)
+		params.AdaptivePricing = &stripe.CheckoutSessionCreateAdaptivePricingParams{Enabled: new(false)}
+	}
 	params.Locale = stripe.String(input.Locale)
 	params.AddMetadata("user_id", input.UserID.String())
 	params.AddMetadata("tenant_id", input.TenantID.String())
@@ -114,11 +118,17 @@ func (c *stripeSDKClient) GetPrice(ctx context.Context, priceID string) (*stripe
 	if loaded == nil || loaded.Recurring == nil {
 		return nil, nil
 	}
+	productID := ""
+	if loaded.Product != nil {
+		productID = loaded.Product.ID
+	}
 	return &stripePriceOutput{
-		AmountMinor: loaded.UnitAmount,
-		Currency:    string(loaded.Currency),
-		Interval:    string(loaded.Recurring.Interval),
-		Active:      loaded.Active,
+		ProductID:     productID,
+		IntervalCount: loaded.Recurring.IntervalCount,
+		AmountMinor:   loaded.UnitAmount,
+		Currency:      string(loaded.Currency),
+		Interval:      string(loaded.Recurring.Interval),
+		Active:        loaded.Active,
 	}, nil
 }
 

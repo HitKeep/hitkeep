@@ -156,9 +156,9 @@
                             <ng-template appTableCell="referrer" let-source>
                                 @if (source.referrer) {
                                 <div class="ecommerce-source-cell text-[var(--p-text-muted-color)]">
-                                    @if (sourceDomain(source.referrer); as domain) { @if (faviconUrlForDomain(domain); as favicon) {
-                                    <img [ngSrc]="favicon" class="ecommerce-source-cell__favicon" [width]="16" [height]="16" alt="" />
-                                    } } @if (sourceLinkUrl(source.referrer); as referrerUrl) {
+                                    @if (sourceDomain(source.referrer); as domain) {
+                                    <app-site-favicon compact [site]="{ domain }" />
+                                    } @if (sourceLinkUrl(source.referrer); as referrerUrl) {
                                     <span class="ecommerce-source-cell__label" [title]="source.referrer">{{ sourceDisplayUrl(source.referrer) }}</span>
                                     <a class="ecommerce-source-cell__link" [href]="referrerUrl" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()" [attr.aria-label]="'common.openInNewTabAria' | transloco">
                                         <i class="pi pi-external-link ecommerce-source-cell__link-icon" aria-hidden="true"></i>

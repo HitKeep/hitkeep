@@ -70,9 +70,9 @@ describe('OverviewPage', () => {
                                     yesterday: 'Yesterday',
                                     last24Hours: '24h',
                                     last7Days: '7d',
-                                    last30Days: '30d',
+                                    lastDays: 'Last {{count}} days',
                                     customShort: 'Custom',
-                                    moreRanges: 'More ranges',
+                                    allRanges: 'All ranges',
                                     searchRanges: 'Search ranges'
                                 },
                                 actions: {

@@ -53,6 +53,33 @@ describe('SiteFavicon', () => {
         expect(image.getAttribute('aria-hidden')).toBe('true');
     });
 
+    it('ignores an error from the previous image after switching domains', () => {
+        fixture.componentRef.setInput('site', site('first.example.com'));
+        fixture.detectChanges();
+        const first = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        fixture.componentRef.setInput('site', site('google.com'));
+        fixture.detectChanges();
+        first.dispatchEvent(new Event('error'));
+        fixture.detectChanges();
+
+        const current = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        expect(current).not.toBe(first);
+        expect(current.getAttribute('src')).toContain('/api/favicon/google.com');
+    });
+
+    it('ignores an old error between a domain change and the next render', () => {
+        fixture.componentRef.setInput('site', site('first.example.com'));
+        fixture.detectChanges();
+        const first = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+
+        fixture.componentRef.setInput('site', site('google.com'));
+        first.dispatchEvent(new Event('error'));
+        fixture.detectChanges();
+
+        const current = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        expect(current.getAttribute('src')).toContain('/api/favicon/google.com');
+    });
+
     it('tries the image again when the site changes after a failed favicon', () => {
         fixture.componentRef.setInput('site', site('example.com'));
         fixture.detectChanges();
@@ -64,6 +91,13 @@ describe('SiteFavicon', () => {
 
         expect(fixture.nativeElement.querySelector('img')).toBeTruthy();
         expect(fixture.nativeElement.querySelector('.hk-site-favicon-fallback')).toBeNull();
+        const next = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        next.dispatchEvent(new Event('load'));
+        fixture.componentRef.setInput('site', site('example.com'));
+        fixture.detectChanges();
+        const retried = fixture.nativeElement.querySelector('img') as HTMLImageElement;
+        expect(retried).not.toBe(next);
+        expect(retried.getAttribute('src')).toContain('/api/favicon/example.com');
     });
 });
 

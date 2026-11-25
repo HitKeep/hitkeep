@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { injectFaviconUrl } from '@core/analytics/favicon';
 
@@ -12,9 +12,9 @@ export interface SiteFaviconSource {
     imports: [NgOptimizedImage],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        @if (showImage()) {
-            <img [ngSrc]="faviconUrl()" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="showFallback()" />
-        } @else {
+        @for (image of visibleImages(); track image.url) {
+            <img [ngSrc]="image.url" class="hk-site-favicon" [width]="20" [height]="20" loading="lazy" alt="" aria-hidden="true" (error)="showFallback(image.url)" />
+        } @empty {
             <span class="hk-site-favicon-fallback" aria-hidden="true">
                 <i class="pi pi-globe"></i>
             </span>
@@ -26,14 +26,19 @@ export interface SiteFaviconSource {
                 display: inline-flex;
                 width: 1.25rem;
                 height: 1.25rem;
-                flex: 0 0 auto;
+                flex: none;
+            }
+
+            :host([compact]) {
+                width: 1rem;
+                height: 1rem;
             }
 
             .hk-site-favicon,
             .hk-site-favicon-fallback {
-                width: 1.25rem;
-                height: 1.25rem;
-                flex: 0 0 auto;
+                width: 100%;
+                height: 100%;
+                flex: none;
                 border-radius: 999px;
             }
 
@@ -65,18 +70,16 @@ export interface SiteFaviconSource {
 export class SiteFavicon {
     private readonly faviconUrlForDomain = injectFaviconUrl();
     site = input.required<SiteFaviconSource | null>();
-    private readonly failedDomain = signal<string | null>(null);
-    protected domain = computed(() => this.site()?.domain ?? '');
-    protected showImage = computed(() => {
-        const domain = this.domain();
-        return !!this.faviconUrl() && this.failedDomain() !== domain;
+    private readonly faviconUrl = computed(() => this.faviconUrlForDomain(this.site()?.domain));
+    // Key the image node by URL so a late error cannot hide its replacement.
+    protected readonly visibleImages = linkedSignal(() => {
+        const url = this.faviconUrl();
+        return url ? [{ url }] : [];
     });
-    protected faviconUrl = computed(() => this.faviconUrlForDomain(this.domain()) ?? '');
 
-    protected showFallback(): void {
-        const domain = this.domain();
-        if (domain) {
-            this.failedDomain.set(domain);
+    protected showFallback(url: string): void {
+        if (url === this.faviconUrl()) {
+            this.visibleImages.set([]);
         }
     }
 }

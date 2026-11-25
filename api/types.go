@@ -1682,12 +1682,13 @@ type CloudPlanTier struct {
 }
 
 type CloudStatus struct {
-	Hosted        bool   `json:"hosted"`
-	SignupEnabled bool   `json:"signup_enabled"`
-	Jurisdiction  string `json:"jurisdiction,omitempty"`
-	Region        string `json:"region,omitempty"`
-	UpgradeURL    string `json:"upgrade_url,omitempty"`
-	SupportURL    string `json:"support_url,omitempty"`
+	PromotionConfigured bool   `json:"promotion_configured,omitzero"`
+	Hosted              bool   `json:"hosted"`
+	SignupEnabled       bool   `json:"signup_enabled"`
+	Jurisdiction        string `json:"jurisdiction,omitempty"`
+	Region              string `json:"region,omitempty"`
+	UpgradeURL          string `json:"upgrade_url,omitempty"`
+	SupportURL          string `json:"support_url,omitempty"`
 }
 
 type TeamMember struct {

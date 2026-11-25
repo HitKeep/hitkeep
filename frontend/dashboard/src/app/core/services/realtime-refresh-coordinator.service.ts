@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { DestroyRef, WritableSignal, inject, Service } from '@angular/core';
+import { DestroyRef, Signal, WritableSignal, effect, inject, Service, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RealtimeEvent, RealtimeKind, RealtimeService } from '@services/realtime.service';
 
@@ -9,6 +9,7 @@ interface RealtimeRegistration {
     refresh: () => void;
     enabled: () => boolean;
     debounceMs: number;
+    refreshDuringBursts: boolean;
     timer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -18,6 +19,8 @@ export interface RealtimeRefreshOptions {
     refresh: () => void;
     enabled?: () => boolean;
     debounceMs?: number;
+    /** Use a fixed window for consumers that coalesce invalidations while fetching. */
+    refreshDuringBursts?: boolean;
 }
 
 export interface RealtimeRefreshSignalOptions extends Omit<RealtimeRefreshOptions, 'refresh'> {
@@ -26,6 +29,16 @@ export interface RealtimeRefreshSignalOptions extends Omit<RealtimeRefreshOption
 
 const FALLBACK_REFRESH_MS = 30000;
 const DEFAULT_DEBOUNCE_MS = 500;
+
+export function refreshWhenIdle(key: Signal<number>, pending: () => boolean, refresh: () => void): void {
+    let lastRefresh = 0;
+    effect(() => {
+        const next = key();
+        if (next === lastRefresh || pending()) return;
+        lastRefresh = next;
+        untracked(refresh);
+    });
+}
 
 @Service()
 export class RealtimeRefreshCoordinator {
@@ -53,6 +66,7 @@ export class RealtimeRefreshCoordinator {
             refresh: options.refresh,
             enabled: options.enabled ?? (() => true),
             debounceMs: options.debounceMs ?? DEFAULT_DEBOUNCE_MS,
+            refreshDuringBursts: options.refreshDuringBursts ?? false,
             timer: null
         };
         this.registrations.add(registration);
@@ -94,6 +108,7 @@ export class RealtimeRefreshCoordinator {
     }
 
     private scheduleRefresh(registration: RealtimeRegistration): void {
+        if (registration.refreshDuringBursts && registration.timer !== null) return;
         this.clearRegistrationTimer(registration);
         registration.timer = setTimeout(() => {
             registration.timer = null;

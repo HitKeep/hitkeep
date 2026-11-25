@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { NavigationSearch } from './navigation-search';
+import { FreePlanChip } from '@layout/free-plan-chip';
 import { Brand } from '@components/brand/brand';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { TeamSwitcher } from '@components/team-switcher/team-switcher';
@@ -9,7 +10,7 @@ import { MainLayoutContextService } from '@layout/main-layout-context.service';
 
 @Component({
     selector: 'app-layout-page-bar',
-    imports: [NavigationSearch, Brand, TeamSwitcher, UserControls, SiteSelector, TranslocoPipe],
+    imports: [FreePlanChip, NavigationSearch, Brand, TeamSwitcher, UserControls, SiteSelector, TranslocoPipe],
     templateUrl: './layout-page-bar.html',
     styleUrl: './layout-page-bar.css',
     changeDetection: ChangeDetectionStrategy.OnPush

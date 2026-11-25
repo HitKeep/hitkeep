@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 	stdUUID "uuid"
 
 	"github.com/google/uuid"
@@ -24,8 +23,6 @@ import (
 type handler struct {
 	ctx *shared.Context
 }
-
-var faviconProxyTransport = newFaviconProxyTransport(5 * time.Second)
 
 func Register(mux *http.ServeMux, ctx *shared.Context) {
 	h := &handler{ctx: ctx}

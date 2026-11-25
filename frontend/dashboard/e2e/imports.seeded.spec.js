@@ -60,6 +60,7 @@ async function runPlausibleImportFlow(page, files, mode, testInfo) {
 
         await dropImportFiles(page, files);
         await expect(page.locator(".imports-fileupload__summary")).toContainText(String(files.length));
+        await expect(page.locator(".imports-file-row > i").first()).toBeVisible();
         await captureImportScreenshot(page, `imports-plausible-${mode}-selected`, testInfo);
 
         await page.getByRole("button", { name: /upload and validate/i }).click();
