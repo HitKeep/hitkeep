@@ -1,6 +1,6 @@
 import { inject, Injector, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
-import { finalize, Subject, takeUntil, tap } from 'rxjs';
+import { finalize, Subject, takeUntil, tap, throwIfEmpty } from 'rxjs';
 
 import { AnalyticsService } from '@core/services/analytics.service';
 import type { AIActivityReport } from '@models/analytics.types';
@@ -42,6 +42,7 @@ export class AIActivityQuery {
             params: () => this.request(),
             stream: ({ params }) =>
                 this.analyticsService.getAIActivity(params.siteId, params.from, params.to, params.filters ?? [], params.comparison ?? undefined, params.goalIds ?? [], params.funnelIds ?? []).pipe(
+                    throwIfEmpty(),
                     takeUntil(this.cancel$),
                     tap({
                         next: (report) => {
