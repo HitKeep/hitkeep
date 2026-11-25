@@ -105,6 +105,27 @@ func TestHandleGetShareSiteStatsIncludesGeoNetworkAggregates(t *testing.T) {
 	assertMetricStat(t, "shared stats ASN", stats.TopASNs, "AS15169 Google LLC", 1)
 }
 
+func TestHandleGetShareSiteStatsUTMOverview(t *testing.T) {
+	h, store, token, siteID := setupShareExportTestEnv(t)
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.CreateHit(t.Context(), &api.Hit{SiteID: siteID, PageID: uuid.New(), SessionID: uuid.New(), Path: "/untagged", Timestamp: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/share/"+token+"/sites/"+siteID.String()+"/stats?view=utm", nil)
+	req.SetPathValue("token", token)
+	req.SetPathValue("id", siteID.String())
+	w := httptest.NewRecorder()
+	h.handleGetShareSiteStats().ServeHTTP(w, req)
+	var stats api.SiteStats
+	if err := json.UnmarshalRead(w.Body, &stats); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || stats.TotalPageviews != 2 || len(stats.TopUTMSources) != 1 {
+		t.Fatalf("status %d, pageviews %d, sources %+v", w.Code, stats.TotalPageviews, stats.TopUTMSources)
+	}
+	assertMetricStat(t, "shared UTM sources", stats.TopUTMSources, "newsletter", 1)
+}
+
 func TestShareOpportunitiesListIsScopedToShareTokenSite(t *testing.T) {
 	ctx := context.Background()
 	store := testdb.Shared(t)

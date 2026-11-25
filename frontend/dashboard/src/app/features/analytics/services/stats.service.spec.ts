@@ -36,6 +36,15 @@ describe('StatsService', () => {
         req.flush({});
     });
 
+    it('requests campaign rankings and preserves literal UTM filters', () => {
+        service.fetchStats('site', '2026-07-01', '2026-07-02', [{ type: 'utm_source', value: '(Unspecified)' }], [], [], 'utm').subscribe();
+
+        const req = httpMock.expectOne((request) => request.url === '/api/sites/site/stats');
+        expect(req.request.params.get('view')).toBe('utm');
+        expect(req.request.params.getAll('filter')).toEqual(['utm_source:(Unspecified)']);
+        req.flush({});
+    });
+
     it('requests lightweight overview stats for all accessible sites', () => {
         service.fetchSitesOverviewStats('2026-07-01T00:00:00.000Z', '2026-07-02T00:00:00.000Z').subscribe((response) => {
             expect(response.sites).toEqual([]);
