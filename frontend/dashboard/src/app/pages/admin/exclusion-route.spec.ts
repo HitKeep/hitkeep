@@ -71,9 +71,10 @@ describe('global filter navigation', () => {
         expect(link()?.textContent).toContain('Global filters');
         link()!.focus();
         await userEvent.keyboard('{Enter}');
-        await expect.poll(() => TestBed.inject(Router).url).toBe('/admin/exclusions');
-        http.expectOne('/api/user/current-ip').flush({ cidr: '192.0.2.72/32' });
-        http.expectOne('/api/admin/exclusions').flush([]);
+        await expect.poll(() => harness.routeNativeElement?.textContent).toContain('Global traffic filters');
+        expect(TestBed.inject(Router).url).toBe('/admin/exclusions');
+        http.expectOne({ method: 'GET', url: '/api/user/current-ip' }).flush({ cidr: '192.0.2.72/32' });
+        http.expectOne({ method: 'GET', url: '/api/admin/exclusions' }).flush([]);
     });
 
     it('lets an exclusion-only manager review and cancel a suggested IP by keyboard before explicitly submitting', async () => {
