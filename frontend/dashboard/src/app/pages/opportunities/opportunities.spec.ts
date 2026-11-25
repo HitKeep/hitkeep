@@ -43,7 +43,7 @@ describe('OpportunitiesPage', () => {
                                     lastDays: 'Last {{count}} days',
                                     lastYear: 'Last year',
                                     lastYearShort: '1y',
-                                    moreRanges: 'More ranges',
+                                    allRanges: 'All ranges',
                                     customRange: 'Custom range',
                                     customShort: 'Custom',
                                     customRangeSummary: '{{start}} - {{end}}'
@@ -270,7 +270,7 @@ describe('OpportunitiesPage', () => {
                                     lastDays: 'Letzte {{count}} Tage',
                                     lastYear: 'Letztes Jahr',
                                     lastYearShort: '1J',
-                                    moreRanges: 'Weitere Zeiträume',
+                                    allRanges: 'Zeiträume',
                                     customRange: 'Eigener Zeitraum',
                                     customShort: 'Eigener',
                                     customRangeSummary: '{{start}} - {{end}}'

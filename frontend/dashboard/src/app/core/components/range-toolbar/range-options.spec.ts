@@ -11,7 +11,8 @@ describe('range options', () => {
     });
 
     it('keeps common report presets available while defaulting to today first', () => {
-        expect(DEFAULT_RANGE_OPTIONS.map((range) => range.value)).toEqual(['today', 'yesterday', '24h', '7d', '30d', '30m', '1h', '6h', '3d', '14d', '60d', '90d', '180d', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'thisYear', '1y', 'custom']);
+        const values = DEFAULT_RANGE_OPTIONS.map((range) => range.value);
+        expect(values).toEqual(['today', 'yesterday', '24h', '7d', '28d', '30m', '1h', '6h', '3d', '14d', '30d', '60d', '90d', '180d', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'thisYear', '1y', 'custom']);
     });
 
     it('resolves today from local midnight to now', () => {
@@ -47,6 +48,14 @@ describe('range options', () => {
         });
         expect(resolveDateRange({ value: '14d' }, null, now)).toEqual({
             from: new Date(2026, 5, 19, 15, 45, 30, 250).toISOString(),
+            to: now.toISOString()
+        });
+        expect(resolveDateRange({ value: '28d' }, null, now)).toEqual({
+            from: new Date(2026, 5, 5, 15, 45, 30, 250).toISOString(),
+            to: now.toISOString()
+        });
+        expect(resolveDateRange({ value: '30d' }, null, now)).toEqual({
+            from: new Date(2026, 5, 3, 15, 45, 30, 250).toISOString(),
             to: now.toISOString()
         });
         expect(resolveDateRange({ value: '60d' }, null, now)).toEqual({

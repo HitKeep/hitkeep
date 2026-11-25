@@ -1,5 +1,8 @@
 import { computed, inject, signal, Service } from '@angular/core';
-import { DEFAULT_RANGE_OPTIONS, DateRange, isShortRange, RangeOption, RangeSelectEvent, RangeValue, resolveDateRange, selectDefaultRange } from '@components/range-toolbar/range-toolbar';
+import { DEFAULT_RANGE_OPTIONS, DateRange, findLinkedPreset, isShortRange, RangeOption, RangeSelectEvent, RangeValue, resolveDateRange, selectDefaultRange } from '@components/range-toolbar/range-toolbar';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
+import { distinctUntilChanged, map, of } from 'rxjs';
 import { PreferenceStorage } from '@services/preference-storage';
 
 interface StoredReportRange {
@@ -26,7 +29,14 @@ export class ReportRangePreferencesService {
     readonly customRangeDates = this.customRangeDatesState.asReadonly();
     readonly isShortRange = computed(() => isShortRange(this.selectedRange(), this.customRangeDates()));
 
-    initialize(fallback: RangeOption = this.defaultRange): void {
+    initialize(fallback: RangeOption = this.defaultRange, linkedValue?: string | null): void {
+        const linked = findLinkedPreset(DEFAULT_RANGE_OPTIONS, linkedValue);
+        if (linked) {
+            this.applySelection({ range: linked, customRangeDates: null });
+            this.initializedFromStorage = false;
+            return;
+        }
+
         if (!this.storage.available()) {
             this.applySelection({ range: fallback, customRangeDates: null });
             this.initializedFromStorage = false;
@@ -111,6 +121,8 @@ export class ReportRangePreferencesService {
 
 export function injectReportRange(fallback?: RangeOption): ReportRangePreferencesService {
     const reportRange = inject(ReportRangePreferencesService);
-    reportRange.initialize(fallback);
+    const route = inject(ActivatedRoute, { optional: true });
+    const linkedRange = route ? route.queryParamMap.pipe(map((params) => (params.has('from') && params.has('to') ? null : params.get('range')))) : of(null);
+    linkedRange.pipe(distinctUntilChanged(), takeUntilDestroyed()).subscribe((value) => reportRange.initialize(fallback, value));
     return reportRange;
 }

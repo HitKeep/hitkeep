@@ -140,6 +140,10 @@
         flex: 0 0 auto;
     }
 
+    :host ::ng-deep .range-toolbar__more-select-control.p-select {
+        max-width: 100%;
+    }
+
     .range-toolbar__more-select {
         margin-left: 0;
     }

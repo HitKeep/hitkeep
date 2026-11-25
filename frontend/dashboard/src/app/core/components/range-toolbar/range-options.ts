@@ -1,4 +1,4 @@
-export type RangeValue = 'today' | 'yesterday' | '30m' | '1h' | '6h' | '24h' | '3d' | '7d' | '14d' | '30d' | '60d' | '90d' | '180d' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | '1y' | 'custom';
+export type RangeValue = 'today' | 'yesterday' | '30m' | '1h' | '6h' | '24h' | '3d' | '7d' | '14d' | '28d' | '30d' | '60d' | '90d' | '180d' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | '1y' | 'custom';
 
 export interface RangeOption {
     label?: string;
@@ -17,12 +17,13 @@ export const DEFAULT_RANGE_OPTIONS: RangeOption[] = [
     { value: 'yesterday' },
     { value: '24h' },
     { value: '7d' },
-    { value: '30d' },
+    { value: '28d' },
     { value: '30m' },
     { value: '1h' },
     { value: '6h' },
     { value: '3d' },
     { value: '14d' },
+    { value: '30d' },
     { value: '60d' },
     { value: '90d' },
     { value: '180d' },
@@ -53,6 +54,10 @@ function startOfIsoWeek(date: Date): Date {
     const start = startOfLocalDay(date);
     start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
     return start;
+}
+
+export function findLinkedPreset(ranges: readonly RangeOption[], value: string | null | undefined): RangeOption | undefined {
+    return ranges.find((range) => range.value === value && range.value !== 'custom');
 }
 
 export function selectDefaultRange(ranges: readonly RangeOption[], previous?: RangeOption | null): RangeOption {
@@ -107,6 +112,9 @@ export function resolveDateRange(range: RangeOption, customRangeDates: Date[] | 
             break;
         case '14d':
             from.setDate(to.getDate() - 14);
+            break;
+        case '28d':
+            from.setDate(to.getDate() - 28);
             break;
         case '30d':
             from.setDate(to.getDate() - 30);

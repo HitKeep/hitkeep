@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
-import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormControl, FormsModule, NgModel, ReactiveFormsModule } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -17,7 +17,7 @@ import { TeamService } from '@services/team.service';
 import { resolveDateRange, type RangeOption, type RangeValue } from './range-options';
 import { translateRangeLabel, translateRangeShortLabel } from './range-labels';
 
-export { DEFAULT_RANGE_OPTIONS, DEFAULT_RANGE_VALUE, isShortRange, resolveDateRange, selectDefaultRange } from './range-options';
+export { DEFAULT_RANGE_OPTIONS, DEFAULT_RANGE_VALUE, findLinkedPreset, isShortRange, resolveDateRange, selectDefaultRange } from './range-options';
 export { translateRangeLabel, translateRangeShortLabel } from './range-labels';
 export type { DateRange, RangeOption, RangeValue } from './range-options';
 
@@ -29,9 +29,10 @@ export interface RangeSelectEvent {
 interface ToolbarRangeOption extends RangeOption {
     label: string;
     shortLabel: string;
+    quick: boolean;
 }
 
-const VISIBLE_PRESET_VALUES = new Set<RangeValue>(['today', 'yesterday', '24h', '7d', '30d']);
+const VISIBLE_PRESET_VALUES = new Set<RangeValue>(['today', 'yesterday', '24h', '7d', '28d']);
 
 @Component({
     selector: 'app-range-toolbar',
@@ -68,20 +69,12 @@ export class RangeToolbar {
         return this.timeRanges().map((option) => ({
             ...option,
             label: option.label ?? this.defaultLabel(option.value),
-            shortLabel: this.shortLabel(option.value)
+            shortLabel: this.shortLabel(option.value),
+            quick: VISIBLE_PRESET_VALUES.has(option.value)
         })) satisfies ToolbarRangeOption[];
     });
-    protected readonly presetRanges = computed(() => this.translatedTimeRanges().filter((option) => option.value !== 'custom'));
-    protected readonly visiblePresetRanges = computed(() => this.presetRanges().filter((option) => VISIBLE_PRESET_VALUES.has(option.value)));
-    protected readonly overflowPresetRanges = computed(() => this.presetRanges().filter((option) => !VISIBLE_PRESET_VALUES.has(option.value)));
-    protected readonly selectedPresetValue = computed(() => {
-        const value = this.selectedRange().value;
-        return this.visiblePresetRanges().some((option) => option.value === value) ? value : null;
-    });
-    protected readonly overflowSelectValue = computed(() => {
-        const value = this.selectedRange().value;
-        return this.overflowPresetRanges().some((option) => option.value === value) ? value : null;
-    });
+    protected readonly visiblePresetRanges = computed(() => this.translatedTimeRanges().filter((option) => option.quick));
+    protected readonly customOption = computed(() => this.translatedTimeRanges().find((option) => option.value === 'custom'));
     protected readonly customRangeSummary = computed(() => {
         this.activeLanguage();
         if (!this.isCustomActive()) {
@@ -112,9 +105,9 @@ export class RangeToolbar {
         this.activeLanguage();
         return this.transloco.translate('common.timeRanges.customShort');
     });
-    protected readonly moreRangesLabel = computed(() => {
+    protected readonly allRangesLabel = computed(() => {
         this.activeLanguage();
-        return this.transloco.translate('common.timeRanges.moreRanges');
+        return this.transloco.translate('common.timeRanges.allRanges');
     });
     protected readonly searchRangesLabel = computed(() => {
         this.activeLanguage();
@@ -163,34 +156,23 @@ export class RangeToolbar {
         });
     }
 
-    protected selectPreset(option: ToolbarRangeOption) {
-        if (this.selectedRange().value === option.value) {
+    protected selectPresetValue(value: RangeValue) {
+        const option = this.translatedTimeRanges().find((range) => range.value === value);
+        if (!option || value === 'custom' || this.selectedRange().value === value) {
             return;
         }
         this.selectedRangeChange.emit(option);
         this.rangeChange.emit({ value: option });
     }
 
-    protected selectPresetValue(value: RangeValue | null) {
-        if (!value) {
+    protected selectDropdownRange(value: RangeValue, event: Event | undefined, model: NgModel, popover: Popover, anchor: HTMLElement) {
+        if (value === 'custom' && this.customOption()) {
+            // Keep the applied range selected until the user confirms both dates.
+            model.control.setValue(this.selectedRange().value);
+            popover.show(event, anchor);
             return;
         }
-
-        const option = this.visiblePresetRanges().find((range) => range.value === value);
-        if (option) {
-            this.selectPreset(option);
-        }
-    }
-
-    protected selectOverflowPresetValue(value: RangeValue | null) {
-        if (!value) {
-            return;
-        }
-
-        const option = this.overflowPresetRanges().find((range) => range.value === value);
-        if (option) {
-            this.selectPreset(option);
-        }
+        this.selectPresetValue(value);
     }
 
     protected toggleCustomRange(event: Event, popover: Popover) {
@@ -200,16 +182,12 @@ export class RangeToolbar {
     protected applyCustomRange(popover: Popover) {
         const start = this.rangeForm.customStart().value();
         const end = this.rangeForm.customEnd().value();
-        if (!start || !end || start.getTime() > end.getTime()) {
+        const selected = this.customOption();
+        if (!selected || !start || !end || start.getTime() > end.getTime()) {
             return;
         }
 
         const customRange = [start, end];
-        const selected = this.translatedTimeRanges().find((option) => option.value === 'custom') ?? {
-            value: 'custom',
-            label: this.transloco.translate('common.timeRanges.customRange')
-        };
-
         this.customRangeDatesChange.emit(customRange);
         this.selectedRangeChange.emit(selected);
         this.rangeChange.emit({ value: selected, customRange });
