@@ -60,7 +60,7 @@ describe('Dashboard', () => {
         };
 
         const period = { from: '2026-02-01T00:00:00.000Z', to: '2026-02-07T23:59:59.999Z' };
-        dashboard.statsQuery.loaded.set({ siteId: 'site-1', stats: value, period });
+        dashboard.statsQuery.loaded.set({ cohort: JSON.stringify(['site-1', undefined, [], [], []]), stats: value, period });
         dashboard.isStatsLoading.set(false);
     };
 
@@ -525,6 +525,38 @@ describe('Dashboard', () => {
             expect(sessions?.loading).toBe(false);
             expect(sessions?.updateKey).toBe(1);
             expect(fixture.nativeElement.querySelectorAll('app-kpi-card p-skeleton').length).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('finishes slow initial and background page statistics during sustained realtime activity', async () => {
+        vi.useFakeTimers();
+        try {
+            initialOnboarding.flush({ complete: true, steps: [] });
+            const initial = new Subject<SiteStats>();
+            const refresh = new Subject<SiteStats>();
+            const stats = vi.mocked(TestBed.inject(StatsService).fetchStats).mockReturnValueOnce(initial).mockReturnValueOnce(refresh);
+            startTrackingSite();
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(1);
+
+            initial.next(emptySiteStats({ top_pages: [{ name: '/before', value: 1 }] }));
+            initial.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(2);
+            await deliverHit();
+            await deliverHit();
+            expect(stats).toHaveBeenCalledTimes(2);
+            expect(fixture.nativeElement.textContent).toContain('/before');
+
+            refresh.next(emptySiteStats({ top_pages: [{ name: '/after', value: 2 }] }));
+            fixture.detectChanges();
+            expect(fixture.nativeElement.textContent).toContain('/after');
+            refresh.complete();
+            fixture.detectChanges();
+            expect(stats).toHaveBeenCalledTimes(3);
         } finally {
             vi.useRealTimers();
         }

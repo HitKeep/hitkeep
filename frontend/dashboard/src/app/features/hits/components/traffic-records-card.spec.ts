@@ -31,6 +31,56 @@ describe('TrafficRecordsCard', () => {
 
     afterEach(() => http.verify());
 
+    it('keeps the current page interactive during a burst and clears its rows when the scope changes', async () => {
+        const fixture = TestBed.createComponent(TrafficRecordsCard);
+        fixture.componentRef.setInput('siteId', 'site-1');
+        fixture.componentRef.setInput('siteDomain', 'example.com');
+        fixture.componentRef.setInput('from', '2026-07-01');
+        fixture.componentRef.setInput('to', '2026-07-29');
+        fixture.detectChanges();
+        const hits = () => http.expectOne((req) => req.url === '/api/sites/site-1/hits');
+        const result = (path: string) => ({ data: [{ id: path, path, timestamp: '2026-07-01T12:00:00Z' }], total: 25 });
+        const element: HTMLElement = fixture.nativeElement;
+        const tick = (key: number) => {
+            fixture.componentRef.setInput('refreshKey', key);
+            fixture.detectChanges();
+        };
+
+        hits().flush(result('/first'));
+        await fixture.whenStable();
+        element.querySelector<HTMLButtonElement>('.p-paginator-next')!.click();
+        const page = hits();
+        expect(page.request.params.get('offset')).toBe('10');
+        page.flush(result('/second'));
+        await fixture.whenStable();
+
+        tick(1);
+        const refresh = hits();
+        expect(element.querySelector('.p-datatable-mask')).toBeNull();
+        const link = element.querySelector<HTMLAnchorElement>('a[href="https://example.com/second"]')!;
+        link.focus();
+        expect(document.activeElement).toBe(link);
+        expect(refresh.request.params.get('offset')).toBe('10');
+        for (let key = 2; key <= 10; key++) tick(key);
+        expect(refresh.cancelled).toBe(false);
+        http.expectNone((req) => req.url.endsWith('/hits'));
+        refresh.flush(result('/fresh'));
+        await fixture.whenStable();
+        expect(element.textContent).toContain('/fresh');
+        const trailing = hits();
+
+        fixture.componentRef.setInput('filters', [{ type: 'country', value: 'DE' }]);
+        fixture.detectChanges();
+        expect(trailing.cancelled).toBe(true);
+        expect(element.textContent).not.toContain('/fresh');
+        const filtered = hits();
+        expect(filtered.request.params.get('offset')).toBe('0');
+        expect(filtered.request.params.get('filter')).toBe('country:DE');
+        filtered.flush('', { status: 403, statusText: 'Forbidden' });
+        await fixture.whenStable();
+        expect(element.textContent).toContain('trafficRecords.errorTitle');
+    });
+
     it('loads a union cohort with dimension filters in isolated table state', () => {
         const fixture = TestBed.createComponent(TrafficRecordsCard);
         fixture.componentRef.setInput('siteId', 'site-1');

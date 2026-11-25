@@ -51,7 +51,9 @@ export class TrafficRecordsCard {
     private readonly destroyRef = inject(DestroyRef);
     private lastTableEvent: TableLazyLoadEvent | null = null;
     private lastLoadedScope = '';
+    private lastRefreshKey = 0;
 
+    protected readonly first = signal(0);
     protected readonly searchQuery = signal('');
     protected readonly isExporting = signal(false);
     protected readonly hitRows = computed(() => this.hitService.hits().map((hit) => ({ ...hit, device: (hit.viewport_width ?? 0) > 768 ? 'desktop' : 'mobile' })));
@@ -71,7 +73,6 @@ export class TrafficRecordsCard {
             goalIds: this.goalIds(),
             funnelIds: this.funnelIds(),
             enabled: this.enabled(),
-            refreshKey: this.refreshKey(),
             shareToken: this.shareToken()
         })
     );
@@ -95,18 +96,27 @@ export class TrafficRecordsCard {
     constructor() {
         effect(() => {
             const scope = this.requestScope();
+            const refreshKey = this.refreshKey();
             if (!this.enabled()) {
                 untracked(() => this.hitService.reset());
                 this.lastLoadedScope = scope;
                 return;
             }
-            if (!this.lastTableEvent || scope === this.lastLoadedScope) return;
-            untracked(() => this.reloadFromFirstPage());
+            if (!this.lastTableEvent) return;
+            if (scope !== this.lastLoadedScope) {
+                untracked(() => this.loadHits({ ...this.lastTableEvent, first: 0 }));
+            } else if (refreshKey !== this.lastRefreshKey) {
+                this.lastRefreshKey = refreshKey;
+                untracked(() => this.hitService.refresh());
+            }
         });
     }
 
     protected loadHits(event: TableLazyLoadEvent) {
         this.lastTableEvent = { ...event };
+        this.first.set(event.first ?? 0);
+        this.lastLoadedScope = this.requestScope();
+        this.lastRefreshKey = this.refreshKey();
         this.searchQuery.set(typeof event.globalFilter === 'string' ? event.globalFilter.trim() : '');
         const sort = event.multiSortMeta?.[0] ?? { field: event.sortField as string, order: event.sortOrder };
         const siteId = this.siteId();
@@ -119,7 +129,6 @@ export class TrafficRecordsCard {
 
         const rows = event.rows || 10;
         const first = event.first || 0;
-        this.lastLoadedScope = this.requestScope();
         this.hitService.loadHits(siteId, from, to, first / rows + 1, rows, sort.field, sort.order === 1 ? 'asc' : 'desc', this.searchQuery(), this.filters(), this.goalIds(), this.funnelIds(), this.shareToken());
     }
 
@@ -160,11 +169,6 @@ export class TrafficRecordsCard {
 
     protected referrerDomain(referrer: string | null | undefined): string | null {
         return this.normalizeUrl(referrer)?.hostname ?? null;
-    }
-
-    private reloadFromFirstPage() {
-        if (!this.lastTableEvent) return;
-        this.loadHits({ ...this.lastTableEvent, first: 0 });
     }
 
     private normalizeUrl(raw: string | null | undefined): URL | null {

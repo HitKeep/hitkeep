@@ -139,6 +139,7 @@ export class Dashboard {
     protected emptyTeamName = computed(() => this.teamService.activeTeam()?.name ?? null);
     protected activeFilters = signal<MetricFilter[]>([]);
     protected trafficRefreshKey = signal(0);
+    private readonly realtimeRefreshKey = signal(0);
     protected trafficDateRange = computed(() => this.getCurrentDateRange());
     protected trafficGoalIds = computed(() => {
         const subject = this.requestedConversion();
@@ -623,6 +624,14 @@ export class Dashboard {
             }
         });
 
+        this.refreshWhenIdle(
+            () => this.statsQuery.isLoading() || this.statsQuery.isBackgroundRefreshing(),
+            () => this.loadStatsForCurrentRange('background')
+        );
+        this.refreshWhenIdle(
+            () => this.aiActivityQuery.isFetching(),
+            () => this.loadAIActivityForCurrentRange('background')
+        );
         this.realtimeRefresh.registerUntilDestroyed(this.destroyRef, {
             siteId: () => this.siteService.activeSite()?.id ?? null,
             kinds: REALTIME_ALL_ANALYTICS_KINDS,
@@ -713,13 +722,18 @@ export class Dashboard {
         }
     }
 
-    private refreshStatsOnly(mode: StatsQueryMode = 'blocking') {
-        this.loadStatsForCurrentRange(mode);
-        this.loadAIActivityForCurrentRange(mode);
+    private refreshWhenIdle(pending: () => boolean, refresh: () => void) {
+        let lastRefresh = 0;
+        effect(() => {
+            const key = this.realtimeRefreshKey();
+            if (key === lastRefresh || pending()) return;
+            lastRefresh = key;
+            untracked(refresh);
+        });
     }
 
     private refreshRealtimeData() {
-        this.refreshStatsOnly('background');
+        this.realtimeRefreshKey.update((key) => key + 1);
         this.trafficRefreshKey.update((key) => key + 1);
         if (this.onboarding.onboarding() === null || this.showOnboarding()) {
             this.refreshOnboarding();

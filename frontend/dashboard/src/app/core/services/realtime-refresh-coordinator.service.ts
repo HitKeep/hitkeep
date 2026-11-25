@@ -94,7 +94,8 @@ export class RealtimeRefreshCoordinator {
     }
 
     private scheduleRefresh(registration: RealtimeRegistration): void {
-        this.clearRegistrationTimer(registration);
+        // Coalesce from the first event so a busy site never needs a quiet period to refresh.
+        if (registration.timer !== null) return;
         registration.timer = setTimeout(() => {
             registration.timer = null;
             if (registration.enabled() && this.isDocumentVisible()) {

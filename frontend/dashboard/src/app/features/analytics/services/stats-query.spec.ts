@@ -1,4 +1,5 @@
 import { Injector } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
@@ -119,6 +120,44 @@ describe('StatsQuery', () => {
         responses[1].next(emptySiteStats());
         expect(query.currentRange()).toEqual({ from: changed.from, to: changed.to });
         expect(query.comparisonRange()).toBeNull();
+    });
+
+    it('clears the previous cohort before fetching filtered page statistics', () => {
+        const { query, responses } = createQuery();
+        load(query, request);
+        responses[0].next(emptySiteStats({ top_pages: [{ name: '/all-traffic', value: 3 }] }));
+        responses[0].complete();
+
+        load(query, { ...request, filters: [{ type: 'country', value: 'DE' }], goalIds: ['goal'] });
+        expect(query.stats()).toBeNull();
+        expect(query.isLoading()).toBe(true);
+    });
+
+    it('clears the displayed rows when switching between tagged and all traffic on the same site', () => {
+        const { query, responses, fetchStats } = createQuery();
+        for (const view of ['utm', undefined, 'utm'] as const) {
+            load(query, { ...request, view });
+            expect(fetchStats).toHaveBeenLastCalledWith(request.siteId, request.from, request.to, [], [], [], view);
+            expect(query.stats()).toBeNull();
+            const current = responses.at(-1)!;
+            current.next(emptySiteStats({ total_pageviews: view === 'utm' ? 2 : 10 }));
+            current.complete();
+        }
+    });
+
+    it.each([401, 403, 'session ended'])('clears visible page statistics when a refresh loses access (%s)', (status) => {
+        const { query, responses } = createQuery();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        load(query, request);
+        responses[0].next(emptySiteStats({ top_pages: [{ name: '/private', value: 3 }] }));
+        responses[0].complete();
+
+        load(query, { ...request, mode: 'background' });
+        if (typeof status === 'number') responses[1].error(new HttpErrorResponse({ status }));
+        else responses[1].complete();
+        expect(query.stats()).toBeNull();
+        expect(query.currentRange()).toBeNull();
+        expect(query.isBackgroundRefreshing()).toBe(false);
     });
 
     it('keeps loading flags aligned when the refresh mode changes mid-flight', () => {
