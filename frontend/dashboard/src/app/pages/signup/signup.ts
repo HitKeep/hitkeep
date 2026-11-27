@@ -75,15 +75,18 @@ export class Signup {
     protected readonly verificationResendFeedbackSeverity = signal<'success' | 'error'>('success');
     protected readonly selectedPlan = signal<CloudPlanCode>('free');
     protected readonly selectedBilling = signal<BillingInterval>('monthly');
+    private readonly activeLanguage = injectActiveLang();
+    private readonly signupLang = computed(() => (this.route.snapshot.data['signupLanguage'] ? this.activeLanguage() : null));
     protected readonly loginQueryParams = computed(() => {
         const intent = { plan: this.selectedPlan(), billing: this.selectedBilling() };
+        const lang = this.signupLang();
         return {
             ...cloudPurchaseQuery(intent),
+            ...(lang ? { lang } : {}),
             ...(this.isOAuthSignup ? { oauth: '1' } : {}),
             returnUrl: this.nativeReturn ?? (intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent))
         };
     });
-    private readonly activeLanguage = injectActiveLang();
     protected readonly currentYear = new Date().getFullYear();
     protected readonly jurisdictionOptions: Jurisdiction[] = ['EU', 'US'];
     protected readonly jurisdictionFieldsetDesignTokens = AUTH_FIELDSET_DESIGN_TOKENS;
@@ -289,6 +292,8 @@ export class Signup {
             billing: this.selectedBilling(),
             region: this.currentJurisdiction()
         });
+        const lang = this.signupLang();
+        if (lang) query.set('lang', lang);
         if (this.isOAuthSignup) query.set('oauth', '1');
         if (this.nativeReturn) query.set('native', new URLSearchParams(this.nativeReturn.split('?')[1]).get('request')!);
         this.auth
@@ -315,6 +320,8 @@ export class Signup {
         const url = new URL('/signup', Signup.REGION_BASE_URLS[jurisdiction]);
 
         this.appendPreservedQueryParams(url);
+        const lang = this.signupLang();
+        if (lang) url.searchParams.set('lang', lang);
         const email = this.signupForm.email().value().trim().toLowerCase();
         const teamName = this.signupForm.teamName().value().trim();
         if (email !== '') {

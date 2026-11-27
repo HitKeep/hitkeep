@@ -22,6 +22,7 @@ import { AuthDivider } from '@core/components/auth-divider/auth-divider';
 import { Brand } from '@components/brand/brand';
 import { AuthMethodOption, AuthMethods } from '@core/components/auth-methods/auth-methods';
 import { CloudStatus } from '@models/analytics.types';
+import { signupLanguage } from '@pages/signup/signup-language';
 import { AuthService, LoginResponse, PasskeyLoginFinishRequest, PasskeyLoginStartResponse, SocialProvider, SocialProviderID } from '@services/auth.service';
 import { AnalyticsService } from '@services/analytics.service';
 import { OAuthService } from '@services/oauth.service';
@@ -95,7 +96,7 @@ export class Login {
     protected readonly mfaHasFallback = computed(() => this.mfaHasRecoveryCode() || this.mfaHasActionFallback());
     protected readonly mfaShowsFallbackDivider = computed(() => this.mfaHasFallback() && (this.mfaHasTotp() || (this.mfaHasRecoveryCode() && this.mfaHasActionFallback())));
     protected readonly showSignupLink = computed(() => Boolean(this.cloudStatus()?.hosted && this.cloudStatus()?.signup_enabled));
-    protected readonly signupQueryParams = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'))
+    private readonly purchaseQueryParams = nativeAuthReturnPath(this.route.snapshot.queryParamMap.get('returnUrl'))
         ? { returnUrl: this.route.snapshot.queryParamMap.get('returnUrl')! }
         : this.route.snapshot.queryParamMap.has('plan') || this.route.snapshot.queryParamMap.has('billing') || this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent'
           ? {
@@ -103,10 +104,12 @@ export class Login {
                 ...(this.route.snapshot.queryParamMap.get('oauth') === '1' || this.route.snapshot.queryParamMap.get('returnUrl') === '/oauth/consent' ? { oauth: '1' } : {})
             }
           : null;
+    private readonly signupLang = signupLanguage(this.route.snapshot.queryParamMap.get('lang'));
+    protected readonly signupQueryParams = this.signupLang ? { ...this.purchaseQueryParams, lang: this.signupLang } : this.purchaseQueryParams;
     protected readonly recoveryQueryParams = (() => {
-        if (!this.signupQueryParams || !('plan' in this.signupQueryParams) || this.signupQueryParams.plan === 'free') return this.signupQueryParams;
-        const reviewUrl = cloudBillingReviewUrl(this.signupQueryParams);
-        return this.route.snapshot.queryParamMap.get('returnUrl') === reviewUrl ? { ...this.signupQueryParams, returnUrl: reviewUrl } : this.signupQueryParams;
+        if (!this.purchaseQueryParams || !('plan' in this.purchaseQueryParams) || this.purchaseQueryParams.plan === 'free') return this.purchaseQueryParams;
+        const reviewUrl = cloudBillingReviewUrl(this.purchaseQueryParams);
+        return this.route.snapshot.queryParamMap.get('returnUrl') === reviewUrl ? { ...this.purchaseQueryParams, returnUrl: reviewUrl } : this.purchaseQueryParams;
     })();
     protected readonly authMethods = computed<readonly AuthMethodOption[]>(() => {
         const disabled = this.oauth.resuming() || this.isLoading() || this.isPasskeyLoading() || this.isSSOLoading() || this.socialLoading() !== null;
