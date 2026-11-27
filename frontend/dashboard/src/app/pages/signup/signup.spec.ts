@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { Router } from '@angular/router';
-import { TranslocoTestingModule } from '@jsverse/transloco';
+import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { provideTranslocoLocale } from '@jsverse/transloco-locale';
 import { NEVER, of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -18,6 +18,7 @@ describe('Signup', () => {
     let component: Signup;
     let fixture: ComponentFixture<Signup>;
     let queryParams: Record<string, string>;
+    let resolvedLang: string | null;
     let locationAssignMock: ReturnType<typeof vi.fn>;
     let documentMock: Document;
 
@@ -93,14 +94,15 @@ describe('Signup', () => {
             }
         }) as Document;
         queryParams = {};
+        resolvedLang = null;
 
         await TestBed.configureTestingModule({
             imports: [
                 Signup,
                 TranslocoTestingModule.forRoot({
-                    langs: { en: {} },
+                    langs: { en: {}, fr: {} },
                     translocoConfig: {
-                        availableLangs: ['en'],
+                        availableLangs: ['en', 'fr'],
                         defaultLang: 'en'
                     },
                     preloadLangs: true
@@ -119,6 +121,9 @@ describe('Signup', () => {
                     provide: ActivatedRoute,
                     useValue: {
                         snapshot: {
+                            get data() {
+                                return { signupLanguage: resolvedLang };
+                            },
                             get queryParamMap() {
                                 return convertToParamMap(queryParams);
                             }
@@ -384,6 +389,23 @@ describe('Signup', () => {
         expect(locationAssignMock).toHaveBeenCalledWith('https://accounts.example.com/authorize');
     });
 
+    it('carries the current language through region, sign-in and social signup links after a marketing selection', () => {
+        resolvedLang = 'en';
+        queryParams = { lang: 'en', region: 'US', plan: 'pro', billing: 'annual' };
+        TestBed.inject(TranslocoService).setActiveLang('fr');
+        fixture = TestBed.createComponent(Signup);
+        component = fixture.componentInstance;
+
+        const target = new URL(locationAssignMock.mock.calls[0][0]);
+        expect(target.origin).toBe('https://cloud.hitkeep.com');
+        expect(target.searchParams.get('lang')).toBe('fr');
+        expect(new URL(component['signupUrlForJurisdiction']('EU')).searchParams.get('lang')).toBe('fr');
+        expect(component['loginQueryParams']()).toMatchObject({ lang: 'fr', plan: 'pro', billing: 'annual' });
+        component['socialProviders'].set([{ id: 'github', display_name: 'GitHub' }]);
+        component['selectSocialMethod']('github');
+        expect(authServiceMock.startSocial).toHaveBeenCalledWith('github', { flow: 'signup', return_url: '/signup/social/complete?plan=pro&billing=annual&region=EU&lang=fr' });
+    });
+
     it('maps configured social signup providers to branded marks', () => {
         component['socialProviders'].set([
             { id: 'google', display_name: 'Google' },
@@ -454,6 +476,7 @@ describe('Signup', () => {
         expect(href).toContain('plan=business');
         expect(href).toContain('billing=annual');
         expect(href).not.toContain('region=');
+        expect(href).not.toContain('lang=');
         expect(href).not.toContain('error=');
         expect(href).not.toContain('password123');
     });

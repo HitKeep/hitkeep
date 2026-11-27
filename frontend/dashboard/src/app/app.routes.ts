@@ -4,6 +4,7 @@ import { authGuard } from '@guards/auth-guard';
 import { privateFrameGuard } from '@guards/private-frame-guard';
 import { capabilityGuard } from '@guards/capability-guard';
 import { cloudSignupGuard } from '@guards/cloud-signup-guard';
+import { resolveSignupLanguage } from '@pages/signup/signup-language';
 import { importExportDefaultGuard } from '@pages/import-export/import-export-default.guard';
 import { overviewDefaultGuard } from '@pages/overview/overview-default.guard';
 import { siteSettingsSectionGuard, siteSettingsSiteGuard } from '@pages/site-settings/site-settings.guard';
@@ -63,6 +64,7 @@ export const routes: Routes = [
         path: 'signup',
         loadComponent: () => import('@pages/signup/signup').then((m) => m.Signup),
         canActivate: [cloudSignupGuard],
+        resolve: { signupLanguage: resolveSignupLanguage },
         data: titleData('signup.pageTitle')
     },
     {
@@ -75,6 +77,7 @@ export const routes: Routes = [
         path: 'signup/social/complete',
         loadComponent: () => import('@pages/signup/social-signup').then((m) => m.SocialSignup),
         canActivate: [cloudSignupGuard],
+        resolve: { signupLanguage: resolveSignupLanguage },
         data: titleData('social.completeSignupTitle')
     },
     {
