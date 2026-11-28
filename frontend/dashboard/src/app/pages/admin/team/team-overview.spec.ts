@@ -167,7 +167,10 @@ describe('TeamOverviewPage', () => {
                                     ariaLabel: 'Copy to clipboard'
                                 }
                             },
-                            cloud: { promotion: { saving: '{{percent}} off one invoice', withCode: 'with {{code}}', annualRenewal: 'Renews at {{price}} per year.', deadline: 'Start checkout before {{date}}.' } },
+                            cloud: {
+                                billing: { annualTotal: 'Billed {{price}} per year', activated: 'Your {{plan}} plan is active!', processing: 'Payment processing' },
+                                promotion: { saving: '{{percent}} off one invoice', withCode: 'with {{code}}', annualRenewal: 'Renews at {{price}} per year.', deadline: 'Start checkout before {{date}}.' }
+                            },
                             teams: { roles: { owner: 'Owner' } },
                             signup: {
                                 plans: {
@@ -211,6 +214,7 @@ describe('TeamOverviewPage', () => {
                     provide: TeamService,
                     useValue: {
                         activeTeam,
+                        loadTeams: vi.fn(() => of(undefined)),
                         activeTeamId: () => activeTeam()?.id ?? '',
                         hasMultipleTeams: () => multipleTeams
                     }
@@ -291,6 +295,19 @@ describe('TeamOverviewPage', () => {
         expect(text).toContain('2 pending invites');
     });
 
+    it.each([
+        [7999, 'healthy'],
+        [8000, 'warning'],
+        [9499, 'warning'],
+        [9500, 'critical']
+    ])('marks monthly usage at %i hits as %s', (hits, severity) => {
+        const team = createActiveTeam();
+        activeTeam.set({ ...team, entitlements: { ...team.entitlements!, max_monthly_hits: 10000 }, usage: { ...team.usage!, current_monthly_hits: Number(hits) } });
+        const card = fixture.componentInstance['usageCards']().find((card) => card.key === 'monthlyHits');
+        expect(card?.className).toContain('--' + severity);
+        expect(card?.limitLabel).toContain('10,000');
+    });
+
     it('renders a singular pending invite label', () => {
         activeTeam.set({
             ...createActiveTeam(),
@@ -326,7 +343,8 @@ describe('TeamOverviewPage', () => {
         expect(text).toContain('Upgrade to Business');
         expect(text).toContain('Single sign-on (SSO)');
         expect(text).toContain('External scheduled-report recipients');
-        expect(text).toContain('€150');
+        expect(text).toContain('€12.50');
+        expect(text).toContain('Billed €150');
         expect(text).toContain('€390');
     });
 
@@ -497,9 +515,20 @@ describe('TeamOverviewPage', () => {
         expect(oauth.continueAfterAuthentication).toHaveBeenCalledWith('/admin/team/overview');
     });
 
+    it('confirms a delayed payment from synced Stripe state without OAuth messaging', async () => {
+        await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'free' });
+        expect(fixture.nativeElement.textContent).toContain('cloud.billing.confirming');
+        billingState = { ...billingState, plan_code: 'pro', subscription_status: 'active' };
+        await vi.waitFor(() => expect(fixture.nativeElement.textContent).toContain('Your Pro plan is active!'), { timeout: 7000 });
+        expect(fixture.nativeElement.textContent).not.toContain('oauth.');
+        expect(TestBed.inject(TeamService).loadTeams).toHaveBeenCalledTimes(1);
+    });
+
     it('does not treat a forged checkout success marker as payment or authorization', async () => {
         oauth.continuation.mockReturnValue(of({ pending: true }));
         await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'free', subscription_status: 'pending_checkout' });
+        expect(TestBed.inject(CloudService).getBillingState).toHaveBeenCalledWith({ sync: true });
+        expect(fixture.nativeElement.textContent).toContain('Payment processing');
         expect(oauth.continuation).not.toHaveBeenCalled();
         expect(oauth.continueAfterAuthentication).not.toHaveBeenCalled();
         expect(fixture.nativeElement.querySelector('[data-testid="oauth-checkout-continue"]')).toBeNull();
@@ -508,7 +537,8 @@ describe('TeamOverviewPage', () => {
     it('keeps native billing visible when pending-authorization lookup fails', async () => {
         oauth.continuation.mockReturnValue(throwError(() => ({ status: 503, error: 'private details' })));
         await showRecovery({ checkout: 'success' }, { ...billingState, plan_code: 'pro', subscription_status: 'active' });
-        expect(fixture.nativeElement.textContent).toContain('oauth.resumeFailed');
+        expect(fixture.nativeElement.textContent).toContain('Your Pro plan is active!');
+        expect(fixture.nativeElement.textContent).not.toContain('oauth.resumeFailed');
         expect(fixture.nativeElement.textContent).toContain('Acme Analytics');
         expect(fixture.nativeElement.textContent).not.toContain('private details');
         expect(oauth.continueAfterAuthentication).not.toHaveBeenCalled();

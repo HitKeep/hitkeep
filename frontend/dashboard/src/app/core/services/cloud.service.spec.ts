@@ -22,6 +22,13 @@ describe('CloudService', () => {
         httpMock.verify();
     });
 
+    it('requests a Stripe sync only when confirming a return', () => {
+        service.getBillingState({ sync: true }).subscribe();
+        httpMock.expectOne('/api/cloud/billing/state?sync=1').flush({});
+        service.getBillingState().subscribe();
+        httpMock.expectOne('/api/cloud/billing/state').flush({});
+    });
+
     it('removes the annual offer at the exclusive cutoff while review remains open', () => {
         vi.useFakeTimers();
         try {

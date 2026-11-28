@@ -401,15 +401,15 @@ func TestWriteCreateSiteErrorMapsStableErrors(t *testing.T) {
 		status int
 		body   string
 	}{
-		{database.ErrSiteLimitReached, http.StatusForbidden, "Site limit reached\n"},
+		{database.ErrSiteLimitReached, http.StatusForbidden, `{"code":"site_limit_reached","error":"Site limit reached","limit":3}`},
 		{database.ErrActiveTenantChanged, http.StatusConflict, "Active team changed; retry\n"},
 	}
 	for _, tc := range tests {
 		w := httptest.NewRecorder()
-		if !writeCreateSiteError(w, tc.err) {
+		if !writeCreateSiteError(t.Context(), w, tc.err, 3) {
 			t.Fatalf("expected handled error %v", tc.err)
 		}
-		if w.Code != tc.status || w.Body.String() != tc.body {
+		if w.Code != tc.status || strings.TrimSpace(w.Body.String()) != strings.TrimSpace(tc.body) {
 			t.Fatalf("expected %d %q, got %d %q", tc.status, tc.body, w.Code, w.Body.String())
 		}
 	}
@@ -591,7 +591,7 @@ func TestHandleCreateSiteReturnsForbiddenAtLimit(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), shared.UserIDKey, userID))
 	w := httptest.NewRecorder()
 	h.handleCreateSite(uuid.Nil).ServeHTTP(w, req)
-	if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Site limit reached" {
+	if w.Code != http.StatusForbidden || w.Body.String() != `{"code":"site_limit_reached","error":"Site limit reached","limit":1}` {
 		t.Fatalf("expected site limit 403, got %d: %s", w.Code, w.Body.String())
 	}
 }
@@ -659,7 +659,7 @@ func TestHandleTransferSiteTeamReturnsForbiddenAtLimit(t *testing.T) {
 	req.SetPathValue("id", site.ID.String())
 	w := httptest.NewRecorder()
 	h.handleTransferSiteTeam().ServeHTTP(w, req)
-	if w.Code != http.StatusForbidden || strings.TrimSpace(w.Body.String()) != "Site limit reached" {
+	if w.Code != http.StatusForbidden || w.Body.String() != `{"code":"site_limit_reached","error":"Site limit reached","limit":1}` {
 		t.Fatalf("expected site limit 403, got %d: %s", w.Code, w.Body.String())
 	}
 	teamID, err := store.GetSiteTenantID(context.Background(), site.ID)

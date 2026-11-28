@@ -1,0 +1,23 @@
+Subject: Dein Workspace hat 80 % des monatlichen Kontingents erreicht
+
+Dein Workspace hat 80 % des monatlichen Kontingents erreicht
+
+Dein Free-Tarif umfasst 10.000 Hits pro Kalendermonat. Im Dashboard siehst du deinen Verbrauch und die verfügbaren Tarife.
+
+Dashboard öffnen: https://app.hitkeep.example/dashboard
+
+Dokumentation lesen: https://hitkeep.com/docs/
+
+-- 
+Bereitgestellt von HitKeep
+Die datenschutzfreundliche Analytics-Plattform als Single Binary.
+https://hitkeep.com
+
+Impressum: https://hitkeep.com/legal/imprint/
+Datenschutzerklärung: https://hitkeep.com/legal/privacy-policy/
+
+HitKeep auf Social Media:
+GitHub: https://github.com/HitKeep/hitkeep
+LinkedIn: https://www.linkedin.com/company/hitkeep
+X: https://x.com/gethitkeep
+Bluesky: https://bsky.app/profile/hitkeep.com

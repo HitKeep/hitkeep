@@ -54,8 +54,8 @@ func TestReuseCheckoutChecksAllCustomerSessions(t *testing.T) {
 		t.Fatalf("pending session hid active subscription: %v", err)
 	}
 	f.sessions[1] = &checkoutSessionOutput{ID: "cs_competing", TenantID: teamID.String(), Status: "open", PlanCode: "business", BillingInterval: "monthly", PriceID: "business_month"}
-	if _, err := h.reuseOrCreateCheckout(t.Context(), input); !errors.Is(err, errCheckoutConflict) {
-		t.Fatalf("pending session hid competing checkout: %v", err)
+	if got, err := h.reuseOrCreateCheckout(t.Context(), input); err != nil || got.ID != "cs_pending" || f.sessions[1].Status != "expired" {
+		t.Fatalf("competing checkout was not replaced: %v", err)
 	}
 }
 
@@ -74,6 +74,9 @@ func TestStripeCheckoutSessionWireContract(t *testing.T) {
 		case "POST /v1/checkout/sessions":
 			if err := r.ParseForm(); err != nil {
 				t.Error(err)
+			}
+			if r.Form.Get("payment_method_configuration") != "pmc_example" || r.Form.Has("payment_method_types[0]") || r.Form.Get("billing_address_collection") != "required" || r.Form.Get("name_collection[business][optional]") != "true" || r.Form.Has("automatic_tax[enabled]") || r.Form.Has("tax_id_collection[enabled]") || r.Form.Get("consent_collection[terms_of_service]") != "required" || !strings.HasPrefix(r.Form.Get("custom_text[submit][message]"), "Endpreis") {
+				t.Errorf("unexpected checkout fields: %v", r.Form)
 			}
 			if r.Form.Has("discounts[0][coupon]") || r.Form.Has("discounts[0][promotion_code]") || r.Form.Get("adaptive_pricing[enabled]") != "false" || r.Form.Get("allow_promotion_codes") != "true" {
 				t.Error("native promotion entry must not preselect a discount")
@@ -108,7 +111,7 @@ func TestStripeCheckoutSessionWireContract(t *testing.T) {
 	defer server.Close()
 	backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{URL: new(server.URL), HTTPClient: server.Client(), MaxNetworkRetries: new(int64(0))})
 	client := &stripeSDKClient{client: stripe.NewClient("sk_fixture", stripe.WithBackends(&stripe.Backends{API: backend}))}
-	session, err := client.CreateCheckoutSession(t.Context(), createCheckoutSessionInput{AllowPromotionCodes: true, IdempotencyKey: "wire-key", CustomerID: "cus_wire", PriceID: "price_wire", TenantID: teamID, PlanCode: "pro", BillingInterval: "annual"})
+	session, err := client.CreateCheckoutSession(t.Context(), createCheckoutSessionInput{PaymentMethodConfigurationID: "pmc_example", Locale: "de", AllowPromotionCodes: true, IdempotencyKey: "wire-key", CustomerID: "cus_wire", PriceID: "price_wire", TenantID: teamID, PlanCode: "pro", BillingInterval: "annual"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,5 +138,43 @@ func TestStripeCheckoutSessionWireContract(t *testing.T) {
 	}
 	if calls != 4 {
 		t.Fatalf("Stripe requests=%d", calls)
+	}
+}
+
+func TestReplaceOpenCheckout(t *testing.T) {
+	for _, change := range []string{"plan", "interval", "price", "locale", "promo-enabled", "promo-disabled"} {
+		t.Run(change, func(t *testing.T) {
+			h, f := planCatalogTestHandler()
+			team := uuid.New()
+			input := createCheckoutSessionInput{TenantID: team, PriceID: "price", PlanCode: "pro", BillingInterval: "annual", Locale: "en", AllowPromotionCodes: change == "promo-disabled"}
+			first, err := h.reuseOrCreateCheckout(t.Context(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			firstKey := f.lastCheckoutInput.IdempotencyKey
+			switch change {
+			case "plan":
+				input.PlanCode = "business"
+			case "interval":
+				input.BillingInterval = "monthly"
+			case "price":
+				input.PriceID = "price_new"
+			case "locale":
+				input.Locale = "de"
+			default:
+				input.AllowPromotionCodes = !input.AllowPromotionCodes
+			}
+			second, err := h.reuseOrCreateCheckout(t.Context(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first.Status != "expired" || first.ID == second.ID || firstKey == f.lastCheckoutInput.IdempotencyKey {
+				t.Fatalf("replacement: %v -> %v", first, second)
+			}
+			again, err := h.reuseOrCreateCheckout(t.Context(), input)
+			if err != nil || again.ID != second.ID || f.checkoutCalls != 2 {
+				t.Fatalf("retry %v %v", again, err)
+			}
+		})
 	}
 }

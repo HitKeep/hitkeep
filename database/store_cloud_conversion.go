@@ -105,6 +105,9 @@ func (s *Store) RecordCloudConversionEvent(ctx context.Context, event CloudConve
 	if s.runtime != nil && s.runtime.cloudConversionMilestones != nil {
 		s.runtime.cloudConversionMilestones.Add(event.DedupeKey, true)
 	}
+	if rows > 0 && event.EventName == CloudConversionSignupVerified {
+		s.notifyCloudSignupVerified()
+	}
 	return rows > 0, nil
 }
 

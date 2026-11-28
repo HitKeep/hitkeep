@@ -1,0 +1,9 @@
+{{ define "content" -}}
+{{ .Subject }}
+
+{{ .Body }}
+
+{{ t "cloud.welcome.dashboard_button" }}: {{ .Links.DashboardURL }}
+
+{{ t "cloud.welcome.docs_button" }}: {{ .Links.DocsURL }}
+{{- end }}

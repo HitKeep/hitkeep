@@ -39,6 +39,7 @@ const (
 )
 
 type stripeClient interface {
+	UpdateCustomerDefaults(context.Context, string, string) error
 	CreateCustomer(context.Context, createCustomerInput) (string, error)
 	CreateCheckoutSession(context.Context, createCheckoutSessionInput) (*checkoutSessionOutput, error)
 	GetCheckoutSession(context.Context, string) (*checkoutSessionOutput, error)
@@ -64,12 +65,14 @@ type handler struct {
 	stripe       stripeClient
 	webhooks     stripeWebhookVerifier
 	clock        func() time.Time
+	eventMu      sync.Mutex
 	checkoutMu   sync.Mutex
 	commerceMu   sync.Mutex
 	profileCheck func(context.Context, string) (int, error)
 }
 
 type createCustomerInput struct {
+	Locale          string
 	Email           string
 	Name            string
 	UserID          uuid.UUID
@@ -81,22 +84,25 @@ type createCustomerInput struct {
 }
 
 type createCheckoutSessionInput struct {
-	AllowPromotionCodes bool
-	IdempotencyKey      string
-	CustomerID          string
-	PriceID             string
-	SuccessURL          string
-	CancelURL           string
-	Locale              string
-	UserID              uuid.UUID
-	TenantID            uuid.UUID
-	PlanCode            string
-	PlanName            string
-	BillingInterval     string
-	Jurisdiction        string
+	PaymentMethodConfigurationID string
+	AllowPromotionCodes          bool
+	IdempotencyKey               string
+	CustomerID                   string
+	PriceID                      string
+	SuccessURL                   string
+	CancelURL                    string
+	Locale                       string
+	UserID                       uuid.UUID
+	TenantID                     uuid.UUID
+	PlanCode                     string
+	PlanName                     string
+	BillingInterval              string
+	Jurisdiction                 string
 }
 
 type checkoutSessionOutput struct {
+	Locale              string
+	Jurisdiction        string
 	AllowPromotionCodes bool
 	PriceID             string
 	ID                  string
@@ -516,6 +522,8 @@ func (h *handler) handleListCloudPlans() http.HandlerFunc {
 			Code: code,
 			Name: entitlements.CloudPlanName(code),
 			Entitlements: api.TeamEntitlements{
+				MaxMonthlyHits:                ent.MaxMonthlyHits,
+				MaxAskAIAnswersPerDay:         ent.MaxAskAIAnswersPerDay,
 				MaxSitesPerTeam:               ent.MaxSitesPerTeam,
 				MaxTeamMembers:                ent.MaxTeamMembers,
 				MaxRetentionDays:              ent.MaxRetentionDays,

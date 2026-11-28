@@ -378,17 +378,17 @@ func TestCommerceUnavailableRailsNeverIssuePaymentProof(t *testing.T) {
 	}
 }
 
-func TestReuseCheckoutRejectsCompetingTermsAndPendingPayment(t *testing.T) {
+func TestReuseCheckoutReplacesCompetingTermsAndRejectsPendingPayment(t *testing.T) {
 	h, f := planCatalogTestHandler()
 	teamID := uuid.New()
 	f.sessions = []*checkoutSessionOutput{{ID: "cs_pending", TenantID: teamID.String(), Status: "open", PlanCode: "pro", BillingInterval: "monthly", PriceID: "pro_month"}}
 	input := createCheckoutSessionInput{CustomerID: "cus_test", TenantID: teamID, PlanCode: "business", BillingInterval: "monthly", PriceID: "business_month"}
-	if _, err := h.reuseOrCreateCheckout(t.Context(), input); !errors.Is(err, errCheckoutConflict) {
+	if _, err := h.reuseOrCreateCheckout(t.Context(), input); err != nil {
 		t.Fatalf("competing plan=%v", err)
 	}
 	input.PlanCode = "pro"
 	input.PriceID = "changed_price"
-	if _, err := h.reuseOrCreateCheckout(t.Context(), input); !errors.Is(err, errCheckoutConflict) {
+	if _, err := h.reuseOrCreateCheckout(t.Context(), input); err != nil {
 		t.Fatalf("changed price=%v", err)
 	}
 	f.sessions[0].Status = "complete"
@@ -397,7 +397,7 @@ func TestReuseCheckoutRejectsCompetingTermsAndPendingPayment(t *testing.T) {
 	if _, err := h.reuseOrCreateCheckout(t.Context(), input); !errors.Is(err, errCheckoutConflict) {
 		t.Fatalf("pending completion=%v", err)
 	}
-	if f.checkoutCalls != 0 {
+	if f.checkoutCalls != 2 {
 		t.Fatal("created competing subscription checkout")
 	}
 }

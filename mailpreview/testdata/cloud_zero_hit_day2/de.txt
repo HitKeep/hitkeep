@@ -1,0 +1,23 @@
+Subject: Verbinde deine Website mit HitKeep
+
+Verbinde deine Website mit HitKeep
+
+Füge deine Website im Dashboard hinzu, kopiere das Tracking-Skript in deine Seite und öffne sie im Browser. Dein erster Seitenaufruf erscheint im Dashboard.
+
+Dashboard öffnen: https://app.hitkeep.example/dashboard
+
+Dokumentation lesen: https://hitkeep.com/docs/
+
+-- 
+Bereitgestellt von HitKeep
+Die datenschutzfreundliche Analytics-Plattform als Single Binary.
+https://hitkeep.com
+
+Impressum: https://hitkeep.com/legal/imprint/
+Datenschutzerklärung: https://hitkeep.com/legal/privacy-policy/
+
+HitKeep auf Social Media:
+GitHub: https://github.com/HitKeep/hitkeep
+LinkedIn: https://www.linkedin.com/company/hitkeep
+X: https://x.com/gethitkeep
+Bluesky: https://bsky.app/profile/hitkeep.com

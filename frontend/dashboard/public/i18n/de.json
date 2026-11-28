@@ -1763,7 +1763,8 @@
         "domainInvalid": "Ungültiges Domain-Format.",
         "removeProtocol": "Bitte entferne http:// oder https://",
         "removeWww": "Bitte entferne 'www.'. Gib die Domain ohne das 'www.'-Präfix ein.",
-        "createFailed": "Seite konnte nicht erstellt werden. Die Domain existiert möglicherweise bereits."
+        "createFailed": "Seite konnte nicht erstellt werden. Die Domain existiert möglicherweise bereits.",
+        "quota": "Dein Team hat das Website-Limit erreicht. Mit einem Upgrade kannst du eine weitere Website hinzufügen."
       }
     },
     "danger": {
@@ -2198,7 +2199,8 @@
           "pendingInviteMany": "{{count}} ausstehende Einladungen",
           "metrics": {
             "sites": "Websites",
-            "members": "Mitglieder"
+            "members": "Mitglieder",
+            "monthlyHits": "Monatliche Hits"
           }
         },
         "cloud": {
@@ -2241,7 +2243,10 @@
             "retentionDays": "{{count}} Tage Datenaufbewahrung",
             "externalReportRecipients": "Externe Empfänger für geplante Berichte",
             "customDomains": "Eigene Tracking-Domains",
-            "sso": "Single Sign-on (SSO)"
+            "sso": "Single Sign-on (SSO)",
+            "monthlyHits": "Bis zu {{count}} Hits pro Monat",
+            "askAi": "Ask AI-Antworten pro Tag: {{count}}",
+            "branding": "Eigenes Branding"
           }
         }
       },
@@ -3148,7 +3153,10 @@
       "planUnavailable": "Diese Registrierungsoption ist derzeit nicht verfügbar.",
       "unexpected": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es erneut.",
       "verificationExpired": "Dieser Bestätigungslink ist abgelaufen. Bitte registriere dich erneut."
-    }
+    },
+    "workspaceOptional": "Name des Arbeitsbereichs (optional)",
+    "workspacePlaceholder": "Für einen automatisch vergebenen Namen leer lassen",
+    "workspaceTooLong": "Verwende höchstens 120 Zeichen."
   },
   "preferences": {
     "subtitle": "Verwalte deine Anwendungseinstellungen.",
@@ -4134,7 +4142,9 @@
       "usageMessageSites": "Dein Team nutzt {{current}} von {{limit}} Websites im kostenlosen Tarif.",
       "usageMessageMembers": "Dein Team nutzt {{current}} von {{limit}} Team-Plätzen im kostenlosen Tarif.",
       "upgradeAction": "Auf Pro upgraden",
-      "dismissAction": "Hinweis ausblenden"
+      "dismissAction": "Hinweis ausblenden",
+      "hitsNear": "Du hast diesen Monat {{current}} von {{limit}} Hits genutzt.",
+      "hitsFull": "Dein monatliches Hit-Limit ist erreicht ({{current}} von {{limit}}). Mit einem Upgrade erhältst du mehr Kapazität."
     },
     "promotion": {
       "saving": "{{percent}} Rabatt auf eine Rechnung",
@@ -4159,6 +4169,14 @@
     "planChip": {
       "free": "Free-Tarif",
       "aria": "Du nutzt den kostenlosen Tarif – Tarife ansehen und upgraden"
+    },
+    "billing": {
+      "priceNotice": "Endpreise — gemäß § 19 UStG wird keine Umsatzsteuer berechnet. Sofortiger Zugang zu kostenpflichtigen Funktionen; jederzeit zum Ende des Abrechnungszeitraums kündbar.",
+      "activated": "Dein {{plan}}-Tarif ist aktiv!",
+      "confirming": "Deine Zahlung wird bestätigt …",
+      "processing": "Zahlung in Bearbeitung. SEPA- und andere Bankzahlungen können einige Werktage dauern. Dein Tarif wird nach der Zahlungsbestätigung automatisch aktiviert.",
+      "manage": "Abrechnung und Rechnungen verwalten",
+      "annualTotal": "Jährliche Abrechnung: {{price}}"
     }
   },
   "reportConfirmation": {

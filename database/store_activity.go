@@ -15,7 +15,6 @@ import (
 
 const (
 	activityDormantAfter = 7 * 24 * time.Hour
-	activityCountWindow  = 8 * 24 * time.Hour
 
 	// Pruning is garbage collection only — readers already filter by bucket
 	// age — so it does not need to run on every batch flush.

@@ -47,6 +47,7 @@ func CloudPlanEntitlements(code string) *Entitlements {
 			MaxTeamMembers:                20,
 			MaxRetentionDays:              1095,
 			MaxAskAIAnswersPerDay:         500,
+			MaxMonthlyHits:                1_000_000,
 			AllowSSO:                      true,
 			AllowCustomBranding:           true,
 			AllowExternalReportRecipients: true,
@@ -57,6 +58,7 @@ func CloudPlanEntitlements(code string) *Entitlements {
 			MaxTeamMembers:                5,
 			MaxRetentionDays:              365,
 			MaxAskAIAnswersPerDay:         100,
+			MaxMonthlyHits:                250_000,
 			AllowExternalReportRecipients: true,
 		}
 	case database.CloudPlanFree:
@@ -65,6 +67,7 @@ func CloudPlanEntitlements(code string) *Entitlements {
 			MaxTeamMembers:        3,
 			MaxRetentionDays:      60,
 			MaxAskAIAnswersPerDay: 1,
+			MaxMonthlyHits:        database.CloudFreePlanMonthlyHitLimit,
 		}
 	default:
 		return nil
@@ -98,4 +101,8 @@ func (s *Service) cloudBillingTeamEntitlements(ctx context.Context, teamID uuid.
 	}
 	code, _ := EffectiveCloudPlan(account)
 	return CloudPlanEntitlements(code)
+}
+
+func (s *Service) AllowsCustomBranding(ctx context.Context, actorID, teamID uuid.UUID) bool {
+	return !s.cloudHosted() || s.BypassesCloudLimits(ctx, actorID) || s.TeamBypassesCloudLimits(ctx, teamID) || s.TeamEntitlements(ctx, teamID).AllowCustomBranding
 }

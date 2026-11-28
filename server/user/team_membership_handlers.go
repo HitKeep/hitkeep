@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -393,15 +392,8 @@ func (h *handler) handleUpdateTeam() http.HandlerFunc {
 		}
 
 		logoURL := strings.TrimSpace(req.LogoURL)
-		if logoURL != "" {
-			if len(logoURL) > 2048 {
-				http.Error(w, "Logo URL must be 2048 characters or fewer", http.StatusBadRequest)
-				return
-			}
-			if _, err := url.ParseRequestURI(logoURL); err != nil {
-				http.Error(w, "Invalid logo URL", http.StatusBadRequest)
-				return
-			}
+		if !h.validateTeamLogo(w, r, actorID, teamID, logoURL) {
+			return
 		}
 
 		if err := h.ctx.Store.UpdateTenant(r.Context(), teamID, name, logoURL); err != nil {

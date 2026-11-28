@@ -20,6 +20,7 @@ func NewProvider(conf *config.Config) Provider {
 
 	return NewStaticProvider(Entitlements{
 		MaxTeams:                      conf.CloudMaxTeams,
+		MaxMonthlyHits:                planEntitlements.MaxMonthlyHits,
 		MaxSitesPerTeam:               conf.CloudMaxSitesPerTeam,
 		MaxRetentionDays:              conf.CloudMaxRetentionDays,
 		MaxTeamMembers:                conf.CloudMaxTeamMembers,

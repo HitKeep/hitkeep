@@ -119,6 +119,8 @@ func teamEntitlementsResponse(ent *entitlements.Entitlements) *api.TeamEntitleme
 		return nil
 	}
 	return &api.TeamEntitlements{
+		MaxMonthlyHits:                ent.MaxMonthlyHits,
+		MaxAskAIAnswersPerDay:         ent.MaxAskAIAnswersPerDay,
 		MaxSitesPerTeam:               ent.MaxSitesPerTeam,
 		MaxTeamMembers:                ent.MaxTeamMembers,
 		MaxRetentionDays:              ent.MaxRetentionDays,
@@ -156,6 +158,9 @@ func (h *handler) hydrateTeamSummaries(r *http.Request, teams []api.Team) []api.
 			enriched[idx].Plan = operatorTeamPlan()
 		} else {
 			enriched[idx].Entitlements = teamEntitlementsResponse(limits.TeamEntitlements(r.Context(), team.ID))
+			if ent := enriched[idx].Entitlements; ent != nil && ent.MaxMonthlyHits > 0 && limits.TeamBypassesCloudLimits(r.Context(), team.ID) {
+				ent.MaxMonthlyHits = 0
+			}
 			enriched[idx].Plan = teamPlanResponse(limits.TeamPlan(r.Context(), team.ID))
 		}
 
@@ -222,6 +227,35 @@ func (h *handler) sendTeamInviteEmail(r *http.Request, teamID, actorID uuid.UUID
 	}
 }
 
+func (h *handler) validateTeamLogo(w http.ResponseWriter, r *http.Request, actorID, teamID uuid.UUID, logoURL string) bool {
+	if logoURL == "" {
+		return true
+	}
+	if len(logoURL) > 2048 {
+		http.Error(w, "Logo URL must be 2048 characters or fewer", http.StatusBadRequest)
+		return false
+	}
+	if _, err := url.ParseRequestURI(logoURL); err != nil {
+		http.Error(w, "Invalid logo URL", http.StatusBadRequest)
+		return false
+	}
+	if h.ctx.Limits().AllowsCustomBranding(r.Context(), actorID, teamID) {
+		return true
+	}
+	if teamID != uuid.Nil {
+		team, err := h.ctx.Store.GetTenant(r.Context(), teamID)
+		if err != nil {
+			http.Error(w, "Unable to load team", http.StatusInternalServerError)
+			return false
+		}
+		if team.LogoURL == logoURL {
+			return true
+		}
+	}
+	http.Error(w, "Custom branding requires Business", http.StatusForbidden)
+	return false
+}
+
 func (h *handler) handleCreateTeam() http.HandlerFunc {
 	type request struct {
 		Name    string `json:"name"`
@@ -252,15 +286,8 @@ func (h *handler) handleCreateTeam() http.HandlerFunc {
 		}
 
 		logoURL := strings.TrimSpace(req.LogoURL)
-		if logoURL != "" {
-			if len(logoURL) > 2048 {
-				http.Error(w, "Logo URL must be 2048 characters or fewer", http.StatusBadRequest)
-				return
-			}
-			if _, err := url.ParseRequestURI(logoURL); err != nil {
-				http.Error(w, "Invalid logo URL", http.StatusBadRequest)
-				return
-			}
+		if !h.validateTeamLogo(w, r, actorID, uuid.Nil, logoURL) {
+			return
 		}
 
 		if err := h.ctx.Limits().CanCreateTeam(r.Context(), actorID); err != nil {

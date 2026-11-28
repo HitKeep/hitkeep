@@ -128,6 +128,19 @@ describe('FreePlanRetentionNotice', () => {
         expect(noticeElement()?.textContent).toContain('Your team is using 3 of 3 sites on the Free plan.');
     });
 
+    it('resurfaces the monthly hit warning when the team reaches its quota', () => {
+        const team = freeTeam('team-a');
+        const usage = { current_sites: 1, current_members: 1, current_pending_invites: 0, current_monthly_hits: 8000 };
+        activeTeam.set({ ...team, entitlements: { ...team.entitlements!, max_monthly_hits: 10000 }, usage });
+        fixture.detectChanges();
+        expect(noticeElement()?.textContent).toContain('cloud.retentionNotice.hitsNear');
+        dismissButton()?.click();
+        activeTeam.update((team) => ({ ...team!, usage: { ...usage, current_monthly_hits: 10000 } }));
+        fixture.detectChanges();
+        expect(noticeElement()?.textContent).toContain('cloud.retentionNotice.hitsFull');
+        window.localStorage.removeItem('hitkeep.freeUsageNotice.dismissed.team-a.monthlyHits');
+    });
+
     it('keeps the quota warning and its own dismissal while a promotion is active', () => {
         spotlight.set({});
         activeTeam.set({ ...freeTeam('team-a'), usage: { current_sites: 3, current_members: 1, current_pending_invites: 0 } });

@@ -32,9 +32,32 @@ func NewCloudLifecycleWorker(tenantMgr *database.TenantStoreManager, m *mailer.M
 	}
 }
 
-// Start waits until 09:00 UTC, then ticks every 24 hours.
+// Start delivers welcomes on verification and runs daily reminders at 09:00 UTC.
 func (w *CloudLifecycleWorker) Start(ctx context.Context) {
-	runDailyAtUTC(ctx, "CloudLifecycleWorker", 9, w.Run)
+	if w == nil || w.mailer == nil || w.tenantMgr == nil || w.tenantMgr.Control() == nil || w.conf == nil || !w.conf.CloudHosted {
+		return
+	}
+	now := time.Now().UTC()
+	next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, time.UTC)
+	if !next.After(now) {
+		next = next.AddDate(0, 0, 1)
+	}
+	timer := time.NewTimer(time.Until(next))
+	defer timer.Stop()
+	notifications := w.tenantMgr.Control().CloudSignupNotifications()
+	w.processKind(ctx, database.CloudLifecycleMessageWelcome, now)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-notifications:
+			w.processKind(ctx, database.CloudLifecycleMessageWelcome, time.Now().UTC())
+		case <-timer.C:
+			w.Run(ctx)
+			next = next.AddDate(0, 0, 1)
+			timer.Reset(time.Until(next))
+		}
+	}
 }
 
 func (w *CloudLifecycleWorker) Run(ctx context.Context) {
@@ -50,6 +73,8 @@ func (w *CloudLifecycleWorker) RunAt(ctx context.Context, now time.Time) {
 	}
 
 	w.processKind(ctx, database.CloudLifecycleMessageWelcome, now.UTC())
+	w.processKind(ctx, database.CloudLifecycleMessageZeroHitDay2, now.UTC())
+	w.processKind(ctx, database.CloudLifecycleMessageZeroHitDay6, now.UTC())
 	w.processKind(ctx, database.CloudLifecycleMessageFreeRetentionReminder, now.UTC())
 	w.processKind(ctx, database.CloudLifecycleMessageFreeRetentionPreTrim, now.UTC())
 	w.processKind(ctx, database.CloudLifecycleMessageFreeLimitReminder, now.UTC())
@@ -117,11 +142,13 @@ func (w *CloudLifecycleWorker) processKind(ctx context.Context, kind string, now
 
 func cloudLifecycleMailable(kind string, recipient database.CloudLifecycleRecipient, links mailables.CloudLifecycleLinks) mailer.Mailable {
 	switch kind {
+	case database.CloudLifecycleMessageZeroHitDay2, database.CloudLifecycleMessageZeroHitDay6:
+		return mailables.NewCloudSetupReminder(recipient.Locale, kind == database.CloudLifecycleMessageZeroHitDay6, links)
 	case database.CloudLifecycleMessageWelcome:
 		return mailables.NewCloudWelcome(
 			recipient.Locale,
 			cloudLifecycleTeamName(recipient),
-			cloudLifecycleSiteDomain(recipient),
+			recipient.SiteDomain,
 			cloudLifecycleIsFreePlan(recipient),
 			cloudLifecycleFreeRetentionDays,
 			links,
@@ -144,6 +171,9 @@ func cloudLifecycleMailable(kind string, recipient database.CloudLifecycleRecipi
 			links,
 		)
 	case database.CloudLifecycleMessageFreeLimitReminder:
+		if recipient.MonthlyLimitNear {
+			return mailables.NewMonthlyHitReminder(recipient.Locale, links)
+		}
 		return mailables.NewCloudFreeLimitReminder(
 			recipient.Locale,
 			cloudLifecycleTeamName(recipient),

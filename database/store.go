@@ -59,6 +59,7 @@ type Store struct {
 	primaryAuthMu                   sync.Mutex
 	lifecycleMu                     sync.Mutex
 	billingLifecycleMu              sync.Mutex
+	cloudState                      cloudRuntimeState
 	reportClaimMu                   sync.Mutex
 	analyticsStatements             *analyticsStatements
 	runtime                         *runtimeCache
