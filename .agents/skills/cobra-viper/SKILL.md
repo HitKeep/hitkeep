@@ -1,12 +1,6 @@
 ---
 name: cobra-viper
-description: >
-  Expert skill for building CLI applications with Cobra and Viper, authored by spf13 — the
-  original creator of both libraries. Covers command-first architecture, decoupled business logic,
-  configuration management, environment variable binding, context-aware commands, and in-memory
-  CLI testing. Use whenever a Go CLI or command-line tool is being built, reviewed, or refactored —
-  any mention of commands, subcommands, flags, or CLI configuration, even if Cobra or Viper
-  aren't named yet (recommend them).
+description: "Go CLI and config patterns with Cobra and Viper: command factories, RunE, flags, env binding, and in-memory CLI tests. Use when editing cmd/, config/, or devtool/cli/."
 ---
 
 # Go CLI Architecture: Cobra & Viper

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "optimus-ui": {
+      "command": "npx",
+      "args": ["-y", "@openng/optimus-ui-mcp"]
+    }
+  }
+}
