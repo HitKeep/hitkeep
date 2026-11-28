@@ -65,7 +65,7 @@ func (f *fakeStripeClient) CreateCheckoutSession(_ context.Context, input create
 	if f.createCheckoutErr != nil {
 		return nil, f.createCheckoutErr
 	}
-	session := &checkoutSessionOutput{AllowPromotionCodes: input.AllowPromotionCodes, PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
+	session := &checkoutSessionOutput{Locale: input.Locale, AllowPromotionCodes: input.AllowPromotionCodes, PriceID: input.PriceID, ID: "cs_test", URL: "https://checkout.stripe.test/session", Status: "open", PaymentStatus: "unpaid", CustomerID: input.CustomerID, TenantID: input.TenantID.String(), PlanCode: input.PlanCode, BillingInterval: input.BillingInterval, Currency: "eur", AmountSubtotal: 1200, AmountTotal: 1200}
 	if f.checkoutCalls > 1 {
 		session.ID = fmt.Sprintf("cs_test_%d", f.checkoutCalls)
 	}
@@ -97,6 +97,8 @@ func (f *fakeStripeClient) CustomerPromotions(_ context.Context, q *stripe.Promo
 	}
 	return records, nil
 }
+func (f *fakeStripeClient) UpdateCustomerDefaults(context.Context, string, string) error { return nil }
+
 func (f *fakeStripeClient) CreateCustomerPromotion(_ context.Context, customer string, offer *billingPromotion) (*stripe.PromotionCode, error) {
 	f.minted++
 	p := &stripe.PromotionCode{ID: "promo_" + offer.couponID, Code: offer.Code, Active: true, Customer: &stripe.Customer{ID: customer}, Promotion: &stripe.PromotionCodePromotion{Type: "coupon", Coupon: f.coupon}, MaxRedemptions: 1, ExpiresAt: offer.EndsAt.Unix()}
@@ -1104,7 +1106,7 @@ func TestHandleStripeEventUpdatesBillingAccount(t *testing.T) {
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},
 				"customer":{"id":"cus_live"},
 				"subscription":{"id":"sub_live"},
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}
@@ -1151,7 +1153,7 @@ func TestHandleStripeEventCheckoutSessionWithoutExpandedRefsDoesNotPanic(t *test
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},
 				"customer":null,
 				"subscription":null,
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}
@@ -1193,7 +1195,7 @@ func TestHandleStripeEventIsIdempotent(t *testing.T) {
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},
 				"customer":{"id":"cus_live"},
 				"subscription":{"id":"sub_live"},
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}
@@ -1235,7 +1237,7 @@ func TestHandleStripeEventIgnoresOtherJurisdictions(t *testing.T) {
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro","jurisdiction":"US"},
 				"customer":{"id":"cus_live"},
 				"subscription":{"id":"sub_live"},
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}
@@ -1771,7 +1773,7 @@ func TestHandleCreateBillingCheckoutSession(t *testing.T) {
 	if stripeClient.lastCheckoutInput.PriceID != "price_pro_annual" {
 		t.Fatalf("expected annual Pro price, got %q", stripeClient.lastCheckoutInput.PriceID)
 	}
-	if stripeClient.lastCheckoutInput.SuccessURL != "https://cloud.hitkeep.eu/hitkeep/admin/team?checkout=success" {
+	if stripeClient.lastCheckoutInput.SuccessURL != "https://cloud.hitkeep.eu/hitkeep/admin/team/overview?checkout=success" {
 		t.Fatalf("expected prefixed checkout success URL, got %q", stripeClient.lastCheckoutInput.SuccessURL)
 	}
 	wantCancelURL := fmt.Sprintf("https://cloud.hitkeep.eu/hitkeep/admin/team?billing=annual&checkout=canceled&plan=pro&team=%s", account.TenantID)
@@ -1967,5 +1969,100 @@ func TestNormalizeStripeLocale(t *testing.T) {
 				t.Fatalf("normalizeStripeLocale(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAsyncCheckoutAwaitsSettlement(t *testing.T) {
+	h, store := setupCloudTestHandler(t)
+	defer store.Close()
+	buyer, err := store.CreateManagedCloudAccount(t.Context(), database.CreateManagedCloudAccountInput{Email: "async@example.test", HashedPassword: "hashed", TeamName: "Test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply := func(id, kind, payment, want string) {
+		t.Helper()
+		event := stripe.Event{ID: id, Type: stripe.EventType(kind), Data: &stripe.EventData{Raw: fmt.Appendf(nil, `{"status":"complete","payment_status":%q,"subscription":"sub_async","customer":"cus_async","metadata":{"tenant_id":%q,"plan_code":"pro","jurisdiction":"EU"}}`, payment, buyer.TenantID.String())}}
+		if err := h.handleStripeEvent(t.Context(), event); err != nil {
+			t.Fatal(err)
+		}
+		a, err := store.GetCloudBillingAccount(t.Context(), buyer.TenantID)
+		if err != nil || a.SubscriptionStatus != want {
+			t.Fatalf("%s: %v %v", kind, a, err)
+		}
+	}
+	apply("evt_pending", "checkout.session.completed", "unpaid", database.CloudSubscriptionStatusPendingCheckout)
+	apply("evt_settled", "checkout.session.async_payment_succeeded", "paid", "complete")
+	apply("evt_old", "checkout.session.completed", "unpaid", "complete")
+	events, err := store.ListCloudConversionEvents(t.Context(), buyer.TenantID)
+	if err != nil || len(events) != 1 || events[0].EventName != database.CloudConversionSubscriptionActivated {
+		t.Fatalf("activation: %v %v", events, err)
+	}
+	apply("evt_failed", "checkout.session.async_payment_failed", "unpaid", database.CloudSubscriptionStatusPastDue)
+}
+
+func TestBillingReturnSyncChecksCustomerTeamPriceAndSettlement(t *testing.T) {
+	h, store := setupCloudTestHandler(t)
+	defer store.Close()
+	buyer, err := store.CreateManagedCloudAccount(t.Context(), database.CreateManagedCloudAccountInput{Email: "return@example.test", HashedPassword: "hash", TeamName: "Test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := database.CloudBillingAccount{TenantID: buyer.TenantID, PlanCode: "free", PlanName: "Free", SubscriptionStatus: subscriptionStatusPending, StripePriceID: "price_pro", StripeCustomerID: "cus_test"}
+	if err := store.UpsertCloudBillingAccount(t.Context(), a); err != nil {
+		t.Fatal(err)
+	}
+	client := h.stripe.(*fakeStripeClient)
+	session := &checkoutSessionOutput{TenantID: buyer.TenantID.String(), CustomerID: "cus_test", PriceID: "price_pro", PlanCode: "pro", Status: "complete", SubscriptionStatus: "active", PaymentStatus: "paid", Jurisdiction: "EU"}
+	client.sessions = []*checkoutSessionOutput{session}
+	for _, tc := range []struct{ query, region, payment, want string }{{"", "EU", "paid", "free"}, {"?sync=1", "US", "paid", "free"}, {"?sync=1", "EU", "unpaid", "free"}, {"?sync=1", "EU", "paid", "pro"}} {
+		session.Jurisdiction, session.PaymentStatus = tc.region, tc.payment
+		listed := false
+		client.afterCheckoutList = func() { listed = true }
+		r := httptest.NewRequest("GET", "/"+tc.query, nil)
+		r = r.WithContext(context.WithValue(r.Context(), shared.UserIDKey, buyer.UserID))
+		w := httptest.NewRecorder()
+		h.handleGetBillingState().ServeHTTP(w, r)
+		var state billingStateResponse
+		if err := json.UnmarshalRead(w.Body, &state); err != nil || state.PlanCode != tc.want || listed != (tc.query != "") {
+			t.Fatalf("state %+v %v listed=%t for %+v", state, err, listed, tc)
+		}
+	}
+	current, err := store.GetCloudBillingAccount(t.Context(), a.TenantID)
+	if err != nil || current.SubscriptionStatus != subscriptionStatusPending {
+		t.Fatalf("read-only sync changed account: %+v %v", current, err)
+	}
+}
+
+func TestStripeRiskEventsAuditOnlyLocalCustomers(t *testing.T) {
+	h, store := setupCloudTestHandler(t)
+	defer store.Close()
+	buyer, err := store.CreateManagedCloudAccount(t.Context(), database.CreateManagedCloudAccountInput{Email: "risk@example.test", HashedPassword: "hash", TeamName: "Test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertCloudBillingAccount(t.Context(), database.CloudBillingAccount{TenantID: buyer.TenantID, PlanCode: "pro", PlanName: "Pro", SubscriptionStatus: "active", StripeCustomerID: "cus_local"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []stripe.EventType{"charge.refunded", "radar.early_fraud_warning.created"} {
+		for _, customer := range []string{"cus_other", "cus_local"} {
+			h.stripe.(*fakeStripeClient).chargeCustomerID = customer
+			id := string(kind) + customer
+			event := stripe.Event{ID: id, Type: kind, Data: &stripe.EventData{Raw: fmt.Appendf(nil, `{"customer":%q,"charge":"ch_test","id":"object_test"}`, customer)}}
+			if err := h.handleStripeEvent(t.Context(), event); err != nil {
+				t.Fatal(err)
+			}
+			audit, err := store.GetCloudBillingEvent(t.Context(), id)
+			if customer == "cus_other" {
+				if !errors.Is(err, database.ErrCloudBillingEventNotFound) {
+					t.Fatalf("foreign risk audit: %v", err)
+				}
+			} else if err != nil || audit.TenantID != buyer.TenantID {
+				t.Fatalf("local audit %+v %v", audit, err)
+			}
+		}
+	}
+	account, err := store.GetCloudBillingAccount(t.Context(), buyer.TenantID)
+	if err != nil || account.SubscriptionStatus != "active" {
+		t.Fatalf("risk changed subscription: %+v %v", account, err)
 	}
 }

@@ -19,6 +19,7 @@ const (
 	CloudPlanBusiness                        = "business"
 	CloudBillingIntervalMonthly              = "monthly"
 	CloudBillingIntervalAnnual               = "annual"
+	CloudFreePlanMonthlyHitLimit             = 10_000
 	CloudFreePlanSiteLimit                   = 3
 	CloudFreePlanMemberLimit                 = 3
 	CloudSubscriptionStatusFree              = "free"
@@ -192,6 +193,7 @@ func (s *Store) UpsertCloudBillingAccount(ctx context.Context, account CloudBill
 		return nil
 	}
 
+	defer s.cloudState.quotaGeneration.Add(1)
 	now := time.Now().UTC()
 	account.BillingInterval = normalizeCloudBillingInterval(account.BillingInterval)
 	if account.CreatedAt.IsZero() {

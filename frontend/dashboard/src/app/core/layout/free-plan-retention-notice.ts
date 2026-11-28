@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { injectActiveLang } from '@core/i18n/active-lang';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ButtonModule } from '@openng/optimus-ui/button';
 
@@ -9,7 +10,7 @@ import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service
 import { ShareService } from '@services/share.service';
 import { TeamService } from '@services/team.service';
 
-type UsagePressureKind = 'sites' | 'members';
+type UsagePressureKind = 'sites' | 'members' | 'monthlyHits';
 
 interface UsagePressure {
     kind: UsagePressureKind;
@@ -29,6 +30,7 @@ const USAGE_PRESSURE_THRESHOLD = 0.8;
 export class FreePlanRetentionNotice {
     private static readonly dismissedValue = 'dismissed';
 
+    protected readonly language = injectActiveLang();
     private readonly campaign = inject(BillingPromotionService);
     private readonly bootstrap = inject(DashboardBootstrapService);
     private readonly document = inject(DOCUMENT);
@@ -54,6 +56,7 @@ export class FreePlanRetentionNotice {
         }
 
         const candidates: UsagePressure[] = [
+            { kind: 'monthlyHits', current: usage.current_monthly_hits ?? 0, limit: entitlements.max_monthly_hits ?? 0 },
             { kind: 'sites', current: usage.current_sites ?? 0, limit: entitlements.max_sites_per_team },
             { kind: 'members', current: usage.current_members ?? 0, limit: entitlements.max_team_members }
         ];
@@ -63,7 +66,7 @@ export class FreePlanRetentionNotice {
     protected readonly usageDismissalKey = computed(() => {
         const team = this.team();
         const pressure = this.usagePressure();
-        return team?.id && pressure ? `hitkeep.freeUsageNotice.dismissed.${team.id}.${pressure.kind}` : '';
+        return team?.id && pressure ? `hitkeep.freeUsageNotice.dismissed.${team.id}.${pressure.kind}${pressure.kind === 'monthlyHits' && pressure.current >= pressure.limit ? '.full' : ''}` : '';
     });
 
     /** Usage pressure has its own dismissal so it resurfaces even after the retention notice was dismissed. */

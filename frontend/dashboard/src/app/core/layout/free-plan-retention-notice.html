@@ -7,6 +7,10 @@
         <div class="free-plan-retention-notice__text">
             @if (variant() === "usage" && usagePressure(); as pressure) { @if (pressure.kind === "sites") {
             <p class="free-plan-retention-notice__headline">{{ "cloud.retentionNotice.usageMessageSites" | transloco: { current: pressure.current, limit: pressure.limit } }}</p>
+            } @else if (pressure.kind === 'monthlyHits') {
+            <p class="free-plan-retention-notice__headline">
+                {{ (pressure.current >= pressure.limit ? 'cloud.retentionNotice.hitsFull' : 'cloud.retentionNotice.hitsNear') | transloco: { current: pressure.current.toLocaleString(language()), limit: pressure.limit.toLocaleString(language()) } }}
+            </p>
             } @else {
             <p class="free-plan-retention-notice__headline">{{ "cloud.retentionNotice.usageMessageMembers" | transloco: { current: pressure.current, limit: pressure.limit } }}</p>
             } } @else {

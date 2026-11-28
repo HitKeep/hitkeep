@@ -28,7 +28,8 @@ import (
 )
 
 type handler struct {
-	ctx *shared.Context
+	monthlyQuota monthlyQuota
+	ctx          *shared.Context
 }
 
 var (
@@ -239,6 +240,10 @@ func (h *handler) handleServerPageviewIngestLeader() http.HandlerFunc {
 			UTMContent:     queryValuePtr(ingestCtx.utm, "utm_content"),
 			QRCodeID:       queryUUIDPtr(ingestCtx.utm, "hk_qr"),
 		}
+		if h.dropMonthlyHit(r.Context(), ingestCtx.site.ID) {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		if err := h.publishJSON("hits", hit); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to publish server-side hit to NSQ", "error", err, "site_id", ingestCtx.site.ID)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -332,6 +337,10 @@ func (h *handler) handleServerEventIngestLeader() http.HandlerFunc {
 			Name:       name,
 			Properties: payload.Properties,
 			Timestamp:  ingestCtx.timestamp.UTC(),
+		}
+		if h.dropMonthlyHit(r.Context(), ingestCtx.site.ID) {
+			w.WriteHeader(http.StatusAccepted)
+			return
 		}
 		if err := h.publishJSON("events", event); err != nil {
 			shared.LoggerFromContext(r.Context()).Error("Failed to publish server-side event to NSQ", "error", err, "site_id", ingestCtx.site.ID)
@@ -711,6 +720,10 @@ func (h *handler) handleIngestLeader(w http.ResponseWriter, r *http.Request) {
 		TrackerVersion: payload.TrackerVersion,
 	}
 
+	if h.dropMonthlyHit(r.Context(), site.ID) {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	body, err := json.Marshal(hit)
 	if err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to encode hit for NSQ", "error", err)
@@ -1046,6 +1059,10 @@ func (h *handler) handleIngestEventLeader(w http.ResponseWriter, r *http.Request
 		TrackerVersion: payload.TrackerVersion,
 	}
 
+	if h.dropMonthlyHit(r.Context(), site.ID) {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	body, err := json.Marshal(event)
 	if err != nil {
 		shared.LoggerFromContext(r.Context()).Error("Failed to encode event for NSQ", "error", err)

@@ -1615,12 +1615,15 @@ type Team struct {
 }
 
 type TeamUsageSummary struct {
-	CurrentSites          int `json:"current_sites"`
-	CurrentMembers        int `json:"current_members"`
-	CurrentPendingInvites int `json:"current_pending_invites"`
+	CurrentMonthlyHits    int64 `json:"current_monthly_hits,omitempty"`
+	CurrentSites          int   `json:"current_sites"`
+	CurrentMembers        int   `json:"current_members"`
+	CurrentPendingInvites int   `json:"current_pending_invites"`
 }
 
 type TeamEntitlements struct {
+	MaxMonthlyHits                int  `json:"max_monthly_hits"`
+	MaxAskAIAnswersPerDay         int  `json:"max_ask_ai_answers_per_day"`
 	MaxSitesPerTeam               int  `json:"max_sites_per_team"`
 	MaxTeamMembers                int  `json:"max_team_members"`
 	MaxRetentionDays              int  `json:"max_retention_days"`

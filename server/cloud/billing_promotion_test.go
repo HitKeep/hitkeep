@@ -183,8 +183,8 @@ func TestBillingPromotion(t *testing.T) {
 		t.Fatal("returned explicit checkout after cutoff during lookup")
 	}
 	f.afterCheckoutList = nil
-	if checkout("pro", "monthly", "", buyer.TenantID) != 200 {
-		t.Fatal("closed ordinary checkout at promotion cutoff")
+	if checkout("pro", "monthly", "", buyer.TenantID) != 200 || f.checkoutCalls != 2 || f.sessions[1].Status != "expired" || f.sessions[0].AllowPromotionCodes {
+		t.Fatal("ordinary checkout must replace the superseded promotion session at cutoff")
 	}
 	now = promotionEnd
 	if checkout("pro", "monthly", promotionCode, buyer.TenantID) != 409 {
@@ -248,7 +248,7 @@ func TestBillingPromotion(t *testing.T) {
 	}
 	wg.Wait()
 	now = promotionEnd
-	if redeem(buyer.TenantID, promotionCode) != 204 || f.applied != 1 || f.minted != 1 || f.checkoutCalls != 1 {
+	if redeem(buyer.TenantID, promotionCode) != 204 || f.applied != 1 || f.minted != 1 || f.checkoutCalls != 2 {
 		t.Fatal("lost response/retry caused another redemption, subscription, or code")
 	}
 	f.subscription.Discounts = nil

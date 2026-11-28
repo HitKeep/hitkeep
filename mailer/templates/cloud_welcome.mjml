@@ -1,11 +1,11 @@
-{{ define "preheader" }}{{ tf "cloud.welcome.body" .TeamName .SiteDomain }}{{ end }}
+{{ define "preheader" }}{{ if .SiteDomain }}{{ tf "cloud.welcome.body" .TeamName .SiteDomain }}{{ else if .German }}Dein Workspace {{ .TeamName }} ist bereit. Füge deine Website im Dashboard hinzu, um die ersten Aufrufe zu sehen.{{ else }}Your {{ .TeamName }} workspace is ready. Add your site in the dashboard to see your first visits.{{ end }}{{ end }}
 {{ define "content" }}
 <mj-text font-size="20px" font-weight="600" padding-bottom="10px">
   {{ t "cloud.welcome.heading" }}
 </mj-text>
 
 <mj-text>
-  {{ tf "cloud.welcome.body" .TeamName .SiteDomain }}
+  {{ if .SiteDomain }}{{ tf "cloud.welcome.body" .TeamName .SiteDomain }}{{ else if .German }}Dein Workspace {{ .TeamName }} ist bereit. Füge deine Website im Dashboard hinzu, um die ersten Aufrufe zu sehen.{{ else }}Your {{ .TeamName }} workspace is ready. Add your site in the dashboard to see your first visits.{{ end }}
 </mj-text>
 
 <mj-button href="{{ .DashboardURL }}" padding-top="20px" padding-bottom="16px">

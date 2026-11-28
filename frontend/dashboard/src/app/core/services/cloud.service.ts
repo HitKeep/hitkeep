@@ -130,7 +130,7 @@ export class CloudService {
         return this.plans;
     }
 
-    getBillingState(): Observable<CloudBillingState> {
-        return this.http.get<CloudBillingState>('/api/cloud/billing/state');
+    getBillingState({ sync = false } = {}): Observable<CloudBillingState> {
+        return this.http.get<CloudBillingState>('/api/cloud/billing/state', { params: sync ? { sync: '1' } : {} });
     }
 }

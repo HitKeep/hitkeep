@@ -55,7 +55,7 @@ func TestHandleStripeEventSyncsRetentionOnUpgrade(t *testing.T) {
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},
 				"customer":{"id":"cus_live"},
 				"subscription":{"id":"sub_live"},
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}
@@ -334,7 +334,7 @@ func TestHandleStripeEventSucceedsWithoutTenantStores(t *testing.T) {
 				"metadata":{"tenant_id":"` + account.TenantID.String() + `","plan_code":"pro","plan_name":"Pro"},
 				"customer":{"id":"cus_live"},
 				"subscription":{"id":"sub_live"},
-				"status":"complete"
+				"status":"complete","payment_status":"paid"
 			}`),
 		},
 	}

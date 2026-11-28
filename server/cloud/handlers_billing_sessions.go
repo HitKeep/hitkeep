@@ -3,12 +3,14 @@
 package cloud
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -287,6 +289,7 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 	customerID := strings.TrimSpace(account.StripeCustomerID)
 	if customerID == "" {
 		customerID, err = h.stripe.CreateCustomer(r.Context(), createCustomerInput{
+			Locale:         req.Locale,
 			Email:          strings.TrimSpace(strings.ToLower(user.Email)),
 			Name:           stripeCustomerName(user, team.Name),
 			UserID:         user.ID,
@@ -300,6 +303,10 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, "Unable to start checkout", http.StatusBadGateway)
 			return nil
 		}
+	} else if err := h.stripe.UpdateCustomerDefaults(r.Context(), customerID, req.Locale); err != nil {
+		shared.LoggerFromContext(r.Context()).Error("Failed to update Stripe invoice defaults", slog.Group("stripe", stripeErrorLogAttrs(err)...))
+		http.Error(w, "Unable to start checkout", http.StatusBadGateway)
+		return nil
 	}
 
 	if account.StripeCustomerID != customerID {
@@ -326,18 +333,19 @@ func (h *handler) createBillingCheckout(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 	session, err := h.reuseOrCreateCheckout(r.Context(), createCheckoutSessionInput{
-		AllowPromotionCodes: entry != nil,
-		CustomerID:          customerID,
-		PriceID:             priceID,
-		SuccessURL:          checkoutSuccessURL(h.ctx.Config),
-		CancelURL:           checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
-		Locale:              req.Locale,
-		UserID:              user.ID,
-		TenantID:            activeTenantID,
-		PlanCode:            req.PlanCode,
-		PlanName:            planNameForCode(req.PlanCode),
-		BillingInterval:     req.BillingInterval,
-		Jurisdiction:        strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
+		PaymentMethodConfigurationID: strings.TrimSpace(h.ctx.Config.StripePaymentMethodConfigurationID),
+		AllowPromotionCodes:          entry != nil,
+		CustomerID:                   customerID,
+		PriceID:                      priceID,
+		SuccessURL:                   checkoutSuccessURL(h.ctx.Config),
+		CancelURL:                    checkoutCancelURLForIntent(h.ctx.Config, req.PlanCode, req.BillingInterval, activeTenantID),
+		Locale:                       req.Locale,
+		UserID:                       user.ID,
+		TenantID:                     activeTenantID,
+		PlanCode:                     req.PlanCode,
+		PlanName:                     planNameForCode(req.PlanCode),
+		BillingInterval:              req.BillingInterval,
+		Jurisdiction:                 strings.TrimSpace(strings.ToUpper(h.ctx.Config.CloudJurisdiction)),
 	})
 	if errors.Is(err, errCheckoutConflict) {
 		http.Error(w, errCheckoutConflict.Error(), http.StatusConflict)
@@ -419,6 +427,9 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 			if account.SubscriptionStatus == subscriptionStatusPending {
 				state.PendingPlanCode = planCodeForPrice(h.ctx.Config, account.StripePriceID)
 				state.BillingInterval = account.BillingInterval
+				if r.URL.Query().Get("sync") == "1" && account.StripeCustomerID != "" {
+					h.refreshPendingCheckout(r.Context(), account, &state)
+				}
 			}
 		}
 		state.Promotion, err = h.promotionFor(r.Context(), teamID, account, "", "")
@@ -427,6 +438,35 @@ func (h *handler) handleGetBillingState() http.HandlerFunc {
 		}
 		w.Header().Set("Cache-Control", "private, no-store")
 		shared.WriteJSON(r.Context(), w, http.StatusOK, state)
+	}
+}
+
+// Refresh only the response. Webhooks own durable entitlements and conversion events.
+func (h *handler) refreshPendingCheckout(ctx context.Context, account *database.CloudBillingAccount, state *billingStateResponse) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	sessions, err := h.stripe.ListCheckoutSessions(ctx, account.StripeCustomerID)
+	if err != nil {
+		shared.LoggerFromContext(ctx).Warn("Unable to refresh checkout state", "team_id", account.TenantID)
+		return
+	}
+	for _, session := range sessions {
+		if session.TenantID != account.TenantID.String() || session.CustomerID != account.StripeCustomerID || session.PriceID != account.StripePriceID {
+			continue
+		}
+		if session.Jurisdiction != "" && !strings.EqualFold(session.Jurisdiction, h.ctx.Config.CloudJurisdiction) {
+			continue
+		}
+		if session.Status != "complete" || !checkoutPaid(session.PaymentStatus) {
+			continue
+		}
+		if session.SubscriptionStatus != "" && session.SubscriptionStatus != "active" && session.SubscriptionStatus != "trialing" {
+			continue
+		}
+		if plan := planCodeForPrice(h.ctx.Config, session.PriceID); plan != "" {
+			state.PlanCode, state.SubscriptionStatus, state.PendingPlanCode = plan, "active", ""
+			return
+		}
 	}
 }
 

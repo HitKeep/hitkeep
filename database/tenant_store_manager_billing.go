@@ -5,151 +5,138 @@ package database
 import (
 	"cmp"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-type lifecycleSiteCandidate struct {
-	recipient   CloudLifecycleRecipient
-	createdAt   time.Time
-	clmStatus   string
-	sent        bool
-	siteCount   int
-	memberCount int
+type lifecycleCandidate struct {
+	CloudLifecycleRecipient
+	created        time.Time
+	sites, members int
+	activated      bool
 }
 
-// ListEligibleCloudLifecycleRecipients keeps billing metadata and lifecycle
-// message state on the control plane while resolving activation timestamps
-// from the owning tenant catalogs.
+// Billing and delivery records live on the control plane. Activity belongs to the tenant.
 func (m *TenantStoreManager) ListEligibleCloudLifecycleRecipients(ctx context.Context, kind string, now time.Time, limit int) ([]CloudLifecycleRecipient, error) {
-	if m == nil || m.shared == nil || !m.dataPlaneEnabled {
-		if m == nil || m.shared == nil {
-			return nil, fmt.Errorf("tenant store manager is not configured")
-		}
-		return m.shared.ListEligibleCloudLifecycleRecipients(ctx, kind, now, limit)
+	if m == nil || m.shared == nil {
+		return nil, fmt.Errorf("tenant store manager is not configured")
 	}
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
+	now = cloudLifecycleNow(now)
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	if kind != CloudLifecycleMessageWelcome && kind != CloudLifecycleMessageFreeRetentionReminder && kind != CloudLifecycleMessageFreeRetentionPreTrim && kind != CloudLifecycleMessageFreeLimitReminder {
+	switch kind {
+	case CloudLifecycleMessageWelcome, CloudLifecycleMessageZeroHitDay2, CloudLifecycleMessageZeroHitDay6, CloudLifecycleMessageFreeRetentionReminder, CloudLifecycleMessageFreeRetentionPreTrim, CloudLifecycleMessageFreeLimitReminder:
+	default:
 		return nil, fmt.Errorf("unsupported cloud lifecycle message kind %q", kind)
 	}
-	rows, err := m.shared.DB().QueryContext(ctx, `
-		SELECT
-			st.tenant_id, t.name, tm.user_id, u.email,
-			COALESCE(up.default_locale, ''), s.id, s.domain, s.created_at,
-			COALESCE(cba.plan_code, ''), COALESCE(cba.plan_name, ''),
-			COALESCE(cba.subscription_status, ''), COALESCE(clm.attempts, 0),
-			COALESCE(clm.status, ''), clm.sent_at,
-			(SELECT COUNT(*) FROM site_tenants st2 WHERE st2.tenant_id = st.tenant_id),
-			(SELECT COUNT(*) FROM tenant_members tm2 WHERE tm2.tenant_id = st.tenant_id)
-		FROM site_tenants st
-		JOIN sites s ON s.id = st.site_id
-		JOIN tenants t ON t.id = st.tenant_id
-		JOIN tenant_members tm ON tm.tenant_id = st.tenant_id AND tm.role = 'owner'
-		JOIN users u ON u.id = tm.user_id
-		LEFT JOIN user_preferences up ON up.user_id = tm.user_id
-		JOIN cloud_billing_accounts cba ON cba.tenant_id = st.tenant_id
-		LEFT JOIN tenant_archives ta ON ta.tenant_id = st.tenant_id
-		LEFT JOIN cloud_lifecycle_messages clm
-			ON clm.tenant_id = st.tenant_id AND clm.user_id = tm.user_id AND clm.kind = ?
-		WHERE ta.tenant_id IS NULL
-		  AND COALESCE(clm.status, '') <> ?
-		  AND clm.sent_at IS NULL
-		  AND COALESCE(clm.attempts, 0) < ?
-	`, kind, CloudLifecycleMessageStatusSent, CloudLifecycleMessageMaxAttempts)
+	rows, err := m.shared.db.QueryContext(ctx, `
+ SELECT t.id,t.name,t.created_at,tm.user_id,u.email,COALESCE(up.default_locale,''),
+ cba.plan_code,cba.plan_name,cba.subscription_status,COALESCE(clm.attempts,0),
+ (SELECT COUNT(*) FROM site_tenants WHERE tenant_id=t.id),
+ (SELECT COUNT(*) FROM tenant_members WHERE tenant_id=t.id),
+ EXISTS(SELECT 1 FROM cloud_conversion_events WHERE tenant_id=t.id AND event_name=?)
+ FROM tenants t JOIN cloud_billing_accounts cba ON cba.tenant_id=t.id
+ JOIN tenant_members tm ON tm.tenant_id=t.id AND tm.role='owner'
+ JOIN users u ON u.id=tm.user_id
+ LEFT JOIN user_preferences up ON up.user_id=u.id
+ LEFT JOIN cloud_lifecycle_messages clm ON clm.tenant_id=t.id AND clm.user_id=u.id AND clm.kind=?
+ WHERE NOT EXISTS(SELECT 1 FROM tenant_archives WHERE tenant_id=t.id)
+ AND clm.sent_at IS NULL AND COALESCE(clm.status,'')<>? AND COALESCE(clm.attempts,0)<?
+ `, CloudConversionFirstHitReceived, kind, CloudLifecycleMessageStatusSent, CloudLifecycleMessageMaxAttempts)
 	if err != nil {
-		return nil, fmt.Errorf("query cloud lifecycle control metadata: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
-	selected := make(map[uuid.UUID]lifecycleSiteCandidate)
+	var candidates []lifecycleCandidate
 	for rows.Next() {
-		var candidate lifecycleSiteCandidate
-		var sentAt *time.Time
-		if err := rows.Scan(
-			&candidate.recipient.TenantID, &candidate.recipient.TenantName,
-			&candidate.recipient.UserID, &candidate.recipient.Email, &candidate.recipient.Locale,
-			&candidate.recipient.SiteID, &candidate.recipient.SiteDomain, &candidate.createdAt,
-			&candidate.recipient.PlanCode, &candidate.recipient.PlanName,
-			&candidate.recipient.SubscriptionStatus, &candidate.recipient.Attempts,
-			&candidate.clmStatus, &sentAt, &candidate.siteCount, &candidate.memberCount,
-		); err != nil {
-			return nil, fmt.Errorf("scan cloud lifecycle control metadata: %w", err)
+		var c lifecycleCandidate
+		if err := rows.Scan(&c.TenantID, &c.TenantName, &c.created, &c.UserID, &c.Email, &c.Locale, &c.PlanCode, &c.PlanName, &c.SubscriptionStatus, &c.Attempts, &c.sites, &c.members, &c.activated); err != nil {
+			return nil, err
 		}
-		candidate.sent = sentAt != nil
-		store, _, err := m.ResolveSiteStore(ctx, candidate.recipient.SiteID)
-		if err != nil {
-			return nil, fmt.Errorf("resolve lifecycle analytics store for site %s: %w", candidate.recipient.SiteID, err)
-		}
-		status, err := store.GetSiteTrackingStatus(ctx, candidate.recipient.SiteID, now)
-		if err != nil {
-			return nil, fmt.Errorf("load lifecycle activity for site %s: %w", candidate.recipient.SiteID, err)
-		}
-		if status == nil || status.FirstHitAt == nil {
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var result []CloudLifecycleRecipient
+	for _, c := range candidates {
+		rescue := kind == CloudLifecycleMessageZeroHitDay2 || kind == CloudLifecycleMessageZeroHitDay6
+		if rescue && (c.activated || now.Sub(c.created) < 48*time.Hour || (kind == CloudLifecycleMessageZeroHitDay6 && now.Sub(c.created) < 6*24*time.Hour)) {
 			continue
 		}
-		candidate.recipient.FirstHitAt = *status.FirstHitAt
-		if previous, ok := selected[candidate.recipient.TenantID]; ok && !lifecycleCandidateEarlier(candidate, previous) {
+		if !rescue && kind != CloudLifecycleMessageWelcome && !CloudSubscriptionStatusIsFree(c.SubscriptionStatus) {
 			continue
 		}
-		if candidate.sent || candidate.clmStatus == CloudLifecycleMessageStatusSent || candidate.recipient.Attempts >= CloudLifecycleMessageMaxAttempts {
-			continue
+		var monthly int64
+		if c.sites > 0 {
+			store := m.shared
+			if m.dataPlaneEnabled {
+				store, err = m.ForTenant(ctx, c.TenantID)
+				if err != nil {
+					return nil, err
+				}
+			}
+			query := `SELECT s.id,s.domain,a.first_hit_at FROM site_activity_summary a JOIN sites s ON s.id=a.site_id WHERE a.first_hit_at IS NOT NULL`
+			var args []any
+			if store == m.shared {
+				query += ` AND a.site_id IN (SELECT site_id FROM site_tenants WHERE tenant_id=?)`
+				args = append(args, c.TenantID)
+			}
+			query += ` ORDER BY a.first_hit_at,s.domain,s.id LIMIT 1`
+			err = store.db.QueryRowContext(ctx, query, args...).Scan(&c.SiteID, &c.SiteDomain, &c.FirstHitAt)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return nil, err
+			}
+			if kind == CloudLifecycleMessageFreeLimitReminder {
+				monthly, err = store.CurrentMonthlyHits(ctx, c.TenantID, now)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
-		if kind != CloudLifecycleMessageWelcome {
-			if !CloudSubscriptionStatusIsFree(candidate.recipient.SubscriptionStatus) {
+		switch kind {
+		case CloudLifecycleMessageZeroHitDay2, CloudLifecycleMessageZeroHitDay6:
+			if !c.FirstHitAt.IsZero() {
+				continue
+			}
+		case CloudLifecycleMessageFreeLimitReminder:
+			c.MonthlyLimitNear = monthly >= CloudFreePlanMonthlyHitLimit*8/10
+			if c.sites < CloudFreePlanSiteLimit && c.members < CloudFreePlanMemberLimit && !c.MonthlyLimitNear {
+				continue
+			}
+			exempt, err := m.shared.IsTeamOwnedByOperator(ctx, c.TenantID)
+			if err != nil {
+				return nil, err
+			}
+			if exempt {
+				continue
+			}
+		case CloudLifecycleMessageFreeRetentionReminder:
+			if c.FirstHitAt.IsZero() || c.FirstHitAt.After(now.AddDate(0, 0, -14)) {
+				continue
+			}
+		case CloudLifecycleMessageFreeRetentionPreTrim:
+			if c.FirstHitAt.After(now.AddDate(0, 0, -(CloudFreePlanRetentionDays-CloudRetentionPreTrimLeadDays))) || !c.FirstHitAt.After(now.AddDate(0, 0, -CloudFreePlanRetentionDays)) {
 				continue
 			}
 		}
-		if !eligibleLifecycleKind(kind, candidate.recipient.FirstHitAt, candidate.siteCount, candidate.memberCount, now) {
-			continue
+		result = append(result, c.CloudLifecycleRecipient)
+	}
+	slices.SortFunc(result, func(a, b CloudLifecycleRecipient) int {
+		if a.FirstHitAt.IsZero() != b.FirstHitAt.IsZero() {
+			if a.FirstHitAt.IsZero() {
+				return 1
+			}
+			return -1
 		}
-		selected[candidate.recipient.TenantID] = candidate
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read cloud lifecycle control metadata: %w", err)
-	}
-	result := make([]CloudLifecycleRecipient, 0, len(selected))
-	for _, candidate := range selected {
-		result = append(result, candidate.recipient)
-	}
-	slices.SortFunc(result, func(left, right CloudLifecycleRecipient) int {
-		if !left.FirstHitAt.Equal(right.FirstHitAt) {
-			return left.FirstHitAt.Compare(right.FirstHitAt)
+		if diff := a.FirstHitAt.Compare(b.FirstHitAt); diff != 0 {
+			return diff
 		}
-		return cmp.Compare(strings.ToLower(left.Email), strings.ToLower(right.Email))
+		return cmp.Compare(a.Email, b.Email)
 	})
-	if len(result) > limit {
-		result = result[:limit]
-	}
-	return result, nil
-}
-
-func lifecycleCandidateEarlier(candidate, previous lifecycleSiteCandidate) bool {
-	if !candidate.recipient.FirstHitAt.Equal(previous.recipient.FirstHitAt) {
-		return candidate.recipient.FirstHitAt.Before(previous.recipient.FirstHitAt)
-	}
-	if !candidate.createdAt.Equal(previous.createdAt) {
-		return candidate.createdAt.Before(previous.createdAt)
-	}
-	return candidate.recipient.SiteDomain < previous.recipient.SiteDomain
-}
-
-func eligibleLifecycleKind(kind string, firstHit time.Time, siteCount, memberCount int, now time.Time) bool {
-	switch kind {
-	case CloudLifecycleMessageFreeRetentionReminder:
-		return !firstHit.After(now.AddDate(0, 0, -14))
-	case CloudLifecycleMessageFreeRetentionPreTrim:
-		return !firstHit.After(now.AddDate(0, 0, -(CloudFreePlanRetentionDays-CloudRetentionPreTrimLeadDays))) && firstHit.After(now.AddDate(0, 0, -CloudFreePlanRetentionDays))
-	case CloudLifecycleMessageFreeLimitReminder:
-		return siteCount >= CloudFreePlanSiteLimit || memberCount >= CloudFreePlanMemberLimit
-	default:
-		return true
-	}
+	return result[:min(len(result), limit)], nil
 }

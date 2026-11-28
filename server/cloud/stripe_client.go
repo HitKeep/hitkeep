@@ -18,10 +18,31 @@ import (
 
 var errStripeAPIVersionMismatch = errors.New("unsupported Stripe event API version")
 
+const kleinunternehmerInvoiceFooter = "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. · No VAT charged pursuant to § 19 UStG."
+
+func invoiceLocale(locale string) string {
+	if normalizeStripeLocale(locale) == "de" {
+		return "de"
+	}
+	return "en"
+}
+
+func (c *stripeSDKClient) UpdateCustomerDefaults(ctx context.Context, id, locale string) error {
+	params := &stripe.CustomerUpdateParams{
+		PreferredLocales: []*string{new(invoiceLocale(locale))},
+		InvoiceSettings:  &stripe.CustomerUpdateInvoiceSettingsParams{Footer: new(kleinunternehmerInvoiceFooter)},
+	}
+	setStripeVersionHeader(&params.Params)
+	_, err := c.client.V1Customers.Update(ctx, id, params)
+	return err
+}
+
 func (c *stripeSDKClient) CreateCustomer(ctx context.Context, input createCustomerInput) (string, error) {
 	params := &stripe.CustomerCreateParams{
-		Email: stripe.String(input.Email),
-		Name:  stripe.String(strings.TrimSpace(input.Name)),
+		Email:            stripe.String(input.Email),
+		PreferredLocales: []*string{new(invoiceLocale(input.Locale))},
+		InvoiceSettings:  &stripe.CustomerCreateInvoiceSettingsParams{Footer: new(kleinunternehmerInvoiceFooter)},
+		Name:             stripe.String(strings.TrimSpace(input.Name)),
 	}
 	setStripeVersionHeader(&params.Params)
 	setStripeIdempotencyKey(&params.Params, input.IdempotencyKey)
@@ -39,11 +60,23 @@ func (c *stripeSDKClient) CreateCustomer(ctx context.Context, input createCustom
 }
 
 func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input createCheckoutSessionInput) (*checkoutSessionOutput, error) {
+	submit := "Final price — no VAT charged (§ 19 UStG). Instant access to paid features; cancel anytime at period end."
+	terms := "I agree to the Terms of Service and request immediate start of the service before the withdrawal period ends, acknowledging that any statutory withdrawal right expires upon full performance (§ 356(5) BGB) and proportionate value compensation may apply for services already provided."
+	if invoiceLocale(input.Locale) == "de" {
+		submit = "Endpreis gemäß § 19 UStG (keine MwSt.). Sofortiger Zugang zu den Tarif-Funktionen; jederzeit zum Periodenende kündbar."
+		terms = "Ich stimme den Nutzungsbedingungen zu und verlange den sofortigen Beginn der Dienstleistung vor Ablauf der Widerrufsfrist; mir ist bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung vorzeitig erlischt (§ 356 Abs. 5 BGB) und bei Widerruf Wertersatz für bereits erbrachte Leistungen fällig sein kann."
+	}
 	params := &stripe.CheckoutSessionCreateParams{
-		Mode:       stripe.String(checkoutModeSubscription),
-		Customer:   stripe.String(input.CustomerID),
-		SuccessURL: stripe.String(input.SuccessURL),
-		CancelURL:  stripe.String(input.CancelURL),
+		IntegrationIdentifier:    new("hitkeep_cloud_chk_a7k9m2p4"),
+		BillingAddressCollection: new("required"),
+		AdaptivePricing:          &stripe.CheckoutSessionCreateAdaptivePricingParams{Enabled: new(false)},
+		ConsentCollection:        &stripe.CheckoutSessionCreateConsentCollectionParams{TermsOfService: new("required")},
+		NameCollection:           &stripe.CheckoutSessionCreateNameCollectionParams{Business: &stripe.CheckoutSessionCreateNameCollectionBusinessParams{Enabled: new(true), Optional: new(true)}},
+		CustomText:               &stripe.CheckoutSessionCreateCustomTextParams{Submit: &stripe.CheckoutSessionCreateCustomTextSubmitParams{Message: new(submit)}, TermsOfServiceAcceptance: &stripe.CheckoutSessionCreateCustomTextTermsOfServiceAcceptanceParams{Message: new(terms)}},
+		Mode:                     stripe.String(checkoutModeSubscription),
+		Customer:                 stripe.String(input.CustomerID),
+		SuccessURL:               stripe.String(input.SuccessURL),
+		CancelURL:                stripe.String(input.CancelURL),
 		LineItems: []*stripe.CheckoutSessionCreateLineItemParams{
 			{
 				Price:    stripe.String(input.PriceID),
@@ -52,12 +85,13 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 		},
 		SubscriptionData: &stripe.CheckoutSessionCreateSubscriptionDataParams{
 			Metadata: map[string]string{
-				"user_id":          input.UserID.String(),
-				"tenant_id":        input.TenantID.String(),
-				"plan_code":        input.PlanCode,
-				"plan_name":        input.PlanName,
-				"billing_interval": input.BillingInterval,
-				"jurisdiction":     input.Jurisdiction,
+				"checkout_payment_gate": "1",
+				"user_id":               input.UserID.String(),
+				"tenant_id":             input.TenantID.String(),
+				"plan_code":             input.PlanCode,
+				"plan_name":             input.PlanName,
+				"billing_interval":      input.BillingInterval,
+				"jurisdiction":          input.Jurisdiction,
 			},
 		},
 		CustomerUpdate: &stripe.CheckoutSessionCreateCustomerUpdateParams{
@@ -69,7 +103,9 @@ func (c *stripeSDKClient) CreateCheckoutSession(ctx context.Context, input creat
 	setStripeIdempotencyKey(&params.Params, input.IdempotencyKey)
 	if input.AllowPromotionCodes {
 		params.AllowPromotionCodes = new(true)
-		params.AdaptivePricing = &stripe.CheckoutSessionCreateAdaptivePricingParams{Enabled: new(false)}
+	}
+	if input.PaymentMethodConfigurationID != "" {
+		params.PaymentMethodConfiguration = new(input.PaymentMethodConfigurationID)
 	}
 	params.Locale = stripe.String(input.Locale)
 	params.AddMetadata("user_id", input.UserID.String())
@@ -230,13 +266,13 @@ func supportedStripeLocale(tag string) (string, bool) {
 
 func jurisdictionFromStripeEvent(event stripe.Event) (string, error) {
 	switch string(event.Type) {
-	case "checkout.session.completed":
+	case "checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed":
 		var session stripe.CheckoutSession
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return "", fmt.Errorf("decode checkout.session.completed: %w", err)
 		}
 		return strings.TrimSpace(strings.ToUpper(session.Metadata["jurisdiction"])), nil
-	case "customer.subscription.updated", "customer.subscription.deleted":
+	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
 		var subscription stripe.Subscription
 		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
 			return "", fmt.Errorf("decode subscription event: %w", err)

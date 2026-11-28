@@ -1,6 +1,49 @@
 @if (team(); as t) {
 <div class="grid gap-4">
-    @if (paidPrice(); as paid) {
+    <ng-template #checklist let-code>
+        <ul class="m-0 grid list-none gap-2 p-0">
+            @for (feature of features()[code]; track feature.label) {
+            <li class="flex items-center gap-2 text-sm">
+                <i aria-hidden="true" [class]="feature.included ? 'pi pi-check text-primary' : 'pi pi-times text-muted-color'"></i>
+                <span>{{ feature.label }}</span><span class="sr-only">{{ (feature.included ? 'common.yes' : 'common.no') | transloco }}</span>
+            </li>
+            }
+        </ul>
+    </ng-template>
+    @if (checkoutReturned && systemStatus()?.cloud?.hosted) {
+    <div aria-live="polite">
+        @if (returnTeamId && returnTeamId !== t.id) {
+        <p-card [header]="'signup.recovery.switchTeamTitle' | transloco">{{ 'signup.recovery.switchTeamDescription' | transloco }}</p-card>
+        } @else if (checkoutAuthorizationReady()) {
+        <p-card [header]="'cloud.billing.activated' | transloco: { plan: activatedTier()?.name ?? billingState()?.plan_code }">
+            <div class="grid gap-4">
+                @if (activatedTier(); as tier) { <ng-container *ngTemplateOutlet="checklist; context: { $implicit: tier.code }" /> }
+                <div class="flex flex-wrap gap-2">
+                    <a pButton routerLink="/dashboard"><span pButtonLabel>{{ 'signup.recovery.dashboard' | transloco }}</span></a>
+                    <p-button [label]="'cloud.billing.manage' | transloco" [loading]="portalPending()" severity="secondary" (onClick)="openBillingPortal()" />
+                </div>
+            </div>
+        </p-card>
+        } @else {
+        <p-card>
+            @if (billingState()?.team_id === t.id && billingState()?.subscription_status === 'pending_checkout') {
+            <p role="status">{{ 'cloud.billing.processing' | transloco }}</p>
+            } @else {
+            <p role="status">{{ (billingStateResource.error() || confirmationFinished() ? 'signup.recovery.unavailableTitle' : 'cloud.billing.confirming') | transloco }}</p>
+            } @if (confirmationFinished() || billingStateResource.error()) {
+            <p-button severity="secondary" [label]="'signup.recovery.retryState' | transloco" (onClick)="refreshBilling()" />
+            }
+        </p-card>
+        }
+    </div>
+    @if (authorizationContinuation.hasValue() && authorizationContinuation.value().pending) {
+    <section class="grid gap-3" aria-live="polite">
+        <p>{{ 'oauth.resumeDescription' | transloco }}</p>
+        <p-button data-testid="oauth-checkout-continue" [label]="'oauth.continueAuthorization' | transloco" [loading]="oauth.resuming()" (onClick)="continueToAuthorization()" />
+    </section>
+    } } @if (portalError()) {
+    <p role="alert">{{ 'signup.recovery.checkoutError' | transloco }}</p>
+    } @if (paidPrice(); as paid) {
     <section id="promotion" class="grid gap-3 rounded-xl border border-[var(--p-content-border-color)] bg-[var(--p-content-background)] p-4 sm:p-6">
         <h2 class="m-0 text-lg font-semibold">{{ 'cloud.promotion.heading' | transloco }}</h2>
         <p>{{ t.name }} · {{ 'cloud.promotion.once' | transloco }}</p>
@@ -13,23 +56,6 @@
     </section>
     } @if (redemption(); as result) { @if (result.team === t.id) {
     <p role="status">{{ (result.status === 'applied' ? 'cloud.promotion.applied' : 'cloud.promotion.failed') | transloco }}</p>
-    } } @if (checkoutReturned && systemStatus()?.cloud?.hosted) { @if (billingStateResource.isLoading() || authorizationContinuation.isLoading()) {
-    <p role="status">{{ 'oauth.loading' | transloco }}</p>
-    } @else if (billingStateResource.error() || authorizationContinuation.error()) {
-    <section class="grid gap-3" aria-live="polite">
-        <p role="alert">{{ 'oauth.resumeFailed' | transloco }}</p>
-        <p-button [label]="'oauth.retry' | transloco" severity="secondary" (onClick)="retryAuthorizationReturn()" />
-    </section>
-    } @else if (!checkoutAuthorizationReady()) {
-    <section class="grid gap-3" aria-live="polite">
-        <p>{{ 'oauth.checkoutWaiting' | transloco }}</p>
-        <p-button [label]="'oauth.retry' | transloco" severity="secondary" (onClick)="retryAuthorizationReturn()" />
-    </section>
-    } @else if (authorizationContinuation.hasValue() && authorizationContinuation.value().pending) {
-    <section class="grid gap-3" aria-live="polite">
-        <p>{{ 'oauth.resumeDescription' | transloco }}</p>
-        <p-button data-testid="oauth-checkout-continue" [label]="'oauth.continueAuthorization' | transloco" [loading]="oauth.resuming()" (onClick)="continueToAuthorization()" />
-    </section>
     } } @if (recoveryKind(); as kind) {
     <section class="grid gap-3 rounded-xl border border-[var(--p-content-border-color)] bg-[var(--p-content-background)] p-4 sm:p-6" aria-labelledby="purchase-recovery-title">
         @if (kind === 'loading') {
@@ -66,7 +92,7 @@
         <div class="flex flex-wrap gap-2">
             <p-button
                 [label]="'signup.recovery.continuePaid' | transloco: { plan: ('signup.plans.' + recoveryIntent().plan + '.name') | transloco, price: recoveryPrice() }"
-                [loading]="checkoutPending()"
+                [loading]="checkoutPlanPending() === recoveryIntent().plan"
                 [disabled]="checkoutPending() || oauth.resuming()"
                 (onClick)="startRecoveryCheckout()"
             />
@@ -104,7 +130,7 @@
         </div>
         }
     </app-settings-card>
-    } @if (showPlanComparison()) {
+    } @if (showPlanComparison() && !checkoutReturned) {
     <section class="grid gap-4" aria-labelledby="team-plan-comparison-title">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div class="grid max-w-[70ch] gap-1">
@@ -122,9 +148,6 @@
                     size="small"
                     [attr.aria-label]="'admin.team.overview.plans.billingLabel' | transloco"
                 />
-                @if (!promotion()) {
-                <span class="text-xs leading-4 text-[var(--p-text-muted-color)]">{{ "admin.team.overview.plans.annualSaving" | transloco }}</span>
-                }
             </div>
         </div>
 
@@ -132,111 +155,48 @@
         <p role="alert">{{ 'signup.recovery.checkoutError' | transloco }}</p>
         }
         <div class="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
-            @if (currentTier(); as current) {
-            <p-card styleClass="hk-card plan-comparison__card--current">
+            @for (tier of comparisonTiers(); track tier.code) { @let current = tier === currentTier();
+            <p-card [styleClass]="'hk-card' + (current ? ' plan-comparison__card--current' : tier.code === 'pro' ? ' plan-comparison__card--recommended' : '')">
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-2">
-                        <span class="text-lg font-bold">{{ ("signup.plans." + current.code + ".name") | transloco }}</span>
+                        <span class="text-lg font-bold">{{ ('signup.plans.' + tier.code + '.name') | transloco }}</span>
+                        @if (current) {
                         <p-tag [value]="'admin.team.overview.plans.currentPlan' | transloco" severity="secondary" [rounded]="true" />
-                    </div>
-                    <span class="flex items-baseline gap-1">
-                        <span class="text-3xl font-extrabold">{{ planPriceLabels()[current.code] }}</span>
-                        @if (current.code !== "free") {
-                        <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">{{ (billingInterval() === "annual" ? "admin.team.overview.plans.perYear" : "admin.team.overview.plans.perMonth") | transloco }}</span>
-                        }
-                    </span>
-                    <p class="mt-1 mb-0 text-sm text-[var(--p-text-muted-color)]">{{ ("signup.plans." + current.code + ".description") | transloco }}</p>
-                </div>
-
-                <div class="flex flex-1 flex-col gap-2">
-                    <div class="flex items-center gap-2 text-sm">
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i>
-                        <span>{{ "admin.team.overview.plans.features.sites" | transloco: { count: current.entitlements.max_sites_per_team } }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm">
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i>
-                        <span>{{ "admin.team.overview.plans.features.members" | transloco: { count: current.entitlements.max_team_members } }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm">
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i>
-                        <span>{{ retentionYears(current.entitlements.max_retention_days) }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm">
-                        @if (current.entitlements.allow_external_report_recipients) {
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i>
-                        } @else {
-                        <i class="pi pi-times text-sm font-bold text-[var(--p-text-muted-color)]" aria-hidden="true"></i>
-                        }
-                        <span>{{ "admin.team.overview.plans.features.externalReportRecipients" | transloco }}</span>
-                    </div>
-                </div>
-            </p-card>
-            } @for (tier of upgradeTiers(); track tier.code) {
-            <p-card [styleClass]="'hk-card' + (tier.code === 'pro' ? ' plan-comparison__card--recommended' : '')">
-                <div class="flex flex-col gap-1">
-                    <div class="flex items-center gap-2">
-                        <span class="text-lg font-bold">{{ ("signup.plans." + tier.code + ".name") | transloco }}</span>
-                        @if (tier.code === "pro") {
+                        } @else if (tier.code === 'pro') {
                         <p-tag [value]="'admin.team.overview.plans.recommended' | transloco" severity="success" [rounded]="true" />
                         }
                     </div>
-                    @if (offerPrice(tier.code, billingInterval()); as price) {
-                    <app-promotion-price [price]="price" [endsAt]="promotion()!.ends_at" [code]="promotion()!.code" [percentOff]="promotion()!.percent_off" [interval]="billingInterval()" />
+                    @if (!current && offerPrice(tier.code, billingInterval()); as price) {
+                    <app-promotion-price [monthlyEquivalent]="true" [price]="price" [endsAt]="promotion()!.ends_at" [code]="promotion()!.code" [percentOff]="promotion()!.percent_off" [interval]="billingInterval()" />
                     } @else {
                     <span class="flex items-baseline gap-1">
                         <span class="text-3xl font-extrabold">{{ planPriceLabels()[tier.code] }}</span>
-                        <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">{{ (billingInterval() === "annual" ? "admin.team.overview.plans.perYear" : "admin.team.overview.plans.perMonth") | transloco }}</span>
+                        <span class="text-sm font-semibold text-[var(--p-text-muted-color)]">@if (tier.prices?.[billingInterval()]) { {{ 'admin.team.overview.plans.perMonth' | transloco }} }</span>
                     </span>
-                    }
+                    @if (billingInterval() === 'annual' && tier.prices?.annual) {
+                    <small>{{ 'cloud.billing.annualTotal' | transloco: { price: annualTotal(tier) } }} · {{ 'admin.team.overview.plans.annualSaving' | transloco }}</small>
+                    } }
                     <p class="mt-1 mb-0 text-sm text-[var(--p-text-muted-color)]">{{ ("signup.plans." + tier.code + ".description") | transloco }}</p>
                 </div>
 
-                <div class="flex flex-1 flex-col gap-2">
-                    <div class="flex items-center gap-2 text-sm">
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i><span>{{ "admin.team.overview.plans.features.sites" | transloco: { count: tier.entitlements.max_sites_per_team } }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm">
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i><span>{{ "admin.team.overview.plans.features.members" | transloco: { count: tier.entitlements.max_team_members } }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm"><i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i><span>{{ retentionYears(tier.entitlements.max_retention_days) }}</span></div>
-                    <div class="flex items-center gap-2 text-sm">
-                        @if (tier.entitlements.allow_external_report_recipients) {
-                        <i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i>
-                        } @else {
-                        <i class="pi pi-times text-sm font-bold text-[var(--p-text-muted-color)]" aria-hidden="true"></i>
-                        }
-                        <span>{{ "admin.team.overview.plans.features.externalReportRecipients" | transloco }}</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm"><i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i><span>{{ "admin.team.overview.plans.features.customDomains" | transloco }}</span></div>
-                    @if (tier.entitlements.allow_sso) {
-                    <div class="flex items-center gap-2 text-sm"><i class="pi pi-check text-sm font-bold text-primary" aria-hidden="true"></i><span>{{ "admin.team.overview.plans.features.sso" | transloco }}</span></div>
-                    }
-                </div>
-
+                <ng-container *ngTemplateOutlet="checklist; context: { $implicit: tier.code }" />
+                @if (!current) {
                 <div class="mt-auto pt-2">
                     <p-button
                         [label]="'admin.team.overview.plans.upgradeAction' | transloco: { plan: tier.name }"
-                        [loading]="checkoutPending()"
+                        [loading]="checkoutPlanPending() === tier.code"
                         [disabled]="checkoutPending() || oauth.resuming()"
                         [severity]="tier.code === 'pro' || upgradeTiers().length === 1 ? 'primary' : 'secondary'"
                         [fluid]="true"
                         (onClick)="startCheckoutForPlan($any(tier.code))"
                     />
                 </div>
+                }
             </p-card>
             }
         </div>
 
-        <div class="grid gap-1 border-t border-[var(--p-content-border-color)] pt-3 text-sm leading-5 text-[var(--p-text-muted-color)]">
-            <p class="m-0">{{ "admin.team.overview.plans.openSource.note" | transloco }}</p>
-            <p class="m-0">
-                {{ "admin.team.overview.plans.openSource.support" | transloco }}
-                <a href="https://hitkeep.com/support/funding/" target="_blank" rel="noreferrer" class="font-semibold text-primary no-underline hover:underline">{{ "admin.team.overview.plans.openSource.sponsor" | transloco }}</a>
-                · <a href="https://x.com/gethitkeep" target="_blank" rel="noreferrer" class="font-semibold text-primary no-underline hover:underline">X</a> ·
-                <a href="https://www.linkedin.com/company/hitkeep" target="_blank" rel="noreferrer" class="font-semibold text-primary no-underline hover:underline">LinkedIn</a>
-                · {{ "admin.team.overview.plans.openSource.spread" | transloco }}
-            </p>
-        </div>
+        <p class="m-0 text-xs text-muted-color">{{ 'cloud.billing.priceNotice' | transloco }}</p>
     </section>
     } @if (showUsageSection()) {
     <app-settings-card [title]="'admin.team.overview.usage.title' | transloco" [subtitle]="'admin.team.overview.usage.description' | transloco" icon="pi pi-chart-bar">

@@ -3,6 +3,7 @@
 package cloud
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -24,6 +25,11 @@ import (
 )
 
 func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) error {
+	h.eventMu.Lock()
+	defer h.eventMu.Unlock()
+	if event.Data == nil {
+		return errors.New("missing Stripe event data")
+	}
 	if event.Type == "invoice.payment_failed" && event.Data != nil {
 		if invoice, err := parseStripeInvoiceEvent(event.Data.Raw); err == nil && invoice.isManualInvoice() {
 			return nil
@@ -38,7 +44,19 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 		return nil
 	}
 
-	tenantID, _ := tenantIDFromStripeEvent(event)
+	tenantID, parseErr := tenantIDFromStripeEvent(event)
+	if parseErr != nil && (strings.HasPrefix(string(event.Type), "checkout.session.") || strings.HasPrefix(string(event.Type), "customer.subscription.")) {
+		var obj struct {
+			Metadata map[string]string `json:"metadata"`
+		}
+		if err := json.Unmarshal(event.Data.Raw, &obj); err != nil {
+			return err
+		}
+		if obj.Metadata["tenant_id"] == "" {
+			return nil
+		}
+		return parseErr
+	}
 	var references struct {
 		ID           string              `json:"id"`
 		Customer     stripeExpandableRef `json:"customer"`
@@ -48,6 +66,34 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 		if err := json.Unmarshal(event.Data.Raw, &references); err != nil {
 			return fmt.Errorf("decode billing event references: %w", err)
 		}
+	}
+	if event.Type == "charge.refunded" || event.Type == "radar.early_fraud_warning.created" {
+		customer := references.Customer.ID
+		if event.Type == "radar.early_fraud_warning.created" {
+			var warning stripeDisputeEventPayload
+			if err := json.Unmarshal(event.Data.Raw, &warning); err != nil {
+				return err
+			}
+			if warning.Charge.ID == "" {
+				return nil
+			}
+			charge, err := h.stripe.GetCharge(ctx, warning.Charge.ID)
+			if e, ok := errors.AsType[*stripe.Error](err); ok && e.Code == stripe.ErrorCodeResourceMissing {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			customer = charge.CustomerID
+		}
+		account, err := h.resolveCloudBillingAccount(ctx, uuid.Nil, customer, "")
+		if errors.Is(err, database.ErrCloudBillingAccountNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		tenantID = account.TenantID
 	}
 	subscriptionID := references.Subscription.ID
 	if strings.HasPrefix(string(event.Type), "customer.subscription.") {
@@ -98,27 +144,8 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 
 	var handleErr error
 	switch string(event.Type) {
-	case "checkout.session.completed":
-		session, err := parseStripeCheckoutSessionEvent(event.Data.Raw)
-		if err != nil {
-			handleErr = fmt.Errorf("decode checkout.session.completed: %w", err)
-			break
-		}
-		tenantID, err := uuid.Parse(strings.TrimSpace(session.Metadata["tenant_id"]))
-		if err != nil {
-			handleErr = fmt.Errorf("parse checkout tenant_id: %w", err)
-			break
-		}
-		handleErr = h.ctx.Store.UpsertCloudBillingAccount(ctx, database.CloudBillingAccount{
-			TenantID:             tenantID,
-			PlanCode:             normalizePlanCode(session.Metadata["plan_code"]),
-			PlanName:             strings.TrimSpace(session.Metadata["plan_name"]),
-			BillingInterval:      normalizeBillingInterval(session.Metadata["billing_interval"]),
-			SubscriptionStatus:   session.Status,
-			StripeCustomerID:     session.Customer.ID,
-			StripeSubscriptionID: session.Subscription.ID,
-			StripePriceID:        session.FirstPriceID(),
-		})
+	case "checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed":
+		handleErr = h.applyCheckoutEvent(ctx, event, tenantID)
 	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
 		subscription, err := parseStripeSubscriptionEvent(event.Data.Raw)
 		if err != nil {
@@ -129,6 +156,17 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 		if err != nil {
 			handleErr = err
 			break
+		}
+		// Delayed methods can create an active subscription before the first charge settles.
+		if subscription.Metadata["checkout_payment_gate"] == "1" && !database.CloudSubscriptionStatusIsFree(subscription.Status) {
+			current, err := h.ctx.Store.GetCloudBillingAccount(ctx, tenantID)
+			if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
+				handleErr = err
+				break
+			}
+			if current == nil || current.StripeSubscriptionID != subscription.ID || current.SubscriptionStatus == database.CloudSubscriptionStatusPendingCheckout || current.SubscriptionStatus == database.CloudSubscriptionStatusFree || current.SubscriptionStatus == database.CloudSubscriptionStatusIncomplete {
+				break
+			}
 		}
 		// The subscription's price is authoritative for the plan: a billing
 		// portal plan switch changes the price but never rewrites the
@@ -172,7 +210,7 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 		return fmt.Errorf("mark stripe event processed: %w", err)
 	}
 
-	if tenantID != uuid.Nil {
+	if tenantID != uuid.Nil && event.Type != "charge.refunded" && event.Type != "radar.early_fraud_warning.created" {
 		removed, err := h.ctx.Store.IsRemovedCloudAccount(ctx, tenantID, "", "")
 		if err != nil {
 			return fmt.Errorf("resolve completed billing closure: %w", err)
@@ -180,7 +218,7 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 		if removed {
 			return nil
 		}
-		if account, err := h.ctx.Store.GetCloudBillingAccount(ctx, tenantID); err == nil && account != nil && account.SubscriptionStatus == database.CloudSubscriptionStatusActive {
+		if account, err := h.ctx.Store.GetCloudBillingAccount(ctx, tenantID); err == nil && account != nil && (account.SubscriptionStatus == database.CloudSubscriptionStatusActive || account.SubscriptionStatus == "complete") {
 			if _, err := h.ctx.Store.RecordCloudConversionEvent(ctx, database.CloudConversionEvent{
 				TenantID:        tenantID,
 				EventName:       database.CloudConversionSubscriptionActivated,
@@ -195,6 +233,55 @@ func (h *handler) handleStripeEvent(ctx context.Context, event stripe.Event) err
 	}
 
 	return nil
+}
+
+func checkoutPaid(status string) bool { return status == "paid" || status == "no_payment_required" }
+
+func (h *handler) applyCheckoutEvent(ctx context.Context, event stripe.Event, tenantID uuid.UUID) error {
+	session, err := parseStripeCheckoutSessionEvent(event.Data.Raw)
+	if err != nil {
+		return err
+	}
+	current, err := h.ctx.Store.GetCloudBillingAccount(ctx, tenantID)
+	if err != nil && !errors.Is(err, database.ErrCloudBillingAccountNotFound) {
+		return err
+	}
+	failed := event.Type == "checkout.session.async_payment_failed"
+	if current != nil {
+		if current.StripeCustomerID != "" && current.StripeCustomerID != session.Customer.ID {
+			return nil
+		}
+		if current.StripeSubscriptionID != "" {
+			if current.StripeSubscriptionID != session.Subscription.ID {
+				return nil
+			}
+			// Late Checkout notifications must not undo subscription changes made after settlement.
+			switch current.SubscriptionStatus {
+			case database.CloudSubscriptionStatusPendingCheckout, database.CloudSubscriptionStatusIncomplete:
+			case database.CloudSubscriptionStatusActive, "complete", database.CloudSubscriptionStatusPastDue:
+				if !failed {
+					return nil
+				}
+			default:
+				return nil
+			}
+		}
+	}
+	status := database.CloudSubscriptionStatusPendingCheckout
+	if checkoutPaid(session.PaymentStatus) {
+		status = "complete"
+	}
+	if failed {
+		status = database.CloudSubscriptionStatusFree
+		if current != nil && !database.CloudSubscriptionStatusIsFree(current.SubscriptionStatus) {
+			status = database.CloudSubscriptionStatusPastDue
+		}
+		shared.LoggerFromContext(ctx).Warn("Checkout payment failed", "team_id", tenantID, "event_id", event.ID)
+	}
+	return h.ctx.Store.UpsertCloudBillingAccount(ctx, database.CloudBillingAccount{
+		TenantID: tenantID, PlanCode: normalizePlanCode(session.Metadata["plan_code"]), PlanName: strings.TrimSpace(session.Metadata["plan_name"]), BillingInterval: normalizeBillingInterval(session.Metadata["billing_interval"]), SubscriptionStatus: status,
+		StripeCustomerID: session.Customer.ID, StripeSubscriptionID: session.Subscription.ID, StripePriceID: cmp.Or(session.FirstPriceID(), session.Metadata["price_id"]),
+	})
 }
 
 // syncTeamRetentionAfterBillingChange applies the team's current plan's
@@ -325,7 +412,7 @@ func checkoutSuccessURL(conf *config.Config) string {
 	if override := strings.TrimSpace(conf.CloudCheckoutSuccessURL); override != "" {
 		return override
 	}
-	return appurl.Path(conf.PublicURL, "/admin/team?checkout=success")
+	return appurl.Path(conf.PublicURL, "/admin/team/overview?checkout=success")
 }
 
 func checkoutCancelURL(conf *config.Config) string {
@@ -370,7 +457,11 @@ func (h *handler) handleInvoicePaymentFailed(ctx context.Context, event stripe.E
 		return uuid.Nil, err
 	}
 
-	account.SubscriptionStatus = database.CloudSubscriptionStatusPastDue
+	if account.SubscriptionStatus == database.CloudSubscriptionStatusPendingCheckout || account.SubscriptionStatus == database.CloudSubscriptionStatusIncomplete {
+		account.SubscriptionStatus = database.CloudSubscriptionStatusFree
+	} else {
+		account.SubscriptionStatus = database.CloudSubscriptionStatusPastDue
+	}
 	if invoice.Subscription.ID != "" {
 		account.StripeSubscriptionID = invoice.Subscription.ID
 	}
@@ -443,7 +534,7 @@ func (h *handler) resolveCloudBillingAccount(ctx context.Context, tenantID uuid.
 
 func tenantIDFromStripeEvent(event stripe.Event) (uuid.UUID, error) {
 	switch string(event.Type) {
-	case "checkout.session.completed":
+	case "checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed":
 		session, err := parseStripeCheckoutSessionEvent(event.Data.Raw)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("decode checkout.session.completed: %w", err)
@@ -499,18 +590,21 @@ type stripeCheckoutSessionLineItem struct {
 }
 
 type stripeCheckoutSessionEventPayload struct {
-	Metadata     map[string]string               `json:"metadata"`
-	Status       string                          `json:"status"`
-	Customer     stripeExpandableRef             `json:"customer"`
-	Subscription stripeExpandableRef             `json:"subscription"`
-	LineItems    []stripeCheckoutSessionLineItem `json:"line_items"`
+	Metadata      map[string]string   `json:"metadata"`
+	PaymentStatus string              `json:"payment_status"`
+	Status        string              `json:"status"`
+	Customer      stripeExpandableRef `json:"customer"`
+	Subscription  stripeExpandableRef `json:"subscription"`
+	LineItems     struct {
+		Data []stripeCheckoutSessionLineItem `json:"data"`
+	} `json:"line_items"`
 }
 
 func (p *stripeCheckoutSessionEventPayload) FirstPriceID() string {
-	if p == nil || len(p.LineItems) == 0 {
+	if p == nil || len(p.LineItems.Data) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(p.LineItems[0].Price.ID)
+	return strings.TrimSpace(p.LineItems.Data[0].Price.ID)
 }
 
 type stripeSubscriptionItem struct {

@@ -1,0 +1,23 @@
+Subject: Your workspace has used 80% of its monthly hits
+
+Your workspace has used 80% of its monthly hits
+
+Your Free plan includes 10,000 hits per calendar month. Open the dashboard to check your usage and review upgrade options.
+
+Dashboard openen: https://app.hitkeep.example/dashboard
+
+Lees de documentatie: https://hitkeep.com/docs/
+
+-- 
+Gemaakt met HitKeep
+Het privacyvriendelijke single-binary analyticsplatform.
+https://hitkeep.com
+
+Colofon: https://hitkeep.com/legal/imprint/
+Privacybeleid: https://hitkeep.com/legal/privacy-policy/
+
+HitKeep op sociale media:
+GitHub: https://github.com/HitKeep/hitkeep
+LinkedIn: https://www.linkedin.com/company/hitkeep
+X: https://x.com/gethitkeep
+Bluesky: https://bsky.app/profile/hitkeep.com

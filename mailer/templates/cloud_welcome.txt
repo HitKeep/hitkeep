@@ -2,7 +2,7 @@
 {{ t "cloud.welcome.heading" }}
 {{ rule "=" (t "cloud.welcome.heading") }}
 
-{{ tf "cloud.welcome.body" .TeamName .SiteDomain }}
+{{ if .SiteDomain }}{{ tf "cloud.welcome.body" .TeamName .SiteDomain }}{{ else if .German }}Dein Workspace {{ .TeamName }} ist bereit. Füge deine Website im Dashboard hinzu, um die ersten Aufrufe zu sehen.{{ else }}Your {{ .TeamName }} workspace is ready. Add your site in the dashboard to see your first visits.{{ end }}
 
 {{ t "cloud.welcome.dashboard_button" }}: {{ .DashboardURL }}
 

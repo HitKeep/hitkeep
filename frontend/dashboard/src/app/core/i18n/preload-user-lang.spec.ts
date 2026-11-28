@@ -63,6 +63,20 @@ describe('dashboard language activation', () => {
         expect([transloco.getActiveLang(), root.lang, root.dir]).toEqual(['fr', 'fr-FR', 'ltr']);
     });
 
+    it('loads the supported signup language before the browser preference', async () => {
+        const previous = location.href;
+        try {
+            history.replaceState(null, '', '/signup?lang=pt');
+            vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fr']);
+            const bootstrap = TestBed.runInInjectionContext(preloadUserLang);
+            http.expectOne('/i18n/pt.json').flush({});
+            await bootstrap;
+            expect(transloco.getActiveLang()).toBe('pt');
+        } finally {
+            history.replaceState(null, '', previous);
+        }
+    });
+
     it('uses the default catalog and its direction when all preferences are unsupported', async () => {
         vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['ar-EG', 'fa']);
         const bootstrap = TestBed.runInInjectionContext(preloadUserLang);

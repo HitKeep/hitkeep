@@ -43,6 +43,7 @@ func (m *CloudWelcome) Template() string {
 
 func (m *CloudWelcome) Data() any {
 	return struct {
+		German        bool
 		TeamName      string
 		SiteDomain    string
 		IsFreePlan    bool
@@ -54,6 +55,7 @@ func (m *CloudWelcome) Data() any {
 		WordPressURL  string
 		FeedbackURL   string
 	}{
+		German:        mailer.NormalizeLocale(m.LocaleCode) == "de",
 		TeamName:      m.TeamName,
 		SiteDomain:    m.SiteDomain,
 		IsFreePlan:    m.IsFreePlan,
@@ -220,3 +222,42 @@ func (m *CloudFreeLimitReminder) Data() any {
 }
 
 func (m *CloudFreeLimitReminder) Locale() string { return m.LocaleCode }
+
+func NewMonthlyHitReminder(locale string, links CloudLifecycleLinks) mailer.Mailable {
+	m := &CloudSetupReminder{locale: locale, Links: links, title: "Your workspace has used 80% of its monthly hits", Body: "Your Free plan includes 10,000 hits per calendar month. Open the dashboard to check your usage and review upgrade options."}
+	if mailer.NormalizeLocale(locale) == "de" {
+		m.title = "Dein Workspace hat 80 % des monatlichen Kontingents erreicht"
+		m.Body = "Dein Free-Tarif umfasst 10.000 Hits pro Kalendermonat. Im Dashboard siehst du deinen Verbrauch und die verfügbaren Tarife."
+	}
+	return m
+}
+
+type CloudSetupReminder struct {
+	locale string
+	title  string
+	Body   string
+	Links  CloudLifecycleLinks
+}
+
+func NewCloudSetupReminder(locale string, daySix bool, links CloudLifecycleLinks) mailer.Mailable {
+	m := &CloudSetupReminder{locale: locale, Links: links}
+	switch {
+	case mailer.NormalizeLocale(locale) == "de" && daySix:
+		m.title = "Ist dein Tracking-Skript schon online?"
+		m.Body = "HitKeep hat noch keinen Seitenaufruf empfangen. Prüfe, ob dein Tracking-Skript auf der veröffentlichten Seite steht, und öffne sie einmal im Browser."
+	case mailer.NormalizeLocale(locale) == "de":
+		m.title = "Verbinde deine Website mit HitKeep"
+		m.Body = "Füge deine Website im Dashboard hinzu, kopiere das Tracking-Skript in deine Seite und öffne sie im Browser. Dein erster Seitenaufruf erscheint im Dashboard."
+	case daySix:
+		m.title = "Is your tracking script on the live site?"
+		m.Body = "HitKeep is still waiting for its first pageview. Check that the tracking script is on your published page, then open it in a browser."
+	default:
+		m.title = "Connect your site to HitKeep"
+		m.Body = "Add your site in the dashboard, copy its tracking script into your page, and open it in a browser. Your first visit will appear in the dashboard."
+	}
+	return m
+}
+func (m *CloudSetupReminder) Subject() string  { return m.title }
+func (m *CloudSetupReminder) Template() string { return "cloud_setup_reminder.mjml" }
+func (m *CloudSetupReminder) Data() any        { return m }
+func (m *CloudSetupReminder) Locale() string   { return m.locale }

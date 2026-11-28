@@ -1,0 +1,7 @@
+{{ define "preheader" }}{{ .Body }}{{ end }}
+{{ define "content" }}
+<mj-text font-size="20px" font-weight="600">{{ .Subject }}</mj-text>
+<mj-text>{{ .Body }}</mj-text>
+<mj-button href="{{ .Links.DashboardURL }}">{{ t "cloud.welcome.dashboard_button" }}</mj-button>
+<mj-text><a href="{{ .Links.DocsURL }}">{{ t "cloud.welcome.docs_button" }}</a></mj-text>
+{{ end }}

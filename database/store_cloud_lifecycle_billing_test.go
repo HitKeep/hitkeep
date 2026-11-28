@@ -28,8 +28,8 @@ func TestListEligibleCloudLifecycleRecipientsForWelcome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list welcome recipients: %v", err)
 	}
-	if len(recipients) != 1 {
-		t.Fatalf("expected one welcome recipient, got %d: %+v", len(recipients), recipients)
+	if len(recipients) != 3 {
+		t.Fatalf("expected three welcome recipient, got %d: %+v", len(recipients), recipients)
 	}
 	got := recipients[0]
 	if got.TenantID != activated.TenantID || got.UserID != activated.UserID || got.SiteDomain != "activated.example" {
@@ -52,7 +52,7 @@ func TestListEligibleCloudLifecycleRecipientsForWelcome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list welcome recipients after sent: %v", err)
 	}
-	if len(recipients) != 0 {
+	if len(recipients) != 2 {
 		t.Fatalf("expected sent welcome recipient to be excluded, got %+v", recipients)
 	}
 }
@@ -313,5 +313,76 @@ func TestListEligibleCloudLifecycleRecipientsFreeLimitReminder(t *testing.T) {
 	}
 	if recipients[0].TenantID == relaxed.TenantID {
 		t.Fatalf("relaxed tenant must not be eligible")
+	}
+}
+
+func TestZeroHitRescueStopsAfterActivation(t *testing.T) {
+	store := setupTenantStore(t)
+	now := time.Now().UTC()
+	buyer := seedCloudLifecycleTeamWithoutSite(t, store, "rescue@example.com", CloudPlanFree, CloudSubscriptionStatusFree)
+	if err := store.Exec(t.Context(), "UPDATE tenants SET created_at=? WHERE id=?", now.Add(-48*time.Hour), buyer.TenantID); err != nil {
+		t.Fatal(err)
+	}
+	check := func(kind string, when time.Time, want int) {
+		t.Helper()
+		got, err := store.ListEligibleCloudLifecycleRecipients(t.Context(), kind, when, 100)
+		if err != nil || len(got) != want {
+			t.Fatalf("%s: got %d want %d: %v", kind, len(got), want, err)
+		}
+	}
+	check(CloudLifecycleMessageZeroHitDay2, now.Add(-time.Second), 0)
+	check(CloudLifecycleMessageZeroHitDay2, now, 1)
+	check(CloudLifecycleMessageZeroHitDay6, now, 0)
+	check(CloudLifecycleMessageZeroHitDay6, now.Add(4*24*time.Hour), 1)
+	site, err := store.CreateSite(t.Context(), buyer.UserID, "rescue.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordHitActivity(t.Context(), []*api.Hit{{SiteID: site.ID, Timestamp: now}}); err != nil {
+		t.Fatal(err)
+	}
+	check(CloudLifecycleMessageZeroHitDay6, now.Add(4*24*time.Hour), 0)
+	if err := store.Exec(t.Context(), "UPDATE site_activity_hourly_counts SET events=7999 WHERE site_id=?", site.ID); err != nil {
+		t.Fatal(err)
+	}
+	check(CloudLifecycleMessageFreeLimitReminder, now, 1)
+	used, err := store.CurrentMonthlyHits(t.Context(), buyer.TenantID, now)
+	if err != nil || used != 8000 {
+		t.Fatalf("monthly usage %d %v", used, err)
+	}
+	used, err = store.CurrentMonthlyHits(t.Context(), buyer.TenantID, monthStart(now).AddDate(0, 1, 0))
+	if err != nil || used != 0 {
+		t.Fatalf("new month usage %d %v", used, err)
+	}
+}
+
+func TestSplitTeamUsageAndLifecycleAfterSiteTransfer(t *testing.T) {
+	control := setupTenantStore(t)
+	team := seedCloudLifecycleTeamWithoutSite(t, control, "split-owner@example.com", CloudPlanFree, CloudSubscriptionStatusFree)
+	site, err := control.CreateSite(t.Context(), team.UserID, "transferred.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analytics := newTenantTestFixtureStoreWithOptions(t, withTenantID(team.TenantID))
+	if err := analytics.UpsertSiteMirror(t.Context(), site); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	former := uuid.New()
+	if err := analytics.Exec(t.Context(), "INSERT INTO site_activity_summary(site_id,tenant_id,first_hit_at) VALUES(?,?,?)", site.ID, former, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := analytics.Exec(t.Context(), "INSERT INTO site_activity_hourly_counts(site_id,tenant_id,bucket,hits,events) VALUES(?,?,?,?,?)", site.ID, former, now.Truncate(time.Hour), 7000, 1000); err != nil {
+		t.Fatal(err)
+	}
+	mgr := NewTenantStoreManager(control, t.TempDir(), WithTenantDataPlane(true))
+	mgr.stores[team.TenantID] = analytics
+	recipients, err := mgr.ListEligibleCloudLifecycleRecipients(t.Context(), CloudLifecycleMessageFreeLimitReminder, now, 5)
+	if err != nil || len(recipients) != 1 || recipients[0].SiteDomain != site.Domain || !recipients[0].MonthlyLimitNear {
+		t.Fatalf("transferred activity: %+v %v", recipients, err)
+	}
+	usage, err := control.BuildTeamUsageSummary(t.Context(), team.TenantID, analytics)
+	if err != nil || usage.CurrentMonthlyHits != 8000 {
+		t.Fatalf("usage %+v %v", usage, err)
 	}
 }

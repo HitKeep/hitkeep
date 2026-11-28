@@ -13,14 +13,21 @@ import { BillingInterval, PromotionPrice } from '@services/cloud.service';
         <p class="m-0 text-xs leading-5 font-bold text-[var(--p-highlight-color)]">{{ 'cloud.promotion.saving' | transloco: { percent: percent() } }}</p>
         <p class="m-0 flex flex-wrap items-baseline gap-x-2">
             <strong class="text-3xl leading-tight font-bold tracking-tight tabular-nums">{{ first() }}</strong>
+            @if (monthlyEquivalent() && interval() === 'annual') {
+                <span class="text-sm">{{ 'admin.team.overview.plans.perMonth' | transloco }}</span>
+            }
             <span class="text-sm">{{ 'cloud.promotion.withCode' | transloco: { code: code() } }}</span>
             <app-copy-control [value]="code()" [text]="true" size="small" ariaLabelKey="cloud.promotion.copy" labelKey="cloud.promotion.copy" />
         </p>
+        @if (monthlyEquivalent() && interval() === 'annual') {
+            <p class="m-0 text-sm">{{ 'cloud.billing.annualTotal' | transloco: { price: invoiceTotal() } }}</p>
+        }
         <p class="m-0 mt-1 text-sm leading-5">{{ (interval() === 'annual' ? 'cloud.promotion.annualRenewal' : 'cloud.promotion.monthlyRenewal') | transloco: { price: renewal() } }}</p>
         <p class="m-0 text-xs leading-5 text-muted-color">{{ (paid() ? 'cloud.promotion.applyDeadline' : 'cloud.promotion.checkoutDeadline') | transloco: { date: deadline() } }}</p>
     `
 })
 export class PromotionPriceDisplay {
+    readonly monthlyEquivalent = input(false);
     readonly paid = input(false);
     readonly interval = input.required<BillingInterval>();
     readonly percentOff = input.required<number>();
@@ -33,7 +40,8 @@ export class PromotionPriceDisplay {
         this.lang();
         return this.locale.localizeNumber(this.percentOff() / 100, 'percent', undefined, { maximumFractionDigits: 2 });
     });
-    protected readonly first = computed(() => this.money(this.price().with_code_minor));
+    protected readonly invoiceTotal = computed(() => this.money(this.price().with_code_minor));
+    protected readonly first = computed(() => (this.monthlyEquivalent() && this.interval() === 'annual' ? this.money(this.price().with_code_minor / 12) : this.invoiceTotal()));
     protected readonly renewal = computed(() => this.money(this.price().regular_minor));
     protected readonly deadline = computed(() => {
         this.lang();
