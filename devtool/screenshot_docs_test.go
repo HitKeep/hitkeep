@@ -41,4 +41,21 @@ func TestSyncDocsScreenshotsCopiesDocsSetAndReadmeSubset(t *testing.T) {
 	if _, err := syncDocsScreenshots(source, readme, filepath.Join(root, "missing-docs"), []string{"missing.png"}); err == nil {
 		t.Fatal("a missing README screenshot must fail the sync")
 	}
+
+	if got := resolveDocsScreenshotsDir(""); got != "" {
+		t.Fatalf("resolveDocsScreenshotsDir(\"\") = %q, want empty", got)
+	}
+	wantDocs := filepath.Join(root, "docs-checkout", "src", "assets", "screenshots")
+	if got := resolveDocsScreenshotsDir(filepath.Join(root, "docs-checkout")); got != wantDocs {
+		t.Fatalf("resolveDocsScreenshotsDir() = %q, want %q", got, wantDocs)
+	}
+
+	readmeOnly := filepath.Join(root, "readme-only", ".github", "assets")
+	written, err = syncDocsScreenshots(source, readmeOnly, "", readmeScreenshots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(written) != len(readmeScreenshots) {
+		t.Fatalf("written = %v, want %d README images when docsDir is empty", written, len(readmeScreenshots))
+	}
 }

@@ -30,8 +30,9 @@ var docsScreenshotTargets = []string{"", "ask-ai", "annotations", "release"}
 
 // DocsScreenshotRequest selects the curated docs screenshot run.
 type DocsScreenshotRequest struct {
-	Target string `json:"target,omitempty"`
-	Sync   bool   `json:"sync,omitempty"`
+	Target  string `json:"target,omitempty"`
+	Sync    bool   `json:"sync,omitempty"`
+	DocsDir string `json:"docs_dir,omitempty"`
 }
 
 // DocsScreenshotResult lists the captured docs screenshots and, when synced,
@@ -98,7 +99,7 @@ func (a *App) CaptureDocsScreenshots(ctx context.Context, request DocsScreenshot
 	_ = a.maintainArtifacts()
 
 	if request.Sync {
-		docsDir := filepath.Join(filepath.Dir(a.workspace.Root), "hitkeep-docs", "src", "assets", "screenshots")
+		docsDir := resolveDocsScreenshotsDir(request.DocsDir)
 		// A targeted subset never replaces the README set.
 		readme := readmeScreenshots
 		if request.Target != "" {
@@ -106,14 +107,24 @@ func (a *App) CaptureDocsScreenshots(ctx context.Context, request DocsScreenshot
 		}
 		synced, err := syncDocsScreenshots(outputDir, filepath.Join(a.workspace.Root, ".github", "assets"), docsDir, readme)
 		result.Synced = synced
-		if info, statErr := os.Stat(docsDir); statErr == nil && info.IsDir() {
-			result.DocsDir = docsDir
+		if docsDir != "" {
+			if info, statErr := os.Stat(docsDir); statErr == nil && info.IsDir() {
+				result.DocsDir = docsDir
+			}
 		}
 		if err != nil {
 			return result, err
 		}
 	}
 	return result, nil
+}
+
+func resolveDocsScreenshotsDir(docsRepoDir string) string {
+	docsRepoDir = strings.TrimSpace(docsRepoDir)
+	if docsRepoDir == "" {
+		return ""
+	}
+	return filepath.Join(docsRepoDir, "src", "assets", "screenshots")
 }
 
 // syncDocsScreenshots copies every capture into docsDir when that directory
@@ -145,11 +156,13 @@ func syncDocsScreenshots(sourceDir, readmeDir, docsDir string, readme []string) 
 		return nil
 	}
 
-	if info, err := os.Stat(docsDir); err == nil && info.IsDir() {
-		files, _ := filepath.Glob(filepath.Join(sourceDir, "*.png"))
-		for _, file := range files {
-			if err := copyFile(filepath.Base(file), docsDir); err != nil {
-				return written, fmt.Errorf("sync docs screenshot: %w", err)
+	if docsDir != "" {
+		if info, err := os.Stat(docsDir); err == nil && info.IsDir() {
+			files, _ := filepath.Glob(filepath.Join(sourceDir, "*.png"))
+			for _, file := range files {
+				if err := copyFile(filepath.Base(file), docsDir); err != nil {
+					return written, fmt.Errorf("sync docs screenshot: %w", err)
+				}
 			}
 		}
 	}

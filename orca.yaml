@@ -1,0 +1,5 @@
+scripts:
+  setup: |
+    ./hk setup
+  archive: |
+    ./hk dev stop || true

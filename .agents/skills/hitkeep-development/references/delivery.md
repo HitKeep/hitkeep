@@ -4,7 +4,7 @@ Read this reference only when the contribution changes public docs, OpenAPI, dis
 
 ## Documentation
 
-- Treat the adjacent `hitkeep-docs` repository as the private source for the public documentation website and follow its local instructions. It is intentionally separate from HitKeep's public MIT-licensed source.
+- Treat the separate `HitKeep/hitkeep-docs` repository (checked out independently, never assumed at `../hitkeep-docs`) as the private source for the public documentation website and follow its local instructions. It is intentionally separate from HitKeep's public MIT-licensed source.
 - When that private repository is unavailable, record the exact documentation impact for a maintainer instead of inventing or silently skipping a website change.
 - Prefer updating the nearest page. Use tutorials for learning paths, how-to guides for tasks, reference for exact contracts, and explanation for tradeoffs.
 - Lead with the reader's job and concrete product behavior. Remove padded introductions, generic claims, unsupported promises, internal task notes, and private operating details.
