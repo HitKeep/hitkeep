@@ -1,0 +1,1255 @@
+# Select
+
+Select is used to choose an item from a collection of options.
+
+## Import
+
+```typescript
+import { SelectModule, Select, SelectItem } from '@openng/optimus-ui/select';
+```
+
+## Basic
+
+Select is used as a controlled component with ngModel property along with an options collection. Label and value of an option are defined with the optionLabel and optionValue properties respectively. Note that, when options are simple primitive values such as a string array, no optionLabel and optionValue would be necessary.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" optionLabel="name" placeholder="Select a City" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectBasicDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Checkmark
+
+An alternative way to highlight the selected option is displaying a checkmark instead.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" [checkmark]="true" optionLabel="name" [showClear]="true" placeholder="Select a City" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectCheckmarkDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Editable
+
+When editable is present, the input can also be entered with typing.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" placeholder="Select a City" [editable]="true" optionLabel="name" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectEditableDemo implements OnInit {
+    cities: City[] | undefined;
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Group
+
+Options can be grouped when a nested data structures is provided.
+
+```typescript
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { SelectItemGroup } from '@openng/optimus-ui/api';
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="groupedCities" [(ngModel)]="selectedCity" placeholder="Select a City" [group]="true" class="w-full md:w-56">
+                <ng-template let-group #group>
+                    <div class="flex items-center">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'mr-2 flag flag-' + group.value" style="width: 20px" />
+                        <span>{{ group.label }}</span>
+                    </div>
+                </ng-template>
+            </p-select>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectGroupDemo {
+    groupedCities: SelectItemGroup[];
+    selectedCity: string | undefined;
+
+    constructor() {
+        this.groupedCities = [
+                    {
+                        label: 'Germany',
+                        value: 'de',
+                        items: [
+                            { label: 'Berlin', value: 'Berlin' },
+                            { label: 'Frankfurt', value: 'Frankfurt' },
+                            { label: 'Hamburg', value: 'Hamburg' },
+                            { label: 'Munich', value: 'Munich' }
+                        ]
+                    },
+                    {
+                        label: 'USA',
+                        value: 'us',
+                        items: [
+                            { label: 'Chicago', value: 'Chicago' },
+                            { label: 'Los Angeles', value: 'Los Angeles' },
+                            { label: 'New York', value: 'New York' },
+                            { label: 'San Francisco', value: 'San Francisco' }
+                        ]
+                    },
+                    {
+                        label: 'Japan',
+                        value: 'jp',
+                        items: [
+                            { label: 'Kyoto', value: 'Kyoto' },
+                            { label: 'Osaka', value: 'Osaka' },
+                            { label: 'Tokyo', value: 'Tokyo' },
+                            { label: 'Yokohama', value: 'Yokohama' }
+                        ]
+                    }
+                ];
+    }
+}
+```
+
+## Template
+
+Both the selected option and the options list can be templated to provide customizated representation. Use selectedItem template to customize the selected label display and the item template to change the content of the options in the select panel. In addition when grouping is enabled, group template is available to customize the option groups. All templates get the option instance as the default local template variable.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="countries" [(ngModel)]="selectedCountry" optionLabel="name" placeholder="Select a country" class="w-full md:w-56">
+                <ng-template #selectedItem let-selectedOption>
+                    <div class="flex items-center gap-2" *ngIf="selectedOption">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + selectedOption.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ selectedOption.name }}</div>
+                    </div>
+                </ng-template>
+                <ng-template let-country #item>
+                    <div class="flex items-center gap-2">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + country.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ country.name }}</div>
+                    </div>
+                </ng-template>
+                <ng-template #dropdownicon>
+                    <i class="pi pi-map"></i>
+                </ng-template>
+                <ng-template #header>
+                    <div class="font-medium p-3">Available Countries</div>
+                </ng-template>
+                <ng-template #footer>
+                    <div class="p-3">
+                        <p-button label="Add New" fluid severity="secondary" text size="small" icon="pi pi-plus" />
+                    </div>
+                </ng-template>
+            </p-select>
+        </div>
+    `,
+    standalone: true,
+    imports: [ButtonModule, SelectModule, FormsModule]
+})
+export class SelectTemplateDemo implements OnInit {
+    countries: any[] | undefined;
+    selectedCountry: string | undefined;
+
+    ngOnInit() {
+        this.countries = [
+            { name: 'Australia', code: 'AU' },
+            { name: 'Brazil', code: 'BR' },
+            { name: 'China', code: 'CN' },
+            { name: 'Egypt', code: 'EG' },
+            { name: 'France', code: 'FR' },
+            { name: 'Germany', code: 'DE' },
+            { name: 'India', code: 'IN' },
+            { name: 'Japan', code: 'JP' },
+            { name: 'Spain', code: 'ES' },
+            { name: 'United States', code: 'US' }
+        ];
+    }
+}
+```
+
+## Filter
+
+Select provides built-in filtering that is enabled by adding the filter property.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { Country } from '@/domain/customer';
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="countries" [(ngModel)]="selectedCountry" optionLabel="name" [filter]="true" filterBy="name" [showClear]="true" placeholder="Select a Country" class="w-full md:w-56">
+                <ng-template #selectedItem let-selectedOption>
+                    <div class="flex items-center gap-2">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + selectedCountry.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ selectedOption.name }}</div>
+                    </div>
+                </ng-template>
+                <ng-template let-country #item>
+                    <div class="flex items-center gap-2">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + country.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ country.name }}</div>
+                    </div>
+                </ng-template>
+            </p-select>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectFilterDemo implements OnInit {
+    countries: any[] | undefined;
+    selectedCountry: string | undefined;
+
+    ngOnInit() {
+        this.countries = [
+            { name: 'Australia', code: 'AU' },
+            { name: 'Brazil', code: 'BR' },
+            { name: 'China', code: 'CN' },
+            { name: 'Egypt', code: 'EG' },
+            { name: 'France', code: 'FR' },
+            { name: 'Germany', code: 'DE' },
+            { name: 'India', code: 'IN' },
+            { name: 'Japan', code: 'JP' },
+            { name: 'Spain', code: 'ES' },
+            { name: 'United States', code: 'US' }
+        ];
+    }
+}
+```
+
+## Loading State
+
+Loading state can be used loading property.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" [loading]="true" optionLabel="name" placeholder="Loading..." class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectLoadingstateDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Virtual Scroll
+
+VirtualScrolling is an efficient way of rendering the options by displaying a small subset of data in the viewport at any time. When dealing with huge number of options, it is suggested to enable VirtualScrolling to avoid performance issues. Usage is simple as setting virtualScroll property to true and defining virtualScrollItemSize to specify the height of an item.
+
+```typescript
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { SelectItem } from '@openng/optimus-ui/api';
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="items" [(ngModel)]="selectedItem" placeholder="Select Item" [virtualScroll]="true" [virtualScrollItemSize]="32" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectVirtualscrollDemo {
+    items: SelectItem[];
+    selectedItem: string | undefined;
+
+    constructor() {
+        this.items = [];
+                for (let i = 0; i < 10000; i++) {
+                    this.items.push({ label: 'Item ' + i, value: 'Item ' + i });
+                }
+    }
+}
+```
+
+## Lazy Virtual Scroll
+
+```typescript
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { SelectItem } from '@openng/optimus-ui/api';
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="items" [(ngModel)]="selectedItem" placeholder="Select Item" [virtualScroll]="true" [virtualScrollItemSize]="32" [virtualScrollOptions]="options" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectLazyvirtualscrollDemo {
+    items: SelectItem[];
+    selectedItem: string | undefined;
+    loading: boolean = false;
+    loadLazyTimeout: any = null;
+    options: ScrollerOptions;
+
+    constructor() {
+        this.items = [];
+                for (let i = 0; i < 10000; i++) {
+                    this.items.push({ label: 'Item ' + i, value: 'Item ' + i });
+                }
+    }
+
+    onLazyLoad(event) {
+        this.loading = true;
+        
+        if (this.loadLazyTimeout) {
+            clearTimeout(this.loadLazyTimeout);
+        }
+        
+        //imitate delay of a backend call
+        this.loadLazyTimeout = setTimeout(
+            () => {
+                const { first, last } = event;
+                const items = [...this.items];
+        
+                for (let i = first; i < last; i++) {
+                    items[i] = { label: `Item #${i}`, value: i };
+                }
+        
+                this.items = items;
+                this.loading = false;
+            },
+            Math.random() * 1000 + 250
+        );
+    }
+}
+```
+
+## Filled
+
+Specify the variant property as filled to display the component with a higher visual emphasis than the default outlined style.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" variant="filled" optionLabel="name" placeholder="Select a City" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectFilledDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Float Label
+
+A floating label appears on top of the input field when focused. Visit FloatLabel documentation for more information.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { FloatLabelModule } from '@openng/optimus-ui/floatlabel';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex flex-wrap justify-center items-end gap-4">
+            <p-floatlabel class="w-full md:w-56">
+                <p-select [(ngModel)]="value1" inputId="over_label" [options]="cities" optionLabel="name" class="w-full" />
+                <label for="over_label">Over Label</label>
+            </p-floatlabel>
+            <p-floatlabel class="w-full md:w-56" variant="in">
+                <p-select [(ngModel)]="value2" inputId="in_label" [options]="cities" optionLabel="name" class="w-full" variant="filled" />
+                <label for="in_label">In Label</label>
+            </p-floatlabel>
+            <p-floatlabel class="w-full md:w-56" variant="on">
+                <p-select [(ngModel)]="value3" inputId="on_label" [options]="cities" optionLabel="name" class="w-full" />
+                <label for="on_label">On Label</label>
+            </p-floatlabel>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FloatLabelModule, FormsModule]
+})
+export class SelectFloatlabelDemo implements OnInit {
+    cities: City[] | undefined;
+    value1: City | undefined;
+    value2: City | undefined;
+    value3: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Ifta Label
+
+IftaLabel is used to create infield top aligned labels. Visit IftaLabel documentation for more information.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { IftaLabelModule } from '@openng/optimus-ui/iftalabel';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-iftalabel class="w-full md:w-56">
+                <p-select [(ngModel)]="selectedCity" inputId="dd-city" [options]="cities" optionLabel="name" class="w-full" />
+                <label for="dd-city">City</label>
+            </p-iftalabel>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, IftaLabelModule, FormsModule]
+})
+export class SelectIftalabelDemo implements OnInit {
+    cities: City[] | undefined;
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Clear Icon
+
+When showClear is enabled, a clear icon is displayed to clear the value.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" optionLabel="name" placeholder="Select a City" class="w-full md:w-56" [showClear]="true" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectCleariconDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Sizes
+
+Select provides small and large sizes as alternatives to the base.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex flex-col items-center gap-4">
+            <p-select [(ngModel)]="value1" [options]="cities" optionLabel="name" size="small" placeholder="Small" class="w-full md:w-56" />
+            <p-select [(ngModel)]="value2" [options]="cities" optionLabel="name" placeholder="Normal" class="w-full md:w-56" />
+            <p-select [(ngModel)]="value3" [options]="cities" optionLabel="name" size="large" placeholder="Large" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectSizesDemo implements OnInit {
+    value1: City | undefined;
+    value2: City | undefined;
+    value3: City | undefined;
+    cities: City[];
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Fluid
+
+The fluid prop makes the component take up the full width of its container when set to true.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" optionLabel="name" placeholder="Select a City" fluid />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectFluidDemo implements OnInit {
+    cities: City[];
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Disabled
+
+When disabled is present, the element cannot be edited and focused.
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="cities" [(ngModel)]="selectedCity" placeholder="Select a City" optionLabel="name" [disabled]="true" class="w-full md:w-56" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectDisabledDemo implements OnInit {
+    cities: City[] | undefined;
+    selectedCity: City | undefined;
+
+    ngOnInit() {
+        this.cities = [
+            { name: 'New York', code: 'NY' },
+            { name: 'Rome', code: 'RM' },
+            { name: 'London', code: 'LDN' },
+            { name: 'Istanbul', code: 'IST' },
+            { name: 'Paris', code: 'PRS' }
+        ];
+    }
+}
+```
+
+## Invalid
+
+The invalid state is applied using the ⁠invalid property to indicate failed validation, which can be integrated with Angular Forms.
+
+```typescript
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center gap-4">
+            <p-select [options]="cities" [(ngModel)]="selectedCity1" optionLabel="name" [showClear]="true" [invalid]="value1" placeholder="Select a City" class="w-full md:w-56" />
+            <p-select [options]="cities" [(ngModel)]="selectedCity2" optionLabel="name" [showClear]="true" [invalid]="value2" placeholder="Select a City" class="w-full md:w-56" variant="filled" />
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, FormsModule]
+})
+export class SelectInvalidDemo {
+    cities: City[];
+    selectedCity1: City | undefined;
+    selectedCity2: City | undefined;
+    value1: boolean = true;
+    value2: boolean = true;
+}
+```
+
+## Accessibility
+
+Screen Reader Value to describe the component can either be provided with ariaLabelledBy or ariaLabel props. The select element has a combobox role in addition to aria-haspopup and aria-expanded attributes. If the editable option is enabled aria-autocomplete is also added. The relation between the combobox and the popup is created with aria-controls and aria-activedescendant attribute is used to instruct screen reader which option to read during keyboard navigation within the popup list. The popup list has an id that refers to the aria-controls attribute of the combobox element and uses listbox as the role. Each list item has an option role, an id to match the aria-activedescendant of the input element along with aria-label , aria-selected and aria-disabled attributes. If filtering is enabled, filterInputProps can be defined to give aria-* props to the filter input element.
+
+## Customfilter
+
+Custom filter can be applied with the filterTemplate .
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { InputGroupModule } from '@openng/optimus-ui/inputgroup';
+import { InputTextModule } from '@openng/optimus-ui/inputtext';
+import { Country } from '@/domain/customer';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <div class="card flex justify-center">
+            <p-select [options]="countries" [(ngModel)]="selectedCountry" optionLabel="name" [filter]="true" filterBy="name" [showClear]="true" placeholder="Select a Country">
+                <ng-template pTemplate="filter" let-options="options">
+                    <div class="flex gap-1">
+                        <p-inputgroup (click)="$event.stopPropagation()">
+                            <p-inputgroup-addon><i class="pi pi-search"></i></p-inputgroup-addon>
+                            <input type="text" pInputText placeholder="Filter" [(ngModel)]="filterValue" (keyup)="customFilterFunction($event, options)" />
+                        </p-inputgroup>
+                        <p-button icon="pi pi-times" (click)="resetFunction(options)" severity="secondary" />
+                    </div>
+                </ng-template>
+                <ng-template pTemplate="selectedItem" let-selectedOption>
+                    <div class="flex items-center gap-2">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + selectedCountry.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ selectedOption.name }}</div>
+                    </div>
+                </ng-template>
+                <ng-template let-country pTemplate="item">
+                    <div class="flex items-center gap-2">
+                        <img src="https://optimus.openng.org/demo/flag/flag_placeholder.png" [class]="'flag flag-' + country.code.toLowerCase()" style="width: 18px" />
+                        <div>{{ country.name }}</div>
+                    </div>
+                </ng-template>
+            </p-select>
+        </div>
+    `,
+    standalone: true,
+    imports: [ButtonModule, SelectModule, InputGroupModule, InputTextModule, FormsModule]
+})
+export class SelectCustomfilterDemo implements OnInit {
+    countries: City[] | undefined;
+    selectedCountry: string | undefined;
+    filterValue: string | undefined = '';
+
+    ngOnInit() {
+        this.countries = [
+            { name: 'Australia', code: 'AU' },
+            { name: 'Brazil', code: 'BR' },
+            { name: 'China', code: 'CN' },
+            { name: 'Egypt', code: 'EG' },
+            { name: 'France', code: 'FR' },
+            { name: 'Germany', code: 'DE' },
+            { name: 'India', code: 'IN' },
+            { name: 'Japan', code: 'JP' },
+            { name: 'Spain', code: 'ES' },
+            { name: 'United States', code: 'US' }
+        ];
+    }
+
+    resetFunction(options: SelectFilterOptions) {
+        options.reset();
+        this.filterValue = '';
+    }
+
+    customFilterFunction(event: KeyboardEvent, options: SelectFilterOptions) {
+        options.filter(event);
+    }
+}
+```
+
+## Reactiveforms
+
+Select can also be used with reactive forms. In this case, the formControlName property is used to bind the component to a form control.
+
+```typescript
+import { Component, inject } from '@angular/core';
+import { ReactiveFormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { MessageModule } from '@openng/optimus-ui/message';
+import { ToastModule } from '@openng/optimus-ui/toast';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { MessageService } from '@openng/optimus-ui/api';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <p-toast />
+        <div class="card flex justify-center">
+            <form [formGroup]="exampleForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-4 w-full sm:w-56">
+                <div class="flex flex-col gap-1">
+                    <p-select formControlName="city" [options]="cities" [invalid]="isInvalid('city')" optionLabel="name" placeholder="Select a City" class="w-full md:w-56" />
+                    @if (isInvalid('city')) {
+                        <p-message severity="error" size="small" variant="simple">City is required.</p-message>
+                    }
+                </div>
+                <button pButton severity="secondary" type="submit"><span pButtonLabel>Submit</span></button>
+            </form>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, MessageModule, ToastModule, ButtonModule, ReactiveFormsModule]
+})
+export class SelectReactiveformsDemo {
+    messageService = inject(MessageService);
+    cities: City[];
+    exampleForm: FormGroup | undefined;
+    formSubmitted: boolean = false;
+
+    constructor() {
+        this.exampleForm = this.fb.group({
+                    city: ['', Validators.required]
+                });
+    }
+
+    onSubmit() {
+        this.formSubmitted = true;
+        if (this.exampleForm.valid) {
+            this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Form is submitted', life: 3000 });
+            this.exampleForm.reset();
+            this.formSubmitted = false;
+        }
+    }
+
+    isInvalid(controlName: string) {
+        const control = this.exampleForm.get(controlName);
+        return control?.invalid && (control.touched || this.formSubmitted);
+    }
+}
+```
+
+## Templatedrivenforms
+
+```typescript
+import { Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SelectModule } from '@openng/optimus-ui/select';
+import { MessageModule } from '@openng/optimus-ui/message';
+import { ToastModule } from '@openng/optimus-ui/toast';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { MessageService } from '@openng/optimus-ui/api';
+
+interface City {
+    name: string;
+    code: string;
+}
+
+@Component({
+    template: `
+        <p-toast />
+        <div class="card flex justify-center">
+            <form #exampleForm="ngForm" (ngSubmit)="onSubmit(exampleForm)" class="flex flex-col gap-4 w-full sm:w-56">
+                <div class="flex flex-col gap-1">
+                    <p-select
+                        #city="ngModel"
+                        [(ngModel)]="selectedCity"
+                        [options]="cities"
+                        [invalid]="city.invalid && (city.touched || exampleForm.submitted)"
+                        optionLabel="name"
+                        name="city"
+                        placeholder="Select a City"
+                        class="w-full md:w-56"
+                        required
+                    />
+                    @if (city.invalid && (city.touched || exampleForm.submitted)) {
+                        <p-message severity="error" size="small" variant="simple">City is required.</p-message>
+                    }
+                </div>
+                <button pButton severity="secondary" type="submit"><span pButtonLabel>Submit</span></button>
+            </form>
+        </div>
+    `,
+    standalone: true,
+    imports: [SelectModule, MessageModule, ToastModule, ButtonModule, FormsModule]
+})
+export class SelectTemplatedrivenformsDemo {
+    messageService = inject(MessageService);
+    cities: City[];
+    selectedCity: City | undefined;
+
+    onSubmit(form: any) {
+        if (form.valid) {
+            this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Form Submitted', life: 3000 });
+            form.resetForm();
+        }
+    }
+}
+```
+
+## API
+
+### Select
+
+Selector: `p-select` · Component, standalone · works with `ngModel`, `formControl` and `formControlName`
+
+Select is used to choose an item from a collection of options.
+
+#### Inputs
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `appendTo` | `any` | - | Target element to attach the overlay, valid values are "body" or a local ng-template variable of another element (note: use binding with brackets for template variables, e.g. [appendTo]="mydiv" for a div element having #mydiv as variable name). |
+| `ariaFilterLabel` | `string \| undefined` | - | Defines a string that labels the filter input. |
+| `ariaLabel` | `string \| undefined` | - | Used to define a aria label attribute the current element. |
+| `ariaLabelledBy` | `string \| undefined` | - | Establishes relationships between the component and label(s) where its value should be one or more element IDs. |
+| `autofocus` | `boolean \| undefined` | - | When present, it specifies that the component should automatically get focus on load. |
+| `autofocusFilter` | `boolean` | `true` | Applies focus to the filter element when the overlay is shown. |
+| `autoOptionFocus` | `boolean` | `false` | Whether to focus on the first visible or selected element when the overlay panel is shown. |
+| `checkmark` | `boolean` | `false` | Whether the selected option will be shown with a check mark. |
+| `dataKey` | `string \| undefined` | - | A property to uniquely identify a value in options. |
+| `disabled` | `boolean \| undefined` | - | When present, it specifies that the component should have disabled state style. |
+| `dropdownIcon` | `string \| undefined` | - | Icon class of the select icon. |
+| `dt` | `Object \| undefined` | - | Defines scoped design tokens of the component. |
+| `editable` | `boolean \| undefined` | - | When present, custom value instead of predefined options can be entered using the editable input field. |
+| `emptyFilterMessage` | `string` | `''` | Text to display when filtering does not return any results. Defaults to global value in i18n translation configuration. |
+| `emptyMessage` | `string` | `''` | Text to display when there is no data. Defaults to global value in i18n translation configuration. |
+| `filter` | `boolean \| undefined` | - | When specified, displays an input field to filter the items on keyup. |
+| `filterBy` | `string \| undefined` | - | When filtering is enabled, filterBy decides which field or fields (comma separated) to search against. |
+| `filterFields` | `any[] \| undefined` | - | Fields used when filtering the options, defaults to optionLabel. |
+| `filterLocale` | `string \| undefined` | - | Locale to use in filtering. The default locale is the host environment's current locale. |
+| `filterMatchMode` | `"in" \| "contains" \| "startsWith" \| "endsWith" \| "equals" \| "notEquals" \| "lt" \| "lte" \| "gt" \| "gte"` | `'contains'` | Defines how the items are filtered. |
+| `filterPlaceholder` | `string \| undefined` | - | Placeholder text to show when filter input is empty. |
+| `filterValue` | `string \| null \| undefined` | - | When specified, filter displays with this value. |
+| `fluid` | `boolean \| undefined` | - | Spans 100% width of the container when enabled. |
+| `focusOnHover` | `boolean` | `true` | Fields used when filtering the options, defaults to optionLabel. |
+| `group` | `boolean \| undefined` | - | Whether to display options as grouped when nested options are provided. |
+| `id` | `string \| undefined` | - | Unique identifier of the component |
+| `inputId` | `string \| undefined` | - | Identifier of the accessible input element. |
+| `inputSize` | `number \| null \| undefined` | - | Specifies the visible width of the input element in characters. |
+| `invalid` | `boolean \| undefined` | - | When present, it specifies that the component should have invalid state style. |
+| `lazy` | `boolean` | `false` | Defines if data is loaded and interacted with in lazy manner. |
+| `loading` | `boolean \| undefined` | `false` | Whether the select is in loading state. |
+| `loadingIcon` | `string \| undefined` | - | Icon to display in loading state. |
+| `max` | `number \| null \| undefined` | - | The value must be less than or equal to the value. |
+| `maxlength` | `number \| null \| undefined` | - | The number of characters (code points) must not exceed the value of the attribute. |
+| `min` | `number \| null \| undefined` | - | The value must be greater than or equal to the value. |
+| `minlength` | `number \| null \| undefined` | - | The number of characters (code points) must not be less than the value of the attribute, if non-empty. |
+| `motionOptions` | `MotionOptions \| undefined` | - | The motion options. |
+| `name` | `string \| undefined` | - | When present, it specifies that the name of the input. |
+| `optionDisabled` | `string \| undefined` | - | Name of the disabled field of an option. |
+| `optionGroupChildren` | `string` | `'items'` | Name of the options field of an option group. |
+| `optionGroupLabel` | `string \| undefined` | `'label'` | Name of the label field of an option group. |
+| `optionLabel` | `string \| undefined` | - | Name of the label field of an option. |
+| `options` | `any[] \| null \| undefined` | - | An array of objects to display as the available options. |
+| `optionValue` | `string \| undefined` | - | Name of the value field of an option. |
+| `overlayOptions` | `OverlayOptions \| undefined` | - | Whether to use overlay API feature. The properties of overlay API can be used like an object in it. |
+| `panelStyle` | `{ [klass: string]: any; } \| null \| undefined` | - | Inline style of the overlay panel element. |
+| `panelStyleClass` | `string \| undefined` | - | Style class of the overlay panel element. |
+| `pattern` | `string \| null \| undefined` | - | Specifies the value must match the pattern. |
+| `placeholder` | `Signal<string \| undefined>` | - | Default text to display when no option is selected. |
+| `pt` | `SelectPassThrough` | - | Used to pass attributes to DOM elements inside the component. |
+| `ptOptions` | `PassThroughOptions \| undefined` | - | Used to configure passthrough(pt) options of the component. |
+| `readonly` | `boolean \| undefined` | - | When present, it specifies that the component cannot be edited. |
+| `required` | `boolean \| undefined` | - | There must be a value (if set). |
+| `resetFilterOnHide` | `boolean` | `false` | Clears the filter value when hiding the select. |
+| `scrollHeight` | `string` | `'200px'` | Height of the viewport in pixels, a scrollbar is defined if height of list exceeds this value. |
+| `selectOnFocus` | `boolean` | `false` | Determines if the option will be selected on focus. |
+| `showClear` | `boolean \| undefined` | - | When enabled, a clear icon is displayed to clear the value. |
+| `size` | `"large" \| "small"` | - | Specifies the size of the component. |
+| `step` | `number \| null \| undefined` | - | Unless the step is set to the any literal, the value must be min + an integral multiple of the step. |
+| `styleClass` | `string \| undefined` | - | Style class of the element. **Deprecated**: since v20.0.0, use `class` instead. |
+| `tabindex` | `number \| undefined` | `0` | Index of the element in tabbing order. |
+| `tooltip` | `string` | `''` | Advisory information to display in a tooltip on hover. |
+| `tooltipPosition` | `"top" \| "bottom" \| "left" \| "right"` | `'right'` | Position of the tooltip. |
+| `tooltipPositionStyle` | `string` | `'absolute'` | Type of CSS position. |
+| `tooltipStyleClass` | `string \| undefined` | - | Style class of the tooltip. |
+| `unstyled` | `boolean \| undefined` | - | Indicates whether the component should be rendered without styles. |
+| `variant` | `"filled" \| "outlined"` | `'outlined'` | Specifies the input variant of the component. |
+| `virtualScroll` | `boolean \| undefined` | - | Whether the data should be loaded on demand during scroll. |
+| `virtualScrollItemSize` | `number \| undefined` | - | Height of an item in the list for VirtualScrolling. |
+| `virtualScrollOptions` | `ScrollerOptions \| undefined` | - | Whether to use the scroller feature. The properties of scroller component can be used like an object in it. |
+
+#### Outputs
+
+| Name | Payload | Description |
+|---|---|---|
+| `onBlur` | `Event` | Callback to invoke when select loses focus. |
+| `onChange` | `SelectChangeEvent` | Callback to invoke when value of select changes. |
+| `onClear` | `Event` | Callback to invoke when select clears the value. |
+| `onClick` | `MouseEvent` | Callback to invoke when component is clicked. |
+| `onFilter` | `SelectFilterEvent` | Callback to invoke when data is filtered. |
+| `onFocus` | `Event` | Callback to invoke when select gets focus. |
+| `onHide` | `AnimationEvent` | Callback to invoke when select overlay gets hidden. |
+| `onLazyLoad` | `SelectLazyLoadEvent` | Callback to invoke in lazy mode to load new data. |
+| `onShow` | `AnimationEvent` | Callback to invoke when select overlay gets visible. |
+
+#### Templates
+
+Define with `<ng-template #name let-context>` inside the `p-select` element.
+
+| Name | Context | Description |
+|---|---|---|
+| `item` | `SelectItemTemplateContext<any>` | Custom item template. |
+| `group` | `SelectGroupTemplateContext<any>` | Custom group template. |
+| `loader` | `SelectLoaderTemplateContext` | Custom loader template. |
+| `selecteditem` | `SelectSelectedItemTemplateContext<any>` | Custom selected item template. |
+| `header` | - | Custom header template. |
+| `filter` | `SelectFilterTemplateContext` | Custom filter template. |
+| `footer` | - | Custom footer template. |
+| `emptyfilter` | - | Custom empty filter template. |
+| `empty` | - | Custom empty template. |
+| `dropdownicon` | `SelectIconTemplateContext` | Custom dropdown icon template. |
+| `loadingicon` | - | Custom loading icon template. |
+| `clearicon` | `SelectIconTemplateContext` | Custom clear icon template. |
+| `filtericon` | - | Custom filter icon template. |
+| `onicon` | - | Custom on icon template. |
+| `officon` | - | Custom off icon template. |
+| `cancelicon` | - | Custom cancel icon template. |
+
+#### Methods
+
+| Name | Parameters | Returns | Description |
+|---|---|---|---|
+| `resetFilter` | - | `void` | Callback to invoke on filter reset. |
+| `show` | `isFocus: any` | `void` | Displays the panel. |
+| `hide` | `isFocus: any` | `void` | Hides the panel. |
+| `focus` | - | `void` | Applies focus. |
+| `clear` | `event: Event` | `void` | Clears the model. |
+
+### SelectItem
+
+Selector: `p-selectItem` · Component, standalone
+
+#### Inputs
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `ariaPosInset` | `string \| undefined` | - | - |
+| `ariaSetSize` | `string \| undefined` | - | - |
+| `checkmark` | `boolean` | - | - |
+| `disabled` | `boolean \| undefined` | - | - |
+| `dt` | `Object \| undefined` | - | Defines scoped design tokens of the component. |
+| `focused` | `boolean \| undefined` | - | - |
+| `id` | `string \| undefined` | - | - |
+| `index` | `number \| undefined` | - | - |
+| `itemSize` | `number \| undefined` | - | - |
+| `label` | `string \| undefined` | - | - |
+| `option` | `any` | - | - |
+| `pt` | `any` | - | Used to pass attributes to DOM elements inside the component. |
+| `ptOptions` | `PassThroughOptions \| undefined` | - | Used to configure passthrough(pt) options of the component. |
+| `scrollerOptions` | `any` | - | - |
+| `selected` | `boolean \| undefined` | - | - |
+| `template` | `TemplateRef<any> \| undefined` | - | - |
+| `unstyled` | `boolean \| undefined` | - | Indicates whether the component should be rendered without styles. |
+| `visible` | `boolean \| undefined` | - | - |
+
+#### Outputs
+
+| Name | Payload | Description |
+|---|---|---|
+| `onClick` | `any` | - |
+| `onMouseEnter` | `any` | - |
+
+## Pass Through Options
+
+| Name | Type | Description |
+|---|---|---|
+| `root` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the root's DOM element. |
+| `label` | `PassThroughOption<HTMLInputElement \| HTMLSpanElement, I>` | Used to pass attributes to the label's DOM element. |
+| `clearIcon` | `PassThroughOption<HTMLElement, I>` | Used to pass attributes to the clear icon's DOM element. |
+| `dropdown` | `PassThroughOption<HTMLDivElement, I>` | Used to pass attributes to the dropdown's DOM element. |
+| `loadingIcon` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the loading icon's DOM element. |
+| `dropdownIcon` | `PassThroughOption<HTMLElement, I>` | Used to pass attributes to the dropdown icon's DOM element. |
+| `pcOverlay` | `OverlayPassThrough` | Used to pass attributes to the Overlay component. |
+| `header` | `PassThroughOption<HTMLDivElement, I>` | Used to pass attributes to the header's DOM element. |
+| `pcFilterContainer` | `IconFieldPassThrough` | Used to pass attributes to the filter container's DOM element. |
+| `pcFilter` | `InputTextPassThrough` | Used to pass attributes to the filter input's DOM element. |
+| `pcFilterIconContainer` | `InputIconPassThrough` | Used to pass attributes to the filter icon container's DOM element. |
+| `filterIcon` | `PassThroughOption<HTMLElement, I>` | Used to pass attributes to the filter icon's DOM element. |
+| `listContainer` | `PassThroughOption<HTMLDivElement, I>` | Used to pass attributes to the list container's DOM element. |
+| `virtualScroller` | `VirtualScrollerPassThrough` | Used to pass attributes to the VirtualScroller component. |
+| `list` | `PassThroughOption<HTMLUListElement, I>` | Used to pass attributes to the list's DOM element. |
+| `optionGroup` | `PassThroughOption<HTMLLIElement, I>` | Used to pass attributes to the option group's DOM element. |
+| `optionGroupLabel` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the option group label's DOM element. |
+| `option` | `PassThroughOption<HTMLLIElement, I>` | Used to pass attributes to the option's DOM element. |
+| `optionCheckIcon` | `PassThroughOption<HTMLElement, I>` | Used to pass attributes to the option check icon's DOM element. |
+| `optionBlankIcon` | `PassThroughOption<HTMLElement, I>` | Used to pass attributes to the option blank icon's DOM element. |
+| `optionLabel` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the option label's DOM element. |
+| `emptyMessage` | `PassThroughOption<HTMLLIElement, I>` | Used to pass attributes to the empty message's DOM element. |
+| `hiddenFirstFocusableEl` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the hidden first focusable element's DOM element. |
+| `hiddenFilterResult` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the hidden filter result's DOM element. |
+| `hiddenEmptyMessage` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the hidden empty message's DOM element. |
+| `hiddenSelectedMessage` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the hidden selected message's DOM element. |
+| `hiddenLastFocusableEl` | `PassThroughOption<HTMLSpanElement, I>` | Used to pass attributes to the hidden last focusable element's DOM element. |
+
+## Theming
+
+### CSS Classes
+
+| Class | Description |
+|---|---|
+| `p-select` | Class name of the root element |
+| `p-select-label` | Class name of the label element |
+| `p-select-clear-icon` | Class name of the clear icon element |
+| `p-select-dropdown` | Class name of the dropdown element |
+| `p-select-loading-icon` | Class name of the loadingicon element |
+| `p-select-dropdown-icon` | Class name of the dropdown icon element |
+| `p-select-overlay` | Class name of the overlay element |
+| `p-select-header` | Class name of the header element |
+| `p-select-filter` | Class name of the filter element |
+| `p-select-list-container` | Class name of the list container element |
+| `p-select-list` | Class name of the list element |
+| `p-select-option-group` | Class name of the option group element |
+| `p-select-option-group-label` | Class name of the option group label element |
+| `p-select-option` | Class name of the option element |
+| `p-select-option-label` | Class name of the option label element |
+| `p-select-option-check-icon` | Class name of the option check icon element |
+| `p-select-option-blank-icon` | Class name of the option blank icon element |
+| `p-select-empty-message` | Class name of the empty message element |
+
+### Design Tokens
+
+| Token | CSS Variable | Description |
+|---|---|---|
+| `select.background` | `--p-select-background` | Background of root |
+| `select.disabled.background` | `--p-select-disabled-background` | Disabled background of root |
+| `select.filled.background` | `--p-select-filled-background` | Filled background of root |
+| `select.filled.hover.background` | `--p-select-filled-hover-background` | Filled hover background of root |
+| `select.filled.focus.background` | `--p-select-filled-focus-background` | Filled focus background of root |
+| `select.border.color` | `--p-select-border-color` | Border color of root |
+| `select.hover.border.color` | `--p-select-hover-border-color` | Hover border color of root |
+| `select.focus.border.color` | `--p-select-focus-border-color` | Focus border color of root |
+| `select.invalid.border.color` | `--p-select-invalid-border-color` | Invalid border color of root |
+| `select.color` | `--p-select-color` | Color of root |
+| `select.disabled.color` | `--p-select-disabled-color` | Disabled color of root |
+| `select.placeholder.color` | `--p-select-placeholder-color` | Placeholder color of root |
+| `select.invalid.placeholder.color` | `--p-select-invalid-placeholder-color` | Invalid placeholder color of root |
+| `select.shadow` | `--p-select-shadow` | Shadow of root |
+| `select.padding.x` | `--p-select-padding-x` | Padding x of root |
+| `select.padding.y` | `--p-select-padding-y` | Padding y of root |
+| `select.border.radius` | `--p-select-border-radius` | Border radius of root |
+| `select.focus.ring.width` | `--p-select-focus-ring-width` | Focus ring width of root |
+| `select.focus.ring.style` | `--p-select-focus-ring-style` | Focus ring style of root |
+| `select.focus.ring.color` | `--p-select-focus-ring-color` | Focus ring color of root |
+| `select.focus.ring.offset` | `--p-select-focus-ring-offset` | Focus ring offset of root |
+| `select.focus.ring.shadow` | `--p-select-focus-ring-shadow` | Focus ring shadow of root |
+| `select.transition.duration` | `--p-select-transition-duration` | Transition duration of root |
+| `select.sm.font.size` | `--p-select-sm-font-size` | Sm font size of root |
+| `select.sm.padding.x` | `--p-select-sm-padding-x` | Sm padding x of root |
+| `select.sm.padding.y` | `--p-select-sm-padding-y` | Sm padding y of root |
+| `select.lg.font.size` | `--p-select-lg-font-size` | Lg font size of root |
+| `select.lg.padding.x` | `--p-select-lg-padding-x` | Lg padding x of root |
+| `select.lg.padding.y` | `--p-select-lg-padding-y` | Lg padding y of root |
+| `select.dropdown.width` | `--p-select-dropdown-width` | Width of dropdown |
+| `select.dropdown.color` | `--p-select-dropdown-color` | Color of dropdown |
+| `select.overlay.background` | `--p-select-overlay-background` | Background of overlay |
+| `select.overlay.border.color` | `--p-select-overlay-border-color` | Border color of overlay |
+| `select.overlay.border.radius` | `--p-select-overlay-border-radius` | Border radius of overlay |
+| `select.overlay.color` | `--p-select-overlay-color` | Color of overlay |
+| `select.overlay.shadow` | `--p-select-overlay-shadow` | Shadow of overlay |
+| `select.list.padding` | `--p-select-list-padding` | Padding of list |
+| `select.list.gap` | `--p-select-list-gap` | Gap of list |
+| `select.list.header.padding` | `--p-select-list-header-padding` | Header padding of list |
+| `select.option.focus.background` | `--p-select-option-focus-background` | Focus background of option |
+| `select.option.selected.background` | `--p-select-option-selected-background` | Selected background of option |
+| `select.option.selected.focus.background` | `--p-select-option-selected-focus-background` | Selected focus background of option |
+| `select.option.color` | `--p-select-option-color` | Color of option |
+| `select.option.focus.color` | `--p-select-option-focus-color` | Focus color of option |
+| `select.option.selected.color` | `--p-select-option-selected-color` | Selected color of option |
+| `select.option.selected.focus.color` | `--p-select-option-selected-focus-color` | Selected focus color of option |
+| `select.option.padding` | `--p-select-option-padding` | Padding of option |
+| `select.option.border.radius` | `--p-select-option-border-radius` | Border radius of option |
+| `select.option.group.background` | `--p-select-option-group-background` | Background of option group |
+| `select.option.group.color` | `--p-select-option-group-color` | Color of option group |
+| `select.option.group.font.weight` | `--p-select-option-group-font-weight` | Font weight of option group |
+| `select.option.group.padding` | `--p-select-option-group-padding` | Padding of option group |
+| `select.clear.icon.color` | `--p-select-clear-icon-color` | Color of clear icon |
+| `select.checkmark.color` | `--p-select-checkmark-color` | Color of checkmark |
+| `select.checkmark.gutter.start` | `--p-select-checkmark-gutter-start` | Gutter start of checkmark |
+| `select.checkmark.gutter.end` | `--p-select-checkmark-gutter-end` | Gutter end of checkmark |
+| `select.empty.message.padding` | `--p-select-empty-message-padding` | Padding of empty message |

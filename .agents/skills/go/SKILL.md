@@ -1,11 +1,6 @@
 ---
 name: go
-description: >
-  Expert Go programming skill authored by spf13 (former Go team lead, author of Cobra, Viper, Hugo, Afero).
-  Covers idiomatic Go — package design, error handling, interfaces, concurrency, testing, and
-  project layout, current through Go 1.27. Use whenever Go code is written, reviewed, debugged, or
-  refactored — any .go file, go.mod, CLI tool, or web service, and whenever the user mentions
-  Go or golang, even if they don't ask for "idiomatic" code.
+description: "Idiomatic Go (through Go 1.27) patterns: package layout, error handling, interfaces, concurrency, stdlib, json/v2, and testing. Use when writing, reviewing, or refactoring Go code."
 ---
 
 # Idiomatic Go: The Go Way
