@@ -12,7 +12,7 @@ import (
 )
 
 func checkoutSessionFromStripe(s *stripe.CheckoutSession) *checkoutSessionOutput {
-	out := &checkoutSessionOutput{AllowPromotionCodes: s.AllowPromotionCodes, PriceID: s.Metadata["price_id"], ID: s.ID, URL: s.URL, Status: string(s.Status), PaymentStatus: string(s.PaymentStatus), TenantID: s.Metadata["tenant_id"], PlanCode: s.Metadata["plan_code"], BillingInterval: s.Metadata["billing_interval"], Currency: string(s.Currency), AmountSubtotal: s.AmountSubtotal, AmountTotal: s.AmountTotal, ExpiresAt: s.ExpiresAt}
+	out := &checkoutSessionOutput{Locale: s.Locale, Jurisdiction: s.Metadata["jurisdiction"], AllowPromotionCodes: s.AllowPromotionCodes, PriceID: s.Metadata["price_id"], ID: s.ID, URL: s.URL, Status: string(s.Status), PaymentStatus: string(s.PaymentStatus), TenantID: s.Metadata["tenant_id"], PlanCode: s.Metadata["plan_code"], BillingInterval: s.Metadata["billing_interval"], Currency: string(s.Currency), AmountSubtotal: s.AmountSubtotal, AmountTotal: s.AmountTotal, ExpiresAt: s.ExpiresAt}
 	if s.Customer != nil {
 		out.CustomerID = s.Customer.ID
 	}
@@ -70,6 +70,7 @@ func (h *handler) reuseOrCreateCheckout(ctx context.Context, input createCheckou
 	}
 	previous := "initial"
 	var pending *checkoutSessionOutput
+	var superseded []string
 	for _, s := range sessions {
 		if s.TenantID != input.TenantID.String() {
 			continue
@@ -84,26 +85,23 @@ func (h *handler) reuseOrCreateCheckout(ctx context.Context, input createCheckou
 		if s.Status != "open" {
 			continue
 		}
-		if s.PlanCode != input.PlanCode || s.BillingInterval != input.BillingInterval || (s.PriceID != "" && s.PriceID != input.PriceID) {
-			return nil, errCheckoutConflict
+		if pending == nil && s.PlanCode == input.PlanCode && s.BillingInterval == input.BillingInterval && s.PriceID == input.PriceID && normalizeStripeLocale(s.Locale) == normalizeStripeLocale(input.Locale) && s.AllowPromotionCodes == input.AllowPromotionCodes {
+			pending = s
+		} else {
+			superseded = append(superseded, s.ID)
 		}
-		if pending != nil && pending.ID != s.ID {
-			return nil, errCheckoutConflict
-		}
-		pending = s
 	}
-	if pending != nil {
-		if !input.AllowPromotionCodes || pending.AllowPromotionCodes {
-			return pending, nil
-		}
-		expired, err := h.stripe.ExpireCheckoutSession(ctx, pending.ID, stripeIdempotencyKey("replace-checkout", pending.ID))
+	for _, id := range superseded {
+		expired, err := h.stripe.ExpireCheckoutSession(ctx, id, stripeIdempotencyKey("replace-checkout", id))
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(errCheckoutConflict, err)
 		}
 		if expired == nil || expired.Status != "expired" {
 			return nil, errCheckoutConflict
 		}
-		previous = pending.ID
+	}
+	if pending != nil {
+		return pending, nil
 	}
 	// One key for the next team purchase, independent of browser/protocol and plan.
 	input.IdempotencyKey = fmt.Sprintf("checkout_%x", sha256.Sum256([]byte(input.TenantID.String()+":"+previous)))

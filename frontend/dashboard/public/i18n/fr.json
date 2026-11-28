@@ -1724,7 +1724,8 @@
         "domainInvalid": "Format de domaine invalide.",
         "removeProtocol": "Veuillez supprimer http:// ou https://",
         "removeWww": "Veuillez supprimer 'www.'. Entrez le domaine sans le préfixe 'www.'.",
-        "createFailed": "Echec de creation du site. Le domaine existe peut-etre deja."
+        "createFailed": "Echec de creation du site. Le domaine existe peut-etre deja.",
+        "quota": "Votre équipe a atteint sa limite de sites. Passez au forfait supérieur pour ajouter un site."
       }
     },
     "danger": {
@@ -2159,7 +2160,8 @@
           "pendingInviteMany": "{{count}} invitations en attente",
           "metrics": {
             "sites": "Sites",
-            "members": "Membres"
+            "members": "Membres",
+            "monthlyHits": "Hits mensuels"
           }
         },
         "cloud": {
@@ -2202,7 +2204,10 @@
             "retentionDays": "{{count}} jours de rétention des données",
             "externalReportRecipients": "Destinataires externes de rapports programmés",
             "customDomains": "Domaines de suivi personnalisés",
-            "sso": "Authentification unique (SSO)"
+            "sso": "Authentification unique (SSO)",
+            "monthlyHits": "Jusqu’à {{count}} hits par mois",
+            "askAi": "Réponses Ask AI par jour : {{count}}",
+            "branding": "Identité visuelle personnalisée"
           }
         }
       },
@@ -3109,7 +3114,10 @@
       "planUnavailable": "Cette option d'inscription n'est pas disponible pour le moment.",
       "unexpected": "Une erreur inattendue est survenue. Veuillez réessayer.",
       "verificationExpired": "Ce lien de vérification a expiré. Veuillez vous inscrire à nouveau."
-    }
+    },
+    "workspaceOptional": "Nom de l’espace de travail (facultatif)",
+    "workspacePlaceholder": "Laissez vide pour générer un nom",
+    "workspaceTooLong": "Utilisez 120 caractères maximum."
   },
   "preferences": {
     "subtitle": "Gérez les préférences de votre application.",
@@ -4095,7 +4103,9 @@
       "usageMessageSites": "Votre équipe utilise {{current}} sites sur {{limit}} dans l'offre gratuite.",
       "usageMessageMembers": "Votre équipe utilise {{current}} sièges sur {{limit}} dans l'offre gratuite.",
       "upgradeAction": "Passer à Pro",
-      "dismissAction": "Fermer l’avis"
+      "dismissAction": "Fermer l’avis",
+      "hitsNear": "Vous avez utilisé {{current}} hits sur {{limit}} ce mois-ci.",
+      "hitsFull": "Votre limite mensuelle de hits est atteinte ({{current}} sur {{limit}}). Passez au forfait supérieur pour l’augmenter."
     },
     "promotion": {
       "saving": "{{percent}} de réduction sur une facture",
@@ -4120,6 +4130,14 @@
     "planChip": {
       "free": "Offre gratuite",
       "aria": "Vous utilisez l'offre gratuite – voir les offres et mettre à niveau"
+    },
+    "billing": {
+      "priceNotice": "Prix définitifs. Aucune TVA facturée conformément au § 19 de la loi allemande sur la TVA (UStG). Accès immédiat aux fonctionnalités payantes. Résiliation possible à tout moment, avec effet à la fin de la période de facturation.",
+      "activated": "Votre forfait {{plan}} est actif !",
+      "confirming": "Confirmation de votre paiement…",
+      "processing": "Paiement en cours de traitement. Les paiements SEPA et autres paiements bancaires peuvent prendre quelques jours ouvrés. Votre forfait sera activé automatiquement dès confirmation du paiement.",
+      "manage": "Gérer la facturation et les factures",
+      "annualTotal": "Facturation annuelle de {{price}}"
     }
   },
   "reportConfirmation": {

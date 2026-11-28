@@ -139,31 +139,32 @@ type Config struct {
 	AITokenLimit          int    `env:"HITKEEP_AI_TOKEN_LIMIT"         default:"100000" desc:"Maximum AI tokens per budget window; 0 disables local token cap"`
 	AIBudgetWindowMinutes int    `env:"HITKEEP_AI_BUDGET_WINDOW"       default:"1440"  desc:"AI local budget window in minutes"`
 
-	CloudHosted                 bool   `env:"HITKEEP_CLOUD_HOSTED"                   default:"true"  desc:"Enable managed cloud runtime surfaces"                              cloud:"true"`
-	CloudSignupEnabled          bool   `env:"HITKEEP_CLOUD_SIGNUP_ENABLED"           default:"false" desc:"Enable hosted self-serve onboarding surfaces"                      cloud:"true"`
-	CloudJurisdiction           string `env:"HITKEEP_CLOUD_JURISDICTION"             default:""      desc:"Managed cloud jurisdiction label"                                   cloud:"true"`
-	CloudRegion                 string `env:"HITKEEP_CLOUD_REGION"                   default:""      desc:"Managed cloud region label"                                        cloud:"true"`
-	CloudUpgradeURL             string `env:"HITKEEP_CLOUD_UPGRADE_URL"              default:""      desc:"Managed cloud upgrade URL"                                         cloud:"true"`
-	CloudSupportURL             string `env:"HITKEEP_CLOUD_SUPPORT_URL"              default:""      desc:"Managed cloud support URL"                                         cloud:"true"`
-	CloudPlanCode               string `env:"HITKEEP_CLOUD_PLAN_CODE"                default:"free"  desc:"Managed cloud plan code"                                           cloud:"true"`
-	CloudPlanName               string `env:"HITKEEP_CLOUD_PLAN_NAME"                default:"Free"  desc:"Managed cloud plan name"                                           cloud:"true"`
-	CloudMaxTeams               int    `env:"HITKEEP_CLOUD_MAX_TEAMS"                default:"1"     desc:"Managed cloud max teams per user"                                  cloud:"true"`
-	CloudMaxSitesPerTeam        int    `env:"HITKEEP_CLOUD_MAX_SITES_PER_TEAM"       default:"3"     desc:"Managed cloud max sites per team"                                  cloud:"true"`
-	CloudMaxRetentionDays       int    `env:"HITKEEP_CLOUD_MAX_RETENTION_DAYS"       default:"60"    desc:"Managed cloud max retention days"                                  cloud:"true"`
-	CloudMaxTeamMembers         int    `env:"HITKEEP_CLOUD_MAX_TEAM_MEMBERS"         default:"3"     desc:"Managed cloud max members per team"                                cloud:"true"`
-	CloudAllowSSO               bool   `env:"HITKEEP_CLOUD_ALLOW_SSO"                default:"false" desc:"Managed cloud SSO entitlement"                                     cloud:"true"`
-	CloudAllowCustomBranding    bool   `env:"HITKEEP_CLOUD_ALLOW_CUSTOM_BRANDING"    default:"false" desc:"Managed cloud custom branding entitlement"                          cloud:"true"`
-	StripeSecretKey             string `env:"HITKEEP_STRIPE_SECRET_KEY"              default:""      desc:"Stripe secret key for managed cloud billing"                       cloud:"true" sensitive:"redact"`
-	StripePublishableKey        string `env:"HITKEEP_STRIPE_PUBLISHABLE_KEY"         default:""      desc:"Stripe publishable key for managed cloud billing"                  cloud:"true" sensitive:"redact"`
-	StripeWebhookSecret         string `env:"HITKEEP_STRIPE_WEBHOOK_SECRET"          default:""      desc:"Stripe webhook signing secret for managed cloud billing"           cloud:"true" sensitive:"redact"`
-	StripePromotionCouponID     string `env:"HITKEEP_STRIPE_PROMOTION_COUPON_ID" default:"" desc:"Optional Stripe coupon for customer-entered, once-per-customer discounts" cloud:"true"`
-	StripePortalConfigurationID string `env:"HITKEEP_STRIPE_PORTAL_CONFIGURATION_ID" default:""   desc:"Stripe customer portal configuration ID for managed cloud billing" cloud:"true"`
-	StripePriceProMonthly       string `env:"HITKEEP_STRIPE_PRICE_PRO_MONTHLY"       default:""      desc:"Stripe monthly recurring price ID for the Pro plan"               cloud:"true"`
-	StripePriceBusinessMonthly  string `env:"HITKEEP_STRIPE_PRICE_BUSINESS_MONTHLY" default:""     desc:"Stripe monthly recurring price ID for the Business plan"          cloud:"true"`
-	StripePriceProAnnual        string `env:"HITKEEP_STRIPE_PRICE_PRO_ANNUAL"        default:""      desc:"Stripe annual recurring price ID for the Pro plan"                cloud:"true"`
-	StripePriceBusinessAnnual   string `env:"HITKEEP_STRIPE_PRICE_BUSINESS_ANNUAL"   default:""      desc:"Stripe annual recurring price ID for the Business plan"           cloud:"true"`
-	CloudCheckoutSuccessURL     string `env:"HITKEEP_CLOUD_CHECKOUT_SUCCESS_URL"     default:""      desc:"Managed cloud checkout success URL override"                      cloud:"true"`
-	CloudCheckoutCancelURL      string `env:"HITKEEP_CLOUD_CHECKOUT_CANCEL_URL"      default:""      desc:"Managed cloud checkout cancel URL override"                       cloud:"true"`
+	CloudHosted                        bool   `env:"HITKEEP_CLOUD_HOSTED"                   default:"true"  desc:"Enable managed cloud runtime surfaces"                              cloud:"true"`
+	CloudSignupEnabled                 bool   `env:"HITKEEP_CLOUD_SIGNUP_ENABLED"           default:"false" desc:"Enable hosted self-serve onboarding surfaces"                      cloud:"true"`
+	CloudJurisdiction                  string `env:"HITKEEP_CLOUD_JURISDICTION"             default:""      desc:"Managed cloud jurisdiction label"                                   cloud:"true"`
+	CloudRegion                        string `env:"HITKEEP_CLOUD_REGION"                   default:""      desc:"Managed cloud region label"                                        cloud:"true"`
+	CloudUpgradeURL                    string `env:"HITKEEP_CLOUD_UPGRADE_URL"              default:""      desc:"Managed cloud upgrade URL"                                         cloud:"true"`
+	CloudSupportURL                    string `env:"HITKEEP_CLOUD_SUPPORT_URL"              default:""      desc:"Managed cloud support URL"                                         cloud:"true"`
+	CloudPlanCode                      string `env:"HITKEEP_CLOUD_PLAN_CODE"                default:"free"  desc:"Managed cloud plan code"                                           cloud:"true"`
+	CloudPlanName                      string `env:"HITKEEP_CLOUD_PLAN_NAME"                default:"Free"  desc:"Managed cloud plan name"                                           cloud:"true"`
+	CloudMaxTeams                      int    `env:"HITKEEP_CLOUD_MAX_TEAMS"                default:"1"     desc:"Managed cloud max teams per user"                                  cloud:"true"`
+	CloudMaxSitesPerTeam               int    `env:"HITKEEP_CLOUD_MAX_SITES_PER_TEAM"       default:"3"     desc:"Managed cloud max sites per team"                                  cloud:"true"`
+	CloudMaxRetentionDays              int    `env:"HITKEEP_CLOUD_MAX_RETENTION_DAYS"       default:"60"    desc:"Managed cloud max retention days"                                  cloud:"true"`
+	CloudMaxTeamMembers                int    `env:"HITKEEP_CLOUD_MAX_TEAM_MEMBERS"         default:"3"     desc:"Managed cloud max members per team"                                cloud:"true"`
+	CloudAllowSSO                      bool   `env:"HITKEEP_CLOUD_ALLOW_SSO"                default:"false" desc:"Managed cloud SSO entitlement"                                     cloud:"true"`
+	CloudAllowCustomBranding           bool   `env:"HITKEEP_CLOUD_ALLOW_CUSTOM_BRANDING"    default:"false" desc:"Managed cloud custom branding entitlement"                          cloud:"true"`
+	StripeSecretKey                    string `env:"HITKEEP_STRIPE_SECRET_KEY"              default:""      desc:"Stripe secret key for managed cloud billing"                       cloud:"true" sensitive:"redact"`
+	StripePublishableKey               string `env:"HITKEEP_STRIPE_PUBLISHABLE_KEY"         default:""      desc:"Stripe publishable key for managed cloud billing"                  cloud:"true" sensitive:"redact"`
+	StripeWebhookSecret                string `env:"HITKEEP_STRIPE_WEBHOOK_SECRET"          default:""      desc:"Stripe webhook signing secret for managed cloud billing"           cloud:"true" sensitive:"redact"`
+	StripePromotionCouponID            string `env:"HITKEEP_STRIPE_PROMOTION_COUPON_ID" default:"" desc:"Optional Stripe coupon for customer-entered, once-per-customer discounts" cloud:"true"`
+	StripePaymentMethodConfigurationID string `env:"HITKEEP_STRIPE_PAYMENT_METHOD_CONFIGURATION_ID" default:"" desc:"Stripe payment method configuration for cloud checkout" cloud:"true"`
+	StripePortalConfigurationID        string `env:"HITKEEP_STRIPE_PORTAL_CONFIGURATION_ID" default:""   desc:"Stripe customer portal configuration ID for managed cloud billing" cloud:"true"`
+	StripePriceProMonthly              string `env:"HITKEEP_STRIPE_PRICE_PRO_MONTHLY"       default:""      desc:"Stripe monthly recurring price ID for the Pro plan"               cloud:"true"`
+	StripePriceBusinessMonthly         string `env:"HITKEEP_STRIPE_PRICE_BUSINESS_MONTHLY" default:""     desc:"Stripe monthly recurring price ID for the Business plan"          cloud:"true"`
+	StripePriceProAnnual               string `env:"HITKEEP_STRIPE_PRICE_PRO_ANNUAL"        default:""      desc:"Stripe annual recurring price ID for the Pro plan"                cloud:"true"`
+	StripePriceBusinessAnnual          string `env:"HITKEEP_STRIPE_PRICE_BUSINESS_ANNUAL"   default:""      desc:"Stripe annual recurring price ID for the Business plan"           cloud:"true"`
+	CloudCheckoutSuccessURL            string `env:"HITKEEP_CLOUD_CHECKOUT_SUCCESS_URL"     default:""      desc:"Managed cloud checkout success URL override"                      cloud:"true"`
+	CloudCheckoutCancelURL             string `env:"HITKEEP_CLOUD_CHECKOUT_CANCEL_URL"      default:""      desc:"Managed cloud checkout cancel URL override"                       cloud:"true"`
 
 	Version          string
 	trustedProxyNets []netip.Prefix

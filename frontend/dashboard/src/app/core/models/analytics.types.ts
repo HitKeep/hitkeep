@@ -52,12 +52,15 @@ export interface Team {
 }
 
 export interface TeamUsageSummary {
+    current_monthly_hits?: number;
     current_sites: number;
     current_members: number;
     current_pending_invites: number;
 }
 
 export interface TeamEntitlements {
+    max_monthly_hits?: number;
+    max_ask_ai_answers_per_day?: number;
     max_sites_per_team: number;
     max_team_members: number;
     max_retention_days: number;

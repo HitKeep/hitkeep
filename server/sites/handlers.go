@@ -1,6 +1,7 @@
 package sites
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -307,15 +308,16 @@ func (h *handler) handleCreateSite(expectedTeamID uuid.UUID) http.HandlerFunc {
 			return
 		}
 		if expectedTeamID != uuid.Nil && teamID != expectedTeamID {
-			writeCreateSiteError(w, database.ErrActiveTenantChanged)
+			writeCreateSiteError(r.Context(), w, database.ErrActiveTenantChanged, 0)
 			return
 		}
 		if !shared.CheckAgentTeam(w, r, teamID) {
 			return
 		}
-		site, err := h.ctx.Store.CreateSiteWithQuota(r.Context(), userID, teamID, domain, h.ctx.Limits().TeamSiteLimit(r.Context(), teamID))
+		limit := h.ctx.Limits().TeamSiteLimit(r.Context(), teamID)
+		site, err := h.ctx.Store.CreateSiteWithQuota(r.Context(), userID, teamID, domain, limit)
 		if err != nil {
-			if writeCreateSiteError(w, err) {
+			if writeCreateSiteError(r.Context(), w, err, limit) {
 				return
 			}
 			shared.LoggerFromContext(r.Context()).Error("Failed to create site", "error", err, "domain", domain)
@@ -367,10 +369,10 @@ func (h *handler) handleCreateSite(expectedTeamID uuid.UUID) http.HandlerFunc {
 	}
 }
 
-func writeCreateSiteError(w http.ResponseWriter, err error) bool {
+func writeCreateSiteError(ctx context.Context, w http.ResponseWriter, err error, limit int) bool {
 	switch {
 	case errors.Is(err, database.ErrSiteLimitReached):
-		http.Error(w, "Site limit reached", http.StatusForbidden)
+		shared.WriteJSON(ctx, w, http.StatusForbidden, map[string]any{"error": "Site limit reached", "code": "site_limit_reached", "limit": limit})
 	case errors.Is(err, database.ErrActiveTenantChanged):
 		http.Error(w, "Active team changed; retry", http.StatusConflict)
 	default:
@@ -752,9 +754,9 @@ func (h *handler) handleTransferSiteTeam() http.HandlerFunc {
 			return
 		}
 
-		if err := h.ctx.TenantStores.TransferSiteWithQuota(r.Context(), siteID, destinationTeamID, h.ctx.Limits().TeamSiteLimit(r.Context(), destinationTeamID), auditEntries...); err != nil {
-			if errors.Is(err, database.ErrSiteLimitReached) {
-				http.Error(w, "Site limit reached", http.StatusForbidden)
+		limit := h.ctx.Limits().TeamSiteLimit(r.Context(), destinationTeamID)
+		if err := h.ctx.TenantStores.TransferSiteWithQuota(r.Context(), siteID, destinationTeamID, limit, auditEntries...); err != nil {
+			if writeCreateSiteError(r.Context(), w, err, limit) {
 				return
 			}
 			shared.LoggerFromContext(r.Context()).Error("Failed to transfer site to team", "error", err, "site_id", siteID, "source_team_id", sourceTeamID, "destination_team_id", destinationTeamID, "user_id", userID)

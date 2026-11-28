@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -49,7 +50,14 @@ func (s *Store) BuildTeamUsageSummary(ctx context.Context, tenantID uuid.UUID, a
 		return nil, err
 	}
 
-	return &api.TeamUsageSummary{
+	if analyticsStore == nil {
+		analyticsStore = s
+	}
+	monthly, err := analyticsStore.CurrentMonthlyHits(ctx, tenantID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return &api.TeamUsageSummary{CurrentMonthlyHits: monthly,
 		CurrentSites:          len(sites),
 		CurrentMembers:        memberCount,
 		CurrentPendingInvites: pendingInviteCount,

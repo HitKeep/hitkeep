@@ -1721,7 +1721,8 @@
         "domainInvalid": "Ongeldig domeinformaat.",
         "removeProtocol": "Verwijder http:// of https://",
         "removeWww": "Verwijder 'www.'. Voer het domein in zonder het voorvoegsel 'www.'.",
-        "createFailed": "Kan site niet maken. Domein bestaat mogelijk al."
+        "createFailed": "Kan site niet maken. Domein bestaat mogelijk al.",
+        "quota": "Je team heeft het maximale aantal sites bereikt. Upgrade je abonnement om nog een site toe te voegen."
       }
     },
     "danger": {
@@ -2142,7 +2143,8 @@
           "pendingInviteMany": "{{count}} openstaande uitnodigingen",
           "metrics": {
             "sites": "Sites",
-            "members": "Leden"
+            "members": "Leden",
+            "monthlyHits": "Maandelijkse hits"
           }
         },
         "cloud": {
@@ -2185,7 +2187,10 @@
             "retentionDays": "{{count}}-dag gegevensretentie",
             "externalReportRecipients": "Externe ontvangers van geplande rapporten",
             "customDomains": "Aangepaste trackingdomeinen",
-            "sso": "Single sign-on (SSO)"
+            "sso": "Single sign-on (SSO)",
+            "monthlyHits": "Tot {{count}} hits per maand",
+            "askAi": "Ask AI-antwoorden per dag: {{count}}",
+            "branding": "Eigen huisstijl"
           }
         }
       },
@@ -3092,7 +3097,10 @@
       "planUnavailable": "Deze aanmeldingsoptie is momenteel niet beschikbaar.",
       "unexpected": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "verificationExpired": "Deze verificatielink is verlopen. Meld je opnieuw aan."
-    }
+    },
+    "workspaceOptional": "Naam van de werkruimte (optioneel)",
+    "workspacePlaceholder": "Laat leeg om een naam te laten genereren",
+    "workspaceTooLong": "Gebruik maximaal 120 tekens."
   },
   "preferences": {
     "subtitle": "Beheer je applicatievoorkeuren.",
@@ -4078,7 +4086,9 @@
       "usageMessageSites": "Je team gebruikt {{current}} van {{limit}} sites in het gratis abonnement.",
       "usageMessageMembers": "Je team gebruikt {{current}} van {{limit}} teamplekken in het gratis abonnement.",
       "upgradeAction": "Upgrade naar Pro",
-      "dismissAction": "Melding sluiten"
+      "dismissAction": "Melding sluiten",
+      "hitsNear": "Je hebt deze maand {{current}} van de {{limit}} hits gebruikt.",
+      "hitsFull": "Je maandelijkse hitlimiet is bereikt ({{current}} van {{limit}}). Upgrade voor meer capaciteit."
     },
     "promotion": {
       "saving": "{{percent}} korting op één factuur",
@@ -4103,6 +4113,14 @@
     "planChip": {
       "free": "Gratis abonnement",
       "aria": "Je gebruikt het gratis abonnement – bekijk abonnementen en upgrade"
+    },
+    "billing": {
+      "priceNotice": "Dit zijn de eindprijzen. Op grond van § 19 van de Duitse btw-wet (UStG) wordt geen btw berekend. Je krijgt direct toegang tot betaalde functies en kunt op elk moment opzeggen tegen het einde van de factureringsperiode.",
+      "activated": "Je {{plan}}-abonnement is actief!",
+      "confirming": "Je betaling wordt bevestigd…",
+      "processing": "Je betaling wordt verwerkt. SEPA- en andere bankbetalingen kunnen enkele werkdagen duren. Je abonnement wordt automatisch geactiveerd zodra de betaling is bevestigd.",
+      "manage": "Facturering en facturen beheren",
+      "annualTotal": "Jaarlijks gefactureerd: {{price}}"
     }
   },
   "reportConfirmation": {

@@ -1,0 +1,23 @@
+Subject: Is your tracking script on the live site?
+
+Is your tracking script on the live site?
+
+HitKeep is still waiting for its first pageview. Check that the tracking script is on your published page, then open it in a browser.
+
+Apri dashboard: https://app.hitkeep.example/dashboard
+
+Leggi la documentazione: https://hitkeep.com/docs/
+
+-- 
+Offerto da HitKeep
+La piattaforma di analitica privacy-first in un unico binario.
+https://hitkeep.com
+
+Note legali: https://hitkeep.com/legal/imprint/
+Informativa sulla privacy: https://hitkeep.com/legal/privacy-policy/
+
+HitKeep sui social media:
+GitHub: https://github.com/HitKeep/hitkeep
+LinkedIn: https://www.linkedin.com/company/hitkeep
+X: https://x.com/gethitkeep
+Bluesky: https://bsky.app/profile/hitkeep.com

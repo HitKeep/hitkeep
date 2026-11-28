@@ -185,7 +185,6 @@ describe('Signup', () => {
             } as CloudSignupResponse)
         );
 
-        component['signupForm'].teamName().control().setValue('Cloud Team');
         component['signupForm'].email().control().setValue('user@example.com');
         component['signupForm'].password().control().setValue('password123');
         component['signupForm'].acceptedTos().control().setValue(true);
@@ -193,7 +192,7 @@ describe('Signup', () => {
         component['onSubmit']();
 
         const payload = (cloudServiceMock.signup.mock.calls[0]?.[0] ?? null) as Record<string, unknown> | null;
-        expect(payload?.['team_name']).toBe('Cloud Team');
+        expect(payload?.['team_name']).toBe('');
         expect(payload?.['email']).toBe('user@example.com');
         expect(payload?.['plan_code']).toBe('free');
         expect(payload?.['billing']).toBe('monthly');
@@ -430,6 +429,7 @@ describe('Signup', () => {
     it('builds a jurisdiction URL for the alternate region with safe funnel context', () => {
         queryParams = {
             region: 'EU',
+            lang: 'de',
             utm_source: 'hitkeep_docs',
             utm_campaign: 'agency_pilot',
             plan: 'business',
@@ -447,6 +447,7 @@ describe('Signup', () => {
 
         const href = component['signupUrlForJurisdiction']('US');
         expect(href).toContain('https://cloud.hitkeep.com/signup');
+        expect(href).toContain('lang=de');
         expect(href).toContain('team_name=Cloud+Team');
         expect(href).toContain('email=user%40example.com');
         expect(href).toContain('utm_source=hitkeep_docs');

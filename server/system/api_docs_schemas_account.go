@@ -28,6 +28,7 @@ func openAPIV1AccountSchemas() map[string]any {
 		"TeamUsageSummary": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"current_monthly_hits":    map[string]any{"type": "integer", "format": "int64", "description": "Hits and events recorded this UTC calendar month."},
 				"current_sites":           map[string]any{"type": "integer"},
 				"current_members":         map[string]any{"type": "integer"},
 				"current_pending_invites": map[string]any{"type": "integer"},
@@ -36,6 +37,8 @@ func openAPIV1AccountSchemas() map[string]any {
 		"TeamEntitlements": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"max_monthly_hits":                 map[string]any{"type": "integer", "description": "Monthly hit allowance. Zero means unlimited."},
+				"max_ask_ai_answers_per_day":       map[string]any{"type": "integer", "description": "Daily Ask AI answer allowance. Zero means unlimited."},
 				"max_sites_per_team":               map[string]any{"type": "integer"},
 				"max_team_members":                 map[string]any{"type": "integer"},
 				"max_retention_days":               map[string]any{"type": "integer"},

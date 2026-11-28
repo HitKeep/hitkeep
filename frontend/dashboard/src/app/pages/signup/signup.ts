@@ -46,7 +46,22 @@ export class Signup {
         EU: 'https://cloud.hitkeep.eu',
         US: 'https://cloud.hitkeep.com'
     };
-    private static readonly PRESERVED_QUERY_PARAMS = new Set(['ref', 'source', 'plan', 'billing', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'utm_source_platform', 'utm_creative_format', 'utm_marketing_tactic']);
+    private static readonly PRESERVED_QUERY_PARAMS = new Set([
+        'ref',
+        'lang',
+        'source',
+        'plan',
+        'billing',
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'utm_id',
+        'utm_source_platform',
+        'utm_creative_format',
+        'utm_marketing_tactic'
+    ]);
 
     private readonly document = inject(DOCUMENT);
     private readonly destroyRef = inject(DestroyRef);
@@ -79,6 +94,7 @@ export class Signup {
         const intent = { plan: this.selectedPlan(), billing: this.selectedBilling() };
         return {
             ...cloudPurchaseQuery(intent),
+            ...(this.route.snapshot.queryParamMap.has('lang') ? { lang: this.activeLanguage() } : {}),
             ...(this.isOAuthSignup ? { oauth: '1' } : {}),
             returnUrl: this.nativeReturn ?? (intent.plan === 'free' ? '/dashboard' : cloudBillingReviewUrl(intent))
         };
@@ -120,7 +136,7 @@ export class Signup {
         }),
         teamName: new FormControl('', {
             nonNullable: true,
-            validators: [Validators.required, Validators.maxLength(120)]
+            validators: [Validators.maxLength(120)]
         }),
         acceptedTos: new FormControl(false, {
             nonNullable: true,
@@ -289,6 +305,7 @@ export class Signup {
             billing: this.selectedBilling(),
             region: this.currentJurisdiction()
         });
+        if (this.route.snapshot.queryParamMap.has('lang')) query.set('lang', this.activeLanguage());
         if (this.isOAuthSignup) query.set('oauth', '1');
         if (this.nativeReturn) query.set('native', new URLSearchParams(this.nativeReturn.split('?')[1]).get('request')!);
         this.auth

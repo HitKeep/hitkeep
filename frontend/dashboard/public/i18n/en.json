@@ -1798,7 +1798,8 @@
         "domainInvalid": "Invalid domain format.",
         "removeProtocol": "Please remove http:// or https://",
         "removeWww": "Please remove 'www.'. Enter the domain without the 'www.' prefix.",
-        "createFailed": "Failed to create site. Domain might already exist."
+        "createFailed": "Failed to create site. Domain might already exist.",
+        "quota": "Your team has reached its site limit. Upgrade your plan to add another site."
       }
     },
     "danger": {
@@ -2250,7 +2251,8 @@
           "pendingInviteMany": "{{count}} pending invites",
           "metrics": {
             "sites": "Sites",
-            "members": "Members"
+            "members": "Members",
+            "monthlyHits": "Monthly hits"
           }
         },
         "cloud": {
@@ -2293,7 +2295,10 @@
             "retentionDays": "{{count}}-day data retention",
             "externalReportRecipients": "External scheduled-report recipients",
             "customDomains": "Custom tracking domains",
-            "sso": "Single sign-on (SSO)"
+            "sso": "Single sign-on (SSO)",
+            "monthlyHits": "Up to {{count}} monthly hits",
+            "askAi": "Daily Ask AI answers: {{count}}",
+            "branding": "Custom branding"
           }
         }
       },
@@ -3211,7 +3216,10 @@
       "planUnavailable": "This signup option is not available right now.",
       "unexpected": "An unexpected error occurred. Please try again.",
       "verificationExpired": "This verification link has expired. Please sign up again."
-    }
+    },
+    "workspaceOptional": "Workspace name (optional)",
+    "workspacePlaceholder": "Leave blank for an automatic name",
+    "workspaceTooLong": "Use 120 characters or fewer."
   },
   "preferences": {
     "subtitle": "Manage your application preferences.",
@@ -4197,7 +4205,9 @@
       "usageMessageSites": "Your team is using {{current}} of {{limit}} sites on the Free plan.",
       "usageMessageMembers": "Your team is using {{current}} of {{limit}} team members on the Free plan.",
       "upgradeAction": "Upgrade to Pro",
-      "dismissAction": "Dismiss retention notice"
+      "dismissAction": "Dismiss retention notice",
+      "hitsNear": "You’ve used {{current}} of {{limit}} hits this month.",
+      "hitsFull": "You’ve reached your monthly hit limit ({{current}} of {{limit}}). Upgrade for more capacity."
     },
     "promotion": {
       "saving": "{{percent}} off one invoice",
@@ -4222,6 +4232,14 @@
     "planChip": {
       "free": "Free plan",
       "aria": "You are on the Free plan — view plans and upgrade"
+    },
+    "billing": {
+      "priceNotice": "Final prices — no VAT charged pursuant to § 19 UStG. Instant access to paid features; cancel anytime at the end of your billing period.",
+      "activated": "Your {{plan}} plan is active!",
+      "confirming": "Confirming your payment…",
+      "processing": "Payment processing. SEPA and other bank payments may take a few business days to settle. Your plan activates automatically once payment is confirmed.",
+      "manage": "Manage billing & invoices",
+      "annualTotal": "Billed {{price}} per year"
     }
   },
   "reportConfirmation": {

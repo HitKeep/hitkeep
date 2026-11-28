@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, model, signal } from '@angular/core';
 
+import { Router } from '@angular/router';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { DashboardBootstrapService } from '@services/dashboard-bootstrap.service';
 import { ReactiveFormsModule, FormControl, Validators } from '@angular/forms';
 import { compatForm } from '@angular/forms/signals/compat';
 import { TranslocoPipe } from '@jsverse/transloco';
@@ -11,7 +14,7 @@ import { domainValidator, sanitizeDomainInput } from '@features/sites/utils/doma
 @Component({
     selector: 'app-add-site-dialog',
     standalone: true,
-    imports: [ReactiveFormsModule, DialogShell, InputTextModule, MessageModule, TranslocoPipe],
+    imports: [ReactiveFormsModule, ButtonModule, DialogShell, InputTextModule, MessageModule, TranslocoPipe],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <app-dialog-shell
@@ -64,7 +67,12 @@ import { domainValidator, sanitizeDomainInput } from '@features/sites/utils/doma
                             <small class="text-red-500">{{ 'sites.addDialog.errors.removeWww' | transloco }}</small>
                         }
                     }
-                    @if (createError()) {
+                    @if (createError() === 'sites.addDialog.errors.quota' && bootstrap.cloudHosted()) {
+                        <p-message severity="warn">
+                            {{ 'sites.addDialog.errors.quota' | transloco }}
+                            <p-button type="button" variant="text" [label]="'cloud.retentionNotice.upgradeAction' | transloco" (onClick)="openUpgrade()" />
+                        </p-message>
+                    } @else if (createError()) {
                         <small class="text-red-500">{{ createError() | transloco }}</small>
                     }
                 </div>
@@ -74,6 +82,8 @@ import { domainValidator, sanitizeDomainInput } from '@features/sites/utils/doma
 })
 export class AddSiteDialog {
     visible = model<boolean>(false);
+    protected readonly bootstrap = inject(DashboardBootstrapService);
+    private readonly router = inject(Router);
     private siteService = inject(SiteService);
     protected isSubmitting = signal(false);
     protected createError = signal<string | null>(null);
@@ -87,6 +97,11 @@ export class AddSiteDialog {
     protected isInvalid() {
         return this.form.domain().invalid() && (this.form.domain().dirty() || this.form.domain().touched());
     }
+    protected openUpgrade(): void {
+        this.onDialogVisibleChange(false);
+        void this.router.navigateByUrl('/admin/team/overview');
+    }
+
     resetForm() {
         this.form.domain().control().reset('');
         this.createError.set(null);
@@ -100,6 +115,7 @@ export class AddSiteDialog {
     }
     onSubmit(event?: Event) {
         event?.preventDefault();
+        if (this.isSubmitting()) return;
         if (this.form().invalid()) {
             this.form.domain().markAsTouched();
             return;
@@ -113,12 +129,16 @@ export class AddSiteDialog {
         this.isSubmitting.set(true);
         this.createError.set(null);
 
+        const firstSite = this.siteService.sites().length === 0;
         this.siteService.createSite(domain).subscribe({
-            next: () => {
+            next: (site) => {
+                if (firstSite) void this.router.navigate(['/sites', site.id, 'settings', 'tracking']);
                 this.onDialogVisibleChange(false);
             },
-            error: () => {
-                this.createError.set('sites.addDialog.errors.createFailed');
+            error: (err) => {
+                const message = typeof err.error === 'string' ? err.error : err.error?.message;
+                const quota = err.status === 402 || err.error?.code === 'site_limit_reached' || (typeof message === 'string' && message.trim().toLowerCase() === 'site limit reached');
+                this.createError.set(quota && this.bootstrap.cloudHosted() ? 'sites.addDialog.errors.quota' : 'sites.addDialog.errors.createFailed');
                 this.isSubmitting.set(false);
             }
         });

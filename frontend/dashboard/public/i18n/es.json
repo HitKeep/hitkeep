@@ -1930,7 +1930,8 @@
         "domainInvalid": "Formato de dominio inválido.",
         "removeProtocol": "Elimina http:// o https://",
         "removeWww": "Elimina 'www.'. Introduce el dominio sin el prefijo 'www.'.",
-        "createFailed": "No se pudo crear el sitio. El dominio puede existir ya."
+        "createFailed": "No se pudo crear el sitio. El dominio puede existir ya.",
+        "quota": "Tu equipo ha alcanzado el límite de sitios. Amplía tu plan para añadir otro sitio."
       }
     },
     "danger": {
@@ -2382,7 +2383,8 @@
           "pendingInviteMany": "{{count}} invitaciones pendientes",
           "metrics": {
             "sites": "Sitios",
-            "members": "Miembros"
+            "members": "Miembros",
+            "monthlyHits": "Hits mensuales"
           }
         },
         "cloud": {
@@ -2425,7 +2427,10 @@
             "retentionDays": "{{count}} días de retención de datos",
             "externalReportRecipients": "Destinatarios externos de informes programados",
             "customDomains": "Dominios de seguimiento personalizados",
-            "sso": "Inicio de sesión único (SSO)"
+            "sso": "Inicio de sesión único (SSO)",
+            "monthlyHits": "Hasta {{count}} hits al mes",
+            "askAi": "Respuestas diarias de Ask AI: {{count}}",
+            "branding": "Marca personalizada"
           }
         }
       },
@@ -3343,7 +3348,10 @@
       "planUnavailable": "Esta opción de registro no está disponible ahora mismo.",
       "unexpected": "Se produjo un error inesperado. Inténtalo de nuevo.",
       "verificationExpired": "Este enlace de verificación ha caducado. Regístrate de nuevo."
-    }
+    },
+    "workspaceOptional": "Nombre del espacio de trabajo (opcional)",
+    "workspacePlaceholder": "Déjalo en blanco para generar un nombre",
+    "workspaceTooLong": "Usa un máximo de 120 caracteres."
   },
   "preferences": {
     "subtitle": "Administra las preferencias de tu aplicación.",
@@ -4332,7 +4340,9 @@
       "usageMessageSites": "Tu equipo está usando {{current}} de {{limit}} sitios del plan gratuito.",
       "usageMessageMembers": "Tu equipo está usando {{current}} de {{limit}} miembros del plan gratuito.",
       "upgradeAction": "Mejorar a Pro",
-      "dismissAction": "Descartar aviso"
+      "dismissAction": "Descartar aviso",
+      "hitsNear": "Has utilizado {{current}} de {{limit}} hits este mes.",
+      "hitsFull": "Has alcanzado el límite mensual de hits ({{current}} de {{limit}}). Amplía tu plan para aumentar la capacidad."
     },
     "promotion": {
       "saving": "{{percent}} de descuento en una factura",
@@ -4357,6 +4367,14 @@
     "planChip": {
       "free": "Plan gratuito",
       "aria": "Estás en el plan gratuito: ver planes y mejorar"
+    },
+    "billing": {
+      "priceNotice": "Precios finales. No se aplica IVA de conformidad con el § 19 de la ley alemana del IVA (UStG). Acceso inmediato a las funciones de pago. Puedes cancelar en cualquier momento con efecto al final del período de facturación.",
+      "activated": "¡Tu plan {{plan}} está activo!",
+      "confirming": "Confirmando tu pago…",
+      "processing": "Pago en proceso. Los pagos SEPA y otros pagos bancarios pueden tardar varios días hábiles. Tu plan se activará automáticamente cuando se confirme el pago.",
+      "manage": "Gestionar facturación y facturas",
+      "annualTotal": "Se facturan {{price}} al año"
     }
   },
   "reportConfirmation": {

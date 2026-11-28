@@ -45,7 +45,7 @@
             <form (submit)="onSubmit($event)" class="hk-auth-form" novalidate>
                 @if (errorMessage(); as errorMessageKey) {
                 <p-message severity="error" role="alert" aria-live="assertive">{{ errorMessageKey | transloco }}</p-message>
-                } @if (selectedPlan() !== "free") {
+                } @if (cloudStatus()?.hosted && selectedPlan() !== "free") {
                 <div class="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm" data-testid="signup-paid-intent">
                     <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                         <strong>{{ ("signup.plans." + selectedPlan() + ".name") | transloco }}</strong>
@@ -62,6 +62,7 @@
                     </p>
                     }
                     <p class="mt-1 mb-0 text-[var(--p-text-muted-color)]">{{ 'signup.paidNextSteps' | transloco }}</p>
+                    <p class="mt-2 mb-0 text-xs">{{ 'cloud.billing.priceNotice' | transloco }}</p>
                 </div>
                 }
 
@@ -138,10 +139,7 @@
                 </div>
 
                 <div class="hk-auth-field">
-                    <label for="teamName" class="hk-auth-field-label">
-                        {{ "signup.teamNameLabel" | transloco }}
-                        <span class="api-client-required-asterisk" aria-hidden="true">*</span>
-                    </label>
+                    <label for="teamName" class="hk-auth-field-label"> {{ "signup.workspaceOptional" | transloco }} </label>
                     <input
                         pInputText
                         id="teamName"
@@ -149,11 +147,11 @@
                         [fluid]="true"
                         autocomplete="organization"
                         [attr.aria-invalid]="signupForm.teamName().touched() && signupForm.teamName().invalid() ? true : null"
-                        [attr.aria-describedby]="signupForm.teamName().touched() && signupForm.teamName().invalid() ? 'signup-team-error' : null"
-                        [placeholder]="'signup.teamNamePlaceholder' | transloco"
+                        maxlength="120"
+                        [placeholder]="'signup.workspacePlaceholder' | transloco"
                     />
                     @if (signupForm.teamName().touched() && signupForm.teamName().invalid()) {
-                    <p-message id="signup-team-error" severity="error" variant="simple" size="small" role="status">{{ "signup.teamNameRequired" | transloco }}</p-message>
+                    <p-message severity="error" variant="simple" size="small" role="status">{{ "signup.workspaceTooLong" | transloco }}</p-message>
                     }
                 </div>
 

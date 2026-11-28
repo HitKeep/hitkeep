@@ -350,7 +350,7 @@ func openAPIV1CorePaths() map[string]any {
 				map[string]any{"204": map[string]any{"description": "Stripe confirmed the promotion on this subscription."}, "400": errResp("Invalid code or team"), "401": errResp("Unauthorized"), "403": errResp("Team billing access denied"), "409": errResp("Team, promotion, or subscription is ineligible"), "502": errResp("Unable to confirm promotion")}),
 		},
 		"/api/cloud/billing/state": map[string]any{
-			"get": cloudOp("Get Cloud billing state", "Returns authoritative billing state for the authenticated active Cloud team. Requires team.manage_settings. A pending plan is reported only while checkout is pending; a paid plan is never described as Free.", secCookie(), nil, nil,
+			"get": cloudOp("Get Cloud billing state", "Returns authoritative billing state for the authenticated active Cloud team. Requires team.manage_settings. A pending plan is reported only while checkout is pending; a paid plan is never described as Free.", secCookie(), []any{map[string]any{"name": "sync", "in": "query", "description": "Set to 1 to check a pending checkout against Stripe.", "schema": map[string]any{"type": "string", "enum": []string{"1"}}}}, nil,
 				map[string]any{
 					"200": jsonSchemaResp("Cloud billing state", map[string]any{"type": "object", "properties": map[string]any{
 						"team_id":             map[string]any{"type": "string", "format": "uuid"},

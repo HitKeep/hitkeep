@@ -1,0 +1,23 @@
+Subject: Connect your site to HitKeep
+
+Connect your site to HitKeep
+
+Add your site in the dashboard, copy its tracking script into your page, and open it in a browser. Your first visit will appear in the dashboard.
+
+Open dashboard: https://app.hitkeep.example/dashboard
+
+Read the docs: https://hitkeep.com/docs/
+
+-- 
+Powered by HitKeep
+The privacy-first, single-binary analytics platform.
+https://hitkeep.com
+
+Imprint: https://hitkeep.com/legal/imprint/
+Privacy Policy: https://hitkeep.com/legal/privacy-policy/
+
+HitKeep on Social Media:
+GitHub: https://github.com/HitKeep/hitkeep
+LinkedIn: https://www.linkedin.com/company/hitkeep
+X: https://x.com/gethitkeep
+Bluesky: https://bsky.app/profile/hitkeep.com

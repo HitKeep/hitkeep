@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" dir="auto" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+
+<head>
+  <title>Connect your site to HitKeep</title>
+  <!--[if !mso]><!-->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <!--<![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style type="text/css">
+    #outlook a {
+      padding: 0;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+
+    table,
+    td {
+      border-collapse: collapse;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+
+    img {
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+
+    p {
+      display: block;
+      margin: 13px 0;
+    }
+
+  </style>
+  <!--[if mso]>
+    <noscript>
+    <xml>
+    <o:OfficeDocumentSettings>
+      <o:AllowPNG/>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+    </xml>
+    </noscript>
+    <![endif]-->
+  <!--[if lte mso 11]>
+    <style type="text/css">
+      .mj-outlook-group-fix { width:100% !important; }
+    </style>
+    <![endif]-->
+  <style type="text/css">
+    @media only screen and (min-width:480px) {
+      .mj-column-per-100 {
+        width: 100% !important;
+        max-width: 100%;
+      }
+    }
+
+  </style>
+  <style media="screen and (min-width:480px)">
+    .moz-text-html .mj-column-per-100 {
+      width: 100% !important;
+      max-width: 100%;
+    }
+
+  </style>
+  <style type="text/css">
+    :root {
+      color-scheme: light dark;
+      supported-color-schemes: light dark;
+    }
+
+    /* Brand green (#33d399) fails contrast on white; links use the darker
+         emerald in light mode and the brand green in dark mode. */
+    a {
+      color: #047857;
+    }
+
+    /* Phones: give tables the width the 40px desktop gutters take away. */
+    @media only screen and (max-width: 480px) {
+      .card-section>table>tbody>tr>td {
+        padding: 28px 20px 12px 20px !important;
+      }
+
+      .kpi-value {
+        font-size: 17px !important;
+      }
+
+      .kpi-label {
+        font-size: 14px !important;
+      }
+
+      /* Tracked uppercase headers cannot hyphenate; tighten them instead. */
+      .dark-table th {
+        font-size: 11px !important;
+        letter-spacing: 0 !important;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+
+      body,
+      .body-wrapper>div {
+        background-color: #0f172a !important;
+      }
+
+      .card-bg>table {
+        background-color: #1e293b !important;
+        background: #1e293b !important;
+      }
+
+      .brand-text div,
+      .dark-text div,
+      .section-heading div {
+        color: #f1f5f9 !important;
+      }
+
+      .brand-icon-light {
+        display: none !important;
+      }
+
+      .brand-icon-dark {
+        display: inline-block !important;
+        max-height: none !important;
+      }
+
+      .footer-text div,
+      .footer-social div {
+        color: #94a3b8 !important;
+      }
+
+      .muted div {
+        color: #94a3b8 !important;
+      }
+
+      .info-text div {
+        color: #64748b !important;
+      }
+
+      .card-bg a,
+      .footer-text a,
+      .footer-social a,
+      .info-text a {
+        color: #33d399 !important;
+      }
+
+      /* Buttons keep dark text on the brand green. */
+      .card-bg .hk-button a {
+        color: #18181a !important;
+      }
+
+      /* Inherited table text; cells with their own inline colour (change
+           indicators) are handled below. */
+      .dark-table table {
+        color: #e2e8f0 !important;
+      }
+
+      .dark-table .cell-label {
+        color: #94a3b8 !important;
+      }
+
+      .dark-table th {
+        color: #94a3b8 !important;
+        border-color: #334155 !important;
+      }
+
+      .tbl-header {
+        border-color: #334155 !important;
+      }
+
+      .alt-row {
+        background-color: #162033 !important;
+      }
+
+      .change-up {
+        color: #4ade80 !important;
+      }
+
+      .change-down {
+        color: #f87171 !important;
+      }
+
+      .change-neutral {
+        color: #94a3b8 !important;
+      }
+
+      .card-bg p {
+        border-color: #334155 !important;
+      }
+    }
+
+    /* Outlook.com dark mode rewrites colours and marks them with
+         data-ogsc (text) and data-ogsb (background). */
+    [data-ogsb] .body-wrapper>div {
+      background-color: #0f172a !important;
+    }
+
+    [data-ogsb] .card-bg>table {
+      background-color: #1e293b !important;
+    }
+
+    [data-ogsc] .brand-text div,
+    [data-ogsc] .dark-text div,
+    [data-ogsc] .section-heading div {
+      color: #f1f5f9 !important;
+    }
+
+    [data-ogsc] .muted div,
+    [data-ogsc] .footer-text div {
+      color: #94a3b8 !important;
+    }
+
+    [data-ogsc] .card-bg a,
+    [data-ogsc] .footer-text a,
+    [data-ogsc] .footer-social a {
+      color: #33d399 !important;
+    }
+
+    [data-ogsc] .brand-icon-light {
+      display: none !important;
+    }
+
+    [data-ogsc] .brand-icon-dark {
+      display: inline-block !important;
+      max-height: none !important;
+    }
+
+    [data-ogsc] .card-bg .hk-button a {
+      color: #18181a !important;
+    }
+
+  </style>
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+</head>
+
+<body style="word-spacing:normal;background-color:#f1f5f9;">
+  <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Add your site in the dashboard, copy its tracking script into your page, and open it in a browser. Your first visit will appear in the dashboard.</div>
+  <div class="body-wrapper" style="background-color:#f1f5f9;" lang="en" dir="auto">
+    <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" role="presentation" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
+    <div style="margin:0px auto;max-width:600px;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
+        <tbody>
+          <tr>
+            <td style="direction:ltr;font-size:0px;padding:20px 0;padding-bottom:20px;padding-top:40px;text-align:center;">
+              <!--[if mso | IE]><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td class="" style="vertical-align:top;width:600px;" ><![endif]-->
+              <div class="mj-column-per-100 mj-outlook-group-fix" style="font-size:0px;text-align:left;direction:ltr;display:inline-block;vertical-align:top;width:100%;">
+                <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="vertical-align:top;" width="100%">
+                  <tbody>
+                    <tr>
+                      <td align="center" class="brand-text" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                        <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:24px;font-weight:700;line-height:1.6;text-align:center;color:#0f172a;"><img src="cid:hitkeep-icon-light" width="32" height="32" alt="" class="brand-icon-light" style="display: inline-block; width: 32px; height: 32px; margin-right: 10px; border: 0; vertical-align: middle;" /><img src="cid:hitkeep-icon-dark" width="32" height="32" alt="" class="brand-icon-dark" style="display: none; mso-hide: all; width: 32px; height: 32px; max-height: 0; margin-right: 10px; border: 0; vertical-align: middle; overflow: hidden;" /><span style="vertical-align: middle;">HitKeep</span></div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!--[if mso | IE]></td></tr></table><![endif]-->
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <!--[if mso | IE]></td></tr></table><table align="center" border="0" cellpadding="0" cellspacing="0" class="card-bg-outlook" role="presentation" style="width:600px;" width="600" bgcolor="#ffffff" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
+    <div class="card-bg" style="background:#ffffff;background-color:#ffffff;margin:0px auto;max-width:600px;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;background-color:#ffffff;width:100%;">
+        <tbody>
+          <tr>
+            <td style="direction:ltr;font-size:0px;padding:0px;text-align:center;">
+              <!--[if mso | IE]><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td class="card-section-outlook" width="600px" ><table align="center" border="0" cellpadding="0" cellspacing="0" class="card-section-outlook" role="presentation" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
+              <div class="card-section" style="margin:0px auto;max-width:600px;">
+                <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
+                  <tbody>
+                    <tr>
+                      <td style="direction:ltr;font-size:0px;padding:40px 40px 20px 40px;text-align:center;">
+                        <!--[if mso | IE]><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td class="" style="vertical-align:top;width:520px;" ><![endif]-->
+                        <div class="mj-column-per-100 mj-outlook-group-fix" style="font-size:0px;text-align:left;direction:ltr;display:inline-block;vertical-align:top;width:100%;">
+                          <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="vertical-align:top;" width="100%">
+                            <tbody>
+                              <tr>
+                                <td align="left" class="dark-text" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                                  <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:20px;font-weight:600;line-height:1.6;text-align:left;color:#334155;">Connect your site to HitKeep</div>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td align="left" class="dark-text" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                                  <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;text-align:left;color:#334155;">Add your site in the dashboard, copy its tracking script into your page, and open it in a browser. Your first visit will appear in the dashboard.</div>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td align="center" class="hk-button" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                                  <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate;line-height:100%;">
+                                    <tbody>
+                                      <tr>
+                                        <td align="center" bgcolor="#33d399" role="presentation" style="border:none;border-radius:8px;cursor:auto;mso-padding-alt:12px 24px;background:#33d399;" valign="middle">
+                                          <a href="https://app.hitkeep.example/dashboard" style="display:inline-block;background:#33d399;color:#18181a;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:700;line-height:1.6;margin:0;text-decoration:none;text-transform:none;padding:12px 24px;mso-padding-alt:0px;border-radius:8px;" target="_blank"> Open dashboard </a>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td align="left" class="dark-text" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                                  <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;text-align:left;color:#334155;"><a href="https://hitkeep.com/docs/">Read the docs</a></div>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        <!--[if mso | IE]></td></tr></table><![endif]-->
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!--[if mso | IE]></td></tr></table></td></tr></table><![endif]-->
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <!--[if mso | IE]></td></tr></table><table align="center" border="0" cellpadding="0" cellspacing="0" class="" role="presentation" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
+    <div style="margin:0px auto;max-width:600px;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
+        <tbody>
+          <tr>
+            <td style="direction:ltr;font-size:0px;padding:20px 0;padding-bottom:40px;padding-top:20px;text-align:center;">
+              <!--[if mso | IE]><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td class="" style="vertical-align:top;width:600px;" ><![endif]-->
+              <div class="mj-column-per-100 mj-outlook-group-fix" style="font-size:0px;text-align:left;direction:ltr;display:inline-block;vertical-align:top;width:100%;">
+                <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="vertical-align:top;" width="100%">
+                  <tbody>
+                    <tr>
+                      <td align="center" class="footer-text" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                        <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;text-align:center;color:#64748b;">Powered by <a href="https://hitkeep.com" style="color: #047857; text-decoration: none; font-weight: 600">HitKeep</a>
+                          <br /> The privacy-first, single-binary analytics platform. <br />
+                          <a href="https://hitkeep.com/legal/imprint/" style="color: #047857; text-decoration: none; font-weight: 600">Imprint</a>
+                          <span style="color: #94a3b8"> · </span>
+                          <a href="https://hitkeep.com/legal/privacy-policy/" style="color: #047857; text-decoration: none; font-weight: 600">Privacy Policy</a>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td align="center" class="footer-social" style="font-size:0px;padding:10px 25px;padding-top:4px;word-break:break-word;">
+                        <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;text-align:center;color:#64748b;"><span style="font-weight: 600">HitKeep on Social Media</span>
+                          <br />
+                          <a href="https://github.com/HitKeep/hitkeep" style="color: #334155; text-decoration: none; font-weight: 600">GitHub</a>
+                          <span style="color: #94a3b8">&nbsp;&nbsp;</span>
+                          <a href="https://www.linkedin.com/company/hitkeep" style="color: #334155; text-decoration: none; font-weight: 600">LinkedIn</a>
+                          <span style="color: #94a3b8">&nbsp;&nbsp;</span>
+                          <a href="https://x.com/gethitkeep" style="color: #334155; text-decoration: none; font-weight: 600">X</a>
+                          <span style="color: #94a3b8">&nbsp;&nbsp;</span>
+                          <a href="https://bsky.app/profile/hitkeep.com" style="color: #334155; text-decoration: none; font-weight: 600">Bluesky</a>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!--[if mso | IE]></td></tr></table><![endif]-->
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <!--[if mso | IE]></td></tr></table><![endif]-->
+  </div>
+</body>
+
+</html>
