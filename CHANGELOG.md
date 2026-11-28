@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.0](https://github.com/HitKeep/hitkeep/compare/v2.18.3...v2.19.0) (2026-11-28)
+
+
+### Features
+
+* **cloud:** optimize Stripe checkout, §19 UStG invoicing, and monthly hit limits ([0f92809](https://github.com/HitKeep/hitkeep/commit/0f9280947e92e1f805e710ab92131ca209fe8935))
+
 ## [2.18.3](https://github.com/HitKeep/hitkeep/compare/v2.18.2...v2.18.3) (2026-11-25)
 
 
